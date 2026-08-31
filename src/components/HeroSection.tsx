@@ -121,27 +121,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
           </div>
         </div>
 
-        {/* Central 3D Glowing Emblem */}
-        <div className="relative flex justify-center items-center my-6">
-          <div className="relative w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] aspect-square flex items-center justify-center group">
-            {/* Ambient Volumetric Backlight Glow */}
-            <div className="absolute inset-0 bg-[#D9F22A]/20 rounded-full blur-[90px] pointer-events-none group-hover:scale-105 transition-transform duration-700" />
-            
-            {/* 3D High-Res Emblem Image */}
-            <img
-              width="575"
-              height="575"
-              src="https://stellargaming.com/wp-content/uploads/2025/08/frame_1321318091.webp"
-              alt="Techify Emblem"
-              referrerPolicy="no-referrer"
-              className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_20px_50px_rgba(217,242,42,0.35)] transition-transform duration-500 hover:scale-[1.02]"
-              loading="eager"
-            />
-          </div>
-        </div>
-
         {/* Hero Bottom Bar */}
-        <div className="max-w-[1140px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/5">
+        <div className="max-w-[1140px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5">
           <div className="flex items-center gap-3 text-xs text-white/70">
             <ShieldCheck className="w-4 h-4 text-[#D9F22A]" />
             <span>Infraestrutura segura com rastreamento UTM, checkout integrado e liquidação transparente.</span>

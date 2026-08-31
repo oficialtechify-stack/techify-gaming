@@ -59,34 +59,46 @@ export const CultureBanner: React.FC = () => {
           </div>
         </div>
 
-        {/* Banner image with team / ecosystem lighting */}
+        {/* Banner with ecosystem performance & real-time metrics (No photo) */}
         <motion.div 
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-50px" }}
           transition={{ duration: 0.8, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-          className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl group"
+          className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#080d1a] via-[#0b1426] to-[#080d1a] p-8 sm:p-12 shadow-2xl"
         >
-          <img
-            src="https://stellargaming.com/wp-content/uploads/2026/01/frame_1321317695.webp"
-            alt="Time e Ecossistema Techify"
-            className="w-full h-auto object-cover transform group-hover:scale-[1.01] transition-transform duration-700 max-h-[440px]"
-            loading="lazy"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#060A15]/90 via-[#060A15]/30 to-transparent pointer-events-none flex items-end p-6 sm:p-10">
-            <div className="flex flex-wrap items-center gap-6 text-xs sm:text-sm font-bold text-white">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-                <span>+50 Startups Conectadas</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-                <span>Comissões Automáticas em D+0</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-                <span>100% Auditável e Transparente</span>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+            <div className="flex flex-col gap-2">
+              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Volume Total Transacionado</div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">R$ 142.500.000+</div>
+              <p className="text-xs text-white/60">Processados com split instantâneo e zero fricção de repasse.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Comissões Pagas a Afiliados</div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-[#D9F22A] font-['Syne']">R$ 48.900.000+</div>
+              <p className="text-xs text-white/60">Liquidados via PIX direto na conta bancária dos vendedores.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Tempo Médio de Repasse</div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">&lt; 3 Segundos</div>
+              <p className="text-xs text-white/60">Sem carência de 30 dias: o saldo é liberado assim que o pagamento é aprovado.</p>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs font-bold text-white/80">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
+              <span>+140 Startups Conectadas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
+              <span>Comissões Automáticas em D+0</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
+              <span>100% Auditável e Transparente</span>
             </div>
           </div>
         </motion.div>

@@ -6,7 +6,6 @@ import { StatsCounter } from './components/StatsCounter';
 import { HowItWorksSection } from './components/HowItWorksSection';
 import { AboutSection } from './components/AboutSection';
 import { CultureBanner } from './components/CultureBanner';
-import { AwardsSection } from './components/AwardsSection';
 import { SponsorshipsSection } from './components/SponsorshipsSection';
 import { ResponsibleGamingSection } from './components/ResponsibleGamingSection';
 import { FooterMarquee } from './components/FooterMarquee';
@@ -69,7 +68,6 @@ export default function App() {
         <HowItWorksSection />
         <SponsorshipsSection />
         <CultureBanner />
-        <AwardsSection />
         <ResponsibleGamingSection onOpenModal={handleOpenModal} />
       </main>
 

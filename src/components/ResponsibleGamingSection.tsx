@@ -15,35 +15,67 @@ export const ResponsibleGamingSection: React.FC<ResponsibleGamingSectionProps> =
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-          {/* Left Column: Visual Image Frame */}
+          {/* Left Column: Techify Security & Split Visual Architecture (No photo) */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.94, y: 30 }}
             whileInView={{ opacity: 1, scale: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="lg:col-span-6 relative flex justify-center"
+            className="lg:col-span-6 relative flex justify-center w-full"
           >
-            <div className="relative w-full max-w-[480px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl group">
-              <div className="relative aspect-[4/5] bg-gradient-to-br from-[#0a1224] via-[#060a15] to-[#04060d]">
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1000&q=80"
-                  alt="Segurança e Governança Techify"
-                  className="w-full h-full object-cover object-top mix-blend-luminosity opacity-85 group-hover:scale-105 transition-transform duration-700"
-                  loading="lazy"
-                />
-                
-                {/* Yellow lighting effect overlay */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#D9F22A]/30 via-transparent to-[#060A15]/80" />
-
-                {/* Lower watermark typography */}
-                <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between pointer-events-none">
-                  <span className="text-white/20 font-black tracking-widest text-3xl font-['Syne']">
-                    TECHIFY
-                  </span>
-                  <div className="w-8 h-8 rounded-full bg-[#D9F22A]/20 flex items-center justify-center">
-                    <div className="w-3 h-3 rounded-full bg-[#D9F22A]" />
+            <div className="w-full max-w-[480px] rounded-3xl p-6 sm:p-8 bg-[#080d1a] border border-white/10 shadow-2xl relative overflow-hidden flex flex-col gap-5">
+              <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Split Engine v4.2</h4>
+                    <span className="text-[11px] text-emerald-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Liquidação Automática Ativa
+                    </span>
                   </div>
                 </div>
+                <span className="text-[11px] font-mono bg-white/5 text-white/60 px-2.5 py-1 rounded-md border border-white/5">
+                  PIX D+0
+                </span>
+              </div>
+
+              {/* Transaction Simulator Visual */}
+              <div className="space-y-3 font-mono text-xs">
+                <div className="p-3.5 rounded-xl bg-[#050811] border border-white/5 flex items-center justify-between">
+                  <span className="text-white/60">Transação Bruta (Plano Anual):</span>
+                  <span className="text-white font-bold">R$ 1.890,00</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="p-3 rounded-xl bg-[#D9F22A]/5 border border-[#D9F22A]/20 flex flex-col gap-1">
+                    <span className="text-[10px] text-[#D9F22A] font-bold uppercase">Repasse Startup (60%)</span>
+                    <span className="text-sm text-white font-black">R$ 1.134,00</span>
+                    <span className="text-[9px] text-white/40">Depósito Direto</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/40 flex flex-col gap-1">
+                    <span className="text-[10px] text-[#D9F22A] font-bold uppercase">Comissão Afiliado (40%)</span>
+                    <span className="text-sm text-[#D9F22A] font-black">R$ 756,00</span>
+                    <span className="text-[9px] text-white/40">PIX Instantâneo</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-[11px]">
+                  <span className="text-white/50">Tempo médio de liquidação:</span>
+                  <span className="text-emerald-400 font-bold">0.8 segundos</span>
+                </div>
+              </div>
+
+              {/* Security Badges */}
+              <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-white/50">
+                <span className="flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#D9F22A]" />
+                  SHA-256 Webhook
+                </span>
+                <span>LGPD Compliant</span>
+                <span>Split Bacen</span>
               </div>
             </div>
           </motion.div>
