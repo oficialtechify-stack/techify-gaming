@@ -73,19 +73,21 @@ import {
   Link2,
   Plus,
   ShoppingBag,
-  ArrowRightLeft
+  ArrowRightLeft,
+  LogOut
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
+import { useAuth } from '../../context/AuthContext';
 
 interface PlatformLayoutProps {
   onBackToHome: () => void;
 }
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
-  const [roleMode, setRoleMode] = useState<UserRoleMode>('afiliado');
+  const { currentUser, userProfile, userRole, setUserRole, logout } = useAuth();
+  const [roleMode, setRoleMode] = useState<UserRoleMode>(userRole || 'afiliado');
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [userProfile, setUserProfile] = useState<UserSellerProfile>(INITIAL_USER_PROFILE);
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -120,12 +122,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setDbConnected(true);
     });
 
-    // 2. Realtime listener for User Profile
-    const unsubProfile = subscribeUserProfile((profile) => {
-      setUserProfile(profile);
-    });
-
-    // 3. Realtime listener for Companies
+    // 2. Realtime listener for Companies
     const unsubCompanies = subscribeCompanies((compList) => {
       setCompanies(compList);
     });
@@ -206,7 +203,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     });
 
     return () => {
-      unsubProfile();
       unsubCompanies();
       unsubPlans();
       unsubAffiliations();
@@ -371,7 +367,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Handle withdrawal
   const handleWithdraw = async (amount: number, pixKey: string, pixKeyType: string) => {
     try {
-      await createWithdrawalInFirebase(amount, pixKey, pixKeyType);
+      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, userProfile.name);
       setLiveToast({
         message: 'Saque PIX D+0 processado com sucesso!',
         sub: `Chave ${pixKey} (${pixKeyType})`,
@@ -555,6 +551,22 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <ExternalLink className="w-4 h-4 flex-shrink-0 text-[#D9F22A]" />
             {!sidebarCollapsed && <span className="truncate">Voltar ao Site</span>}
           </button>
+
+          {currentUser && (
+            <button
+              onClick={() => {
+                logout();
+                onBackToHome();
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer ${
+                sidebarCollapsed ? 'justify-center px-0' : ''
+              }`}
+              title="Sair da Conta"
+            >
+              <LogOut className="w-4 h-4 flex-shrink-0" />
+              {!sidebarCollapsed && <span className="truncate">Sair da Conta</span>}
+            </button>
+          )}
         </div>
       </aside>
 
@@ -649,6 +661,19 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   {roleMode === 'afiliado' ? 'Afiliado Oficial' : 'Produtor / Startup'}
                 </div>
               </div>
+
+              {currentUser && (
+                <button
+                  onClick={() => {
+                    logout();
+                    onBackToHome();
+                  }}
+                  className="p-1.5 rounded-full bg-white/5 hover:bg-red-500/20 text-white/50 hover:text-red-400 border border-white/10 transition-colors ml-1 cursor-pointer"
+                  title="Sair da Conta"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </header>

@@ -111,8 +111,8 @@ export async function clearAllFirestoreData() {
 /**
  * Realtime Profile Listener
  */
-export function subscribeUserProfile(callback: (profile: UserSellerProfile) => void) {
-  const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+export function subscribeUserProfile(callback: (profile: UserSellerProfile) => void, userId: string = DEFAULT_USER_ID) {
+  const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
   return onSnapshot(profileRef, (snap) => {
     if (snap.exists()) {
       const data = snap.data() as UserSellerProfile;
@@ -121,12 +121,13 @@ export function subscribeUserProfile(callback: (profile: UserSellerProfile) => v
       const progress = target > 0 ? Math.min(100, (total / target) * 100) : 0;
       callback({
         ...data,
+        userId: userId || DEFAULT_USER_ID,
         currentSalesProgress: Number(progress.toFixed(1))
       });
     } else {
       callback({
         ...INITIAL_USER_PROFILE,
-        userId: DEFAULT_USER_ID
+        userId: userId || DEFAULT_USER_ID
       });
     }
   }, (err) => {
@@ -137,8 +138,8 @@ export function subscribeUserProfile(callback: (profile: UserSellerProfile) => v
 /**
  * Update user profile in Firebase
  */
-export async function updateUserProfileInFirebase(updates: Partial<UserSellerProfile>) {
-  const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+export async function updateUserProfileInFirebase(updates: Partial<UserSellerProfile>, userId: string = DEFAULT_USER_ID) {
+  const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
   await updateDoc(profileRef, {
     ...updates,
     updatedAt: new Date().toISOString()
@@ -570,15 +571,21 @@ export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]
 /**
  * Request a PIX Cashout in Firebase Firestore
  */
-export async function createWithdrawalInFirebase(amount: number, pixKey: string, pixKeyType: string) {
+export async function createWithdrawalInFirebase(
+  amount: number, 
+  pixKey: string, 
+  pixKeyType: string,
+  userId: string = DEFAULT_USER_ID,
+  userName?: string
+) {
   const id = `WTH-${Math.floor(1000 + Math.random() * 9000)}`;
   const now = new Date();
   const formattedDate = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
   const newWth: WithdrawalRequest = {
     id,
-    userId: DEFAULT_USER_ID,
-    userName: INITIAL_USER_PROFILE.name,
+    userId: userId || DEFAULT_USER_ID,
+    userName: userName || INITIAL_USER_PROFILE.name,
     amount,
     pixKey,
     pixKeyType,
@@ -591,7 +598,7 @@ export async function createWithdrawalInFirebase(amount: number, pixKey: string,
   await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, id), newWth);
 
   // 2. Decrement available balance
-  const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+  const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
   const profileSnap = await getDoc(profileRef);
   if (profileSnap.exists()) {
     const current = profileSnap.data() as UserSellerProfile;

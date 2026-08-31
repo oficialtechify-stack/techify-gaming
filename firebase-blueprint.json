@@ -2,7 +2,7 @@
   "entities": {
     "user_profiles": {
       "title": "User Profile",
-      "description": "User account profile and balance info",
+      "description": "User account profile, security information, and balances",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -17,16 +17,55 @@
         "totalSalesCount": { "type": "number" },
         "partnerLevel": { "type": "string" },
         "targetGoal": { "type": "number" },
+        "activeRoleMode": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "cpf": { "type": "string" },
+        "cleanCpf": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "cleanCnpj": { "type": "string" },
+        "companyId": { "type": "string" },
+        "companyName": { "type": "string" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["userId", "name", "email", "availableBalance", "totalEarned"]
     },
-    "platforms": {
-      "title": "Platform Product",
-      "description": "Platforms available in Techify catalog",
+    "companies": {
+      "title": "Company Startup",
+      "description": "Companies and startups registered on Techify",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "tagline": { "type": "string" },
+        "logo": { "type": "string" },
+        "bannerImage": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "website": { "type": "string" },
+        "email": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "cleanCnpj": { "type": "string" },
+        "totalPlansCount": { "type": "number" },
+        "totalAffiliatesCount": { "type": "number" },
+        "totalSalesVolume": { "type": "number" },
+        "commissionRange": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "category"]
+    },
+    "plans": {
+      "title": "Company Plan",
+      "description": "Plans and software solutions registered by companies",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyId": { "type": "string" },
+        "companyName": { "type": "string" },
         "title": { "type": "string" },
         "tagline": { "type": "string" },
         "category": { "type": "string" },
@@ -41,9 +80,11 @@
         "features": { "type": "array", "items": { "type": "string" } },
         "tags": { "type": "array", "items": { "type": "string" } },
         "demoUrl": { "type": "string" },
+        "salesCount": { "type": "number" },
+        "rating": { "type": "number" },
         "createdAt": { "type": "string" }
       },
-      "required": ["title", "category", "price", "commissionRate", "commissionValue"]
+      "required": ["companyId", "title", "price", "commissionRate", "commissionValue"]
     },
     "sales": {
       "title": "Sale Transaction",

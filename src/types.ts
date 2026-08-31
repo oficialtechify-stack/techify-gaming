@@ -23,4 +23,14 @@ export interface StatItem {
   title: string;
 }
 
-export type ActiveModal = 'careers' | 'about' | 'culture' | 'report' | 'responsible' | 'login' | null;
+export type ActiveModal = 
+  | 'careers' 
+  | 'about' 
+  | 'culture' 
+  | 'report' 
+  | 'responsible' 
+  | 'login' 
+  | 'register_affiliate' 
+  | 'register_company' 
+  | 'forgot_password' 
+  | null;

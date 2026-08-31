@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { ActiveModal } from '../types';
 import { TechifyLogo } from './TechifyLogo';
-import { LayoutDashboard, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, LogOut, User, UserCheck, Building2, Sparkles, ChevronDown } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   onOpenModal: (modal: ActiveModal) => void;
@@ -10,6 +11,8 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) => {
   const [popupActive, setPopupActive] = useState(false);
+  const [registerDropdownOpen, setRegisterDropdownOpen] = useState(false);
+  const { isAuthenticated, userProfile, userRole, logout } = useAuth();
 
   const handleNavClick = (sectionId: string) => {
     setPopupActive(false);
@@ -91,33 +94,101 @@ export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) =
             </a>
           </nav>
 
-          {/* Action Buttons: Acessar Plataforma & Entrar */}
+          {/* Action Buttons */}
           <div className="hidden lg:flex items-center gap-3">
-            {onOpenPlatform && (
-              <button
-                onClick={onOpenPlatform}
-                className="group inline-flex items-center gap-2 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black rounded-full py-2.5 px-4 text-xs uppercase tracking-wider transition-all duration-300 shadow-[0_0_20px_rgba(217,242,42,0.3)] cursor-pointer"
-              >
-                <LayoutDashboard className="w-3.5 h-3.5" />
-                <span>Abrir Plataforma</span>
-              </button>
-            )}
+            {isAuthenticated ? (
+              <div className="flex items-center gap-3">
+                {onOpenPlatform && (
+                  <button
+                    onClick={onOpenPlatform}
+                    className="group inline-flex items-center gap-2 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black rounded-full py-2.5 px-4 text-xs uppercase tracking-wider transition-all duration-300 shadow-[0_0_20px_rgba(217,242,42,0.3)] cursor-pointer"
+                  >
+                    <LayoutDashboard className="w-3.5 h-3.5" />
+                    <span>Painel ({userRole === 'empresa' ? 'Empresa' : 'Afiliado'})</span>
+                  </button>
+                )}
 
-            <button
-              onClick={() => onOpenModal('login')}
-              className="group inline-flex items-center gap-2.5 bg-transparent hover:bg-white/[0.04] border border-white/20 hover:border-[#D9F22A] rounded-full py-2.5 px-4 transition-all duration-300 focus:outline-none cursor-pointer"
-              aria-label="Entrar na conta"
-            >
-              <span className="w-5 h-5 rounded-full bg-white/10 group-hover:bg-[#D9F22A] text-white group-hover:text-[#060A15] flex items-center justify-center flex-shrink-0 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                  <polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
-              </span>
-              <span className="text-xs font-bold text-white tracking-wide">
-                Entrar
-              </span>
-            </button>
+                <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full py-1.5 px-3">
+                  <img
+                    src={userProfile.avatar}
+                    alt={userProfile.name}
+                    className="w-6 h-6 rounded-full object-cover border border-[#D9F22A]"
+                  />
+                  <span className="text-xs font-bold text-white max-w-[120px] truncate">
+                    {userProfile.name}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => logout()}
+                  className="p-2 rounded-full bg-white/5 hover:bg-red-500/20 text-white/60 hover:text-red-400 border border-white/10 transition-colors cursor-pointer"
+                  title="Sair da Conta"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                {/* Cadastrar Dropdown Trigger */}
+                <div className="relative">
+                  <button
+                    onClick={() => setRegisterDropdownOpen(!registerDropdownOpen)}
+                    className="group inline-flex items-center gap-1.5 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black rounded-full py-2.5 px-4 text-xs uppercase tracking-wider transition-all duration-300 shadow-[0_0_20px_rgba(217,242,42,0.25)] cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Cadastrar</span>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+
+                  {registerDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-[#080d1a] border border-white/15 rounded-2xl p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <button
+                        onClick={() => {
+                          setRegisterDropdownOpen(false);
+                          onOpenModal('register_affiliate');
+                        }}
+                        className="w-full p-2.5 rounded-xl hover:bg-white/5 text-left flex items-center gap-2.5 text-xs text-white font-bold cursor-pointer transition-colors"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center">
+                          <UserCheck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-white">Sou Afiliado</div>
+                          <div className="text-[10px] text-white/50 font-normal">Quero vender e lucrar</div>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setRegisterDropdownOpen(false);
+                          onOpenModal('register_company');
+                        }}
+                        className="w-full p-2.5 rounded-xl hover:bg-white/5 text-left flex items-center gap-2.5 text-xs text-white font-bold cursor-pointer transition-colors mt-1"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center">
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-white">Sou Empresa / Startup</div>
+                          <div className="text-[10px] text-white/50 font-normal">Cadastrar meus produtos</div>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Login Button */}
+                <button
+                  onClick={() => onOpenModal('login')}
+                  className="group inline-flex items-center gap-2 bg-transparent hover:bg-white/[0.04] border border-white/20 hover:border-[#D9F22A] rounded-full py-2.5 px-4 transition-all duration-300 focus:outline-none cursor-pointer"
+                  aria-label="Entrar na conta"
+                >
+                  <span className="text-xs font-bold text-white tracking-wide">
+                    Entrar
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mobile Hamburger Button */}
@@ -193,33 +264,69 @@ export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) =
           </nav>
 
           <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
-            {onOpenPlatform && (
-              <button
-                onClick={() => {
-                  setPopupActive(false);
-                  onOpenPlatform();
-                }}
-                className="w-full flex items-center justify-center gap-2 bg-[#D9F22A] text-[#060A15] font-black rounded-full py-3.5 px-5 cursor-pointer uppercase tracking-wider text-xs"
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Abrir Plataforma Techify</span>
-              </button>
-            )}
+            {isAuthenticated ? (
+              <>
+                {onOpenPlatform && (
+                  <button
+                    onClick={() => {
+                      setPopupActive(false);
+                      onOpenPlatform();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 bg-[#D9F22A] text-[#060A15] font-black rounded-full py-3.5 px-5 cursor-pointer uppercase tracking-wider text-xs"
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    <span>Abrir Plataforma Techify</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setPopupActive(false);
+                    logout();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-white/10 text-white font-bold rounded-full py-3 px-5 cursor-pointer text-xs uppercase"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sair da Conta</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    setPopupActive(false);
+                    onOpenModal('register_affiliate');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-[#D9F22A] text-[#060A15] font-black rounded-full py-3.5 px-5 cursor-pointer uppercase tracking-wider text-xs"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>Cadastrar como Afiliado</span>
+                </button>
 
-            <button
-              onClick={() => {
-                setPopupActive(false);
-                onOpenModal('login');
-              }}
-              className="w-full flex items-center justify-center gap-2 bg-transparent border border-white/20 text-white font-bold rounded-full py-3 px-5 cursor-pointer hover:bg-white/5 transition-colors text-xs uppercase"
-            >
-              <span>Entrar na Conta</span>
-            </button>
+                <button
+                  onClick={() => {
+                    setPopupActive(false);
+                    onOpenModal('register_company');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-white/10 text-white font-black rounded-full py-3 px-5 cursor-pointer uppercase tracking-wider text-xs border border-white/15"
+                >
+                  <Building2 className="w-4 h-4 text-[#D9F22A]" />
+                  <span>Cadastrar Empresa / Startup</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPopupActive(false);
+                    onOpenModal('login');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-transparent border border-white/20 text-white font-bold rounded-full py-3 px-5 cursor-pointer hover:bg-white/5 transition-colors text-xs uppercase"
+                >
+                  <span>Entrar na Conta</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
     </>
   );
 };
-
-

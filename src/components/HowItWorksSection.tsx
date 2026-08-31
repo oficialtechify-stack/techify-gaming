@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Building2, Users, CheckCircle2, ArrowRight, Link2, DollarSign, Eye, Layers } from 'lucide-react';
+import { Building2, Users, CheckCircle2, ArrowRight, Layers, Sparkles } from 'lucide-react';
+import { ActiveModal } from '../types';
 
-export const HowItWorksSection: React.FC = () => {
+interface HowItWorksSectionProps {
+  onOpenModal?: (modal: ActiveModal) => void;
+}
+
+export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModal }) => {
   const [activeWorkflow, setActiveWorkflow] = useState<'startups' | 'afiliados'>('startups');
 
   const startupSteps = [
@@ -138,6 +143,37 @@ export const HowItWorksSection: React.FC = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* CTA Bar */}
+        {onOpenModal && (
+          <div className="mt-12 p-6 sm:p-8 rounded-3xl bg-[#080d1a] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-base sm:text-lg font-bold text-white font-['Syne']">
+                  {activeWorkflow === 'startups' 
+                    ? 'Pronto para impulsionar suas vendas com afiliados?' 
+                    : 'Pronto para faturar comissões de até 50%?'}
+                </h4>
+                <p className="text-xs text-white/60">
+                  {activeWorkflow === 'startups'
+                    ? 'Cadastre sua empresa e publique seus primeiros planos comerciais hoje mesmo.'
+                    : 'Crie sua conta de afiliado e tenha acesso imediato a todos os produtos.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onOpenModal(activeWorkflow === 'startups' ? 'register_company' : 'register_affiliate')}
+              className="bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-[0_0_20px_rgba(217,242,42,0.3)] cursor-pointer flex items-center gap-2 whitespace-nowrap"
+            >
+              <span>{activeWorkflow === 'startups' ? 'Cadastrar Minha Empresa' : 'Criar Conta de Afiliado'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );

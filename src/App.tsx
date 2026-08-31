@@ -12,10 +12,12 @@ import { FooterMarquee } from './components/FooterMarquee';
 import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
 import { LayoutDashboard } from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-export default function App() {
+function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [viewPlatform, setViewPlatform] = useState<boolean>(false);
+  const { isAuthenticated } = useAuth();
 
   const handleOpenModal = (modal: ActiveModal) => {
     setActiveModal(modal);
@@ -26,13 +28,13 @@ export default function App() {
   };
 
   const handleLoginSuccess = () => {
-    setIsLoggedIn(true);
+    setViewPlatform(true);
   };
 
-  // If user is logged in, show the complete Techify Platform & Affiliate Dashboard
-  if (isLoggedIn) {
+  // If user opens platform or is logged in and wants to see platform
+  if (viewPlatform) {
     return (
-      <PlatformLayout onBackToHome={() => setIsLoggedIn(false)} />
+      <PlatformLayout onBackToHome={() => setViewPlatform(false)} />
     );
   }
 
@@ -46,26 +48,32 @@ export default function App() {
       {/* Floating Quick Access to Platform Pill */}
       <div className="fixed bottom-6 right-6 z-40">
         <button
-          onClick={() => setIsLoggedIn(true)}
+          onClick={() => setViewPlatform(true)}
           className="group flex items-center gap-2.5 bg-[#080d1a]/90 hover:bg-[#080d1a] border-2 border-[#D9F22A] text-white rounded-full py-2.5 px-5 shadow-[0_0_30px_rgba(217,242,42,0.35)] backdrop-blur-md transition-all duration-300 hover:scale-105 cursor-pointer"
         >
           <span className="w-2.5 h-2.5 rounded-full bg-[#D9F22A] animate-ping" />
           <LayoutDashboard className="w-4 h-4 text-[#D9F22A]" />
           <span className="text-xs font-black uppercase tracking-wider text-white">
-            Abrir Plataforma & Afiliados
+            {isAuthenticated ? 'Meu Painel Techify' : 'Explorar Marketplace & Painel'}
           </span>
         </button>
       </div>
 
       {/* Main Header / Navigation */}
-      <Header onOpenModal={handleOpenModal} onOpenPlatform={() => setIsLoggedIn(true)} />
+      <Header 
+        onOpenModal={handleOpenModal} 
+        onOpenPlatform={() => setViewPlatform(true)} 
+      />
 
       {/* Main Content Sections */}
       <main className="flex-grow">
-        <HeroSection onOpenModal={handleOpenModal} />
+        <HeroSection 
+          onOpenModal={handleOpenModal} 
+          onOpenPlatform={() => setViewPlatform(true)} 
+        />
         <StatsCounter />
         <AboutSection />
-        <HowItWorksSection />
+        <HowItWorksSection onOpenModal={handleOpenModal} />
         <SponsorshipsSection />
         <CultureBanner />
         <ResponsibleGamingSection onOpenModal={handleOpenModal} />
@@ -74,12 +82,20 @@ export default function App() {
       {/* Footer with Marquee & Links */}
       <FooterMarquee onOpenModal={handleOpenModal} />
 
-      {/* Interactive Modals */}
+      {/* Interactive Modals (Login, Register Affiliate, Register Company, Forgot Password) */}
       <Modals
         activeModal={activeModal}
         onClose={handleCloseModal}
         onLoginSuccess={handleLoginSuccess}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

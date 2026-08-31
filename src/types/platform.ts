@@ -12,6 +12,8 @@ export interface CompanyStartup {
   website: string;
   email: string;
   whatsapp?: string;
+  cnpj?: string;
+  cleanCnpj?: string;
   totalPlansCount: number;
   totalAffiliatesCount: number;
   totalSalesVolume: number;
@@ -143,6 +145,13 @@ export interface UserSellerProfile {
   targetGoal: number;
   currentSalesProgress: number;
   activeRoleMode?: UserRoleMode;
+  whatsapp?: string;
+  cpf?: string;
+  cleanCpf?: string;
+  cnpj?: string;
+  cleanCnpj?: string;
+  companyId?: string;
+  companyName?: string;
   updatedAt?: string;
 }
 
