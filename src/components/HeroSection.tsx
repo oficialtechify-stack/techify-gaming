@@ -73,6 +73,25 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
           </a>
         </div>
 
+        {/* Central 3D Glowing Emblem */}
+        <div className="relative flex justify-center items-center my-8">
+          <div className="relative w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] aspect-square flex items-center justify-center group">
+            {/* Ambient Volumetric Backlight Glow */}
+            <div className="absolute inset-0 bg-[#D9F22A]/25 rounded-full blur-[100px] pointer-events-none group-hover:scale-105 transition-transform duration-700" />
+            
+            {/* 3D High-Res Emblem Image */}
+            <img
+              width="575"
+              height="575"
+              src="https://stellargaming.com/wp-content/uploads/2025/08/frame_1321318091.webp"
+              alt="Techify 3D Emblem"
+              referrerPolicy="no-referrer"
+              className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_20px_50px_rgba(217,242,42,0.35)] transition-transform duration-500 hover:scale-[1.03]"
+              loading="eager"
+            />
+          </div>
+        </div>
+
         {/* 3 Core Value Pillars Cards (Direct & Clear) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto mb-10">
           <div className="bg-[#080d1a]/90 border border-white/10 hover:border-[#D9F22A]/40 rounded-2xl p-6 transition-all duration-300 flex flex-col gap-3 group backdrop-blur-md">
