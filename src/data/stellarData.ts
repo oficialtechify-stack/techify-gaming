@@ -1,0 +1,205 @@
+import { AwardItem, StatItem } from '../types';
+
+export const STATS_DATA: StatItem[] = [
+  {
+    id: '1',
+    value: '+50',
+    numericTarget: 50,
+    prefix: '+',
+    title: 'STARTUPS & PLANOS NO CATÁLOGO',
+  },
+  {
+    id: '2',
+    value: 'R$ 4.8M',
+    numericTarget: 4.8,
+    prefix: 'R$ ',
+    suffix: 'M',
+    title: 'COMISSÕES GERADAS & PAGAS',
+  },
+  {
+    id: '3',
+    value: 'D+0',
+    numericTarget: 0,
+    prefix: 'D+',
+    title: 'REPASSE VIA PIX INSTANTÂNEO',
+  },
+  {
+    id: '4',
+    value: '50%',
+    numericTarget: 50,
+    suffix: '%',
+    title: 'COMISSÃO MÁXIMA POR VENDA',
+  },
+  {
+    id: '5',
+    value: '+12K',
+    numericTarget: 12,
+    prefix: '+',
+    suffix: 'K',
+    title: 'AFILIADOS & VENDEDORES ATIVOS',
+  },
+  {
+    id: '6',
+    value: '100%',
+    numericTarget: 100,
+    suffix: '%',
+    title: 'SPLIT DE RECEITA AUTOMATIZADO',
+  },
+];
+
+export const AWARDS_DATA: AwardItem[] = [
+  {
+    id: 'award-1',
+    year: '2024',
+    title: 'Melhor Plataforma de Afiliação B2B & Startups',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_7-1.webp',
+  },
+  {
+    id: 'award-2',
+    year: '2024',
+    title: 'Inovação em Split de Pagamento & Liquidação D+0',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_7-1-1.webp',
+  },
+  {
+    id: 'award-3',
+    year: '2025',
+    title: 'Ecossistema de Maior Crescimento em SaaS & iGaming',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_7-2.webp',
+  },
+  {
+    id: 'award-4',
+    year: '2025',
+    title: 'Top Performance em Captação de Clientes B2B',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_7-5.webp',
+  },
+];
+
+
+export const SPONSORSHIPS_BY_YEAR: Record<string, string[]> = {
+  '2025': [
+    'Internacional',
+    'CBF Futsal',
+    'CazéTV',
+    'Criciúma E.C.',
+    'Ceará',
+    'Villa Nova-MG',
+    'Vasco Basquete',
+    'Vivo Keyd',
+    'Estádio Beira-Rio',
+    'CBF Beach Soccer',
+  ],
+  '2024': [
+    'Internacional',
+    'Criciúma',
+    'Ceará',
+    'América-MG',
+    'Botafogo-SP',
+    'CRB',
+    'Ponte Preta',
+    'CBF Futsal',
+    'Magnus Futsal',
+    'Minas (Fem e Masc)',
+    'Vasco Basquete',
+    'Batalha da Norte',
+    'Minas Judô',
+    'Beira-Rio',
+    'Werdum MMA',
+    'CBF Beach Soccer',
+  ],
+  '2023': [
+    'Internacional',
+    'América-MG',
+    'Botafogo-SP',
+    'Ceará',
+    'CRB',
+    'Criciúma',
+    'Campeonato Mineiro',
+    'Ponte Preta',
+    'Resende',
+    'CBF Futsal',
+    'Magnus',
+    'Minas (Fem)',
+    'Sada Cruzeiro (Masc)',
+    'Vasco Basquete',
+    'Fluxo',
+    'Los Grandes',
+    'Batalha da Aldeia',
+    'Batalha da Norte',
+    'CazéTV',
+  ],
+  '2022': [
+    'Villa Nova-MG',
+    'CRB',
+    'Remo',
+    'Portuguesa',
+    'Resende',
+    'Internacional',
+    'Minas (Fem)',
+    'Magnus',
+    'Los Grandes',
+    'CazéTV',
+  ],
+  '2021': [
+    'Botafogo-RJ',
+    'Coritiba-PR',
+    'Villa Nova-MG',
+  ],
+};
+
+export const SPONSOR_GALLERY_IMAGES = [
+  {
+    id: '1',
+    name: 'CBF Futsal',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_4_1x.webp',
+  },
+  {
+    id: '2',
+    name: 'CazéTV',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_5_1x.webp',
+  },
+  {
+    id: '3',
+    name: 'FIFA Women’s World Cup AU-NZ 2023',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_6_1x.webp',
+  },
+  {
+    id: '4',
+    name: 'Sport Club Internacional',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_7_1x.webp',
+  },
+  {
+    id: '5',
+    name: 'Criciúma E.C.',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_8_1x.webp',
+  },
+  {
+    id: '6',
+    name: 'Ceará Sporting Club',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_9_1x.webp',
+  },
+  {
+    id: '7',
+    name: 'Ponte Preta',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_10_1x.webp',
+  },
+  {
+    id: '8',
+    name: 'América-MG',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_11_1x.webp',
+  },
+  {
+    id: '9',
+    name: 'CRB',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_12_1x.webp',
+  },
+  {
+    id: '10',
+    name: 'Botafogo-SP',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_13_1x.webp',
+  },
+  {
+    id: '11',
+    name: 'Vasco Basquete',
+    image: 'https://stellargaming.com/wp-content/uploads/2026/01/box_premio_14_1x.webp',
+  },
+];

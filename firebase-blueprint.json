@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "user_profiles": {
+      "title": "User Profile",
+      "description": "User account profile and balance info",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "pixKey": { "type": "string" },
+        "pixKeyType": { "type": "string" },
+        "availableBalance": { "type": "number" },
+        "pendingBalance": { "type": "number" },
+        "totalEarned": { "type": "number" },
+        "totalSalesCount": { "type": "number" },
+        "partnerLevel": { "type": "string" },
+        "targetGoal": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "name", "email", "availableBalance", "totalEarned"]
+    },
+    "platforms": {
+      "title": "Platform Product",
+      "description": "Platforms available in Techify catalog",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "tagline": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "commissionRate": { "type": "number" },
+        "commissionValue": { "type": "number" },
+        "status": { "type": "string" },
+        "badge": { "type": "string" },
+        "setupTime": { "type": "string" },
+        "monthlyFee": { "type": "number" },
+        "description": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "demoUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "category", "price", "commissionRate", "commissionValue"]
+    },
+    "sales": {
+      "title": "Sale Transaction",
+      "description": "Transactions and sales recorded in platform",
+      "type": "object",
+      "properties": {
+        "platformId": { "type": "string" },
+        "platformName": { "type": "string" },
+        "buyerName": { "type": "string" },
+        "buyerEmail": { "type": "string" },
+        "buyerCompany": { "type": "string" },
+        "amount": { "type": "number" },
+        "commissionEarned": { "type": "number" },
+        "method": { "type": "string" },
+        "status": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "utmSource": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["platformName", "buyerName", "amount", "commissionEarned", "method", "status"]
+    },
+    "withdrawals": {
+      "title": "Withdrawal Request",
+      "description": "PIX cashout requests from affiliates",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "amount": { "type": "number" },
+        "pixKey": { "type": "string" },
+        "pixKeyType": { "type": "string" },
+        "status": { "type": "string" },
+        "requestedAt": { "type": "string" },
+        "completedAt": { "type": "string" }
+      },
+      "required": ["amount", "pixKey", "pixKeyType", "status", "requestedAt"]
+    },
+    "affiliate_links": {
+      "title": "Affiliate Link",
+      "description": "Custom tracking links created by sellers",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "platformId": { "type": "string" },
+        "platformName": { "type": "string" },
+        "customSlug": { "type": "string" },
+        "utmSource": { "type": "string" },
+        "utmMedium": { "type": "string" },
+        "utmCampaign": { "type": "string" },
+        "fullUrl": { "type": "string" },
+        "clicks": { "type": "number" },
+        "conversions": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["platformName", "fullUrl"]
+    }
+  },
+  "firestoreRules": "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}"
+}

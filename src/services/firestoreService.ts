@@ -1,0 +1,650 @@
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  setDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  limit
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { 
+  CompanyStartup,
+  CompanyPlan,
+  PlatformProduct, 
+  UserAffiliation,
+  SaleTransaction, 
+  WithdrawalRequest, 
+  UserSellerProfile, 
+  AffiliateLinkItem,
+  TeamMember
+} from '../types/platform';
+import { 
+  INITIAL_USER_PROFILE, 
+  INITIAL_TRANSACTIONS, 
+  INITIAL_WITHDRAWALS 
+} from '../data/platformData';
+
+// Firestore Collection Names
+export const COLLECTIONS = {
+  COMPANIES: 'companies',
+  PLANS: 'plans',
+  AFFILIATIONS: 'affiliations',
+  PLATFORMS: 'plans', // alias for backward compatibility
+  SALES: 'sales',
+  WITHDRAWALS: 'withdrawals',
+  PROFILES: 'user_profiles',
+  AFFILIATE_LINKS: 'affiliate_links',
+  TEAM: 'team_members'
+};
+
+export const DEFAULT_USER_ID = 'usr_techify_main';
+
+/**
+ * Initialize / Seed Firestore with clean base state
+ */
+export async function seedFirestoreIfEmpty() {
+  try {
+    const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+    const profileSnap = await getDoc(profileRef);
+    if (!profileSnap.exists()) {
+      await setDoc(profileRef, {
+        ...INITIAL_USER_PROFILE,
+        userId: DEFAULT_USER_ID,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    return { success: true, message: 'Banco Firebase sincronizado com sucesso!' };
+  } catch (error: any) {
+    console.error('Erro ao inicializar Firebase Firestore:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Clear ALL documents in Firebase Firestore
+ */
+export async function clearAllFirestoreData() {
+  try {
+    const collectionsToClear = [
+      COLLECTIONS.COMPANIES,
+      COLLECTIONS.PLANS,
+      COLLECTIONS.AFFILIATIONS,
+      COLLECTIONS.SALES,
+      COLLECTIONS.WITHDRAWALS,
+      COLLECTIONS.AFFILIATE_LINKS,
+      COLLECTIONS.TEAM
+    ];
+
+    for (const collName of collectionsToClear) {
+      const collRef = collection(db, collName);
+      const snap = await getDocs(collRef);
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref);
+      }
+    }
+
+    // Reset profile to 0 balance
+    const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+    await setDoc(profileRef, {
+      ...INITIAL_USER_PROFILE,
+      userId: DEFAULT_USER_ID,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    return { success: true, message: 'Todas as coleções e dados foram zerados com sucesso!' };
+  } catch (error: any) {
+    console.error('Erro ao limpar Firestore:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Realtime Profile Listener
+ */
+export function subscribeUserProfile(callback: (profile: UserSellerProfile) => void) {
+  const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+  return onSnapshot(profileRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data() as UserSellerProfile;
+      const target = data.targetGoal || 100000;
+      const total = data.totalEarned || 0;
+      const progress = target > 0 ? Math.min(100, (total / target) * 100) : 0;
+      callback({
+        ...data,
+        currentSalesProgress: Number(progress.toFixed(1))
+      });
+    } else {
+      callback({
+        ...INITIAL_USER_PROFILE,
+        userId: DEFAULT_USER_ID
+      });
+    }
+  }, (err) => {
+    console.error('Firestore user profile listener error:', err);
+  });
+}
+
+/**
+ * Update user profile in Firebase
+ */
+export async function updateUserProfileInFirebase(updates: Partial<UserSellerProfile>) {
+  const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+  await updateDoc(profileRef, {
+    ...updates,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+// ==========================================
+// 🏢 EMPRESAS & STARTUPS (COMPANIES)
+// ==========================================
+
+/**
+ * Realtime Companies Listener
+ */
+export function subscribeCompanies(callback: (companies: CompanyStartup[]) => void) {
+  const q = collection(db, COLLECTIONS.COMPANIES);
+  return onSnapshot(q, (snap) => {
+    const list: CompanyStartup[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) });
+    });
+    // Sort by creation date descending
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    callback(list);
+  }, (err) => {
+    console.error('Firestore companies listener error:', err);
+    callback([]);
+  });
+}
+
+/**
+ * Create a new Company / Startup in Firestore
+ */
+export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 'id' | 'createdAt'>) {
+  const id = `comp-${Date.now()}`;
+  const now = new Date().toISOString();
+  const slug = companyData.name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-');
+
+  const newCompany: CompanyStartup = {
+    ...companyData,
+    id,
+    slug: slug || id,
+    totalPlansCount: 0,
+    totalAffiliatesCount: 0,
+    totalSalesVolume: 0,
+    verified: true,
+    ownerId: DEFAULT_USER_ID,
+    createdAt: now
+  };
+
+  const docRef = doc(db, COLLECTIONS.COMPANIES, id);
+  await setDoc(docRef, newCompany);
+  return newCompany;
+}
+
+/**
+ * Update a Company in Firestore
+ */
+export async function updateCompanyInFirebase(companyId: string, updates: Partial<CompanyStartup>) {
+  const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+  await updateDoc(docRef, updates);
+}
+
+/**
+ * Delete a Company and its plans in Firestore
+ */
+export async function deleteCompanyInFirebase(companyId: string) {
+  const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+  await deleteDoc(docRef);
+
+  // Also delete company plans
+  const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
+  for (const p of plansSnap.docs) {
+    if (p.data().companyId === companyId) {
+      await deleteDoc(p.ref);
+    }
+  }
+}
+
+// ==========================================
+// 📦 PLANOS & PRODUTOS (COMPANY PLANS)
+// ==========================================
+
+/**
+ * Realtime Plans / Platforms Listener
+ */
+export function subscribePlans(callback: (plans: CompanyPlan[]) => void) {
+  const q = collection(db, COLLECTIONS.PLANS);
+  return onSnapshot(q, (snap) => {
+    const list: CompanyPlan[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...(d.data() as Omit<CompanyPlan, 'id'>) });
+    });
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    callback(list);
+  }, (err) => {
+    console.error('Firestore plans listener error:', err);
+    callback([]);
+  });
+}
+
+// Alias for compatibility
+export const subscribePlatforms = subscribePlans;
+
+/**
+ * Create a new Plan / Product in Firestore
+ */
+export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'id' | 'createdAt'>) {
+  const id = `plan-${Date.now()}`;
+  const now = new Date().toISOString();
+
+  const commissionVal = Number(((planData.priceSetup * planData.commissionPercentage) / 100).toFixed(2));
+
+  const newPlan: CompanyPlan = {
+    ...planData,
+    id,
+    commissionValue: commissionVal,
+    affiliatesCount: 0,
+    totalSales: 0,
+    status: 'Ativo',
+    createdAt: now
+  };
+
+  const docRef = doc(db, COLLECTIONS.PLANS, id);
+  await setDoc(docRef, newPlan);
+
+  // Update Company totalPlansCount or auto-create company if not present
+  if (planData.companyId) {
+    const compRef = doc(db, COLLECTIONS.COMPANIES, planData.companyId);
+    const compSnap = await getDoc(compRef);
+    if (compSnap.exists()) {
+      const compData = compSnap.data() as CompanyStartup;
+      await updateDoc(compRef, {
+        totalPlansCount: (compData.totalPlansCount || 0) + 1
+      });
+    } else {
+      const newComp: CompanyStartup = {
+        id: planData.companyId,
+        name: planData.companyName || 'Techify Solutions',
+        slug: (planData.companyName || 'techify-solutions').toLowerCase().replace(/\s+/g, '-'),
+        tagline: `${planData.category || 'SaaS / B2B'} de alta performance`,
+        logo: planData.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80',
+        bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
+        category: (planData.category as any) || 'SaaS / B2B',
+        description: `Empresa responsável pela distribuição do plano ${planData.name}.`,
+        website: 'https://techifygaming.com',
+        email: 'contato@techify.com',
+        whatsapp: '+55 11 99999-9999',
+        commissionRange: `${planData.commissionPercentage}%`,
+        totalPlansCount: 1,
+        totalAffiliatesCount: 0,
+        totalSalesVolume: 0,
+        verified: true,
+        ownerId: DEFAULT_USER_ID,
+        createdAt: now
+      };
+      await setDoc(compRef, newComp);
+    }
+  }
+
+  return newPlan;
+}
+
+// Alias
+export const createPlatformInFirebase = createCompanyPlanInFirebase;
+
+/**
+ * Delete a Plan from Firestore
+ */
+export async function deleteCompanyPlanInFirebase(planId: string, companyId?: string) {
+  const docRef = doc(db, COLLECTIONS.PLANS, planId);
+  await deleteDoc(docRef);
+
+  if (companyId) {
+    const compRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+    const compSnap = await getDoc(compRef);
+    if (compSnap.exists()) {
+      const compData = compSnap.data() as CompanyStartup;
+      await updateDoc(compRef, {
+        totalPlansCount: Math.max(0, (compData.totalPlansCount || 1) - 1)
+      });
+    }
+  }
+}
+
+export const deletePlatformInFirebase = (planId: string) => deleteCompanyPlanInFirebase(planId);
+
+/**
+ * Update Plan in Firestore
+ */
+export async function updateCompanyPlanInFirebase(planId: string, updates: Partial<CompanyPlan>) {
+  const docRef = doc(db, COLLECTIONS.PLANS, planId);
+  await updateDoc(docRef, updates);
+}
+
+export const updatePlatformInFirebase = updateCompanyPlanInFirebase;
+
+// ==========================================
+// 🤝 AFILIAÇÕES DE USUÁRIOS (AFFILIATIONS)
+// ==========================================
+
+/**
+ * Realtime User Affiliations Listener
+ */
+export function subscribeUserAffiliations(callback: (affiliations: UserAffiliation[]) => void, userId: string = DEFAULT_USER_ID) {
+  const q = collection(db, COLLECTIONS.AFFILIATIONS);
+  return onSnapshot(q, (snap) => {
+    const list: UserAffiliation[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as UserAffiliation;
+      if (!userId || data.userId === userId) {
+        list.push({ id: d.id, ...data });
+      }
+    });
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    callback(list);
+  }, (err) => {
+    console.error('Firestore affiliations listener error:', err);
+    callback([]);
+  });
+}
+
+/**
+ * Create a new Affiliation in Firebase (User joins a Plan)
+ */
+export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile: UserSellerProfile) {
+  const id = `aff_${userProfile.userId || DEFAULT_USER_ID}_${plan.id}`;
+  const now = new Date().toISOString();
+  const affiliateCode = `ref_${(userProfile.userId || 'usr').slice(0, 8)}_${plan.id.slice(-4)}`;
+  const origin = window.location.origin;
+  const affiliateLink = `${origin}/p/${plan.companyId}/${plan.id}?ref=${affiliateCode}`;
+
+  const affiliation: UserAffiliation = {
+    id,
+    userId: userProfile.userId || DEFAULT_USER_ID,
+    userName: userProfile.name,
+    userEmail: userProfile.email,
+    companyId: plan.companyId,
+    companyName: plan.companyName,
+    companyLogo: plan.companyLogo,
+    planId: plan.id,
+    planName: plan.name,
+    priceSetup: plan.priceSetup,
+    commissionPercentage: plan.commissionPercentage,
+    commissionValue: plan.commissionValue,
+    affiliateCode,
+    affiliateLink,
+    clicks: 0,
+    salesCount: 0,
+    totalEarned: 0,
+    status: 'Ativo',
+    createdAt: now
+  };
+
+  await setDoc(doc(db, COLLECTIONS.AFFILIATIONS, id), affiliation);
+
+  // Increment Plan affiliatesCount
+  const planRef = doc(db, COLLECTIONS.PLANS, plan.id);
+  const planSnap = await getDoc(planRef);
+  if (planSnap.exists()) {
+    const pData = planSnap.data() as CompanyPlan;
+    await updateDoc(planRef, {
+      affiliatesCount: (pData.affiliatesCount || 0) + 1
+    });
+  }
+
+  // Increment Company affiliatesCount
+  if (plan.companyId) {
+    const compRef = doc(db, COLLECTIONS.COMPANIES, plan.companyId);
+    const compSnap = await getDoc(compRef);
+    if (compSnap.exists()) {
+      const cData = compSnap.data() as CompanyStartup;
+      await updateDoc(compRef, {
+        totalAffiliatesCount: (cData.totalAffiliatesCount || 0) + 1
+      });
+    }
+  }
+
+  return affiliation;
+}
+
+/**
+ * Remove an Affiliation
+ */
+export async function deleteAffiliationInFirebase(affiliationId: string, planId?: string, companyId?: string) {
+  await deleteDoc(doc(db, COLLECTIONS.AFFILIATIONS, affiliationId));
+
+  if (planId) {
+    const planRef = doc(db, COLLECTIONS.PLANS, planId);
+    const planSnap = await getDoc(planRef);
+    if (planSnap.exists()) {
+      const pData = planSnap.data() as CompanyPlan;
+      await updateDoc(planRef, {
+        affiliatesCount: Math.max(0, (pData.affiliatesCount || 1) - 1)
+      });
+    }
+  }
+}
+
+// ==========================================
+// 💰 VENDAS & COMISSÕES (SALES)
+// ==========================================
+
+/**
+ * Realtime Sales Listener
+ */
+export function subscribeSales(callback: (sales: SaleTransaction[]) => void) {
+  const q = collection(db, COLLECTIONS.SALES);
+  return onSnapshot(q, (snap) => {
+    const list: SaleTransaction[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...(d.data() as Omit<SaleTransaction, 'id'>) });
+    });
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    callback(list);
+  }, (err) => {
+    console.error('Firestore sales listener error:', err);
+    callback([]);
+  });
+}
+
+/**
+ * Record a New Sale in Firebase Firestore & update balance of the affiliate
+ */
+export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransaction, 'id' | 'createdAt'>) {
+  const id = `TX-${Math.floor(100000 + Math.random() * 900000)}`;
+  const now = new Date();
+  const fullSale: SaleTransaction = {
+    ...saleData,
+    id,
+    createdAt: now.toISOString()
+  };
+
+  // 1. Save sale document
+  const saleRef = doc(db, COLLECTIONS.SALES, id);
+  await setDoc(saleRef, fullSale);
+
+  // 2. Update Profile Balances (Credit the affiliate or seller)
+  const targetUserId = saleData.affiliateId || saleData.sellerId || DEFAULT_USER_ID;
+  const profileRef = doc(db, COLLECTIONS.PROFILES, targetUserId);
+  const profileSnap = await getDoc(profileRef);
+  if (profileSnap.exists()) {
+    const current = profileSnap.data() as UserSellerProfile;
+    const newTotalEarned = (current.totalEarned || 0) + fullSale.commissionEarned;
+    const newAvailable = (current.availableBalance || 0) + fullSale.commissionEarned;
+    const newCount = (current.totalSalesCount || 0) + 1;
+    const target = current.targetGoal || 100000;
+    const progress = Math.min(100, (newTotalEarned / target) * 100);
+
+    let level = current.partnerLevel || 'Afiliado Starter';
+    if (newTotalEarned >= 100000) level = 'Master Elite Black';
+    else if (newTotalEarned >= 50000) level = 'Parceiro Gold';
+    else if (newTotalEarned >= 20000) level = 'Parceiro Silver';
+
+    await updateDoc(profileRef, {
+      totalEarned: newTotalEarned,
+      availableBalance: newAvailable,
+      totalSalesCount: newCount,
+      partnerLevel: level,
+      currentSalesProgress: Number(progress.toFixed(1)),
+      updatedAt: now.toISOString()
+    });
+  }
+
+  // 3. Update Plan total sales
+  if (fullSale.platformId) {
+    const planRef = doc(db, COLLECTIONS.PLANS, fullSale.platformId);
+    const planSnap = await getDoc(planRef);
+    if (planSnap.exists()) {
+      const pData = planSnap.data() as CompanyPlan;
+      await updateDoc(planRef, {
+        totalSales: (pData.totalSales || 0) + 1
+      });
+    }
+  }
+
+  // 4. Update Company total sales volume
+  if (fullSale.companyId) {
+    const compRef = doc(db, COLLECTIONS.COMPANIES, fullSale.companyId);
+    const compSnap = await getDoc(compRef);
+    if (compSnap.exists()) {
+      const cData = compSnap.data() as CompanyStartup;
+      await updateDoc(compRef, {
+        totalSalesVolume: (cData.totalSalesVolume || 0) + fullSale.amount
+      });
+    }
+  }
+
+  // 5. Update Affiliation salesCount and totalEarned if exists
+  const affId = `aff_${targetUserId}_${fullSale.platformId}`;
+  const affRef = doc(db, COLLECTIONS.AFFILIATIONS, affId);
+  const affSnap = await getDoc(affRef);
+  if (affSnap.exists()) {
+    const affData = affSnap.data() as UserAffiliation;
+    await updateDoc(affRef, {
+      salesCount: (affData.salesCount || 0) + 1,
+      totalEarned: (affData.totalEarned || 0) + fullSale.commissionEarned
+    });
+  }
+
+  return fullSale;
+}
+
+// ==========================================
+// 🏧 SAQUES PIX (WITHDRAWALS)
+// ==========================================
+
+/**
+ * Realtime Withdrawals Listener
+ */
+export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void) {
+  const q = collection(db, COLLECTIONS.WITHDRAWALS);
+  return onSnapshot(q, (snap) => {
+    const list: WithdrawalRequest[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, 'id'>) });
+    });
+    callback(list);
+  }, (err) => {
+    console.error('Firestore withdrawals listener error:', err);
+    callback([]);
+  });
+}
+
+/**
+ * Request a PIX Cashout in Firebase Firestore
+ */
+export async function createWithdrawalInFirebase(amount: number, pixKey: string, pixKeyType: string) {
+  const id = `WTH-${Math.floor(1000 + Math.random() * 9000)}`;
+  const now = new Date();
+  const formattedDate = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+  const newWth: WithdrawalRequest = {
+    id,
+    userId: DEFAULT_USER_ID,
+    userName: INITIAL_USER_PROFILE.name,
+    amount,
+    pixKey,
+    pixKeyType,
+    status: 'Concluído',
+    requestedAt: formattedDate,
+    completedAt: now.toISOString()
+  };
+
+  // 1. Save withdrawal doc
+  await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, id), newWth);
+
+  // 2. Decrement available balance
+  const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
+  const profileSnap = await getDoc(profileRef);
+  if (profileSnap.exists()) {
+    const current = profileSnap.data() as UserSellerProfile;
+    const newAvailable = Math.max(0, (current.availableBalance || 0) - amount);
+    await updateDoc(profileRef, {
+      availableBalance: newAvailable,
+      updatedAt: now.toISOString()
+    });
+  }
+
+  return newWth;
+}
+
+// ==========================================
+// 👥 EQUIPE & OUTROS
+// ==========================================
+
+export function subscribeTeamMembers(callback: (team: TeamMember[]) => void) {
+  const q = collection(db, COLLECTIONS.TEAM);
+  return onSnapshot(q, (snap) => {
+    const list: TeamMember[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...(d.data() as Omit<TeamMember, 'id'>) });
+    });
+    callback(list);
+  }, (err) => {
+    console.error('Firestore team listener error:', err);
+    callback([]);
+  });
+}
+
+export async function createTeamMemberInFirebase(memberData: Omit<TeamMember, 'id'>) {
+  const id = `team-${Date.now()}`;
+  const newMember: TeamMember = {
+    ...memberData,
+    id
+  };
+  await setDoc(doc(db, COLLECTIONS.TEAM, id), newMember);
+  return newMember;
+}
+
+export async function deleteTeamMemberInFirebase(id: string) {
+  await deleteDoc(doc(db, COLLECTIONS.TEAM, id));
+}
+
+export async function saveAffiliateLinkInFirebase(link: Omit<AffiliateLinkItem, 'id' | 'createdAt'>) {
+  const id = `aff-${Date.now()}`;
+  const now = new Date().toISOString();
+  const linkItem: AffiliateLinkItem = {
+    ...link,
+    id,
+    createdAt: now
+  };
+  await setDoc(doc(db, COLLECTIONS.AFFILIATE_LINKS, id), linkItem);
+  return linkItem;
+}

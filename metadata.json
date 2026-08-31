@@ -1,0 +1,6 @@
+{
+  "name": "Techify Gaming",
+  "description": "A Techify é a plataforma marketplace de startups e ecossistema de afiliação B2B que conecta empresas inovadoras a afiliados de alta performance com comissões instantâneas via PIX D+0.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

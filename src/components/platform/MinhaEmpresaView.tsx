@@ -1,0 +1,489 @@
+import React, { useState } from 'react';
+import { CompanyStartup, CompanyPlan, UserAffiliation, SaleTransaction } from '../../types/platform';
+import { 
+  Building2, 
+  Layers, 
+  Users, 
+  DollarSign, 
+  Plus, 
+  Sparkles, 
+  ExternalLink, 
+  Trash2, 
+  Edit3,
+  Percent, 
+  TrendingUp, 
+  CheckCircle2,
+  Share2,
+  Mail,
+  Phone,
+  Globe,
+  Tag
+} from 'lucide-react';
+
+interface MinhaEmpresaViewProps {
+  companies: CompanyStartup[];
+  plans: CompanyPlan[];
+  affiliations: UserAffiliation[];
+  sales: SaleTransaction[];
+  onOpenCreateCompany: () => void;
+  onOpenCreatePlan: (companyId?: string) => void;
+  onOpenRegisterSale: (planId?: string) => void;
+  onEditPlan?: (plan: CompanyPlan) => void;
+  onDeleteCompany: (companyId: string) => void;
+  onDeletePlan: (planId: string, companyId?: string) => void;
+}
+
+export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
+  companies = [],
+  plans = [],
+  affiliations = [],
+  sales = [],
+  onOpenCreateCompany,
+  onOpenCreatePlan,
+  onOpenRegisterSale,
+  onEditPlan,
+  onDeleteCompany,
+  onDeletePlan
+}) => {
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || '');
+  const [activeTab, setActiveTab] = useState<'planos' | 'afiliados' | 'vendas'>('planos');
+
+  const currentCompany = companies.find(c => c.id === selectedCompanyId) || companies[0];
+
+  const companyPlans = plans.filter(p => !currentCompany || p.companyId === currentCompany.id);
+  const companyAffiliations = affiliations.filter(a => !currentCompany || a.companyId === currentCompany.id);
+  const companySales = sales.filter(s => !currentCompany || s.companyId === currentCompany.id || companyPlans.some(p => p.id === s.platformId));
+
+  const totalRevenue = companySales.reduce((acc, s) => acc + s.amount, 0);
+  const totalCommissionsPaid = companySales.reduce((acc, s) => acc + s.commissionEarned, 0);
+
+  return (
+    <div className="flex flex-col gap-6" id="techify-minha-empresa-view">
+      {/* Header with quick stats & actions */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
+            <Building2 className="w-3.5 h-3.5" />
+            Área Exclusiva de Produtores, Startups & Empresas
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
+            Painel da Empresa & Gestão de Planos
+          </h1>
+          <p className="text-xs text-white/60 mt-1 max-w-2xl">
+            Cadastre sua startup, defina os planos e soluções comercializados e configure as comissões que sua rede de afiliados receberá a cada venda.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 w-full md:w-auto">
+          <button
+            onClick={onOpenCreateCompany}
+            className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 border border-white/10"
+          >
+            <Building2 className="w-4 h-4 text-[#D9F22A]" />
+            Nova Startup
+          </button>
+          <button
+            onClick={() => onOpenCreatePlan(currentCompany?.id)}
+            className="flex-1 md:flex-initial bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            Criar Novo Plano
+          </button>
+        </div>
+      </div>
+
+      {/* If no companies exist yet, prompt to create */}
+      {companies.length === 0 ? (
+        <div className="bg-[#080d1a] border-2 border-dashed border-[#D9F22A]/40 rounded-3xl p-8 sm:p-12 text-center flex flex-col items-center justify-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
+            <Building2 className="w-8 h-8" />
+          </div>
+          <div className="max-w-md">
+            <h3 className="text-xl font-bold text-white font-['Syne'] mb-2">
+              Nenhuma Empresa ou Startup Cadastrada
+            </h3>
+            <p className="text-xs text-white/60 leading-relaxed mb-6">
+              Comece cadastrando o nome da sua empresa, imagem/logotipo e seus planos para que os afiliados da plataforma possam começar a divulgar seus produtos.
+            </p>
+            <button
+              onClick={onOpenCreateCompany}
+              className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-6 py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              Cadastrar Minha Primeira Startup
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Company Selector Pill Selector if multiple companies exist */}
+          {companies.length > 1 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <span className="text-xs text-white/50 font-bold uppercase whitespace-nowrap mr-1">Empresas:</span>
+              {companies.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCompanyId(c.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                    (selectedCompanyId === c.id || (!selectedCompanyId && companies[0].id === c.id))
+                      ? 'bg-[#D9F22A] text-[#060A15]'
+                      : 'bg-[#080d1a] text-white/70 hover:text-white border border-white/10'
+                  }`}
+                >
+                  <img src={c.logo} alt={c.name} className="w-4 h-4 rounded-full object-cover" />
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Company Hero Profile Card */}
+          {currentCompany && (
+            <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-[#D9F22A]/5 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+                <div className="flex items-center gap-4 sm:gap-6">
+                  <img
+                    src={currentCompany.logo}
+                    alt={currentCompany.name}
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-[#D9F22A]/40 bg-[#050811] shadow-lg flex-shrink-0"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h2 className="text-xl sm:text-2xl font-black text-white font-['Syne']">
+                        {currentCompany.name}
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#D9F22A]/10 text-[#D9F22A] border border-[#D9F22A]/30">
+                        {currentCompany.category}
+                      </span>
+                      {currentCompany.verified && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/30 flex items-center gap-1 font-bold">
+                          <CheckCircle2 className="w-3 h-3" /> Verificada
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-white/70 max-w-xl line-clamp-2">
+                      {currentCompany.description}
+                    </p>
+                    <div className="flex items-center gap-4 mt-2 text-[11px] text-white/50 flex-wrap">
+                      {currentCompany.website && (
+                        <span className="flex items-center gap-1 text-[#D9F22A] hover:underline">
+                          <Globe className="w-3 h-3" /> {currentCompany.website.replace('https://', '')}
+                        </span>
+                      )}
+                      {currentCompany.email && (
+                        <span className="flex items-center gap-1">
+                          <Mail className="w-3 h-3" /> {currentCompany.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metrics Pill Grid */}
+                <div className="grid grid-cols-3 gap-3 w-full lg:w-auto bg-[#050811] border border-white/10 rounded-2xl p-3.5">
+                  <div className="text-center px-3">
+                    <span className="text-[10px] font-bold uppercase text-white/50 block">Planos Ativos</span>
+                    <span className="text-lg font-black text-white font-['Syne']">{companyPlans.length}</span>
+                  </div>
+                  <div className="text-center px-3 border-x border-white/10">
+                    <span className="text-[10px] font-bold uppercase text-[#D9F22A] block">Afiliados</span>
+                    <span className="text-lg font-black text-[#D9F22A] font-['Syne']">{companyAffiliations.length}</span>
+                  </div>
+                  <div className="text-center px-3">
+                    <span className="text-[10px] font-bold uppercase text-white/50 block">Vendas</span>
+                    <span className="text-lg font-black text-white font-['Syne']">{companySales.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub Navigation: Planos | Afiliados | Vendas */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('planos')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                  activeTab === 'planos'
+                    ? 'bg-[#D9F22A] text-[#060A15]'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Planos & Comissões ({companyPlans.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab('afiliados')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                  activeTab === 'afiliados'
+                    ? 'bg-[#D9F22A] text-[#060A15]'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Afiliados Conectados ({companyAffiliations.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab('vendas')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                  activeTab === 'vendas'
+                    ? 'bg-[#D9F22A] text-[#060A15]'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <DollarSign className="w-3.5 h-3.5" />
+                Vendas & Contratos ({companySales.length})
+              </button>
+            </div>
+
+            <button
+              onClick={() => onOpenRegisterSale()}
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-[#D9F22A] bg-[#D9F22A]/10 border border-[#D9F22A]/30 px-3 py-1.5 rounded-xl hover:bg-[#D9F22A]/20 transition-all cursor-pointer"
+            >
+              <DollarSign className="w-3.5 h-3.5" /> Lançar Venda de Plano
+            </button>
+          </div>
+
+          {/* TAB 1: PLANOS CADASTRADOS */}
+          {activeTab === 'planos' && (
+            <div>
+              {companyPlans.length === 0 ? (
+                <div className="text-center py-12 px-4 bg-[#080d1a] border border-white/10 rounded-2xl">
+                  <Layers className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
+                  <h4 className="text-base font-bold text-white font-['Syne']">Nenhum plano cadastrado nesta empresa</h4>
+                  <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
+                    Adicione planos, preços e comissões para que os afiliados possam começar a vender.
+                  </p>
+                  <button
+                    onClick={() => onOpenCreatePlan(currentCompany?.id)}
+                    className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" /> Cadastrar Primeiro Plano
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {companyPlans.map((plan) => (
+                    <div
+                      key={plan.id}
+                      className="bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 group shadow-lg"
+                    >
+                      {/* Plan Banner */}
+                      <div className="h-36 w-full relative overflow-hidden bg-black/40">
+                        <img
+                          src={plan.bannerImage}
+                          alt={plan.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#080d1a] via-[#080d1a]/40 to-transparent" />
+                        <div className="absolute top-3 left-3 flex items-center gap-1.5 max-w-[65%]">
+                          {plan.badge && (
+                            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-[#D9F22A] text-[#060A15] uppercase tracking-wider truncate max-w-[130px]" title={plan.badge}>
+                              {plan.badge}
+                            </span>
+                          )}
+                        </div>
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
+                          {onEditPlan && (
+                            <button
+                              onClick={() => onEditPlan(plan)}
+                              className="p-1.5 rounded-lg bg-black/70 text-white/70 hover:text-[#D9F22A] hover:bg-black/90 transition-colors cursor-pointer border border-white/10"
+                              title="Editar Plano"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onDeletePlan(plan.id, plan.companyId)}
+                            className="p-1.5 rounded-lg bg-black/70 text-white/70 hover:text-red-400 hover:bg-black/90 transition-colors cursor-pointer border border-white/10"
+                            title="Excluir Plano"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Plan Content */}
+                      <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                        <div>
+                          <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block mb-1">
+                            {plan.category}
+                          </span>
+                          <h4 className="text-lg font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">
+                            {plan.name}
+                          </h4>
+                          <p className="text-xs text-white/70 line-clamp-2 mt-1.5 leading-relaxed">
+                            {plan.description}
+                          </p>
+
+                          {/* Features */}
+                          <div className="mt-3 space-y-1">
+                            {plan.features?.slice(0, 3).map((f, i) => (
+                              <div key={i} className="flex items-center gap-2 text-[11px] text-white/80 truncate">
+                                <CheckCircle2 className="w-3 h-3 text-[#D9F22A] flex-shrink-0" />
+                                <span className="truncate">{f}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Pricing & Commission Box */}
+                        <div className="pt-3 border-t border-white/10 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-white/50 font-bold uppercase text-[10px]">Preço de Setup:</span>
+                            <span className="text-white font-black text-sm">
+                              R$ {plan.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30">
+                            <span className="text-[11px] font-bold text-[#D9F22A]">
+                              Comissão do Afiliado ({plan.commissionPercentage}%):
+                            </span>
+                            <span className="text-sm font-black text-[#D9F22A]">
+                              R$ {plan.commissionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1 text-[11px] text-white/60">
+                            <span>{plan.affiliatesCount || 0} afiliados ativos</span>
+                            <span>{plan.totalSales || 0} vendas</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: AFILIADOS CONECTADOS */}
+          {activeTab === 'afiliados' && (
+            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
+              <h3 className="text-base font-bold text-white font-['Syne'] mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#D9F22A]" />
+                Afiliados Promovendo os Produtos da Sua Empresa
+              </h3>
+
+              {companyAffiliations.length === 0 ? (
+                <div className="text-center py-10 px-4 bg-[#050811] rounded-xl border border-white/5">
+                  <Users className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                  <p className="text-xs text-white/60">
+                    Nenhum afiliado conectado aos seus planos ainda. Os usuários poderão se afiliar através do Marketplace.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-white/40 bg-[#050811] border-b border-white/10 uppercase tracking-wider">
+                        <th className="py-3 px-4 font-bold">Afiliado</th>
+                        <th className="py-3 px-4 font-bold">Plano Promovido</th>
+                        <th className="py-3 px-4 font-bold text-center">Comissão</th>
+                        <th className="py-3 px-4 font-bold text-center">Vendas Fechadas</th>
+                        <th className="py-3 px-4 font-bold text-right">Comissões Geradas</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {companyAffiliations.map((aff) => (
+                        <tr key={aff.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3.5 px-4 font-bold text-white">
+                            <div>{aff.userName}</div>
+                            <div className="text-[10px] text-white/40 font-normal">{aff.userEmail}</div>
+                          </td>
+                          <td className="py-3.5 px-4 text-white/80">{aff.planName}</td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="px-2 py-0.5 rounded bg-[#D9F22A]/10 text-[#D9F22A] font-bold">
+                              {aff.commissionPercentage}%
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-bold text-white">{aff.salesCount || 0}</td>
+                          <td className="py-3.5 px-4 text-right font-black text-[#D9F22A]">
+                            R$ {(aff.totalEarned || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: VENDAS DA EMPRESA */}
+          {activeTab === 'vendas' && (
+            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-white font-['Syne'] flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-[#D9F22A]" />
+                  Contratos & Vendas Faturadas
+                </h3>
+                <button
+                  onClick={() => onOpenRegisterSale()}
+                  className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-3.5 py-1.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Registrar Venda
+                </button>
+              </div>
+
+              {companySales.length === 0 ? (
+                <div className="text-center py-10 px-4 bg-[#050811] rounded-xl border border-white/5">
+                  <DollarSign className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                  <p className="text-xs text-white/60">
+                    Nenhuma venda registrada ainda para os planos desta empresa.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-white/40 bg-[#050811] border-b border-white/10 uppercase tracking-wider">
+                        <th className="py-3 px-4 font-bold">Código / Data</th>
+                        <th className="py-3 px-4 font-bold">Plano</th>
+                        <th className="py-3 px-4 font-bold">Cliente / Comprador</th>
+                        <th className="py-3 px-4 font-bold text-right">Valor Bruto</th>
+                        <th className="py-3 px-4 font-bold text-right">Comissão Afiliado</th>
+                        <th className="py-3 px-4 font-bold text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {companySales.map((s) => (
+                        <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3.5 px-4 font-mono text-white/80">
+                            <div>{s.id}</div>
+                            <div className="text-[10px] text-white/40">{s.date} {s.time}</div>
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-white">{s.platformName}</td>
+                          <td className="py-3.5 px-4">
+                            <div className="text-white font-medium">{s.buyerName}</div>
+                            <div className="text-[10px] text-white/50">{s.buyerCompany}</div>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-bold text-white">
+                            R$ {s.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-black text-[#D9F22A]">
+                            + R$ {s.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/30">
+                              {s.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
