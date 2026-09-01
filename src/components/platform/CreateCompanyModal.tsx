@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CompanyStartup } from '../../types/platform';
-import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon } from 'lucide-react';
+import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { formatCNPJ, formatPhone, isValidCNPJ, getAuthErrorMessage } from '../../services/authService';
 
 interface CreateCompanyModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
   onCompanyCreated
 }) => {
   const [name, setName] = useState('');
+  const [cnpj, setCnpj] = useState('');
   const [tagline, setTagline] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState('');
@@ -40,27 +42,38 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
   const [whatsapp, setWhatsapp] = useState('');
   const [logo, setLogo] = useState(PRESET_LOGOS[0].url);
   const [commissionRange, setCommissionRange] = useState('30% a 50%');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !description.trim()) {
-      alert('Por favor, preencha o nome e a descrição da empresa.');
+    setErrorMsg(null);
+
+    if (!name.trim()) {
+      setErrorMsg('Por favor, preencha o nome da empresa.');
+      return;
+    }
+
+    const cleanCnpj = cnpj.replace(/\D/g, '');
+    if (cleanCnpj && cleanCnpj.length === 14 && !isValidCNPJ(cleanCnpj)) {
+      setErrorMsg('O CNPJ informado é inválido. Verifique os números digitados.');
       return;
     }
 
     onCompanyCreated({
       name: name.trim(),
-      slug: name.toLowerCase().replace(/\s+/g, '-'),
+      slug: name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'),
       tagline: tagline.trim() || `${category} inovador e escalável`,
       logo: logo.trim() || PRESET_LOGOS[0].url,
       bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
       category: category as any,
-      description: description.trim(),
+      description: description.trim() || `Empresa ${name.trim()} integrada ao ecossistema Techify.`,
       website: website.trim() || 'https://suaempresa.com',
       email: email.trim() || 'contato@empresa.com',
-      whatsapp: whatsapp.trim() || '+55 11 99999-9999',
+      whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : '+55 11 99999-9999',
+      cnpj: cleanCnpj ? formatCNPJ(cleanCnpj) : undefined,
+      cleanCnpj: cleanCnpj || undefined,
       totalPlansCount: 0,
       totalAffiliatesCount: 0,
       totalSalesVolume: 0,
@@ -90,9 +103,16 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
         <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne'] mb-2">
           Cadastrar Empresa ou Startup
         </h3>
-        <p className="text-xs text-white/70 mb-6">
-          Cadastre sua startup na plataforma para disponibilizar planos para a rede de afiliados venderem com comissão.
+        <p className="text-xs text-white/70 mb-5">
+          Cadastre sua startup na plataforma para desbloquear o Painel da Empresa e disponibilizar planos para a rede de afiliados venderem com comissão.
         </p>
+
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -112,6 +132,22 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
+                CNPJ da Empresa
+              </label>
+              <input
+                type="text"
+                maxLength={18}
+                placeholder="00.000.000/0000-00"
+                value={cnpj}
+                onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
+                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
                 Setor / Categoria *
               </label>
               <select
@@ -125,6 +161,20 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
+                WhatsApp de Suporte
+              </label>
+              <input
+                type="text"
+                maxLength={15}
+                placeholder="(11) 99999-9999"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(formatPhone(e.target.value))}
+                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+              />
             </div>
           </div>
 
@@ -184,7 +234,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             </label>
             <textarea
               required
-              rows={3}
+              rows={2}
               placeholder="Descreva o que a sua empresa faz, o público-alvo dos planos e por que os afiliados devem promover seus produtos..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -192,7 +242,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-white/70 mb-1">
                 Website Oficial
@@ -202,19 +252,6 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
                 placeholder="https://empresa.com"
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-white/70 mb-1">
-                E-mail Corporativo
-              </label>
-              <input
-                type="email"
-                placeholder="comercial@empresa.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
               />
             </div>
@@ -238,10 +275,11 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             className="mt-3 w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <Building2 className="w-4 h-4" />
-            Cadastrar Empresa & Liberar Planos
+            Cadastrar Empresa & Desbloquear Painel
           </button>
         </form>
       </div>
     </div>
   );
 };
+

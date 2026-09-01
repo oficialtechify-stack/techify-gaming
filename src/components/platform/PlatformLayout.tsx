@@ -45,10 +45,12 @@ import { RelatoriosView } from './RelatoriosView';
 import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
 import { CreateCompanyModal } from './CreateCompanyModal';
+import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
 import { RegisterSaleModal } from './RegisterSaleModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
+import { completeAffiliateProfile } from '../../services/authService';
 import { 
   LayoutDashboard, 
   Store, 
@@ -104,6 +106,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
 
   // Modals state
+  const [isRegisterAffiliateModalOpen, setIsRegisterAffiliateModalOpen] = useState<boolean>(false);
   const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState<boolean>(false);
   const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState<boolean>(false);
   const [editingPlan, setEditingPlan] = useState<CompanyPlan | null>(null);
@@ -114,6 +117,77 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Live Toast Notification
   const [liveToast, setLiveToast] = useState<{ message: string; sub: string; amount: string } | null>(null);
+
+  // Role Security & Tab Guard
+  useEffect(() => {
+    if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
+      setActiveTab('dashboard');
+    } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios')) {
+      setActiveTab('minha_empresa');
+    }
+  }, [roleMode, activeTab]);
+
+  // Robust Role Switcher with Mandatory Registration
+  const handleSwitchRole = (targetRole: UserRoleMode) => {
+    if (targetRole === roleMode) return;
+
+    if (targetRole === 'afiliado') {
+      const hasAffiliate = userProfile?.hasAffiliateProfile || (userProfile?.cpf && userProfile?.cleanCpf?.length === 11);
+      if (!hasAffiliate) {
+        setIsRegisterAffiliateModalOpen(true);
+        return;
+      }
+      setRoleMode('afiliado');
+      setUserRole('afiliado');
+      if (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes') {
+        setActiveTab('dashboard');
+      }
+      setLiveToast({
+        message: 'Modo Afiliado Ativado',
+        sub: 'Painel de comissões e marketplace',
+        amount: 'Afiliado'
+      });
+      setTimeout(() => setLiveToast(null), 3000);
+    } else if (targetRole === 'empresa') {
+      const userOwnedCompanies = companies.filter(c => c.ownerId === currentUser?.uid || c.id === userProfile?.companyId);
+      const hasCompany = userProfile?.hasCompanyProfile || userOwnedCompanies.length > 0 || !!userProfile?.companyId;
+      if (!hasCompany) {
+        setIsCreateCompanyModalOpen(true);
+        return;
+      }
+      setRoleMode('empresa');
+      setUserRole('empresa');
+      if (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios') {
+        setActiveTab('minha_empresa');
+      }
+      setLiveToast({
+        message: 'Modo Empresa Ativado',
+        sub: 'Gestão de soluções e planos',
+        amount: 'Empresa'
+      });
+      setTimeout(() => setLiveToast(null), 3000);
+    }
+  };
+
+  const handleCompleteAffiliateProfile = async (data: {
+    name: string;
+    cpf: string;
+    pixKey: string;
+    pixKeyType: string;
+    whatsapp?: string;
+  }) => {
+    if (!currentUser?.uid) return;
+    await completeAffiliateProfile(currentUser.uid, data);
+    setRoleMode('afiliado');
+    setUserRole('afiliado');
+    setActiveTab('dashboard');
+    setLiveToast({
+      message: 'Cadastro de Afiliado Concluído!',
+      sub: 'Conta ativada com repasse PIX D+0',
+      amount: 'Sucesso'
+    });
+    setTimeout(() => setLiveToast(null), 4500);
+  };
 
   // Realtime Firebase Subscriptions on mount
   useEffect(() => {
@@ -231,13 +305,15 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const handleCreateCompany = async (companyData: Omit<CompanyStartup, 'id' | 'createdAt'>) => {
     try {
       const created = await createCompanyInFirebase(companyData);
+      setRoleMode('empresa');
+      setUserRole('empresa');
+      setActiveTab('minha_empresa');
       setLiveToast({
         message: 'Empresa cadastrada com sucesso!',
         sub: created.name,
         amount: 'Ativa'
       });
       setTimeout(() => setLiveToast(null), 4000);
-      setActiveTab('minha_empresa');
     } catch (err: any) {
       console.error('Error creating company in Firestore:', err);
       alert(`Erro ao cadastrar empresa: ${err.message}`);
@@ -441,10 +517,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {!sidebarCollapsed && (
             <div className="mx-3 mt-3 p-1 rounded-xl bg-[#050811] border border-white/10 flex items-center gap-1">
               <button
-                onClick={() => {
-                  setRoleMode('afiliado');
-                  if (activeTab === 'minha_empresa') setActiveTab('dashboard');
-                }}
+                onClick={() => handleSwitchRole('afiliado')}
                 className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                   roleMode === 'afiliado'
                     ? 'bg-[#D9F22A] text-[#060A15] shadow-sm'
@@ -456,10 +529,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               </button>
 
               <button
-                onClick={() => {
-                  setRoleMode('empresa');
-                  setActiveTab('minha_empresa');
-                }}
+                onClick={() => handleSwitchRole('empresa')}
                 className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                   roleMode === 'empresa'
                     ? 'bg-[#D9F22A] text-[#060A15] shadow-sm'
@@ -582,10 +652,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           <div className="flex items-center gap-2">
             <div className="bg-[#050811] border border-white/15 rounded-full p-1 flex items-center">
               <button
-                onClick={() => {
-                  setRoleMode('afiliado');
-                  if (activeTab === 'minha_empresa') setActiveTab('dashboard');
-                }}
+                onClick={() => handleSwitchRole('afiliado')}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
                   roleMode === 'afiliado'
                     ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
@@ -597,10 +664,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               </button>
 
               <button
-                onClick={() => {
-                  setRoleMode('empresa');
-                  setActiveTab('minha_empresa');
-                }}
+                onClick={() => handleSwitchRole('empresa')}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
                   roleMode === 'empresa'
                     ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
@@ -749,10 +813,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setIsCreatePlanModalOpen(true);
               } : undefined}
               onDeletePlatform={roleMode === 'empresa' ? handleDeletePlan : undefined}
-              onSwitchToCompanyMode={() => {
-                setRoleMode('empresa');
-                setActiveTab('minha_empresa');
-              }}
+              onSwitchToCompanyMode={() => handleSwitchRole('empresa')}
             />
           )}
 
@@ -782,6 +843,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {activeTab === 'vendas' && (
             <VendasView
+              roleMode={roleMode}
               transactions={transactions}
               onOpenSimulateSale={() => {
                 setSelectedPlanForSale(undefined);
@@ -792,6 +854,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {activeTab === 'financeiro' && (
             <FinanceiroView
+              roleMode={roleMode}
               userProfile={userProfile}
               withdrawals={withdrawals}
               onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
@@ -826,6 +889,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       )}
 
       {/* ===================== 4. MODALS ===================== */}
+      <RegisterAffiliateModal
+        isOpen={isRegisterAffiliateModalOpen}
+        onClose={() => setIsRegisterAffiliateModalOpen(false)}
+        onComplete={handleCompleteAffiliateProfile}
+        initialName={userProfile.name}
+        initialPixKey={userProfile.pixKey}
+        initialPixType={userProfile.pixKeyType}
+        initialWhatsapp={userProfile.whatsapp}
+      />
+
       <CreateCompanyModal
         isOpen={isCreateCompanyModalOpen}
         onClose={() => setIsCreateCompanyModalOpen(false)}

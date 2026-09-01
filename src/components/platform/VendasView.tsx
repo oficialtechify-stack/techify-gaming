@@ -14,11 +14,13 @@ import {
 } from 'lucide-react';
 
 interface VendasViewProps {
+  roleMode?: string;
   transactions: SaleTransaction[];
   onOpenSimulateSale: () => void;
 }
 
 export const VendasView: React.FC<VendasViewProps> = ({
+  roleMode = 'afiliado',
   transactions,
   onOpenSimulateSale
 }) => {
@@ -43,6 +45,7 @@ export const VendasView: React.FC<VendasViewProps> = ({
 
   const totalCommissionsFiltered = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? t.commissionEarned : 0), 0);
   const totalVolumeFiltered = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? t.amount : 0), 0);
+  const totalCompanyNet = totalVolumeFiltered - totalCommissionsFiltered;
 
   return (
     <div className="flex flex-col gap-6" id="techify-vendas-view">
@@ -50,10 +53,12 @@ export const VendasView: React.FC<VendasViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-            Minhas Vendas & Comissões
+            {roleMode === 'empresa' ? 'Vendas & Pedidos da Empresa' : 'Minhas Vendas & Comissões'}
           </h1>
           <p className="text-xs text-white/60 mt-1">
-            Histórico completo de contratos gerados através dos seus links de afiliação.
+            {roleMode === 'empresa'
+              ? 'Histórico completo de assinaturas e compras dos planos da sua startup geradas por você e pela rede de afiliados.'
+              : 'Histórico completo de contratos gerados através dos seus links de afiliação.'}
           </p>
         </div>
 
@@ -75,15 +80,19 @@ export const VendasView: React.FC<VendasViewProps> = ({
           </span>
         </div>
         <div className="bg-[#080d1a] border border-white/10 p-4 rounded-xl">
-          <span className="text-[11px] text-white/50 uppercase font-bold block">Volume Bruto Vendido</span>
+          <span className="text-[11px] text-white/50 uppercase font-bold block">
+            {roleMode === 'empresa' ? 'Faturamento Bruto' : 'Volume Bruto Vendido'}
+          </span>
           <span className="text-xl font-black text-white font-['Syne'] mt-1 block">
             R$ {totalVolumeFiltered.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </span>
         </div>
         <div className="bg-[#080d1a] border border-[#D9F22A]/30 p-4 rounded-xl bg-[#D9F22A]/5">
-          <span className="text-[11px] text-[#D9F22A] uppercase font-bold block">Comissões Acumuladas</span>
+          <span className="text-[11px] text-[#D9F22A] uppercase font-bold block">
+            {roleMode === 'empresa' ? 'Receita Líquida Retida' : 'Comissões Acumuladas'}
+          </span>
           <span className="text-xl font-black text-[#D9F22A] font-['Syne'] mt-1 block">
-            R$ {totalCommissionsFiltered.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {(roleMode === 'empresa' ? totalCompanyNet : totalCommissionsFiltered).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </span>
         </div>
       </div>

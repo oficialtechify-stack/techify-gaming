@@ -249,6 +249,8 @@ export function getAuthErrorMessage(errorCode: string): string {
       return 'A autenticação com o Google foi cancelada antes de concluir.';
     case 'auth/popup-blocked':
       return 'A janela popup foi bloqueada pelo navegador. Permita popups para este site.';
+    case 'auth/unauthorized-domain':
+      return 'Este domínio ainda não foi autorizado no Firebase Console. Adicione seu domínio da Vercel (techify-gaming.vercel.app) em Firebase Console -> Authentication -> Configurações -> Domínios autorizados.';
     default:
       return errorCode.startsWith('custom/') ? errorCode.replace('custom/', '') : 'Ocorreu um erro ao processar. Tente novamente.';
   }
@@ -335,10 +337,16 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     partnerLevel: existingData?.partnerLevel || 'Afiliado Starter',
     targetGoal: existingData?.targetGoal || 100000,
     currentSalesProgress: existingData?.currentSalesProgress || 0,
+    hasAffiliateProfile: true,
+    hasCompanyProfile: existingData?.hasCompanyProfile || false,
     activeRoleMode: 'afiliado',
     whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : (existingData?.whatsapp || ''),
     cpf: formattedCpf || existingData?.cpf || '',
     cleanCpf: cleanCpf || existingData?.cleanCpf || '',
+    companyId: existingData?.companyId,
+    companyName: existingData?.companyName,
+    cnpj: existingData?.cnpj,
+    cleanCnpj: existingData?.cleanCnpj,
     updatedAt: now
   };
 
@@ -460,10 +468,14 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     partnerLevel: 'Empresa Parceira',
     targetGoal: 500000,
     currentSalesProgress: existingData?.currentSalesProgress || 0,
+    hasAffiliateProfile: existingData?.hasAffiliateProfile || false,
+    hasCompanyProfile: true,
     activeRoleMode: 'empresa',
     companyId: companyId,
     companyName: data.companyName.trim(),
     whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : (existingData?.whatsapp || ''),
+    cpf: existingData?.cpf,
+    cleanCpf: existingData?.cleanCpf,
     cnpj: formattedCnpj,
     cleanCnpj: cleanCnpj,
     updatedAt: now
@@ -561,6 +573,8 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
       partnerLevel: preferredRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
       targetGoal: preferredRole === 'empresa' ? 500000 : 100000,
       currentSalesProgress: 0,
+      hasAffiliateProfile: false,
+      hasCompanyProfile: false,
       activeRoleMode: preferredRole,
       updatedAt: new Date().toISOString()
     };
@@ -568,6 +582,181 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
   }
 
   return { user, profile };
+}
+
+/**
+ * Completar / Registrar perfil de Afiliado para um usuário já autenticado (ex: empresa que quer virar afiliado ou login Google)
+ */
+export async function completeAffiliateProfile(
+  userId: string,
+  data: {
+    name: string;
+    cpf: string;
+    pixKey: string;
+    pixKeyType: string;
+    whatsapp?: string;
+  }
+): Promise<UserSellerProfile> {
+  const cleanCpf = cleanDigits(data.cpf);
+  const formattedCpf = formatCPF(cleanCpf);
+
+  if (cleanCpf.length !== 11 || !isValidCPF(cleanCpf)) {
+    const err = new Error('custom/invalid-cpf');
+    (err as any).code = 'custom/invalid-cpf';
+    throw err;
+  }
+
+  const cpfInUse = await checkCpfAlreadyExists(cleanCpf, userId);
+  if (cpfInUse) {
+    const err = new Error('custom/cpf-already-in-use');
+    (err as any).code = 'custom/cpf-already-in-use';
+    throw err;
+  }
+
+  const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
+  const snap = await getDoc(profileRef);
+  const existing = snap.exists() ? (snap.data() as UserSellerProfile) : null;
+
+  const now = new Date().toISOString();
+  const updatedProfile: UserSellerProfile = {
+    userId,
+    name: data.name.trim() || existing?.name || 'Afiliado Techify',
+    email: existing?.email || '',
+    role: 'Afiliado de Alta Performance',
+    avatar: existing?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userId)}`,
+    pixKey: data.pixKey.trim(),
+    pixKeyType: data.pixKeyType,
+    availableBalance: existing?.availableBalance ?? 0,
+    pendingBalance: existing?.pendingBalance ?? 0,
+    totalEarned: existing?.totalEarned ?? 0,
+    totalSalesCount: existing?.totalSalesCount ?? 0,
+    partnerLevel: existing?.partnerLevel || 'Afiliado Starter',
+    targetGoal: existing?.targetGoal || 100000,
+    currentSalesProgress: existing?.currentSalesProgress || 0,
+    hasAffiliateProfile: true,
+    hasCompanyProfile: existing?.hasCompanyProfile || false,
+    activeRoleMode: 'afiliado',
+    whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : (existing?.whatsapp || ''),
+    cpf: formattedCpf,
+    cleanCpf: cleanCpf,
+    companyId: existing?.companyId,
+    companyName: existing?.companyName,
+    cnpj: existing?.cnpj,
+    cleanCnpj: existing?.cleanCnpj,
+    updatedAt: now
+  };
+
+  await setDoc(profileRef, updatedProfile, { merge: true });
+  return updatedProfile;
+}
+
+/**
+ * Completar / Registrar Empresa e vincular ao perfil do usuário autenticado
+ */
+export async function completeCompanyProfile(
+  userId: string,
+  companyData: {
+    companyName: string;
+    cnpj?: string;
+    category: string;
+    website?: string;
+    whatsapp?: string;
+    tagline?: string;
+    description?: string;
+    commissionRange?: string;
+    logo?: string;
+  }
+): Promise<{ company: CompanyStartup; profile: UserSellerProfile }> {
+  const cleanCnpj = companyData.cnpj ? cleanDigits(companyData.cnpj) : '';
+  const formattedCnpj = cleanCnpj ? formatCNPJ(cleanCnpj) : '';
+
+  if (cleanCnpj && cleanCnpj.length === 14) {
+    if (!isValidCNPJ(cleanCnpj)) {
+      const err = new Error('custom/invalid-cnpj');
+      (err as any).code = 'custom/invalid-cnpj';
+      throw err;
+    }
+
+    const cnpjInUse = await checkCnpjAlreadyExists(cleanCnpj, userId);
+    if (cnpjInUse) {
+      const err = new Error('custom/cnpj-already-in-use');
+      (err as any).code = 'custom/cnpj-already-in-use';
+      throw err;
+    }
+  }
+
+  const now = new Date().toISOString();
+  const companyId = `comp-${userId.slice(0, 10)}`;
+  const slug = companyData.companyName
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-');
+
+  const logo = companyData.logo || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(companyData.companyName.trim())}`;
+  const bannerImage = 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80';
+
+  const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
+  const snap = await getDoc(profileRef);
+  const existing = snap.exists() ? (snap.data() as UserSellerProfile) : null;
+
+  const company: CompanyStartup = {
+    id: companyId,
+    name: companyData.companyName.trim(),
+    slug: slug || companyId,
+    tagline: companyData.tagline?.trim() || `${companyData.category} escalável no ecossistema Techify`,
+    logo,
+    bannerImage,
+    category: companyData.category as any,
+    description: companyData.description?.trim() || `Empresa ${companyData.companyName} integrada à Techify.`,
+    website: companyData.website?.trim() || 'https://techify.com',
+    email: existing?.email || '',
+    whatsapp: companyData.whatsapp ? formatPhone(companyData.whatsapp) : '',
+    totalPlansCount: 0,
+    totalAffiliatesCount: 0,
+    totalSalesVolume: 0,
+    commissionRange: companyData.commissionRange || '30% - 50%',
+    verified: true,
+    ownerId: userId,
+    cnpj: formattedCnpj,
+    cleanCnpj: cleanCnpj,
+    createdAt: now
+  };
+
+  await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), company, { merge: true });
+
+  const updatedProfile: UserSellerProfile = {
+    userId,
+    name: existing?.name || 'Produtor / Startup',
+    email: existing?.email || '',
+    role: 'Fundador / Startup',
+    avatar: existing?.avatar || logo,
+    pixKey: existing?.pixKey || '',
+    pixKeyType: existing?.pixKeyType || 'Chave Aleatória',
+    availableBalance: existing?.availableBalance ?? 0,
+    pendingBalance: existing?.pendingBalance ?? 0,
+    totalEarned: existing?.totalEarned ?? 0,
+    totalSalesCount: existing?.totalSalesCount ?? 0,
+    partnerLevel: 'Empresa Parceira',
+    targetGoal: 500000,
+    currentSalesProgress: existing?.currentSalesProgress || 0,
+    hasAffiliateProfile: existing?.hasAffiliateProfile || false,
+    hasCompanyProfile: true,
+    activeRoleMode: 'empresa',
+    companyId: companyId,
+    companyName: companyData.companyName.trim(),
+    whatsapp: companyData.whatsapp ? formatPhone(companyData.whatsapp) : (existing?.whatsapp || ''),
+    cpf: existing?.cpf,
+    cleanCpf: existing?.cleanCpf,
+    cnpj: formattedCnpj,
+    cleanCnpj: cleanCnpj,
+    updatedAt: now
+  };
+
+  await setDoc(profileRef, updatedProfile, { merge: true });
+
+  return { company, profile: updatedProfile };
 }
 
 /**

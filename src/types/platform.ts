@@ -144,6 +144,8 @@ export interface UserSellerProfile {
   partnerLevel: 'Afiliado Starter' | 'Parceiro Silver' | 'Parceiro Gold' | 'Master Elite Black' | 'Elite Partner' | string;
   targetGoal: number;
   currentSalesProgress: number;
+  hasAffiliateProfile?: boolean;
+  hasCompanyProfile?: boolean;
   activeRoleMode?: UserRoleMode;
   whatsapp?: string;
   cpf?: string;
