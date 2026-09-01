@@ -215,45 +215,89 @@ export async function checkCnpjAlreadyExists(cnpj: string, currentOwnerId?: stri
 }
 
 /**
- * Maps Firebase Auth and Custom error codes to friendly Portuguese messages
+ * Maps Firebase Auth, Firestore and Custom error codes to friendly Portuguese messages
  */
-export function getAuthErrorMessage(errorCode: string): string {
-  switch (errorCode) {
-    case 'auth/email-already-in-use':
-    case 'custom/email-already-in-use':
-      return 'Este e-mail já possui uma conta no Techify. Você pode fazer login com sua senha cadastrada ou redefinir a senha com 1 clique abaixo.';
-    case 'custom/cpf-already-in-use':
-      return 'Este CPF já está vinculado a outra conta no Techify. Cada usuário pode possuir uma conta por CPF.';
-    case 'custom/cnpj-already-in-use':
-      return 'Este CNPJ já está cadastrado em outra empresa parceira no Techify.';
-    case 'custom/invalid-cpf':
-      return 'O CPF informado é inválido. Verifique os números digitados.';
-    case 'custom/invalid-cnpj':
-      return 'O CNPJ informado é inválido. Verifique os números digitados.';
-    case 'auth/invalid-email':
-      return 'O formato do e-mail informado é inválido.';
-    case 'auth/weak-password':
-      return 'A senha é muito fraca. Utilize pelo menos 6 caracteres.';
-    case 'auth/user-not-found':
-      return 'Nenhuma conta encontrada com este e-mail. Crie sua conta gratuitamente.';
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'E-mail ou senha incorretos. Verifique os dados ou recupere sua senha.';
-    case 'auth/too-many-requests':
-      return 'Muitas tentativas. Por segurança, aguarde alguns instantes e tente novamente.';
-    case 'auth/user-disabled':
-      return 'Esta conta foi temporariamente suspensa pelo suporte.';
-    case 'auth/network-request-failed':
-      return 'Falha de conexão. Verifique sua internet e tente novamente.';
-    case 'auth/popup-closed-by-user':
-      return 'A autenticação com o Google foi cancelada antes de concluir.';
-    case 'auth/popup-blocked':
-      return 'A janela popup foi bloqueada pelo navegador. Permita popups para este site.';
-    case 'auth/unauthorized-domain':
-      return 'Este domínio ainda não foi autorizado no Firebase Console. Adicione seu domínio da Vercel (techify-gaming.vercel.app) em Firebase Console -> Authentication -> Configurações -> Domínios autorizados.';
-    default:
-      return errorCode.startsWith('custom/') ? errorCode.replace('custom/', '') : 'Ocorreu um erro ao processar. Tente novamente.';
+export function getAuthErrorMessage(error: any): string {
+  if (!error) return 'Ocorreu um erro ao processar. Tente novamente.';
+
+  const code: string = typeof error === 'string' 
+    ? error 
+    : (error.code || error.message || error.toString() || '');
+
+  // Custom Application Errors
+  if (code.includes('custom/invalid-cpf') || code.includes('invalid-cpf')) {
+    return 'O CPF informado é inválido. Por favor, verifique os 11 dígitos digitados.';
   }
+  if (code.includes('custom/invalid-cnpj') || code.includes('invalid-cnpj')) {
+    return 'O CNPJ informado é inválido. Por favor, verifique os 14 dígitos digitados.';
+  }
+  if (code.includes('custom/cpf-already-in-use') || code.includes('cpf-already-in-use')) {
+    return 'Este CPF já está vinculado a outra conta no Techify. Cada afiliado pode possuir apenas uma conta por CPF.';
+  }
+  if (code.includes('custom/cnpj-already-in-use') || code.includes('cnpj-already-in-use')) {
+    return 'Este CNPJ já está cadastrado em outra empresa parceira no Techify.';
+  }
+  if (code.includes('custom/email-already-in-use')) {
+    return 'Este e-mail já possui uma conta no Techify. Você pode fazer login diretamente com sua senha.';
+  }
+
+  // Firebase Authentication Errors
+  if (code.includes('auth/email-already-in-use')) {
+    return 'Este e-mail já possui uma conta cadastrada no Techify. Por favor, utilize a aba "Fazer Login" ou recupere sua senha.';
+  }
+  if (code.includes('auth/invalid-email')) {
+    return 'O formato do e-mail informado é inválido. Digite um e-mail válido (ex: seuemail@exemplo.com).';
+  }
+  if (code.includes('auth/weak-password')) {
+    return 'A senha é muito fraca. Digite pelo menos 6 caracteres seguros.';
+  }
+  if (code.includes('auth/user-not-found')) {
+    return 'Nenhuma conta encontrada com este e-mail. Crie sua conta gratuitamente.';
+  }
+  if (code.includes('auth/wrong-password') || code.includes('auth/invalid-credential')) {
+    return 'E-mail ou senha incorretos. Verifique suas credenciais ou utilize a recuperação de senha.';
+  }
+  if (code.includes('auth/too-many-requests')) {
+    return 'Muitas tentativas em sequência. Por segurança, aguarde alguns instantes e tente novamente.';
+  }
+  if (code.includes('auth/user-disabled')) {
+    return 'Esta conta de usuário foi temporariamente desativada pelo administrador.';
+  }
+  if (code.includes('auth/network-request-failed')) {
+    return 'Falha de conexão com os servidores do Firebase. Verifique sua internet e tente novamente.';
+  }
+  if (code.includes('auth/popup-closed-by-user')) {
+    return 'A janela de autenticação com o Google foi fechada antes de concluir o login.';
+  }
+  if (code.includes('auth/cancelled-popup-request')) {
+    return 'A autenticação popup foi cancelada.';
+  }
+  if (code.includes('auth/popup-blocked')) {
+    return 'A janela popup foi bloqueada pelo seu navegador. Habilite popups para este site nas configurações do navegador.';
+  }
+  if (code.includes('auth/unauthorized-domain')) {
+    return 'Este domínio ainda não foi autorizado no Firebase Console. Adicione seu domínio da Vercel (techify-gaming.vercel.app) em Firebase Console -> Authentication -> Configurações -> Domínios autorizados.';
+  }
+  if (code.includes('auth/operation-not-allowed')) {
+    return 'Este método de login (E-mail ou Google) ainda não está habilitado no Firebase Console. Acesse Authentication -> Sign-in method e ative o provedor.';
+  }
+  if (code.includes('auth/configuration-not-found')) {
+    return 'Configuração de autenticação não encontrada no Firebase Console.';
+  }
+
+  // Firestore Errors
+  if (code.includes('permission-denied') || code.includes('PERMISSION_DENIED')) {
+    return 'Permissão negada no banco de dados Firestore. Verifique as Regras de Segurança (firestore.rules) no Firebase Console.';
+  }
+  if (code.includes('unavailable')) {
+    return 'Serviço temporariamente indisponível. Verifique sua conexão e tente novamente.';
+  }
+
+  if (code.startsWith('custom/')) {
+    return code.replace('custom/', '');
+  }
+
+  return 'Ocorreu um erro ao processar. Verifique os dados informados e tente novamente.';
 }
 
 /**

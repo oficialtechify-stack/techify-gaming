@@ -119,7 +119,8 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
       }, 1000);
     } catch (error: any) {
       setIsSubmitting(false);
-      const friendlyMsg = getAuthErrorMessage(error.code || '');
+      console.error('Erro no login Google:', error);
+      const friendlyMsg = getAuthErrorMessage(error);
       setErrorMessage(friendlyMsg);
     }
   };
@@ -139,7 +140,8 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
       setSuccessMessage(res.message);
     } catch (error: any) {
       setIsSubmitting(false);
-      const friendlyMsg = getAuthErrorMessage(error.code || '');
+      console.error('Erro na redefinição de senha:', error);
+      const friendlyMsg = getAuthErrorMessage(error);
       setErrorMessage(friendlyMsg);
     }
   };
@@ -160,7 +162,8 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
       }, 1000);
     } catch (error: any) {
       setIsSubmitting(false);
-      const friendlyMsg = getAuthErrorMessage(error.code || '');
+      console.error('Erro no login:', error);
+      const friendlyMsg = getAuthErrorMessage(error);
       setErrorMessage(friendlyMsg);
     }
   };
@@ -201,7 +204,8 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
       }, 1200);
     } catch (error: any) {
       setIsSubmitting(false);
-      const friendlyMsg = getAuthErrorMessage(error.code || '');
+      console.error('Erro no cadastro de afiliado:', error);
+      const friendlyMsg = getAuthErrorMessage(error);
       setErrorMessage(friendlyMsg);
     }
   };
@@ -244,7 +248,8 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
       }, 1200);
     } catch (error: any) {
       setIsSubmitting(false);
-      const friendlyMsg = getAuthErrorMessage(error.code || '');
+      console.error('Erro no cadastro de empresa:', error);
+      const friendlyMsg = getAuthErrorMessage(error);
       setErrorMessage(friendlyMsg);
     }
   };
@@ -261,7 +266,8 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
       setSuccessMessage(res.message);
     } catch (error: any) {
       setIsSubmitting(false);
-      const friendlyMsg = getAuthErrorMessage(error.code || '');
+      console.error('Erro no reset de senha:', error);
+      const friendlyMsg = getAuthErrorMessage(error);
       setErrorMessage(friendlyMsg);
     }
   };
