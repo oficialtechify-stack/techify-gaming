@@ -29,11 +29,15 @@ export interface RegisterCompanyData {
   email: string;
   password: string;
   whatsapp?: string;
+  documentType?: 'CNPJ' | 'CPF' | 'SEM_CNPJ';
   cnpj?: string;
+  cpf?: string;
+  hasNoCnpj?: boolean;
   category: string;
   website?: string;
   tagline?: string;
   description?: string;
+  logo?: string;
 }
 
 export interface AuthResult {
@@ -405,14 +409,27 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
  */
 export async function registerCompany(data: RegisterCompanyData): Promise<AuthResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
+  
+  const docType = data.documentType || (data.cnpj ? 'CNPJ' : data.cpf ? 'CPF' : data.hasNoCnpj ? 'SEM_CNPJ' : 'CNPJ');
   const cleanCnpj = data.cnpj ? cleanDigits(data.cnpj) : '';
   const formattedCnpj = cleanCnpj ? formatCNPJ(cleanCnpj) : '';
+  const cleanCpf = data.cpf ? cleanDigits(data.cpf) : '';
+  const formattedCpf = cleanCpf ? formatCPF(cleanCpf) : '';
 
-  // 1. Validar formato de CNPJ se fornecido
-  if (cleanCnpj && cleanCnpj.length === 14) {
-    if (!isValidCNPJ(cleanCnpj)) {
+  // 1. Validar formato de CNPJ se informado como tipo CNPJ
+  if (docType === 'CNPJ' && cleanCnpj) {
+    if (cleanCnpj.length === 14 && !isValidCNPJ(cleanCnpj)) {
       const err = new Error('custom/invalid-cnpj');
       (err as any).code = 'custom/invalid-cnpj';
+      throw err;
+    }
+  }
+
+  // Validar formato de CPF se informado como tipo CPF
+  if (docType === 'CPF' && cleanCpf) {
+    if (cleanCpf.length === 11 && !isValidCPF(cleanCpf)) {
+      const err = new Error('custom/invalid-cpf');
+      (err as any).code = 'custom/invalid-cpf';
       throw err;
     }
   }
@@ -437,8 +454,8 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     }
   }
 
-  // 2. Verificar se CNPJ já existe em outra empresa
-  if (cleanCnpj && cleanCnpj.length === 14) {
+  // 2. Verificar se CNPJ já existe em outra empresa (se aplicável)
+  if (docType === 'CNPJ' && cleanCnpj && cleanCnpj.length === 14) {
     const cnpjExists = await checkCnpjAlreadyExists(cleanCnpj, user.uid);
     if (cnpjExists) {
       const err = new Error('custom/cnpj-already-in-use');
@@ -463,7 +480,8 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     .replace(/[^a-z0-9]/g, '-')
     .replace(/-+/g, '-');
 
-  const logo = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(data.companyName.trim())}`;
+  const defaultLogo = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(data.companyName.trim())}`;
+  const logo = data.logo?.trim() || defaultLogo;
   const bannerImage = 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80';
 
   // 1. Criar/Atualizar Empresa no Firestore
@@ -485,8 +503,12 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     commissionRange: '30% - 50%',
     verified: true,
     ownerId: user.uid,
-    cnpj: formattedCnpj,
-    cleanCnpj: cleanCnpj,
+    docType: docType as any,
+    cnpj: docType === 'CNPJ' ? formattedCnpj : undefined,
+    cleanCnpj: docType === 'CNPJ' ? cleanCnpj : undefined,
+    cpf: docType === 'CPF' ? formattedCpf : undefined,
+    cleanCpf: docType === 'CPF' ? cleanCpf : undefined,
+    hasNoCnpj: docType === 'SEM_CNPJ',
     createdAt: now
   };
 
@@ -518,10 +540,10 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     companyId: companyId,
     companyName: data.companyName.trim(),
     whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : (existingData?.whatsapp || ''),
-    cpf: existingData?.cpf,
-    cleanCpf: existingData?.cleanCpf,
-    cnpj: formattedCnpj,
-    cleanCnpj: cleanCnpj,
+    cpf: docType === 'CPF' ? formattedCpf : (existingData?.cpf || ''),
+    cleanCpf: docType === 'CPF' ? cleanCpf : (existingData?.cleanCpf || ''),
+    cnpj: docType === 'CNPJ' ? formattedCnpj : (existingData?.cnpj || ''),
+    cleanCnpj: docType === 'CNPJ' ? cleanCnpj : (existingData?.cleanCnpj || ''),
     updatedAt: now
   };
 

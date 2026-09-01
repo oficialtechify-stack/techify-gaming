@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CompanyStartup } from '../../types/platform';
-import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon, AlertCircle } from 'lucide-react';
-import { formatCNPJ, formatPhone, isValidCNPJ, getAuthErrorMessage } from '../../services/authService';
+import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon, AlertCircle, Upload, Check, User, FileText, CheckCircle } from 'lucide-react';
+import { formatCNPJ, formatCPF, formatPhone, isValidCNPJ, isValidCPF, getAuthErrorMessage } from '../../services/authService';
 
 interface CreateCompanyModalProps {
   isOpen: boolean;
@@ -19,28 +19,22 @@ const CATEGORIES = [
   'E-commerce / Dropship'
 ];
 
-const PRESET_LOGOS = [
-  { name: 'Modern Tech (Cyan)', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80' },
-  { name: 'Neon Sphere', url: 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=150&q=80' },
-  { name: 'Cyber Minimal', url: 'https://images.unsplash.com/photo-1618172193763-c511deb635ca?auto=format&fit=crop&w=150&q=80' },
-  { name: 'Vibrant Wave', url: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=150&q=80' },
-  { name: 'Gold Luxury', url: 'https://images.unsplash.com/photo-1633167606207-d840b5070fc2?auto=format&fit=crop&w=150&q=80' }
-];
-
 export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
   isOpen,
   onClose,
   onCompanyCreated
 }) => {
   const [name, setName] = useState('');
+  const [docType, setDocType] = useState<'CNPJ' | 'CPF' | 'SEM_CNPJ'>('CNPJ');
   const [cnpj, setCnpj] = useState('');
+  const [cpf, setCpf] = useState('');
   const [tagline, setTagline] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [logo, setLogo] = useState(PRESET_LOGOS[0].url);
+  const [logo, setLogo] = useState('');
   const [commissionRange, setCommissionRange] = useState('30% a 50%');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -56,24 +50,41 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
     }
 
     const cleanCnpj = cnpj.replace(/\D/g, '');
-    if (cleanCnpj && cleanCnpj.length === 14 && !isValidCNPJ(cleanCnpj)) {
-      setErrorMsg('O CNPJ informado é inválido. Verifique os números digitados.');
-      return;
+    const cleanCpf = cpf.replace(/\D/g, '');
+
+    if (docType === 'CNPJ' && cleanCnpj) {
+      if (cleanCnpj.length === 14 && !isValidCNPJ(cleanCnpj)) {
+        setErrorMsg('O CNPJ informado é inválido. Verifique os números digitados.');
+        return;
+      }
     }
+
+    if (docType === 'CPF' && cleanCpf) {
+      if (cleanCpf.length === 11 && !isValidCPF(cleanCpf)) {
+        setErrorMsg('O CPF informado é inválido. Verifique os números digitados.');
+        return;
+      }
+    }
+
+    const defaultLogo = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name.trim())}`;
 
     onCompanyCreated({
       name: name.trim(),
       slug: name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'),
       tagline: tagline.trim() || `${category} inovador e escalável`,
-      logo: logo.trim() || PRESET_LOGOS[0].url,
+      logo: logo.trim() || defaultLogo,
       bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
       category: category as any,
       description: description.trim() || `Empresa ${name.trim()} integrada ao ecossistema Techify.`,
       website: website.trim() || 'https://suaempresa.com',
       email: email.trim() || 'contato@empresa.com',
       whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : '+55 11 99999-9999',
-      cnpj: cleanCnpj ? formatCNPJ(cleanCnpj) : undefined,
-      cleanCnpj: cleanCnpj || undefined,
+      docType: docType,
+      cnpj: docType === 'CNPJ' && cleanCnpj ? formatCNPJ(cleanCnpj) : undefined,
+      cleanCnpj: docType === 'CNPJ' && cleanCnpj ? cleanCnpj : undefined,
+      cpf: docType === 'CPF' && cleanCpf ? formatCPF(cleanCpf) : undefined,
+      cleanCpf: docType === 'CPF' && cleanCpf ? cleanCpf : undefined,
+      hasNoCnpj: docType === 'SEM_CNPJ',
       totalPlansCount: 0,
       totalAffiliatesCount: 0,
       totalSalesVolume: 0,
@@ -115,34 +126,161 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-                Nome da Empresa / Startup *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: SaaS Engine AI, BetFlow"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
+              Nome da Empresa / Startup *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="Ex: SaaS Engine AI, BetFlow"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+            />
+          </div>
+
+          {/* Logotipo da Empresa - Escolher da Galeria */}
+          <div className="bg-[#050811]/80 border border-white/10 rounded-2xl p-3.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-2">
+              Logotipo da Empresa (Selecione da Galeria do Celular)
+            </label>
+            <div className="flex items-center gap-3">
+              <div className="relative group w-14 h-14 rounded-2xl overflow-hidden border border-[#D9F22A]/50 bg-black/50 flex-shrink-0 flex items-center justify-center">
+                {logo ? (
+                  <img
+                    src={logo}
+                    alt="Logo preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImageIcon className="w-6 h-6 text-white/40" />
+                )}
+              </div>
+
+              <div className="flex-1 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center justify-center gap-2 bg-[#D9F22A] text-black hover:bg-[#c5dc24] font-bold text-xs px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-[0_0_15px_rgba(217,242,42,0.2)]">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Escolher da Galeria</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            if (event.target?.result) {
+                              setLogo(event.target.result as string);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                  {logo && (
+                    <button
+                      type="button"
+                      onClick={() => setLogo('')}
+                      className="text-[11px] text-rose-400 hover:underline px-2 py-1"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+                <span className="text-[11px] text-white/40">
+                  PNG, JPG ou WEBP da sua galeria de fotos
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Documento da Empresa: CNPJ, CPF ou Sem CNPJ */}
+          <div className="bg-[#050811]/80 border border-white/10 rounded-2xl p-3.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-2">
+              Documento da Empresa / Produtor
+            </label>
+
+            {/* Seleção de Tipo de Documento */}
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setDocType('CNPJ')}
+                className={`text-xs py-2 px-2 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  docType === 'CNPJ'
+                    ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
+                    : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Possuo CNPJ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDocType('CPF')}
+                className={`text-xs py-2 px-2 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  docType === 'CPF'
+                    ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
+                    : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Usar CPF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDocType('SEM_CNPJ')}
+                className={`text-xs py-2 px-2 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  docType === 'SEM_CNPJ'
+                    ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
+                    : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
+                }`}
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Sem CNPJ</span>
+              </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-                CNPJ da Empresa
-              </label>
-              <input
-                type="text"
-                maxLength={18}
-                placeholder="00.000.000/0000-00"
-                value={cnpj}
-                onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
-            </div>
+            {/* Campo condicional baseado no tipo selecionado */}
+            {docType === 'CNPJ' && (
+              <div className="relative animate-in fade-in duration-200">
+                <FileText className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type="text"
+                  maxLength={18}
+                  placeholder="00.000.000/0000-00"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
+                  className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+            )}
+
+            {docType === 'CPF' && (
+              <div className="relative animate-in fade-in duration-200">
+                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                <input
+                  type="text"
+                  maxLength={14}
+                  placeholder="000.000.000-00"
+                  value={cpf}
+                  onChange={(e) => setCpf(formatCPF(e.target.value))}
+                  className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+            )}
+
+            {docType === 'SEM_CNPJ' && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs flex items-center gap-2 animate-in fade-in duration-200">
+                <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                <span>Sua startup poderá operar normalmente como pessoa física enquanto providencia o CNPJ.</span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -189,43 +327,6 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
               onChange={(e) => setTagline(e.target.value)}
               className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
             />
-          </div>
-
-          {/* Logo / Avatar Selection */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-2">
-              Logotipo da Empresa (URL ou selecione um preset)
-            </label>
-            <div className="flex items-center gap-3 mb-2">
-              <img
-                src={logo || PRESET_LOGOS[0].url}
-                alt="Logo preview"
-                className="w-12 h-12 rounded-xl object-cover border border-[#D9F22A]/40 bg-black/40 flex-shrink-0"
-              />
-              <input
-                type="url"
-                placeholder="https://sua-imagem.com/logo.png"
-                value={logo}
-                onChange={(e) => setLogo(e.target.value)}
-                className="flex-1 bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {PRESET_LOGOS.map((p, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setLogo(p.url)}
-                  className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                    logo === p.url
-                      ? 'border-[#D9F22A] bg-[#D9F22A]/10 text-[#D9F22A] font-bold'
-                      : 'border-white/10 text-white/60 hover:text-white'
-                  }`}
-                >
-                  {p.name}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div>
@@ -282,4 +383,3 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
     </div>
   );
 };
-

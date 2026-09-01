@@ -18,7 +18,10 @@ import {
   Sparkles,
   KeyRound,
   FileText,
-  Briefcase
+  Briefcase,
+  Upload,
+  Image as ImageIcon,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -85,10 +88,13 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
   const [compPassword, setCompPassword] = useState<string>('');
   const [compConfirmPassword, setCompConfirmPassword] = useState<string>('');
   const [compWhatsapp, setCompWhatsapp] = useState<string>('');
+  const [compDocType, setCompDocType] = useState<'CNPJ' | 'CPF' | 'SEM_CNPJ'>('CNPJ');
   const [compCnpj, setCompCnpj] = useState<string>('');
+  const [compCpf, setCompCpf] = useState<string>('');
   const [compCategory, setCompCategory] = useState<string>('SaaS / B2B');
   const [compWebsite, setCompWebsite] = useState<string>('');
   const [compTagline, setCompTagline] = useState<string>('');
+  const [compLogo, setCompLogo] = useState<string>('');
 
   // 4. Forgot Password State
   const [resetEmail, setResetEmail] = useState<string>('');
@@ -234,10 +240,14 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
         email: compEmail,
         password: compPassword,
         whatsapp: compWhatsapp,
-        cnpj: compCnpj,
+        documentType: compDocType,
+        cnpj: compDocType === 'CNPJ' ? compCnpj : undefined,
+        cpf: compDocType === 'CPF' ? compCpf : undefined,
+        hasNoCnpj: compDocType === 'SEM_CNPJ',
         category: compCategory,
         website: compWebsite,
-        tagline: compTagline
+        tagline: compTagline,
+        logo: compLogo
       });
 
       setSuccessMessage('Empresa cadastrada com sucesso! Redirecionando para o painel corporativo...');
@@ -946,6 +956,149 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                     </div>
                   </div>
 
+                  {/* Logotipo da Empresa - Upload da Galeria ou Presets */}
+                  <div className="bg-[#050811]/80 border border-white/10 rounded-2xl p-3.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-2">
+                      Logotipo / Imagem da Empresa (Selecione da Galeria)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="relative group w-14 h-14 rounded-2xl overflow-hidden border border-[#D9F22A]/50 bg-black/50 flex-shrink-0 flex items-center justify-center">
+                        {compLogo ? (
+                          <img
+                            src={compLogo}
+                            alt="Logo preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ImageIcon className="w-6 h-6 text-white/40" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center justify-center gap-2 bg-[#D9F22A] text-black hover:bg-[#c5dc24] font-bold text-xs px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-[0_0_15px_rgba(217,242,42,0.2)]">
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Escolher da Galeria</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = (event) => {
+                                    if (event.target?.result) {
+                                      setCompLogo(event.target.result as string);
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                          {compLogo && (
+                            <button
+                              type="button"
+                              onClick={() => setCompLogo('')}
+                              className="text-[11px] text-rose-400 hover:underline px-2 py-1"
+                            >
+                              Remover
+                            </button>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-white/40">
+                          Formatos aceitos: JPG, PNG, WEBP ou ícones da sua galeria
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Documento da Empresa: CNPJ, CPF ou Não tem CNPJ */}
+                  <div className="bg-[#050811]/80 border border-white/10 rounded-2xl p-3.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-2">
+                      Documento da Empresa / Produtor
+                    </label>
+
+                    {/* Seleção de Tipo de Documento */}
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setCompDocType('CNPJ')}
+                        className={`text-xs py-2 px-2.5 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          compDocType === 'CNPJ'
+                            ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
+                            : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
+                        }`}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Possuo CNPJ</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCompDocType('CPF')}
+                        className={`text-xs py-2 px-2.5 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          compDocType === 'CPF'
+                            ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
+                            : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
+                        }`}
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        <span>Usar meu CPF</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCompDocType('SEM_CNPJ')}
+                        className={`text-xs py-2 px-2.5 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          compDocType === 'SEM_CNPJ'
+                            ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
+                            : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
+                        }`}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Ainda sem CNPJ</span>
+                      </button>
+                    </div>
+
+                    {/* Campo condicional baseado no tipo selecionado */}
+                    {compDocType === 'CNPJ' && (
+                      <div className="relative animate-in fade-in duration-200">
+                        <FileText className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                        <input
+                          type="text"
+                          value={compCnpj}
+                          onChange={(e) => setCompCnpj(formatCNPJ(e.target.value))}
+                          placeholder="Digite o CNPJ: 00.000.000/0000-00"
+                          maxLength={18}
+                          className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                        />
+                      </div>
+                    )}
+
+                    {compDocType === 'CPF' && (
+                      <div className="relative animate-in fade-in duration-200">
+                        <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                        <input
+                          type="text"
+                          value={compCpf}
+                          onChange={(e) => setCompCpf(formatCPF(e.target.value))}
+                          placeholder="Digite o CPF do titular: 000.000.000-00"
+                          maxLength={14}
+                          className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                        />
+                      </div>
+                    )}
+
+                    {compDocType === 'SEM_CNPJ' && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs flex items-center gap-2 animate-in fade-in duration-200">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Sua startup poderá operar normalmente como pessoa física enquanto providencia o CNPJ.</span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-1">
@@ -968,25 +1121,6 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
 
                     <div>
                       <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-1">
-                        CNPJ (Único por empresa)
-                      </label>
-                      <div className="relative">
-                        <FileText className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-                        <input
-                          type="text"
-                          value={compCnpj}
-                          onChange={(e) => setCompCnpj(formatCNPJ(e.target.value))}
-                          placeholder="00.000.000/0000-00"
-                          maxLength={18}
-                          className="w-full bg-[#050811] border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-1">
                         Website / URL da Solução
                       </label>
                       <div className="relative">
@@ -1000,21 +1134,21 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                         />
                       </div>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-1">
-                        Slogan / Tagline Curta
-                      </label>
-                      <div className="relative">
-                        <Briefcase className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
-                        <input
-                          type="text"
-                          value={compTagline}
-                          onChange={(e) => setCompTagline(e.target.value)}
-                          placeholder="Ex: Plataforma líder em automação comercial"
-                          className="w-full bg-[#050811] border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-                        />
-                      </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-1">
+                      Slogan / Tagline Curta
+                    </label>
+                    <div className="relative">
+                      <Briefcase className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                      <input
+                        type="text"
+                        value={compTagline}
+                        onChange={(e) => setCompTagline(e.target.value)}
+                        placeholder="Ex: Plataforma líder em automação comercial"
+                        className="w-full bg-[#050811] border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                      />
                     </div>
                   </div>
 

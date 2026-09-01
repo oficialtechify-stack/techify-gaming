@@ -31,7 +31,9 @@ import {
   createAffiliationInFirebase,
   deleteAffiliationInFirebase,
   createSaleTransactionInFirebase,
-  createWithdrawalInFirebase
+  createWithdrawalInFirebase,
+  updateUserProfileInFirebase,
+  submitVerificationRequestInFirebase
 } from '../../services/firestoreService';
 import { DashboardView } from './DashboardView';
 import { VitrineView } from './VitrineView';
@@ -44,6 +46,7 @@ import { EquipeView } from './EquipeView';
 import { RelatoriosView } from './RelatoriosView';
 import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
+import { MeuPerfilView } from './MeuPerfilView';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
@@ -64,6 +67,7 @@ import {
   Search, 
   Bell, 
   Moon, 
+  Sun,
   ChevronLeft, 
   ChevronRight, 
   ExternalLink,
@@ -76,7 +80,10 @@ import {
   Plus,
   ShoppingBag,
   ArrowRightLeft,
-  LogOut
+  LogOut,
+  User,
+  CheckCircle2,
+  GraduationCap
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -117,6 +124,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Live Toast Notification
   const [liveToast, setLiveToast] = useState<{ message: string; sub: string; amount: string } | null>(null);
+
+  // Topbar Dropdown & Theme state
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   // Role Security & Tab Guard
   useEffect(() => {
@@ -287,6 +298,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Handle Join Affiliate (1 Click)
   const handleJoinAffiliate = async (plan: CompanyPlan) => {
+    // Check if user has verified profile
+    const isVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
+    if (!isVerified) {
+      setLiveToast({
+        message: 'Afiliação bloqueada: perfil não verificado',
+        sub: 'Preencha seus dados em "Meu Perfil" para aprovação do admin',
+        amount: 'Bloqueado'
+      });
+      setTimeout(() => setLiveToast(null), 4500);
+      return;
+    }
+
     try {
       const aff = await createAffiliationInFirebase(plan, userProfile);
       setLiveToast({
@@ -456,9 +479,42 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   };
 
+  // Handle save profile
+  const handleSaveProfile = async (updates: Partial<UserSellerProfile>) => {
+    try {
+      await updateUserProfileInFirebase(updates, currentUser?.uid);
+      setLiveToast({
+        message: 'Perfil atualizado com sucesso!',
+        sub: 'Dados salvos no Firebase',
+        amount: 'OK'
+      });
+      setTimeout(() => setLiveToast(null), 3500);
+    } catch (err: any) {
+      console.error('Error updating profile in Firebase:', err);
+      throw err;
+    }
+  };
+
+  // Handle submit profile for Admin KYC verification & lock
+  const handleSubmitForVerification = async (updates: Partial<UserSellerProfile>) => {
+    try {
+      await submitVerificationRequestInFirebase(updates, currentUser?.uid);
+      setLiveToast({
+        message: 'Dados enviados para validação!',
+        sub: 'Perfil bloqueado para análise da administração',
+        amount: 'Em Análise'
+      });
+      setTimeout(() => setLiveToast(null), 5000);
+    } catch (err: any) {
+      console.error('Error submitting verification request:', err);
+      throw err;
+    }
+  };
+
   // Dynamic Navigation Items based on active role
   const affiliateNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
+    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Meus Produtos Afiliados', icon: Link2, badge: `${affiliations.length}` },
     { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${transactions.length}` },
@@ -470,6 +526,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const companyNavItems = [
     { id: 'minha_empresa' as PlatformTab, label: 'Minha Startup & Planos', icon: Building2, badge: `${companies.length}` },
+    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${transactions.length}` },
     { id: 'equipe' as PlatformTab, label: 'Afiliados & Equipe', icon: Users },
@@ -701,42 +758,132 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               <span className="hidden sm:inline">Registrar Venda</span>
             </button>
 
-            {/* Notification Bell */}
+            {/* Dark / Light Mode Switcher as in Image 1 */}
+            <button 
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="flex items-center w-12 h-6 bg-[#1f293d] rounded-full p-0.5 border border-white/10 transition-colors cursor-pointer relative"
+              title="Alternar Tema"
+            >
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                isDarkMode 
+                  ? 'translate-x-6 bg-[#0f172a] text-white shadow-sm' 
+                  : 'translate-x-0 bg-[#38bdf8] text-[#060A15]'
+              }`}>
+                {isDarkMode ? <Moon className="w-3 h-3 fill-current" /> : <Sun className="w-3 h-3" />}
+              </div>
+            </button>
+
+            {/* Notification Bell with animated badge */}
             <div className="relative">
               <button 
-                onClick={() => setLiveToast({ message: 'Sistema Sincronizado', sub: 'Todas as empresas e comissões atualizadas.', amount: 'D+0' })}
-                className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/70 hover:text-white cursor-pointer"
+                onClick={() => setLiveToast({ message: 'Notificações Ativas', sub: 'Nenhuma pendência recente no sistema.', amount: 'D+0' })}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white cursor-pointer transition-colors"
+                title="Notificações"
               >
                 <Bell className="w-4 h-4" />
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D9F22A] animate-pulse" />
               </button>
             </div>
 
-            {/* User Profile Pill */}
-            <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-white/10">
-              <img
-                src={userProfile.avatar}
-                alt={userProfile.name}
-                className="w-8 h-8 rounded-full object-cover border border-[#D9F22A]"
-              />
-              <div className="hidden md:block text-left">
-                <div className="text-xs font-bold text-white leading-tight">{userProfile.name}</div>
-                <div className="text-[10px] text-[#D9F22A] font-bold">
-                  {roleMode === 'afiliado' ? 'Afiliado Oficial' : 'Produtor / Startup'}
-                </div>
-              </div>
+            {/* User Profile Avatar & Dropdown Menu (Exact Match to Image 1) */}
+            <div className="relative">
+              <button
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-2 p-0.5 rounded-full hover:ring-2 hover:ring-[#D9F22A]/50 transition-all cursor-pointer"
+                title="Menu do Usuário"
+              >
+                <img
+                  src={userProfile.avatar}
+                  alt={userProfile.name}
+                  className="w-8 h-8 rounded-full object-cover border border-white/20"
+                />
+              </button>
 
-              {currentUser && (
-                <button
-                  onClick={() => {
-                    logout();
-                    onBackToHome();
-                  }}
-                  className="p-1.5 rounded-full bg-white/5 hover:bg-red-500/20 text-white/50 hover:text-red-400 border border-white/10 transition-colors ml-1 cursor-pointer"
-                  title="Sair da Conta"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
+              {/* Dropdown Menu Popup (Image 1) */}
+              {isUserMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsUserMenuOpen(false)} 
+                  />
+                  <div className="absolute right-0 top-11 w-72 bg-[#181c24] border border-white/10 rounded-2xl p-2.5 shadow-[0_12px_45px_rgba(0,0,0,0.85)] z-50 animate-in fade-in zoom-in-95 duration-150">
+                    {/* Header User Card with Avatar, Name & Email */}
+                    <div className="flex items-center gap-3 p-2.5 bg-[#232730] rounded-xl mb-2">
+                      <img
+                        src={userProfile.avatar}
+                        alt={userProfile.name}
+                        className="w-10 h-10 rounded-full object-cover border border-white/20 flex-shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-white truncate">
+                          {userProfile.name}
+                        </div>
+                        <div className="text-[11px] text-white/50 truncate">
+                          {userProfile.email || 'rickmarketing81@gmail.com'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-white/10 my-1.5" />
+
+                    {/* Menu Links */}
+                    <div className="space-y-0.5">
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setActiveTab('dashboard');
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Página Inicial
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setActiveTab('meu_perfil');
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Meu Perfil
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setActiveTab('vitrine');
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Planos e Taxas
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          handleSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        {roleMode === 'afiliado' ? 'Mudar para painel da empresa' : 'Mudar para painel do aluno'}
+                      </button>
+                    </div>
+
+                    <div className="h-px bg-white/10 my-1.5" />
+
+                    {/* Logout Option */}
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        logout();
+                        onBackToHome();
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -764,6 +911,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               setSelectedProductFilter={setSelectedProductFilter}
               selectedTypeFilter={selectedTypeFilter}
               setSelectedTypeFilter={setSelectedTypeFilter}
+            />
+          )}
+
+          {activeTab === 'meu_perfil' && (
+            <MeuPerfilView
+              userProfile={userProfile}
+              onSaveProfile={handleSaveProfile}
+              onSubmitForVerification={handleSubmitForVerification}
+              onNavigateToTab={setActiveTab}
+              roleMode={roleMode}
             />
           )}
 
@@ -797,6 +954,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               platforms={plans}
               companies={companies}
               affiliations={affiliations}
+              isVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
+              verificationStatus={userProfile.verificationStatus}
+              onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onJoinAffiliate={handleJoinAffiliate}
               onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
               onSimulateSale={(prod) => {

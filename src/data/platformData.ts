@@ -1,9 +1,11 @@
 import { PlatformProduct, SaleTransaction, PaymentMethodStat, UserSellerProfile, WithdrawalRequest } from '../types/platform';
 
 export const INITIAL_USER_PROFILE: UserSellerProfile = {
-  name: 'Administrador / Parceiro',
-  email: 'admin@techifygaming.com',
-  role: 'Administrador Techify',
+  name: '',
+  firstName: '',
+  lastName: '',
+  email: '',
+  role: 'Afiliado Starter',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
   partnerLevel: 'Afiliado Starter',
   totalEarned: 0.00,
@@ -13,7 +15,17 @@ export const INITIAL_USER_PROFILE: UserSellerProfile = {
   currentSalesProgress: 0.0,
   pixKey: '',
   pixKeyType: 'Chave Aleatória',
-  totalSalesCount: 0
+  totalSalesCount: 0,
+  cpf: '',
+  phone: '',
+  whatsapp: '',
+  cep: '',
+  country: 'Brazil',
+  state: '',
+  city: '',
+  address: '',
+  verified: false,
+  verificationStatus: 'unsubmitted'
 };
 
 // Clean zeroed out catalog ready for user registration

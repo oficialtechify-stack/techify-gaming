@@ -23,7 +23,8 @@ import {
   WithdrawalRequest, 
   UserSellerProfile, 
   AffiliateLinkItem,
-  TeamMember
+  TeamMember,
+  VerificationRequest
 } from '../types/platform';
 import { 
   INITIAL_USER_PROFILE, 
@@ -41,7 +42,8 @@ export const COLLECTIONS = {
   WITHDRAWALS: 'withdrawals',
   PROFILES: 'user_profiles',
   AFFILIATE_LINKS: 'affiliate_links',
-  TEAM: 'team_members'
+  TEAM: 'team_members',
+  VERIFICATIONS: 'verification_requests'
 };
 
 export const DEFAULT_USER_ID = 'usr_techify_main';
@@ -140,10 +142,135 @@ export function subscribeUserProfile(callback: (profile: UserSellerProfile) => v
  */
 export async function updateUserProfileInFirebase(updates: Partial<UserSellerProfile>, userId: string = DEFAULT_USER_ID) {
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
-  await updateDoc(profileRef, {
+  await setDoc(profileRef, {
     ...updates,
     updatedAt: new Date().toISOString()
+  }, { merge: true });
+}
+
+// ==========================================
+// 🛡️ KYC & VALIDAÇÃO DE USUÁRIOS (VERIFICAÇÕES)
+// ==========================================
+
+/**
+ * Submit user profile for Admin verification
+ */
+export async function submitVerificationRequestInFirebase(
+  profileData: Partial<UserSellerProfile>, 
+  userId: string = DEFAULT_USER_ID
+) {
+  const now = new Date().toISOString();
+  const effectiveUserId = userId || DEFAULT_USER_ID;
+  
+  // 1. Update the User's Profile to 'pending' and locked
+  const profileRef = doc(db, COLLECTIONS.PROFILES, effectiveUserId);
+  await setDoc(profileRef, {
+    ...profileData,
+    verificationStatus: 'pending',
+    verified: false,
+    verificationSubmittedAt: now,
+    updatedAt: now
+  }, { merge: true });
+
+  // 2. Add / Update document in verification_requests collection
+  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, effectiveUserId);
+  const fullName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || profileData.name || 'Usuário Techify';
+  
+  await setDoc(requestRef, {
+    id: effectiveUserId,
+    userId: effectiveUserId,
+    name: fullName,
+    firstName: profileData.firstName || '',
+    lastName: profileData.lastName || '',
+    email: profileData.email || '',
+    cpf: profileData.cpf || '',
+    phone: profileData.phone || profileData.whatsapp || '',
+    avatar: profileData.avatar || '',
+    cep: profileData.cep || '',
+    country: profileData.country || 'Brazil',
+    state: profileData.state || '',
+    city: profileData.city || '',
+    address: profileData.address || '',
+    status: 'pending',
+    submittedAt: now
+  }, { merge: true });
+
+  return { success: true, submittedAt: now };
+}
+
+/**
+ * Realtime Listener for Verification Requests (Admin)
+ */
+export function subscribeVerifications(callback: (requests: VerificationRequest[]) => void) {
+  const q = collection(db, COLLECTIONS.VERIFICATIONS);
+  return onSnapshot(q, (snap) => {
+    const list: VerificationRequest[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...(d.data() as Omit<VerificationRequest, 'id'>) });
+    });
+    // Sort pending first, then by date descending
+    list.sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1;
+      if (b.status === 'pending' && a.status !== 'pending') return 1;
+      return (b.submittedAt || '').localeCompare(a.submittedAt || '');
+    });
+    callback(list);
+  }, (err) => {
+    console.error('Firestore verifications listener error:', err);
+    callback([]);
   });
+}
+
+/**
+ * Approve Verification Request (Concede Selo Verificado e desbloqueia afiliação)
+ */
+export async function approveVerificationInFirebase(userId: string) {
+  const now = new Date().toISOString();
+  
+  // 1. Update user profile to verified = true and verificationStatus = 'approved'
+  const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
+  await setDoc(profileRef, {
+    verified: true,
+    verificationStatus: 'approved',
+    verificationReviewedAt: now,
+    updatedAt: now
+  }, { merge: true });
+
+  // 2. Update verification request record
+  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
+  await setDoc(requestRef, {
+    status: 'approved',
+    reviewedAt: now
+  }, { merge: true });
+
+  return { success: true };
+}
+
+/**
+ * Reject Verification Request
+ */
+export async function rejectVerificationInFirebase(userId: string, reason: string = 'Dados cadastrais necessitam de correção') {
+  const now = new Date().toISOString();
+
+  // 1. Update user profile
+  const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
+  await setDoc(profileRef, {
+    verified: false,
+    verificationStatus: 'rejected',
+    verificationRejectionReason: reason,
+    verificationReviewedAt: now,
+    updatedAt: now
+  }, { merge: true });
+
+  // 2. Update verification request record
+  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
+  await setDoc(requestRef, {
+    status: 'rejected',
+    rejectionReason: reason,
+    reviewedAt: now
+  }, { merge: true });
+
+  return { success: true };
 }
 
 // ==========================================

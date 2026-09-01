@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { CompanyPlan, CompanyStartup, UserAffiliation } from '../../types/platform';
 import { 
   Sparkles, 
@@ -19,7 +19,11 @@ import {
   Building2,
   Percent,
   DollarSign,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  ArrowRight,
+  Clock,
+  UserCheck
 } from 'lucide-react';
 
 interface VitrineViewProps {
@@ -27,6 +31,9 @@ interface VitrineViewProps {
   platforms: CompanyPlan[];
   companies?: CompanyStartup[];
   affiliations?: UserAffiliation[];
+  isVerified?: boolean;
+  verificationStatus?: string;
+  onNavigateToProfile?: () => void;
   onSelectProductDetail: (product: CompanyPlan) => void;
   onSimulateSale: (product: CompanyPlan) => void;
   onJoinAffiliate?: (product: CompanyPlan) => void;
@@ -42,6 +49,9 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   platforms = [],
   companies = [],
   affiliations = [],
+  isVerified = false,
+  verificationStatus = 'unsubmitted',
+  onNavigateToProfile,
   onSelectProductDetail,
   onSimulateSale,
   onJoinAffiliate,
@@ -55,6 +65,8 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [minCommission, setMinCommission] = useState<number>(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
+  const [selectedPlanForModal, setSelectedPlanForModal] = useState<CompanyPlan | null>(null);
 
   const categories = [
     'all', 
@@ -90,6 +102,18 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     navigator.clipboard.writeText(aff.affiliateLink);
     setCopiedId(aff.id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleAffiliateClick = (product: CompanyPlan) => {
+    if (!isVerified) {
+      setSelectedPlanForModal(product);
+      setShowVerificationModal(true);
+      return;
+    }
+
+    if (onJoinAffiliate) {
+      onJoinAffiliate(product);
+    }
   };
 
   return (
@@ -390,11 +414,20 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                           </div>
                         ) : (
                           <button
-                            onClick={() => onJoinAffiliate && onJoinAffiliate(product)}
+                            onClick={() => handleAffiliateClick(product)}
                             className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
                           >
-                            <Sparkles className="w-4 h-4 fill-current" />
-                            Afiliar-se com 1 Clique (Ganhe {product.commissionPercentage}%)
+                            {!isVerified ? (
+                              <>
+                                <Lock className="w-3.5 h-3.5 text-[#060A15]" />
+                                <span>Afiliar-se (Validação Necessária)</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 fill-current" />
+                                <span>Afiliar-se com 1 Clique (Ganhe {product.commissionPercentage}%)</span>
+                              </>
+                            )}
                           </button>
                         )}
 
@@ -432,6 +465,72 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           })}
         </div>
       )}
+
+      {/* ================= VERIFICATION REQUIRED MODAL ================= */}
+      <AnimatePresence>
+        {showVerificationModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-[#0a1222] border border-amber-500/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center relative"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 mx-auto mb-4 shadow-lg">
+                <Lock className="w-8 h-8" />
+              </div>
+
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 inline-block mb-2">
+                Afiliação Bloqueada temporariamente
+              </span>
+
+              <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne']">
+                Verificação de Cadastro Obrigatória
+              </h3>
+
+              <p className="text-xs sm:text-sm text-white/70 mt-3 leading-relaxed">
+                Para começar a se afiliar nos produtos e gerar comissões de até <strong>70%</strong>, você precisa primeiro preencher seus dados cadastrais (Nome, CPF, Endereço e WhatsApp) na aba <strong>"Meu Perfil"</strong> e enviar para aprovação do Administrador.
+              </p>
+
+              {verificationStatus === 'pending' ? (
+                <div className="my-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-2">
+                  <Clock className="w-4 h-4 animate-spin" />
+                  <span>Seus dados já foram enviados e estão aguardando aprovação do admin.</span>
+                </div>
+              ) : (
+                <div className="my-5 p-3.5 rounded-xl bg-white/5 border border-white/10 text-white/80 text-xs text-left flex items-start gap-2.5">
+                  <UserCheck className="w-4 h-4 text-[#D9F22A] flex-shrink-0 mt-0.5" />
+                  <span>
+                    Após o envio dos seus dados em <strong>Meu Perfil</strong>, a validação é concluída rapidamente pelo painel administrativo!
+                  </span>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-center gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowVerificationModal(false)}
+                  className="w-full sm:w-1/2 py-3 rounded-xl border border-white/15 hover:bg-white/5 text-white/70 hover:text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  Continuar Explorando
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVerificationModal(false);
+                    if (onNavigateToProfile) onNavigateToProfile();
+                  }}
+                  className="w-full sm:w-1/2 bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>Ir para Meu Perfil</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

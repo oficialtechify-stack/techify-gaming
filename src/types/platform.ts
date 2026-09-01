@@ -14,6 +14,10 @@ export interface CompanyStartup {
   whatsapp?: string;
   cnpj?: string;
   cleanCnpj?: string;
+  cpf?: string;
+  cleanCpf?: string;
+  hasNoCnpj?: boolean;
+  docType?: 'CNPJ' | 'CPF' | 'SEM_CNPJ';
   totalPlansCount: number;
   totalAffiliatesCount: number;
   totalSalesVolume: number;
@@ -132,6 +136,8 @@ export interface WithdrawalRequest {
 export interface UserSellerProfile {
   userId?: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   role: string;
   avatar: string;
@@ -148,13 +154,45 @@ export interface UserSellerProfile {
   hasCompanyProfile?: boolean;
   activeRoleMode?: UserRoleMode;
   whatsapp?: string;
+  phone?: string;
   cpf?: string;
   cleanCpf?: string;
   cnpj?: string;
   cleanCnpj?: string;
   companyId?: string;
   companyName?: string;
+  cep?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  address?: string;
+  verified?: boolean;
+  verificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected';
+  verificationSubmittedAt?: string;
+  verificationReviewedAt?: string;
+  verificationRejectionReason?: string;
   updatedAt?: string;
+}
+
+export interface VerificationRequest {
+  id: string;
+  userId: string;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  cpf: string;
+  phone: string;
+  avatar: string;
+  cep?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  address?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  submittedAt: string;
+  reviewedAt?: string;
 }
 
 export interface AffiliateLinkItem {
@@ -184,6 +222,7 @@ export interface TeamMember {
 
 export type PlatformTab = 
   | 'dashboard' 
+  | 'meu_perfil'
   | 'vitrine' 
   | 'minhas_afiliacoes'
   | 'afiliados' 

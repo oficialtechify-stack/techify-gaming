@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { COLLECTIONS, clearAllFirestoreData } from '../../services/firestoreService';
+import { 
+  COLLECTIONS, 
+  clearAllFirestoreData,
+  subscribeVerifications,
+  approveVerificationInFirebase,
+  rejectVerificationInFirebase
+} from '../../services/firestoreService';
 import { 
   Database, 
   RefreshCw, 
@@ -14,17 +20,41 @@ import {
   Server,
   Zap,
   Copy,
-  AlertTriangle
+  AlertTriangle,
+  UserCheck,
+  UserX,
+  Clock,
+  Check,
+  X,
+  MessageCircle,
+  ExternalLink,
+  Lock,
+  Mail,
+  Phone,
+  MapPin,
+  FileText
 } from 'lucide-react';
+import { VerificationRequest } from '../../types/platform';
 import firebaseConfig from '../../../firebase-applet-config.json';
 
 export const DatabaseManagerView: React.FC = () => {
-  const [activeCollection, setActiveCollection] = useState<string>(COLLECTIONS.COMPANIES);
+  const [activeCollection, setActiveCollection] = useState<string>(COLLECTIONS.VERIFICATIONS);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Subscribe to realtime verification requests
+  useEffect(() => {
+    const unsub = subscribeVerifications((reqs) => {
+      setVerifications(reqs);
+    });
+    return () => unsub();
+  }, []);
 
   const fetchCollectionDocs = async (collName: string) => {
     setLoading(true);
@@ -47,6 +77,41 @@ export const DatabaseManagerView: React.FC = () => {
   useEffect(() => {
     fetchCollectionDocs(activeCollection);
   }, [activeCollection]);
+
+  const handleApproveUser = async (userId: string, userName: string) => {
+    setProcessingId(userId);
+    try {
+      await approveVerificationInFirebase(userId);
+      setStatusMessage(`Usuário "${userName}" aprovado com sucesso! Selo de Verificado concedido.`);
+      setTimeout(() => setStatusMessage(''), 5000);
+      if (activeCollection === COLLECTIONS.VERIFICATIONS || activeCollection === COLLECTIONS.PROFILES) {
+        await fetchCollectionDocs(activeCollection);
+      }
+    } catch (err: any) {
+      alert(`Erro ao aprovar usuário: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectUser = async (userId: string, userName: string) => {
+    const reason = prompt(`Motivo da recusa para o usuário "${userName}":`, 'Dados cadastrais necessitam de ajuste ou confirmação.');
+    if (reason === null) return; // user cancelled
+
+    setProcessingId(userId);
+    try {
+      await rejectVerificationInFirebase(userId, reason);
+      setStatusMessage(`Validação do usuário "${userName}" recusada com motivo registrado.`);
+      setTimeout(() => setStatusMessage(''), 5000);
+      if (activeCollection === COLLECTIONS.VERIFICATIONS || activeCollection === COLLECTIONS.PROFILES) {
+        await fetchCollectionDocs(activeCollection);
+      }
+    } catch (err: any) {
+      alert(`Erro ao recusar usuário: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   const handleWipeAllData = async () => {
     if (!window.confirm('ATENÇÃO: Deseja realmente zerar todos os dados do banco em nuvem (empresas, planos, vendas, saques, afiliados)? Esta ação deixará o sistema limpo.')) {
@@ -83,6 +148,18 @@ export const DatabaseManagerView: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const filteredVerifications = verifications.filter((v) => {
+    if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+    if (searchTerm) {
+      const matchName = (v.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchEmail = (v.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCpf = (v.cpf || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCity = (v.city || '').toLowerCase().includes(searchTerm.toLowerCase());
+      if (!matchName && !matchEmail && !matchCpf && !matchCity) return false;
+    }
+    return true;
+  });
+
   const filteredDocs = documents.filter((docItem) => {
     if (!searchTerm) return true;
     const str = JSON.stringify(docItem).toLowerCase();
@@ -90,12 +167,17 @@ export const DatabaseManagerView: React.FC = () => {
   });
 
   const collectionTabs = [
+    { 
+      key: COLLECTIONS.VERIFICATIONS, 
+      label: '🛡️ Validações de Usuários (KYC)',
+      badge: verifications.filter(v => v.status === 'pending').length || undefined 
+    },
+    { key: COLLECTIONS.PROFILES, label: 'Perfil de Usuário' },
     { key: COLLECTIONS.COMPANIES, label: 'Empresas & Startups' },
     { key: COLLECTIONS.PLANS, label: 'Planos & Comissões' },
     { key: COLLECTIONS.AFFILIATIONS, label: 'Afiliações de Usuários' },
     { key: COLLECTIONS.SALES, label: 'Vendas & Comissões' },
     { key: COLLECTIONS.WITHDRAWALS, label: 'Saques PIX' },
-    { key: COLLECTIONS.PROFILES, label: 'Perfil de Usuário' },
     { key: COLLECTIONS.TEAM, label: 'Equipe de Vendedores' }
   ];
 
@@ -107,14 +189,14 @@ export const DatabaseManagerView: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[10px] font-bold tracking-widest text-[#D9F22A] uppercase">
-              Sincronização em Nuvem Ativa (D+0)
+              Painel Administrativo & Controle em Nuvem
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne'] mt-1">
-            Gerenciador de Banco de Dados & Registros
+            Validação de Usuários & Banco de Dados
           </h1>
           <p className="text-xs text-white/60 mt-1">
-            Persistência em tempo real de empresas, planos, comissões de afiliados e transações de venda.
+            Aprovação de cadastros de afiliados para liberação de afiliações e gerenciamento de coleções Firestore.
           </p>
         </div>
 
@@ -140,7 +222,7 @@ export const DatabaseManagerView: React.FC = () => {
       </div>
 
       {statusMessage && (
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2">
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
           {statusMessage}
         </div>
@@ -155,120 +237,296 @@ export const DatabaseManagerView: React.FC = () => {
           </span>
         </div>
         <div className="bg-[#080d1a] border border-white/10 p-4 rounded-xl">
-          <span className="text-[10px] text-white/50 uppercase font-bold block">Engine de Persistência</span>
-          <span className="text-xs font-mono font-bold text-[#D9F22A] mt-1 block truncate">
-            {firebaseConfig.firestoreDatabaseId || 'cluster-prod-main'}
+          <span className="text-[10px] text-white/50 uppercase font-bold block">Validações Pendentes</span>
+          <span className="text-xs font-mono font-bold text-amber-400 mt-1 block">
+            {verifications.filter(v => v.status === 'pending').length} cadastros aguardando
           </span>
         </div>
         <div className="bg-[#080d1a] border border-white/10 p-4 rounded-xl">
-          <span className="text-[10px] text-white/50 uppercase font-bold block">Status da Conexão</span>
-          <span className="text-xs font-bold text-emerald-400 mt-1 flex items-center gap-1.5">
-            <ShieldCheck className="w-4 h-4" /> Servidor Online (Operacional)
+          <span className="text-[10px] text-white/50 uppercase font-bold block">Usuários Verificados</span>
+          <span className="text-xs font-mono font-bold text-emerald-400 mt-1 block">
+            {verifications.filter(v => v.status === 'approved').length} aprovados
           </span>
         </div>
       </div>
 
-      {/* Collection Selection Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+      {/* Collection Navigation Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-white/10 scrollbar-none">
         {collectionTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveCollection(tab.key)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${
               activeCollection === tab.key
-                ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
-                : 'bg-[#080d1a] text-white/70 hover:text-white border border-white/10'
+                ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_20px_rgba(217,242,42,0.3)] font-black'
+                : 'bg-[#080d1a] text-white/70 hover:text-white hover:bg-white/5 border border-white/10'
             }`}
           >
-            <Database className="w-3.5 h-3.5" />
-            {tab.label}
+            <span>{tab.label}</span>
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeCollection === tab.key ? 'bg-black text-[#D9F22A]' : 'bg-amber-400 text-black'
+              }`}>
+                {tab.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* Search & Document Count Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#080d1a] border border-white/10 p-4 rounded-2xl">
+      {/* Search & Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#080d1a] p-4 rounded-2xl border border-white/10">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+          <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder={`Buscar em ${activeCollection}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A]"
+            placeholder="Buscar por nome, email, CPF ou cidade..."
+            className="w-full bg-[#050811] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
           />
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-white/60">
-          <span>Coleção: <strong className="text-white font-mono">{activeCollection}</strong></span>
-          <span>•</span>
-          <span>Total: <strong className="text-[#D9F22A] font-bold">{filteredDocs.length} documentos</strong></span>
-        </div>
+        {activeCollection === COLLECTIONS.VERIFICATIONS && (
+          <div className="flex items-center gap-1.5 bg-[#050811] p-1 rounded-xl border border-white/10">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                statusFilter === 'all' ? 'bg-[#D9F22A] text-[#060A15]' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Todos ({verifications.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('pending')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'pending' ? 'bg-amber-400 text-[#060A15]' : 'text-amber-400/80 hover:text-amber-400'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              Pendentes ({verifications.filter(v => v.status === 'pending').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('approved')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'approved' ? 'bg-emerald-500 text-white' : 'text-emerald-400/80 hover:text-emerald-400'
+              }`}
+            >
+              <ShieldCheck className="w-3 h-3" />
+              Aprovados ({verifications.filter(v => v.status === 'approved').length})
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Document Explorer Grid / Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {loading ? (
-          <div className="col-span-2 py-16 text-center text-white/50 text-xs flex flex-col items-center gap-2">
-            <RefreshCw className="w-6 h-6 animate-spin text-[#D9F22A]" />
-            Carregando registros em nuvem...
-          </div>
-        ) : filteredDocs.length === 0 ? (
-          <div className="col-span-2 py-16 text-center text-white/50 text-xs bg-[#080d1a] border border-white/10 rounded-2xl p-6">
-            Nenhum documento na coleção <code className="text-[#D9F22A]">{activeCollection}</code>.
-            <p className="text-white/40 mt-1">
-              Coleção zerada e pronta para receber novos cadastros.
-            </p>
-          </div>
-        ) : (
-          filteredDocs.map((item) => (
-            <div
-              key={item._id}
-              className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-lg flex flex-col justify-between hover:border-[#D9F22A]/40 transition-colors"
-            >
-              <div>
-                <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold text-[#D9F22A] bg-[#D9F22A]/10 px-2 py-0.5 rounded">
-                      DOC_ID
-                    </span>
-                    <span className="font-mono text-xs font-bold text-white truncate max-w-[200px]">
-                      {item._id}
-                    </span>
+      {/* ================= SPECIAL VIEW FOR KYC VERIFICATION REQUESTS ================= */}
+      {activeCollection === COLLECTIONS.VERIFICATIONS ? (
+        <div className="flex flex-col gap-4">
+          {filteredVerifications.length === 0 ? (
+            <div className="py-16 text-center text-white/50 text-xs bg-[#080d1a] border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center">
+              <ShieldCheck className="w-10 h-10 text-white/20 mb-3" />
+              <p className="font-bold text-white/80 text-sm">Nenhuma solicitação de validação encontrada.</p>
+              <p className="text-white/40 mt-1 max-w-md">
+                Quando os usuários preencherem seus dados na aba 'Meu Perfil' e clicarem em 'Enviar para Validação', os cadastros aparecerão aqui para sua aprovação.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {filteredVerifications.map((req) => (
+                <div
+                  key={req.id}
+                  className={`bg-[#080d1a] border rounded-2xl p-6 shadow-xl flex flex-col justify-between transition-all ${
+                    req.status === 'pending'
+                      ? 'border-amber-500/40 hover:border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.08)]'
+                      : req.status === 'approved'
+                        ? 'border-emerald-500/30 hover:border-emerald-500/50'
+                        : 'border-rose-500/30 hover:border-rose-500/50'
+                  }`}
+                >
+                  <div>
+                    {/* User Header */}
+                    <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/10 mb-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={req.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'}
+                          alt={req.name}
+                          className="w-12 h-12 rounded-full object-cover border-2 border-white/20"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base font-bold text-white font-['Syne']">
+                              {req.name || 'Usuário Sem Nome'}
+                            </h3>
+                            {req.status === 'approved' && (
+                              <span className="p-0.5 rounded-full bg-emerald-500 text-black" title="Selo Verificado">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-white/50">{req.email}</span>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div>
+                        {req.status === 'pending' ? (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
+                            <Clock className="w-3 h-3" />
+                            Pendente de Análise
+                          </span>
+                        ) : req.status === 'approved' ? (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+                            <ShieldCheck className="w-3 h-3" />
+                            Aprovado & Verificado
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 shadow-sm">
+                            <X className="w-3 h-3" />
+                            Recusado
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Detailed User Data */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="bg-[#050811] p-3 rounded-xl border border-white/5">
+                        <span className="text-[10px] font-bold text-white/40 uppercase block">CPF</span>
+                        <span className="font-mono font-bold text-white mt-0.5 block">{req.cpf || 'Não informado'}</span>
+                      </div>
+
+                      <div className="bg-[#050811] p-3 rounded-xl border border-white/5 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] font-bold text-white/40 uppercase block">WhatsApp / Celular</span>
+                          <span className="font-mono font-bold text-white mt-0.5 block">{req.phone || 'Não informado'}</span>
+                        </div>
+                        {req.phone && (
+                          <a
+                            href={`https://api.whatsapp.com/send?phone=${req.phone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                            title="Conversar no WhatsApp"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="bg-[#050811] p-3 rounded-xl border border-white/5 sm:col-span-2">
+                        <span className="text-[10px] font-bold text-white/40 uppercase block">Endereço Completo</span>
+                        <span className="text-white/90 font-medium mt-0.5 block">
+                          {req.address ? `${req.address} - ` : ''}{req.city ? `${req.city}/${req.state} - ` : ''}CEP: {req.cep || 'N/A'} ({req.country || 'Brasil'})
+                        </span>
+                      </div>
+
+                      <div className="bg-[#050811] p-3 rounded-xl border border-white/5 sm:col-span-2 flex items-center justify-between text-[11px] text-white/40">
+                        <span>Enviado em: {new Date(req.submittedAt).toLocaleString('pt-BR')}</span>
+                        <span className="font-mono">User ID: {req.userId || req.id}</span>
+                      </div>
+
+                      {req.rejectionReason && (
+                        <div className="bg-rose-950/40 border border-rose-500/30 p-3 rounded-xl sm:col-span-2 text-rose-300 text-xs">
+                          <strong>Motivo da Recusa:</strong> {req.rejectionReason}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  {/* Action Controls for Admin */}
+                  <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-end gap-3">
                     <button
-                      onClick={() => handleCopy(JSON.stringify(item, null, 2), item._id)}
-                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white cursor-pointer"
-                      title="Copiar JSON"
+                      onClick={() => handleRejectUser(req.userId || req.id, req.name)}
+                      disabled={processingId === (req.userId || req.id)}
+                      className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                     >
-                      <Copy className="w-3.5 h-3.5" />
+                      <X className="w-3.5 h-3.5" />
+                      Recusar / Solicitar Ajuste
                     </button>
+
                     <button
-                      onClick={() => handleDeleteDocument(item._id)}
-                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer"
-                      title="Excluir Documento"
+                      onClick={() => handleApproveUser(req.userId || req.id, req.name)}
+                      disabled={processingId === (req.userId || req.id)}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-black font-black text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {processingId === (req.userId || req.id) ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="w-4 h-4" />
+                      )}
+                      <span>Aprovar & Conceder Selo Verificado</span>
                     </button>
                   </div>
                 </div>
-
-                {/* Structured Fields Preview */}
-                <pre className="text-[11px] font-mono text-white/80 bg-[#050811] p-3 rounded-xl overflow-x-auto max-h-56 scrollbar-thin border border-white/5">
-                  {JSON.stringify(item, null, 2)}
-                </pre>
-              </div>
-
-              <div className="text-[10px] text-white/40 mt-3 pt-2 border-t border-white/5 flex justify-between">
-                <span>{item.title || item.name || item.platformName || item.email || 'Documento'}</span>
-                {copiedId === item._id && <span className="text-[#D9F22A] font-bold">JSON Copiado!</span>}
-              </div>
+              ))}
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        /* ================= GENERAL DOCUMENT EXPLORER FOR OTHER COLLECTIONS ================= */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {loading ? (
+            <div className="col-span-2 py-16 text-center text-white/50 text-xs flex flex-col items-center gap-2">
+              <RefreshCw className="w-6 h-6 animate-spin text-[#D9F22A]" />
+              Carregando registros em nuvem...
+            </div>
+          ) : filteredDocs.length === 0 ? (
+            <div className="col-span-2 py-16 text-center text-white/50 text-xs bg-[#080d1a] border border-white/10 rounded-2xl p-6">
+              Nenhum documento na coleção <code className="text-[#D9F22A]">{activeCollection}</code>.
+              <p className="text-white/40 mt-1">
+                Coleção zerada e pronta para receber novos cadastros.
+              </p>
+            </div>
+          ) : (
+            filteredDocs.map((item) => (
+              <div
+                key={item._id}
+                className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-lg flex flex-col justify-between hover:border-[#D9F22A]/40 transition-colors"
+              >
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase font-bold text-[#D9F22A] bg-[#D9F22A]/10 px-2 py-0.5 rounded">
+                        DOC_ID
+                      </span>
+                      <span className="font-mono text-xs font-bold text-white truncate max-w-[200px]">
+                        {item._id}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCopy(JSON.stringify(item, null, 2), item._id)}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white cursor-pointer"
+                        title="Copiar JSON"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocument(item._id)}
+                        className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer"
+                        title="Excluir Documento"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Structured Fields Preview */}
+                  <pre className="text-[11px] font-mono text-white/80 bg-[#050811] p-3 rounded-xl overflow-x-auto max-h-56 scrollbar-thin border border-white/5">
+                    {JSON.stringify(item, null, 2)}
+                  </pre>
+                </div>
+
+                <div className="text-[10px] text-white/40 mt-3 pt-2 border-t border-white/5 flex justify-between">
+                  <span>{item.title || item.name || item.platformName || item.email || 'Documento'}</span>
+                  {copiedId === item._id && <span className="text-[#D9F22A] font-bold">JSON Copiado!</span>}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 };
