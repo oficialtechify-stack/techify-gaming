@@ -594,20 +594,53 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
   const normalizedEmail = (user.email || '').trim().toLowerCase();
 
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
-  const profileSnap = await getDoc(profileRef);
-
   let profile: UserSellerProfile;
 
-  if (profileSnap.exists()) {
-    profile = profileSnap.data() as UserSellerProfile;
-  } else {
-    const avatar = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+  try {
+    const profileSnap = await getDoc(profileRef);
+
+    if (profileSnap.exists()) {
+      const existing = profileSnap.data() as UserSellerProfile;
+      profile = {
+        ...existing,
+        hasAffiliateProfile: preferredRole === 'afiliado' ? true : existing.hasAffiliateProfile,
+        hasCompanyProfile: preferredRole === 'empresa' ? true : existing.hasCompanyProfile,
+        activeRoleMode: preferredRole || existing.activeRoleMode || 'afiliado',
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(profileRef, profile, { merge: true });
+    } else {
+      const avatar = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+      profile = {
+        userId: user.uid,
+        name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário Techify',
+        email: normalizedEmail,
+        role: preferredRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
+        avatar,
+        pixKey: '',
+        pixKeyType: 'Chave Aleatória',
+        availableBalance: 0,
+        pendingBalance: 0,
+        totalEarned: 0,
+        totalSalesCount: 0,
+        partnerLevel: preferredRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
+        targetGoal: preferredRole === 'empresa' ? 500000 : 100000,
+        currentSalesProgress: 0,
+        hasAffiliateProfile: preferredRole === 'afiliado',
+        hasCompanyProfile: preferredRole === 'empresa',
+        activeRoleMode: preferredRole,
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(profileRef, profile, { merge: true });
+    }
+  } catch (firestoreErr) {
+    console.warn('Sincronização Firestore offline ou pendente:', firestoreErr);
     profile = {
       userId: user.uid,
       name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário Techify',
       email: normalizedEmail,
       role: preferredRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
-      avatar,
+      avatar: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
       pixKey: '',
       pixKeyType: 'Chave Aleatória',
       availableBalance: 0,
@@ -617,12 +650,11 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
       partnerLevel: preferredRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
       targetGoal: preferredRole === 'empresa' ? 500000 : 100000,
       currentSalesProgress: 0,
-      hasAffiliateProfile: false,
-      hasCompanyProfile: false,
+      hasAffiliateProfile: preferredRole === 'afiliado',
+      hasCompanyProfile: preferredRole === 'empresa',
       activeRoleMode: preferredRole,
       updatedAt: new Date().toISOString()
     };
-    await setDoc(profileRef, profile, { merge: true });
   }
 
   return { user, profile };
