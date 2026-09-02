@@ -53,6 +53,8 @@ import { CreatePlanModal } from './CreatePlanModal';
 import { RegisterSaleModal } from './RegisterSaleModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
+import { ProductEditorView } from './ProductEditorView';
+import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
 import { Modals } from '../Modals';
 import { ActiveModal } from '../../types';
 import { completeAffiliateProfile } from '../../services/authService';
@@ -122,11 +124,34 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState<boolean>(false);
   const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState<boolean>(false);
   const [editingPlan, setEditingPlan] = useState<CompanyPlan | null>(null);
+  const [detailedEditingPlan, setDetailedEditingPlan] = useState<CompanyPlan | null>(null);
+  const [liveCheckoutPlan, setLiveCheckoutPlan] = useState<CompanyPlan | null>(null);
   const [isRegisterSaleModalOpen, setIsRegisterSaleModalOpen] = useState<boolean>(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState<boolean>(false);
   const [selectedPlanForSale, setSelectedPlanForSale] = useState<string | undefined>(undefined);
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<CompanyPlan | null>(null);
   const [companyAuthModal, setCompanyAuthModal] = useState<ActiveModal>(null);
+
+  // Check URL query params for ?checkout=planId or #checkout=planId
+  useEffect(() => {
+    const handleUrlCheckout = () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const checkoutParam = urlParams.get('checkout');
+        if (checkoutParam && plans.length > 0) {
+          const found = plans.find(p => p.id === checkoutParam || p.slug === checkoutParam);
+          if (found) {
+            setLiveCheckoutPlan(found);
+          }
+        }
+      } catch (e) {
+        console.error('Error checking checkout URL:', e);
+      }
+    };
+    handleUrlCheckout();
+    window.addEventListener('popstate', handleUrlCheckout);
+    return () => window.removeEventListener('popstate', handleUrlCheckout);
+  }, [plans]);
 
   // Live Toast Notification
   const [liveToast, setLiveToast] = useState<{ message: string; sub: string; amount: string } | null>(null);
@@ -395,6 +420,30 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     } catch (err: any) {
       console.error('Error updating plan:', err);
       alert(`Erro ao atualizar plano: ${err.message}`);
+    }
+  };
+
+  // Handle duplicate plan
+  const handleDuplicatePlan = async (plan: CompanyPlan) => {
+    try {
+      const duplicatedData = {
+        ...plan,
+        name: `${plan.name} (Cópia)`,
+        affiliatesCount: 0,
+        totalSales: 0,
+        createdAt: new Date().toISOString()
+      };
+      const { id, ...cleanPlan } = duplicatedData as any;
+      const created = await createCompanyPlanInFirebase(cleanPlan);
+      setLiveToast({
+        message: 'Plano duplicado com sucesso!',
+        sub: created.name,
+        amount: 'Duplicado'
+      });
+      setTimeout(() => setLiveToast(null), 3000);
+    } catch (err: any) {
+      console.error('Error duplicating plan:', err);
+      alert(`Erro ao duplicar plano: ${err.message}`);
     }
   };
 
@@ -982,8 +1031,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setIsRegisterSaleModalOpen(true);
               }}
               onEditPlan={(plan) => {
-                setEditingPlan(plan);
-                setIsCreatePlanModalOpen(true);
+                setDetailedEditingPlan(plan);
+              }}
+              onDuplicatePlan={handleDuplicatePlan}
+              onOpenCheckout={(plan) => {
+                setLiveCheckoutPlan(plan);
+              }}
+              onAddReview={(planId, review) => {
+                const target = plans.find(p => p.id === planId);
+                if (target) {
+                  const currentReviews = target.reviews || [];
+                  handleUpdatePlan(planId, { reviews: [review, ...currentReviews] });
+                }
               }}
               onDeleteCompany={handleDeleteCompany}
               onDeletePlan={handleDeletePlan}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CompanyStartup, CompanyPlan, UserAffiliation, SaleTransaction, UserSellerProfile } from '../../types/platform';
+import { CompanyStartup, CompanyPlan, UserAffiliation, SaleTransaction, UserSellerProfile, ProductReview } from '../../types/platform';
 import { 
   Building2, 
   Layers, 
@@ -24,8 +24,20 @@ import {
   ShieldAlert,
   XCircle,
   Lock,
-  ArrowRight
+  ArrowRight,
+  MoreVertical,
+  Link2,
+  MessageSquare,
+  Copy,
+  Check,
+  Search,
+  LayoutGrid,
+  List,
+  CreditCard,
+  Eye
 } from 'lucide-react';
+import { PlanLinksModal } from './PlanLinksModal';
+import { PlanReviewsModal } from './PlanReviewsModal';
 
 interface MinhaEmpresaViewProps {
   companies: CompanyStartup[];
@@ -41,6 +53,9 @@ interface MinhaEmpresaViewProps {
   onEditPlan?: (plan: CompanyPlan) => void;
   onDeleteCompany: (companyId: string) => void;
   onDeletePlan: (planId: string, companyId?: string) => void;
+  onOpenCheckout?: (plan: CompanyPlan) => void;
+  onDuplicatePlan?: (plan: CompanyPlan) => void;
+  onAddReview?: (planId: string, review: ProductReview) => void;
 }
 
 export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
@@ -56,17 +71,37 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   onOpenRegisterSale,
   onEditPlan,
   onDeleteCompany,
-  onDeletePlan
+  onDeletePlan,
+  onOpenCheckout,
+  onDuplicatePlan,
+  onAddReview
 }) => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || '');
   const [activeTab, setActiveTab] = useState<'planos' | 'afiliados' | 'vendas'>('planos');
   const [verificationWarningModal, setVerificationWarningModal] = useState<boolean>(false);
+
+  // Plan Management table/search/actions state
+  const [planViewMode, setPlanViewMode] = useState<'table' | 'cards'>('table');
+  const [planSearch, setPlanSearch] = useState<string>('');
+  const [planStatusFilter, setPlanStatusFilter] = useState<'all' | 'Ativo' | 'Pausado'>('all');
+  const [activePlanDropdownId, setActivePlanDropdownId] = useState<string | null>(null);
+
+  // Modals for Links and Reviews
+  const [selectedPlanForLinks, setSelectedPlanForLinks] = useState<CompanyPlan | null>(null);
+  const [selectedPlanForReviews, setSelectedPlanForReviews] = useState<CompanyPlan | null>(null);
+  const [copiedToast, setCopiedToast] = useState<string | null>(null);
 
   const currentCompany = companies.find(c => c.id === selectedCompanyId) || companies[0];
 
   const companyPlans = plans.filter(p => !currentCompany || p.companyId === currentCompany.id);
   const companyAffiliations = affiliations.filter(a => !currentCompany || a.companyId === currentCompany.id);
   const companySales = sales.filter(s => !currentCompany || s.companyId === currentCompany.id || companyPlans.some(p => p.id === s.platformId));
+
+  const filteredCompanyPlans = companyPlans.filter(p => {
+    const matchesSearch = !planSearch || p.name.toLowerCase().includes(planSearch.toLowerCase()) || p.category.toLowerCase().includes(planSearch.toLowerCase());
+    const matchesStatus = planStatusFilter === 'all' || (p.status || 'Ativo') === planStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const totalRevenue = companySales.reduce((acc, s) => acc + s.amount, 0);
   const totalCommissionsPaid = companySales.reduce((acc, s) => acc + s.commissionEarned, 0);
@@ -98,6 +133,14 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
     }
     onOpenCreateCompany();
   };
+
+  const handleCopyLink = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedToast(id);
+    setTimeout(() => setCopiedToast(null), 3000);
+  };
+
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://techify.app';
 
   return (
     <div className="flex flex-col gap-6" id="techify-minha-empresa-view">
@@ -412,13 +455,106 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             </button>
           </div>
 
-          {/* TAB 1: PLANOS CADASTRADOS */}
+          {/* TAB 1: ÁREA PARA GERENCIAR OS PLANOS (Image 2 & 3) */}
           {activeTab === 'planos' && (
-            <div>
-              {companyPlans.length === 0 ? (
+            <div className="space-y-4">
+              {/* Header Controls for Managing Plans: Search, Status Filter & View Toggle */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#080d1a] border border-white/10 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <div className="relative flex-1">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar planos..."
+                      value={planSearch}
+                      onChange={(e) => setPlanSearch(e.target.value)}
+                      className="w-full bg-[#050811] border border-white/10 focus:border-[#D9F22A] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Status Filter Tabs (Image 2) */}
+                  <div className="flex items-center bg-[#050811] border border-white/10 rounded-xl p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setPlanStatusFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        planStatusFilter === 'all'
+                          ? 'bg-[#D9F22A] text-[#060A15]'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlanStatusFilter('Ativo')}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        planStatusFilter === 'Ativo'
+                          ? 'bg-emerald-500 text-black'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Ativo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlanStatusFilter('Pausado')}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        planStatusFilter === 'Pausado'
+                          ? 'bg-amber-500 text-black'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Pausado
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  {/* View Mode Switcher: Table List vs Grid Cards */}
+                  <div className="flex items-center bg-[#050811] border border-white/10 rounded-xl p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setPlanViewMode('table')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        planViewMode === 'table'
+                          ? 'bg-white/15 text-white shadow-sm'
+                          : 'text-white/50 hover:text-white'
+                      }`}
+                      title="Visualização em Tabela (Gerenciar Planos)"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlanViewMode('cards')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        planViewMode === 'cards'
+                          ? 'bg-white/15 text-white shadow-sm'
+                          : 'text-white/50 hover:text-white'
+                      }`}
+                      title="Visualização em Cards"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => handleCreatePlanRequest(currentCompany?.id)}
+                    className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>Novo Plano</span>
+                  </button>
+                </div>
+              </div>
+
+              {filteredCompanyPlans.length === 0 ? (
                 <div className="text-center py-12 px-4 bg-[#080d1a] border border-white/10 rounded-2xl">
                   <Layers className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
-                  <h4 className="text-base font-bold text-white font-['Syne']">Nenhum plano cadastrado nesta empresa</h4>
+                  <h4 className="text-base font-bold text-white font-['Syne']">
+                    {planSearch ? 'Nenhum plano corresponde à pesquisa' : 'Nenhum plano cadastrado nesta empresa'}
+                  </h4>
                   <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
                     {isVerified 
                       ? 'Adicione planos, preços e comissões para que os afiliados possam começar a vender.' 
@@ -439,9 +575,194 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                     )}
                   </button>
                 </div>
+              ) : planViewMode === 'table' ? (
+                /* TABLE LIST VIEW (Exact Match for Image 2 & 3) */
+                <div className="bg-[#080d1a] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/10 text-[11px] font-bold text-white/40 uppercase bg-[#050811]">
+                          <th className="py-3.5 px-4">Nome</th>
+                          <th className="py-3.5 px-4">Preço</th>
+                          <th className="py-3.5 px-4">Status</th>
+                          <th className="py-3.5 px-4 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-xs">
+                        {filteredCompanyPlans.map((plan) => {
+                          const isDropdownOpen = activePlanDropdownId === plan.id;
+                          return (
+                            <tr key={plan.id} className="hover:bg-white/5 transition-colors group">
+                              {/* Nome & Thumbnail */}
+                              <td className="py-4 px-4 font-bold text-white">
+                                <div className="flex items-center gap-3">
+                                  <img
+                                    src={plan.bannerImage}
+                                    alt={plan.name}
+                                    className="w-10 h-10 rounded-xl object-cover border border-white/10 bg-[#050811] flex-shrink-0"
+                                  />
+                                  <div>
+                                    <span className="font-bold text-white group-hover:text-[#D9F22A] transition-colors block text-sm">
+                                      {plan.name}
+                                    </span>
+                                    <span className="text-[11px] text-white/50 block">
+                                      {plan.category} • {plan.paymentType || 'Único'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Preço */}
+                              <td className="py-4 px-4 font-black text-white text-sm">
+                                R$ {plan.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+
+                              {/* Status Badge (Image 2) */}
+                              <td className="py-4 px-4">
+                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1.5 ${
+                                  (plan.status || 'Ativo') === 'Ativo'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    (plan.status || 'Ativo') === 'Ativo' ? 'bg-emerald-400' : 'bg-amber-400'
+                                  }`} />
+                                  {plan.status || 'Ativo'}
+                                </span>
+                              </td>
+
+                              {/* Ações (3 Dots & Fast Links Modal - Image 3) */}
+                              <td className="py-4 px-4 text-right relative">
+                                <div className="flex items-center justify-end gap-2">
+                                  {/* Quick Links Icon */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedPlanForLinks(plan)}
+                                    className="p-1.5 rounded-lg bg-[#050811] border border-white/10 hover:border-[#D9F22A]/40 text-white/70 hover:text-[#D9F22A] transition-colors cursor-pointer"
+                                    title="Ver Links Exclusivos"
+                                  >
+                                    <Link2 className="w-4 h-4" />
+                                  </button>
+
+                                  {/* Quick Live Checkout Icon */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (onOpenCheckout) onOpenCheckout(plan);
+                                    }}
+                                    className="p-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/80 transition-colors cursor-pointer"
+                                    title="Testar Checkout ao Vivo"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </button>
+
+                                  {/* 3-Dots Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setActivePlanDropdownId(isDropdownOpen ? null : plan.id)}
+                                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                      isDropdownOpen
+                                        ? 'bg-white/20 text-white'
+                                        : 'text-white/60 hover:text-white hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <MoreVertical className="w-4 h-4" />
+                                  </button>
+                                </div>
+
+                                {/* 3-DOTS ACTION POPUP (Exact Match for Image 3) */}
+                                {isDropdownOpen && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-20"
+                                      onClick={() => setActivePlanDropdownId(null)}
+                                    />
+                                    <div className="absolute right-4 top-12 z-30 w-48 bg-[#0a1222] border border-white/15 rounded-2xl shadow-2xl py-2 text-left animate-in fade-in duration-150">
+                                      {/* 1. Ver links */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActivePlanDropdownId(null);
+                                          setSelectedPlanForLinks(plan);
+                                        }}
+                                        className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
+                                      >
+                                        <Link2 className="w-4 h-4 text-[#D9F22A]" />
+                                        <span>Ver links</span>
+                                      </button>
+
+                                      {/* 2. Editar */}
+                                      {onEditPlan && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActivePlanDropdownId(null);
+                                            onEditPlan(plan);
+                                          }}
+                                          className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
+                                        >
+                                          <Edit3 className="w-4 h-4 text-white/60" />
+                                          <span>Editar</span>
+                                        </button>
+                                      )}
+
+                                      {/* 3. Ver avaliações */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActivePlanDropdownId(null);
+                                          setSelectedPlanForReviews(plan);
+                                        }}
+                                        className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
+                                      >
+                                        <MessageSquare className="w-4 h-4 text-amber-400" />
+                                        <span>Ver avaliações</span>
+                                      </button>
+
+                                      {/* 4. Duplicar */}
+                                      {onDuplicatePlan && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActivePlanDropdownId(null);
+                                            onDuplicatePlan(plan);
+                                          }}
+                                          className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
+                                        >
+                                          <Copy className="w-4 h-4 text-emerald-400" />
+                                          <span>Duplicar</span>
+                                        </button>
+                                      )}
+
+                                      {/* 5. Excluir */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActivePlanDropdownId(null);
+                                          if (confirm(`Tem certeza que deseja excluir o plano "${plan.name}"?`)) {
+                                            onDeletePlan(plan.id, plan.companyId);
+                                          }
+                                        }}
+                                        className="w-full px-4 py-2.5 text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 cursor-pointer transition-colors border-t border-white/5 mt-1"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                        <span>Excluir</span>
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               ) : (
+                /* GRID CARDS VIEW */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {companyPlans.map((plan) => (
+                  {filteredCompanyPlans.map((plan) => (
                     <div
                       key={plan.id}
                       className="bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 group shadow-lg"
@@ -462,6 +783,13 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                           )}
                         </div>
                         <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
+                          <button
+                            onClick={() => setSelectedPlanForLinks(plan)}
+                            className="p-1.5 rounded-lg bg-black/70 text-white/70 hover:text-[#D9F22A] hover:bg-black/90 transition-colors cursor-pointer border border-white/10"
+                            title="Ver Links Exclusivos"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                          </button>
                           {onEditPlan && (
                             <button
                               onClick={() => onEditPlan(plan)}
@@ -484,9 +812,15 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                       {/* Plan Content */}
                       <div className="p-5 flex-1 flex flex-col justify-between gap-4">
                         <div>
-                          <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block mb-1">
-                            {plan.category}
-                          </span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
+                              {plan.category}
+                            </span>
+                            <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">
+                              {plan.status || 'Ativo'}
+                            </span>
+                          </div>
+
                           <h4 className="text-lg font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">
                             {plan.name}
                           </h4>
@@ -523,9 +857,24 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                             </span>
                           </div>
 
-                          <div className="flex items-center justify-between pt-1 text-[11px] text-white/60">
-                            <span>{plan.affiliatesCount || 0} afiliados ativos</span>
-                            <span>{plan.totalSales || 0} vendas</span>
+                          <div className="flex items-center justify-between pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onOpenCheckout) onOpenCheckout(plan);
+                              }}
+                              className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Testar Checkout
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPlanForLinks(plan)}
+                              className="text-xs font-bold text-white/60 hover:text-white flex items-center gap-1 cursor-pointer"
+                            >
+                              <Link2 className="w-3 h-3" /> Links Exclusivos
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -535,6 +884,27 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
               )}
             </div>
           )}
+
+          {/* Plan Links Modal (Image 3) */}
+          <PlanLinksModal
+            plan={selectedPlanForLinks}
+            isOpen={!!selectedPlanForLinks}
+            onClose={() => setSelectedPlanForLinks(null)}
+            onOpenCheckout={(p) => {
+              setSelectedPlanForLinks(null);
+              if (onOpenCheckout) onOpenCheckout(p);
+            }}
+          />
+
+          {/* Plan Reviews Modal (Image 3) */}
+          <PlanReviewsModal
+            plan={selectedPlanForReviews}
+            isOpen={!!selectedPlanForReviews}
+            onClose={() => setSelectedPlanForReviews(null)}
+            onAddReview={(planId, rev) => {
+              if (onAddReview) onAddReview(planId, rev);
+            }}
+          />
 
           {/* TAB 2: AFILIADOS CONECTADOS */}
           {activeTab === 'afiliados' && (

@@ -34,6 +34,55 @@ export interface CompanyStartup {
   createdAt?: string;
 }
 
+export interface ProductOrderBump {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  active: boolean;
+  image?: string;
+}
+
+export interface ProductUpsell {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  active: boolean;
+}
+
+export interface ProductCoupon {
+  id: string;
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  active: boolean;
+  usedCount?: number;
+}
+
+export interface ProductCustomCheckout {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  price: number;
+  offerName: string;
+  visitsCount: number;
+  salesCount: number;
+  checkoutSlug: string;
+  bannerImage?: string;
+  timerMinutes?: number;
+  buttonText?: string;
+}
+
+export interface ProductReview {
+  id: string;
+  author: string;
+  rating: number;
+  comment: string;
+  date: string;
+  verifiedBuyer?: boolean;
+}
+
 export interface CompanyPlan {
   id: string;
   companyId: string;
@@ -51,6 +100,15 @@ export interface CompanyPlan {
   recurrentCommission?: number;
   features: string[];
   bannerImage: string;
+  paymentType?: 'Único' | 'Recorrente' | 'Assinatura';
+  supportEmail?: string;
+  warrantyDays?: number;
+  thankYouPageUrl?: string;
+  orderBumps?: ProductOrderBump[];
+  upsells?: ProductUpsell[];
+  coupons?: ProductCoupon[];
+  customCheckouts?: ProductCustomCheckout[];
+  reviews?: ProductReview[];
   affiliatesCount?: number;
   activeSellersCount?: number;
   totalSales: number;
