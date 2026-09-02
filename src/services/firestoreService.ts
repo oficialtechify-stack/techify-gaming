@@ -297,7 +297,7 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
 }
 
 /**
- * Create a new Company / Startup in Firestore
+ * Create a new Company / Startup in Firestore (Sent to Admin for approval)
  */
 export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 'id' | 'createdAt'>) {
   const id = `comp-${Date.now()}`;
@@ -316,14 +316,47 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
     totalPlansCount: 0,
     totalAffiliatesCount: 0,
     totalSalesVolume: 0,
-    verified: true,
-    ownerId: DEFAULT_USER_ID,
+    verified: companyData.verified ?? false,
+    status: companyData.status ?? 'pending',
+    submittedAt: companyData.submittedAt || now,
+    submittedBy: companyData.submittedBy || DEFAULT_USER_ID,
+    ownerId: companyData.ownerId || DEFAULT_USER_ID,
     createdAt: now
   };
 
   const docRef = doc(db, COLLECTIONS.COMPANIES, id);
   await setDoc(docRef, newCompany);
   return newCompany;
+}
+
+/**
+ * Approve a Company in Firestore (Admin Action)
+ */
+export async function approveCompanyInFirebase(companyId: string) {
+  const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+  const now = new Date().toISOString();
+  await setDoc(docRef, {
+    status: 'approved',
+    verified: true,
+    reviewedAt: now,
+    rejectionReason: null
+  }, { merge: true });
+  return { success: true };
+}
+
+/**
+ * Reject a Company in Firestore (Admin Action)
+ */
+export async function rejectCompanyInFirebase(companyId: string, reason: string = 'Dados da empresa necessitam de revisão') {
+  const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+  const now = new Date().toISOString();
+  await setDoc(docRef, {
+    status: 'rejected',
+    verified: false,
+    rejectionReason: reason,
+    reviewedAt: now
+  }, { merge: true });
+  return { success: true };
 }
 
 /**

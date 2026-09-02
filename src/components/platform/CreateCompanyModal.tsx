@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { CompanyStartup } from '../../types/platform';
-import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon, AlertCircle, Upload, Check, User, FileText, CheckCircle } from 'lucide-react';
+import { CompanyStartup, UserSellerProfile } from '../../types/platform';
+import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon, AlertCircle, Upload, Check, User, FileText, CheckCircle, ShieldAlert, Send } from 'lucide-react';
 import { formatCNPJ, formatCPF, formatPhone, isValidCNPJ, isValidCPF, getAuthErrorMessage } from '../../services/authService';
 
 interface CreateCompanyModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCompanyCreated: (company: Omit<CompanyStartup, 'id' | 'createdAt'>) => void;
+  userProfile?: UserSellerProfile;
 }
 
 const CATEGORIES = [
@@ -22,7 +23,8 @@ const CATEGORIES = [
 export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
   isOpen,
   onClose,
-  onCompanyCreated
+  onCompanyCreated,
+  userProfile
 }) => {
   const [name, setName] = useState('');
   const [docType, setDocType] = useState<'CNPJ' | 'CPF' | 'SEM_CNPJ'>('CNPJ');
@@ -77,8 +79,8 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       category: category as any,
       description: description.trim() || `Empresa ${name.trim()} integrada ao ecossistema Techify.`,
       website: website.trim() || 'https://suaempresa.com',
-      email: email.trim() || 'contato@empresa.com',
-      whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : '+55 11 99999-9999',
+      email: email.trim() || userProfile?.email || 'contato@empresa.com',
+      whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : (userProfile?.phone ? formatPhone(userProfile.phone) : '+55 11 99999-9999'),
       docType: docType,
       cnpj: docType === 'CNPJ' && cleanCnpj ? formatCNPJ(cleanCnpj) : undefined,
       cleanCnpj: docType === 'CNPJ' && cleanCnpj ? cleanCnpj : undefined,
@@ -89,7 +91,12 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       totalAffiliatesCount: 0,
       totalSalesVolume: 0,
       commissionRange: commissionRange.trim() || '30% a 50%',
-      verified: true
+      verified: false,
+      status: 'pending',
+      submittedAt: new Date().toISOString(),
+      submittedBy: userProfile?.userId || 'usr_techify_main',
+      submittedByName: userProfile?.name || 'Produtor Solicitante',
+      submittedByEmail: userProfile?.email || 'contato@empresa.com'
     });
 
     onClose();
@@ -107,15 +114,15 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
         </button>
 
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
-          <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />
-          Área de Produtores & Startups
+          <span className="w-2 h-2 rounded-full bg-[#D9F22A] animate-ping" />
+          Área de Produtores & Startups • Envio para Análise
         </div>
 
         <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne'] mb-2">
           Cadastrar Empresa ou Startup
         </h3>
-        <p className="text-xs text-white/70 mb-5">
-          Cadastre sua startup na plataforma para desbloquear o Painel da Empresa e disponibilizar planos para a rede de afiliados venderem com comissão.
+        <p className="text-xs text-white/70 mb-5 leading-relaxed">
+          Preencha os dados da sua empresa. O cadastro será enviado diretamente para <strong className="text-white">análise e aprovação do Administrador</strong> para liberar seu catálogo na vitrine e o painel de produtor.
         </p>
 
         {errorMsg && (
@@ -375,8 +382,8 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             type="submit"
             className="mt-3 w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            <Building2 className="w-4 h-4" />
-            Cadastrar Empresa & Desbloquear Painel
+            <Send className="w-4 h-4" />
+            Cadastrar Empresa & Enviar para Análise do Admin
           </button>
         </form>
       </div>

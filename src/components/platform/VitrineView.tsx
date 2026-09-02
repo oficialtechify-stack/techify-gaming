@@ -137,10 +137,11 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           </div>
 
           <div className="flex items-center gap-3 self-start sm:self-auto flex-shrink-0 flex-wrap">
-            {roleMode === 'empresa' && onOpenCreateCompany && (
+            {onOpenCreateCompany && (
               <button
                 onClick={onOpenCreateCompany}
                 className="bg-white/10 hover:bg-white/15 text-white border border-white/15 font-bold px-4 py-3 rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
+                title="Cadastrar empresa e enviar para análise do Administrador"
               >
                 <Building2 className="w-4 h-4 text-[#D9F22A]" />
                 Cadastrar Empresa

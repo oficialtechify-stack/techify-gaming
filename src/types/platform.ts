@@ -23,6 +23,13 @@ export interface CompanyStartup {
   totalSalesVolume: number;
   commissionRange: string;
   verified: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
+  submittedBy?: string;
+  submittedByName?: string;
+  submittedByEmail?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
   ownerId?: string;
   createdAt?: string;
 }

@@ -5,8 +5,12 @@ import {
   COLLECTIONS, 
   clearAllFirestoreData,
   subscribeVerifications,
+  subscribeCompanies,
   approveVerificationInFirebase,
-  rejectVerificationInFirebase
+  rejectVerificationInFirebase,
+  approveCompanyInFirebase,
+  rejectCompanyInFirebase,
+  deleteCompanyInFirebase
 } from '../../services/firestoreService';
 import { 
   Database, 
@@ -32,15 +36,20 @@ import {
   Mail,
   Phone,
   MapPin,
-  FileText
+  FileText,
+  Building2,
+  Globe,
+  Tag,
+  Send
 } from 'lucide-react';
-import { VerificationRequest } from '../../types/platform';
+import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import firebaseConfig from '../../../firebase-applet-config.json';
 
 export const DatabaseManagerView: React.FC = () => {
   const [activeCollection, setActiveCollection] = useState<string>(COLLECTIONS.VERIFICATIONS);
   const [documents, setDocuments] = useState<any[]>([]);
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
+  const [companies, setCompanies] = useState<CompanyStartup[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -48,12 +57,18 @@ export const DatabaseManagerView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // Subscribe to realtime verification requests
+  // Subscribe to realtime verification requests & companies
   useEffect(() => {
-    const unsub = subscribeVerifications((reqs) => {
+    const unsubVerifs = subscribeVerifications((reqs) => {
       setVerifications(reqs);
     });
-    return () => unsub();
+    const unsubComps = subscribeCompanies((comps) => {
+      setCompanies(comps);
+    });
+    return () => {
+      unsubVerifs();
+      unsubComps();
+    };
   }, []);
 
   const fetchCollectionDocs = async (collName: string) => {
@@ -113,6 +128,41 @@ export const DatabaseManagerView: React.FC = () => {
     }
   };
 
+  const handleApproveCompany = async (companyId: string, companyName: string) => {
+    setProcessingId(companyId);
+    try {
+      await approveCompanyInFirebase(companyId);
+      setStatusMessage(`Empresa "${companyName}" aprovada com sucesso! Painel e catálogo liberados.`);
+      setTimeout(() => setStatusMessage(''), 5000);
+      if (activeCollection === COLLECTIONS.COMPANIES) {
+        await fetchCollectionDocs(activeCollection);
+      }
+    } catch (err: any) {
+      alert(`Erro ao aprovar empresa: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectCompany = async (companyId: string, companyName: string) => {
+    const reason = prompt(`Motivo da recusa para a empresa "${companyName}":`, 'Dados cadastrais ou documentação da empresa necessitam de ajuste.');
+    if (reason === null) return;
+
+    setProcessingId(companyId);
+    try {
+      await rejectCompanyInFirebase(companyId, reason);
+      setStatusMessage(`Empresa "${companyName}" recusada com motivo registrado.`);
+      setTimeout(() => setStatusMessage(''), 5000);
+      if (activeCollection === COLLECTIONS.COMPANIES) {
+        await fetchCollectionDocs(activeCollection);
+      }
+    } catch (err: any) {
+      alert(`Erro ao recusar empresa: ${err.message}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleWipeAllData = async () => {
     if (!window.confirm('ATENÇÃO: Deseja realmente zerar todos os dados do banco em nuvem (empresas, planos, vendas, saques, afiliados)? Esta ação deixará o sistema limpo.')) {
       return;
@@ -160,6 +210,20 @@ export const DatabaseManagerView: React.FC = () => {
     return true;
   });
 
+  const filteredCompanies = companies.filter((c) => {
+    const compStatus = c.status || (c.verified ? 'approved' : 'pending');
+    if (statusFilter !== 'all' && compStatus !== statusFilter) return false;
+    if (searchTerm) {
+      const matchName = (c.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchEmail = (c.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchDoc = (c.cnpj || c.cpf || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCat = (c.category || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchDesc = (c.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+      if (!matchName && !matchEmail && !matchDoc && !matchCat && !matchDesc) return false;
+    }
+    return true;
+  });
+
   const filteredDocs = documents.filter((docItem) => {
     if (!searchTerm) return true;
     const str = JSON.stringify(docItem).toLowerCase();
@@ -172,8 +236,12 @@ export const DatabaseManagerView: React.FC = () => {
       label: '🛡️ Validações de Usuários (KYC)',
       badge: verifications.filter(v => v.status === 'pending').length || undefined 
     },
+    { 
+      key: COLLECTIONS.COMPANIES, 
+      label: '🏢 Validações de Empresas (Startups)',
+      badge: companies.filter(c => c.status === 'pending').length || undefined
+    },
     { key: COLLECTIONS.PROFILES, label: 'Perfil de Usuário' },
-    { key: COLLECTIONS.COMPANIES, label: 'Empresas & Startups' },
     { key: COLLECTIONS.PLANS, label: 'Planos & Comissões' },
     { key: COLLECTIONS.AFFILIATIONS, label: 'Afiliações de Usuários' },
     { key: COLLECTIONS.SALES, label: 'Vendas & Comissões' },
@@ -314,6 +382,37 @@ export const DatabaseManagerView: React.FC = () => {
             >
               <ShieldCheck className="w-3 h-3" />
               Aprovados ({verifications.filter(v => v.status === 'approved').length})
+            </button>
+          </div>
+        )}
+
+        {activeCollection === COLLECTIONS.COMPANIES && (
+          <div className="flex items-center gap-1.5 bg-[#050811] p-1 rounded-xl border border-white/10">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                statusFilter === 'all' ? 'bg-[#D9F22A] text-[#060A15]' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Todas ({companies.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('pending')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'pending' ? 'bg-amber-400 text-[#060A15]' : 'text-amber-400/80 hover:text-amber-400'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              Pendentes ({companies.filter(c => (c.status || (!c.verified ? 'pending' : 'approved')) === 'pending').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('approved')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'approved' ? 'bg-emerald-500 text-white' : 'text-emerald-400/80 hover:text-emerald-400'
+              }`}
+            >
+              <Building2 className="w-3 h-3" />
+              Aprovadas ({companies.filter(c => (c.status || (c.verified ? 'approved' : 'pending')) === 'approved').length})
             </button>
           </div>
         )}
@@ -459,6 +558,207 @@ export const DatabaseManagerView: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      ) : activeCollection === COLLECTIONS.COMPANIES ? (
+        /* ================= SPECIAL VIEW FOR COMPANY APPROVALS ================= */
+        <div className="flex flex-col gap-4">
+          {filteredCompanies.length === 0 ? (
+            <div className="py-16 text-center text-white/50 text-xs bg-[#080d1a] border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center">
+              <Building2 className="w-10 h-10 text-white/20 mb-3" />
+              <p className="font-bold text-white/80 text-sm">Nenhuma empresa encontrada nesta categoria.</p>
+              <p className="text-white/40 mt-1 max-w-md">
+                Quando os usuários cadastrarem suas startups na plataforma, as solicitações aparecerão aqui com todos os dados (CNPJ/CPF, WhatsApp, email) para aprovação do Administrador.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {filteredCompanies.map((comp) => {
+                const compStatus = comp.status || (comp.verified ? 'approved' : 'pending');
+                const isPending = compStatus === 'pending';
+                const isApproved = compStatus === 'approved' || (comp.verified && compStatus !== 'rejected');
+                const isRejected = compStatus === 'rejected';
+
+                return (
+                  <div
+                    key={comp.id}
+                    className={`bg-[#080d1a] border rounded-2xl p-6 shadow-xl flex flex-col justify-between transition-all ${
+                      isPending
+                        ? 'border-amber-500/40 hover:border-amber-500/70 shadow-[0_0_30px_rgba(245,158,11,0.09)]'
+                        : isApproved
+                          ? 'border-emerald-500/30 hover:border-emerald-500/50'
+                          : 'border-rose-500/30 hover:border-rose-500/50'
+                    }`}
+                  >
+                    <div>
+                      {/* Company Header */}
+                      <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/10 mb-4">
+                        <div className="flex items-center gap-3.5">
+                          <img
+                            src={comp.logo || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(comp.name)}`}
+                            alt={comp.name}
+                            className="w-14 h-14 rounded-2xl object-cover border border-[#D9F22A]/30 bg-[#050811] flex-shrink-0"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-base sm:text-lg font-black text-white font-['Syne']">
+                                {comp.name}
+                              </h3>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D9F22A]/10 text-[#D9F22A] border border-[#D9F22A]/30">
+                                {comp.category}
+                              </span>
+                            </div>
+                            <p className="text-xs text-white/60 line-clamp-1 mt-0.5">{comp.tagline || 'Startup Techify'}</p>
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="flex-shrink-0">
+                          {isPending ? (
+                            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
+                              <Clock className="w-3 h-3" />
+                              Pendente de Análise
+                            </span>
+                          ) : isApproved ? (
+                            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Aprovada & Ativa
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 shadow-sm">
+                              <X className="w-3 h-3" />
+                              Recusada
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Detailed Company Data */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="bg-[#050811] p-3 rounded-xl border border-white/5">
+                          <span className="text-[10px] font-bold text-white/40 uppercase block">Documento da Empresa</span>
+                          <span className="font-mono font-bold text-white mt-0.5 block">
+                            {comp.cnpj ? `CNPJ: ${comp.cnpj}` : comp.cpf ? `CPF: ${comp.cpf}` : 'Sem CNPJ (Pessoa Física)'}
+                          </span>
+                        </div>
+
+                        <div className="bg-[#050811] p-3 rounded-xl border border-white/5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-white/40 uppercase block">WhatsApp / Contato</span>
+                            <span className="font-mono font-bold text-white mt-0.5 block">{comp.whatsapp || 'Não informado'}</span>
+                          </div>
+                          {comp.whatsapp && (
+                            <a
+                              href={`https://api.whatsapp.com/send?phone=${comp.whatsapp.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                              title="Falar no WhatsApp com o Produtor"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="bg-[#050811] p-3 rounded-xl border border-white/5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-white/40 uppercase block">E-mail Oficial</span>
+                            <span className="text-white mt-0.5 block truncate max-w-[180px]">{comp.email || 'contato@empresa.com'}</span>
+                          </div>
+                          {comp.email && (
+                            <a
+                              href={`mailto:${comp.email}`}
+                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                              title="Enviar E-mail"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="bg-[#050811] p-3 rounded-xl border border-white/5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-white/40 uppercase block">Website / Landing</span>
+                            <span className="text-[#D9F22A] mt-0.5 block truncate max-w-[180px]">{comp.website || 'https://suaempresa.com'}</span>
+                          </div>
+                          {comp.website && (
+                            <a
+                              href={comp.website.startsWith('http') ? comp.website : `https://${comp.website}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                              title="Abrir Website"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="bg-[#050811] p-3 rounded-xl border border-white/5 sm:col-span-2">
+                          <span className="text-[10px] font-bold text-white/40 uppercase block mb-1">Descrição & Proposta de Valor</span>
+                          <p className="text-white/80 leading-relaxed text-xs">
+                            {comp.description || 'Nenhuma descrição detalhada fornecida.'}
+                          </p>
+                        </div>
+
+                        <div className="bg-[#050811] p-3 rounded-xl border border-white/5 sm:col-span-2 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold text-white/40 uppercase block">Faixa de Comissão Afiliados</span>
+                            <span className="text-sm font-black text-[#D9F22A]">{comp.commissionRange || '30% a 50%'}</span>
+                          </div>
+                          <div className="text-right text-[11px] text-white/40">
+                            <span>Solicitado por: <strong className="text-white/80">{comp.submittedByName || 'Produtor Techify'}</strong></span>
+                            <span className="block">{comp.submittedAt ? new Date(comp.submittedAt).toLocaleString('pt-BR') : 'Data recente'}</span>
+                          </div>
+                        </div>
+
+                        {comp.rejectionReason && (
+                          <div className="bg-rose-950/40 border border-rose-500/30 p-3 rounded-xl sm:col-span-2 text-rose-300 text-xs">
+                            <strong>Motivo da Recusa:</strong> {comp.rejectionReason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action Controls for Admin */}
+                    <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+                      <button
+                        onClick={() => handleDeleteDocument(comp.id)}
+                        className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        title="Excluir Empresa"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Excluir
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleRejectCompany(comp.id, comp.name)}
+                          disabled={processingId === comp.id}
+                          className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Recusar / Solicitar Ajuste
+                        </button>
+
+                        <button
+                          onClick={() => handleApproveCompany(comp.id, comp.name)}
+                          disabled={processingId === comp.id}
+                          className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-black font-black text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {processingId === comp.id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <ShieldCheck className="w-4 h-4" />
+                          )}
+                          <span>Aprovar Empresa & Liberar Catálogo</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

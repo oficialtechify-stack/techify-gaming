@@ -167,13 +167,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Filter Controls */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2.5 w-full md:w-auto">
           {/* Tipo Filter */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <select
               value={selectedTypeFilter}
               onChange={(e) => setSelectedTypeFilter(e.target.value)}
-              className="bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8"
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8"
             >
               <option value="all">Tipo: Todos os Status</option>
               <option value="Aprovado">Aprovados</option>
@@ -183,11 +183,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Produtos Filter */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <select
               value={selectedProductFilter}
               onChange={(e) => setSelectedProductFilter(e.target.value)}
-              className="bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8 max-w-[200px] truncate"
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8 md:max-w-[200px] truncate"
             >
               <option value="all">Produtos: Todas as Plataformas</option>
               {platforms.map(p => (
@@ -198,11 +198,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Período Filter */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8"
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8"
             >
               <option value="Hoje">Período: Hoje</option>
               <option value="Ontem">Ontem</option>
@@ -217,7 +217,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* Refresh Button */}
           <button
             onClick={handleRefresh}
-            className="bg-[#12241b] hover:bg-[#183124] text-[#D9F22A] border border-[#D9F22A]/40 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+            className="w-full sm:w-auto justify-center bg-[#12241b] hover:bg-[#183124] text-[#D9F22A] border border-[#D9F22A]/40 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             Atualizar
@@ -226,7 +226,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 3. BIG PRIMARY CARDS (Vendas Realizadas & Quantidade de Vendas) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Vendas Realizadas (Gross Sales) */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
