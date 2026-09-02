@@ -190,23 +190,23 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                 {/* Affiliate Link with Quick Copy */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1">
-                    Seu Link Exclusivo de Afiliado:
+                    Seu Link Direto do Checkout com Código de Afiliado:
                   </label>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       readOnly
-                      value={aff.affiliateLink}
+                      value={aff.affiliateLink || `${typeof window !== 'undefined' ? window.location.origin : 'https://techify.app'}/?checkout=${aff.planId}&ref=${aff.affiliateCode}`}
                       className="flex-1 bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-mono truncate select-all focus:outline-none"
                     />
                     <button
-                      onClick={() => handleCopy(aff.affiliateLink, aff.id)}
-                      className="bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
-                      title="Copiar Link"
+                      onClick={() => handleCopy(aff.affiliateLink || `${typeof window !== 'undefined' ? window.location.origin : 'https://techify.app'}/?checkout=${aff.planId}&ref=${aff.affiliateCode}`, aff.id)}
+                      className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+                      title="Copiar Link de Divulgação"
                     >
                       {copiedId === aff.id ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-green-400" />
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
                           <span className="text-[10px]">Copiado!</span>
                         </>
                       ) : (
@@ -216,6 +216,15 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                         </>
                       )}
                     </button>
+                    <a
+                      href={aff.affiliateLink || `${typeof window !== 'undefined' ? window.location.origin : 'https://techify.app'}/?checkout=${aff.planId}&ref=${aff.affiliateCode}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center flex-shrink-0"
+                      title="Abrir Checkout ao vivo"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
                   </div>
                 </div>
 

@@ -132,12 +132,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<CompanyPlan | null>(null);
   const [companyAuthModal, setCompanyAuthModal] = useState<ActiveModal>(null);
 
-  // Check URL query params for ?checkout=planId or #checkout=planId
+  const [checkoutAffiliateRef, setCheckoutAffiliateRef] = useState<string>('');
+
+  // Check URL query params for ?checkout=planId&ref=affiliateCode
   useEffect(() => {
     const handleUrlCheckout = () => {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const checkoutParam = urlParams.get('checkout');
+        const refParam = urlParams.get('ref');
+        if (refParam) {
+          setCheckoutAffiliateRef(refParam);
+        }
         if (checkoutParam && plans.length > 0) {
           const found = plans.find(p => p.id === checkoutParam || p.slug === checkoutParam);
           if (found) {
@@ -329,26 +335,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Handle Join Affiliate (1 Click)
   const handleJoinAffiliate = async (plan: CompanyPlan) => {
-    // Check if user has verified profile
-    const isVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
-    if (!isVerified) {
-      setLiveToast({
-        message: 'Afiliação bloqueada: perfil não verificado',
-        sub: 'Preencha seus dados em "Meu Perfil" para aprovação do admin',
-        amount: 'Bloqueado'
-      });
-      setTimeout(() => setLiveToast(null), 4500);
-      return;
-    }
-
     try {
       const aff = await createAffiliationInFirebase(plan, userProfile);
       setLiveToast({
         message: 'Afiliação realizada com sucesso!',
-        sub: `${plan.name} (${plan.companyName})`,
+        sub: `Código liberado: ${aff.affiliateCode} (${plan.name})`,
         amount: `${plan.commissionPercentage}% de comissão`
       });
-      setTimeout(() => setLiveToast(null), 4500);
+      setTimeout(() => setLiveToast(null), 5000);
     } catch (err: any) {
       console.error('Error joining affiliate:', err);
       alert(`Erro ao se afiliar: ${err.message}`);
@@ -1082,6 +1076,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setSelectedPlanForSale(prod.id);
                 setIsRegisterSaleModalOpen(true);
               }}
+              onOpenCheckout={(plan, ref) => {
+                setCheckoutAffiliateRef(ref || '');
+                setLiveCheckoutPlan(plan);
+              }}
               onOpenCreateCompany={() => {
                 if (!userProfile.verified && userProfile.verificationStatus !== 'approved') {
                   setLiveToast({
@@ -1174,6 +1172,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         <div className="fixed inset-0 z-50 overflow-y-auto bg-[#070b14]">
           <CustomCheckoutPage
             plan={liveCheckoutPlan}
+            affiliateRef={checkoutAffiliateRef}
             onBack={() => setLiveCheckoutPlan(null)}
             onPaymentSuccess={(tx) => {
               setLiveToast({

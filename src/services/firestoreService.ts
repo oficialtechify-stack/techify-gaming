@@ -674,15 +674,26 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
  * Create a new Affiliation in Firebase (User joins a Plan)
  */
 export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile: UserSellerProfile) {
-  const id = `aff_${userProfile.userId || DEFAULT_USER_ID}_${plan.id}`;
+  const userId = userProfile.userId || DEFAULT_USER_ID;
+  const id = `aff_${userId}_${plan.id}`;
   const now = new Date().toISOString();
-  const affiliateCode = `ref_${(userProfile.userId || 'usr').slice(0, 8)}_${plan.id.slice(-4)}`;
-  const origin = window.location.origin;
-  const affiliateLink = `${origin}/p/${plan.companyId}/${plan.id}?ref=${affiliateCode}`;
+  
+  // Check if affiliation already exists
+  const existingDoc = await getDoc(doc(db, COLLECTIONS.AFFILIATIONS, id));
+  if (existingDoc.exists()) {
+    const existingData = existingDoc.data() as UserAffiliation;
+    return { id: existingDoc.id, ...existingData };
+  }
+
+  const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const userPart = (userId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
+  const affiliateCode = `AFF-${userPart || 'USR'}-${randPart}`;
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://techify.app';
+  const affiliateLink = `${origin}/?checkout=${plan.id}&ref=${affiliateCode}`;
 
   const affiliation: UserAffiliation = {
     id,
-    userId: userProfile.userId || DEFAULT_USER_ID,
+    userId: userId,
     userName: userProfile.name,
     userEmail: userProfile.email,
     companyId: plan.companyId,

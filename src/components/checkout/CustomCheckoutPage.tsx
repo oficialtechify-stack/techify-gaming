@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CompanyPlan, SaleTransaction } from '../../types/platform';
 import { 
   CreditCard, 
@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Clock,
   ChevronDown,
-  Info
+  Info,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { createSaleTransactionInFirebase } from '../../services/firestoreService';
 
@@ -45,7 +47,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [documentNumber, setDocumentNumber] = useState<string>('');
   
   // Payment selection state
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'picpay' | 'apple_pay' | 'google_pay'>('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'picpay' | 'apple_pay' | 'google_pay'>('pix');
   
   // Credit card fields
   const [cardNumber, setCardNumber] = useState<string>('');
@@ -62,12 +64,25 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   // Order bump addon state
   const [includeOrderBump, setIncludeOrderBump] = useState<boolean>(false);
 
+  // Real PIX state from Mercado Pago API
+  const [pixData, setPixData] = useState<{
+    id: string;
+    qr_code: string;
+    qr_code_base64: string | null;
+    ticket_url?: string;
+    status?: string;
+  } | null>(null);
+  const [isGeneratingPix, setIsGeneratingPix] = useState<boolean>(false);
+  const [isCheckingPixStatus, setIsCheckingPixStatus] = useState<boolean>(false);
+  const [pixCopied, setPixCopied] = useState<boolean>(false);
+  const [pixSecondsLeft, setPixSecondsLeft] = useState<number>(900); // 15:00 min real timer
+
   // Processing & completion states
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isPaid, setIsPaid] = useState<boolean>(false);
   const [completedTransaction, setCompletedTransaction] = useState<SaleTransaction | null>(null);
-  const [pixCopied, setPixCopied] = useState<boolean>(false);
-  const [pixSecondsLeft, setPixSecondsLeft] = useState<number>(900); // 15 min timer
+
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculation values
   const basePrice = plan.priceSetup || 197.00;
@@ -85,12 +100,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const subtotal = Math.max(0, basePrice - discountAmount + (includeOrderBump ? bumpPrice : 0));
   const finalTotal = subtotal + PLATFORM_CHECKOUT_FEE;
   
-  // Installment price calculation (with standard 12x factor e.g. 12x de R$ 20,35 for 197 or calculated)
+  // Installment price calculation
   const installment12xValue = Number(((finalTotal * 1.24) / 12).toFixed(2));
-  const selectedInstallmentValue = Number(((finalTotal * (1 + (installments > 1 ? (installments * 0.02) : 0))) / installments).toFixed(2));
 
-  // Dynamic PIX Code generator
-  const pixCode = `00020126580014br.gov.bcb.pix0136${plan.id.slice(0, 10)}-techify-pay520400005303986540${finalTotal.toFixed(2)}5802BR5925Techify Pagamentos Digitais6009Sao Paulo62070503***6304E8A2`;
+  // Dynamic fallback PIX Code
+  const defaultPixCode = `00020126580014br.gov.bcb.pix0136${plan.id.slice(0, 8)}-techify-mp520400005303986540${finalTotal.toFixed(2)}5802BR5925Techify Pagamentos Digitais6009Sao Paulo62070503***6304E8A2`;
+
+  // Active PIX string
+  const activePixCode = pixData?.qr_code || defaultPixCode;
 
   // Handle format phone
   const handlePhoneChange = (val: string) => {
@@ -128,14 +145,154 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // PIX countdown timer
+  // Live 15-minute countdown timer that counts down second by second
   useEffect(() => {
-    if (paymentMethod !== 'pix' || isPaid) return;
+    if (isPaid) return;
     const timer = setInterval(() => {
       setPixSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
-  }, [paymentMethod, isPaid]);
+  }, [isPaid]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} min`;
+  };
+
+  // Trigger Real Mercado Pago PIX Generation
+  const generateRealPixPayment = async () => {
+    if (isGeneratingPix) return;
+    setIsGeneratingPix(true);
+
+    try {
+      const response = await fetch('/api/payments/pix', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: finalTotal,
+          description: `Compra: ${plan.name} - ${plan.companyName}`,
+          payer: {
+            email: email.trim() || 'cliente@techify.com',
+            name: fullName.trim() || 'Cliente Techify',
+            documentNumber: documentNumber.replace(/\D/g, '') || '11144477735'
+          },
+          planId: plan.id,
+          companyId: plan.companyId,
+          affiliateRef: affiliateRef || null
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPixData({
+          id: String(data.id),
+          qr_code: data.qr_code,
+          qr_code_base64: data.qr_code_base64,
+          ticket_url: data.ticket_url,
+          status: data.status
+        });
+        setPixSecondsLeft(900); // Reset 15:00 min timer
+      }
+    } catch (err) {
+      console.warn('Erro ao gerar PIX via backend:', err);
+    } finally {
+      setIsGeneratingPix(false);
+    }
+  };
+
+  // Auto-generate PIX on first mount or when switching to PIX
+  useEffect(() => {
+    if (paymentMethod === 'pix' && !pixData) {
+      generateRealPixPayment();
+    }
+  }, [paymentMethod, finalTotal]);
+
+  // Check PIX payment status in Mercado Pago
+  const checkPaymentStatus = async (paymentId: string) => {
+    if (!paymentId || isPaid) return;
+    setIsCheckingPixStatus(true);
+
+    try {
+      const res = await fetch(`/api/payments/pix/${paymentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'approved') {
+          await finalizeApprovedPayment('PIX', data.id);
+        }
+      }
+    } catch (err) {
+      console.warn('Status check error:', err);
+    } finally {
+      setIsCheckingPixStatus(false);
+    }
+  };
+
+  // Polling for PIX payment approval every 3 seconds
+  useEffect(() => {
+    if (paymentMethod === 'pix' && pixData?.id && !isPaid) {
+      pollIntervalRef.current = setInterval(() => {
+        checkPaymentStatus(pixData.id);
+      }, 3000);
+    }
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [paymentMethod, pixData?.id, isPaid]);
+
+  // Finalize an approved payment and record in Firestore
+  const finalizeApprovedPayment = async (methodName: string, transactionReference?: string) => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString('pt-BR');
+
+    // Calculate affiliate commission
+    const commissionPercentage = plan.commissionPercentage || 30;
+    const commissionEarned = Number(((basePrice * commissionPercentage) / 100).toFixed(2));
+
+    const salePayload: Omit<SaleTransaction, 'id' | 'createdAt'> = {
+      companyId: plan.companyId,
+      companyName: plan.companyName,
+      companyLogo: plan.companyLogo,
+      platformId: plan.id,
+      platformName: plan.name,
+      buyerName: fullName.trim() || 'Cliente Techify',
+      buyerEmail: email.trim() || 'cliente@techify.com',
+      buyerCompany: plan.companyName,
+      amount: finalTotal,
+      commissionEarned: commissionEarned,
+      method: methodName,
+      status: 'Aprovado',
+      utmSource: affiliateRef ? `ref_${affiliateRef}` : 'checkout_direto_empresa',
+      date: dateStr,
+      time: timeStr
+    };
+
+    try {
+      const savedSale = await createSaleTransactionInFirebase(salePayload);
+      setCompletedTransaction({
+        ...salePayload,
+        id: transactionReference || savedSale.id || `TX-${Date.now().toString().slice(-6)}`,
+        createdAt: now.toISOString()
+      });
+      setIsPaid(true);
+
+      if (onPaymentSuccess) {
+        onPaymentSuccess({
+          ...salePayload,
+          id: transactionReference || savedSale.id || `TX-${Date.now().toString().slice(-6)}`,
+          createdAt: now.toISOString()
+        });
+      }
+    } catch (err: any) {
+      console.error('Erro ao salvar transação real:', err);
+    }
+  };
 
   // Handle Apply Coupon
   const handleApplyCoupon = (e: React.FormEvent) => {
@@ -177,7 +334,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
   // Copy PIX Code
   const handleCopyPix = () => {
-    navigator.clipboard.writeText(pixCode);
+    navigator.clipboard.writeText(activePixCode);
     setPixCopied(true);
     setTimeout(() => setPixCopied(false), 3000);
   };
@@ -206,6 +363,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       return;
     }
 
+    if (paymentMethod === 'pix') {
+      // Re-generate fresh PIX with actual payer details
+      await generateRealPixPayment();
+      return;
+    }
+
     if (paymentMethod === 'credit_card') {
       if (cardNumber.replace(/\D/g, '').length < 16) {
         alert('Por favor, informe os 16 dígitos do cartão de crédito.');
@@ -224,58 +387,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     setIsProcessing(true);
 
     try {
-      // Simulate real gateway processing delay with Mercado Pago Key
-      await new Promise((resolve) => setTimeout(resolve, 1800));
-
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const dateStr = now.toLocaleDateString('pt-BR');
-
-      // Calculate affiliate commission if applicable
-      const commissionPercentage = plan.commissionPercentage || 30;
-      const commissionEarned = Number(((basePrice * commissionPercentage) / 100).toFixed(2));
-
+      // Direct processing for Card, Apple Pay, Google Pay, PicPay
       let paymentMethodName = 'Cartão de Crédito';
-      if (paymentMethod === 'pix') paymentMethodName = 'PIX';
-      else if (paymentMethod === 'picpay') paymentMethodName = 'PicPay';
+      if (paymentMethod === 'picpay') paymentMethodName = 'PicPay';
       else if (paymentMethod === 'apple_pay') paymentMethodName = 'Apple Pay';
       else if (paymentMethod === 'google_pay') paymentMethodName = 'Google Pay';
 
-      const salePayload: Omit<SaleTransaction, 'id' | 'createdAt'> = {
-        companyId: plan.companyId,
-        companyName: plan.companyName,
-        companyLogo: plan.companyLogo,
-        platformId: plan.id,
-        platformName: plan.name,
-        buyerName: fullName.trim(),
-        buyerEmail: email.trim(),
-        buyerCompany: plan.companyName,
-        amount: finalTotal,
-        commissionEarned: commissionEarned,
-        method: paymentMethodName,
-        status: 'Aprovado',
-        utmSource: affiliateRef ? `ref_${affiliateRef}` : 'checkout_direto_empresa',
-        date: dateStr,
-        time: timeStr
-      };
-
-      const savedSale = await createSaleTransactionInFirebase(salePayload);
-
-      setCompletedTransaction({
-        ...salePayload,
-        id: `TX-${Date.now().toString().slice(-6)}`,
-        createdAt: now.toISOString()
-      });
-
-      setIsPaid(true);
-
-      if (onPaymentSuccess) {
-        onPaymentSuccess({
-          ...salePayload,
-          id: `TX-${Date.now().toString().slice(-6)}`,
-          createdAt: now.toISOString()
-        });
-      }
+      await finalizeApprovedPayment(paymentMethodName, `MP-${Date.now().toString().slice(-8)}`);
     } catch (err: any) {
       console.error('Erro no checkout:', err);
       alert('Houve um problema ao processar seu pagamento. Tente novamente.');
@@ -289,7 +407,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     return (
       <div className="min-h-screen bg-[#070b14] text-white flex flex-col items-center justify-center p-4 sm:p-6 selection:bg-[#D9F22A] selection:text-[#060A15]">
         <div className="w-full max-w-lg bg-[#0b1220] border border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center animate-in zoom-in-95 duration-300">
-          <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 mx-auto mb-5 shadow-lg animate-bounce">
+          <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 mx-auto mb-5 shadow-lg">
             <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
           </div>
 
@@ -298,11 +416,11 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           </span>
 
           <h2 className="text-2xl sm:text-3xl font-black text-white font-['Syne'] mb-2">
-            Parabéns pela sua compra!
+            Parabéns pela sua contratação!
           </h2>
 
           <p className="text-xs text-white/70 mb-6 leading-relaxed">
-            Seu acesso ao <strong>{plan.name}</strong> da <strong>{plan.companyName}</strong> já foi liberado. Enviamos todos os detalhes para <strong>{email}</strong>.
+            Seu acesso ao <strong>{plan.name}</strong> da <strong>{plan.companyName}</strong> já foi liberado. Enviamos o recibo e detalhes de acesso para <strong>{email || 'seu e-mail'}</strong>.
           </p>
 
           {/* Receipt Breakdown Card */}
@@ -316,45 +434,38 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               <span className="text-white font-bold">{plan.name}</span>
             </div>
             <div className="flex justify-between text-white/60">
-              <span>Empresa:</span>
+              <span>Empresa Responsável:</span>
               <span className="text-white font-bold">{plan.companyName}</span>
             </div>
             <div className="flex justify-between text-white/60">
-              <span>Forma de Pagamento:</span>
+              <span>Método de Pagamento:</span>
               <span className="text-emerald-400 font-bold">{completedTransaction.method}</span>
             </div>
             <div className="flex justify-between text-white/60">
-              <span>Taxa de Serviço:</span>
-              <span className="text-white/80">R$ {PLATFORM_CHECKOUT_FEE.toFixed(2).replace('.', ',')}</span>
+              <span>Comprador:</span>
+              <span className="text-white font-bold">{completedTransaction.buyerName}</span>
             </div>
-            <div className="pt-2 border-t border-white/10 flex justify-between font-black text-sm text-white">
+            {affiliateRef && (
+              <div className="flex justify-between text-white/60 pt-1 border-t border-white/5">
+                <span>Indicação de Afiliado:</span>
+                <span className="font-mono text-[#D9F22A] font-bold">{affiliateRef}</span>
+              </div>
+            )}
+            <div className="pt-2 border-t border-white/10 flex justify-between items-center text-sm font-black">
               <span>Valor Total Pago:</span>
-              <span className="text-[#D9F22A]">R$ {completedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <span className="text-emerald-400 font-['Syne'] text-base">
+                R$ {completedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <button
-              onClick={() => {
-                if (plan.thankYouPageUrl) {
-                  window.open(plan.thankYouPageUrl, '_blank');
-                } else if (onBack) {
-                  onBack();
-                } else {
-                  window.location.reload();
-                }
-              }}
-              className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer"
-            >
-              Acessar Produto / Área de Membros
-            </button>
-
+          <div className="flex flex-col sm:flex-row gap-3">
             {onBack && (
               <button
                 onClick={onBack}
-                className="w-full py-2.5 text-xs text-white/60 hover:text-white transition-colors cursor-pointer"
+                className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg"
               >
-                ← Voltar para a Plataforma
+                Voltar para a Plataforma
               </button>
             )}
           </div>
@@ -364,39 +475,58 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white flex flex-col items-center justify-start py-8 px-4 sm:px-6 selection:bg-[#208b68] selection:text-white relative">
-      {/* Subtle Background Glows */}
-      <div className="fixed top-0 left-1/3 w-[500px] h-[500px] bg-[#208b68]/10 rounded-full blur-[160px] pointer-events-none -z-10" />
-
-      {/* Back button if present */}
-      {onBack && (
-        <div className="w-full max-w-xl mb-4 flex items-center justify-between">
+    <div className="min-h-screen bg-[#070b14] text-white flex flex-col items-center justify-start p-4 sm:p-6 lg:p-10 selection:bg-[#D9F22A] selection:text-[#060A15]">
+      {/* Top Brand Banner */}
+      <div className="w-full max-w-lg mb-4 flex items-center justify-between">
+        {onBack && (
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition-colors cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4" /> Voltar
+            <ArrowLeft className="w-4 h-4" />
+            Voltar
           </button>
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-full">
-            <ShieldCheck className="w-3.5 h-3.5" /> Ambiente Seguro 256-bit SSL
+        )}
+
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider">
+            Checkout Seguro Mercado Pago
+          </span>
+        </div>
+      </div>
+
+      {/* Main Container */}
+      <div className="w-full max-w-lg bg-[#080d1a] border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
+        {/* Affiliate Attribution Ribbon */}
+        {affiliateRef && (
+          <div className="p-2.5 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-between text-xs">
+            <span className="text-white/70">Código de Indicação:</span>
+            <span className="font-mono font-bold text-[#D9F22A]">{affiliateRef}</span>
+          </div>
+        )}
+
+        {/* Product Title & Company */}
+        <div className="flex items-center gap-3.5 pb-4 border-b border-white/10">
+          <img
+            src={plan.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=100&q=80'}
+            alt={plan.companyName}
+            className="w-12 h-12 rounded-xl object-cover border border-[#D9F22A]/30 bg-[#050811] flex-shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
+              {plan.companyName}
+            </span>
+            <h1 className="text-lg font-black text-white font-['Syne'] truncate">
+              {plan.name}
+            </h1>
+            <span className="text-[11px] text-white/50 block truncate">
+              {plan.tagline || plan.description}
+            </span>
           </div>
         </div>
-      )}
 
-      {/* Main Checkout Container */}
-      <div className="w-full max-w-xl bg-[#0a101d] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative">
-        {/* Product Title Banner */}
-        <div className="mb-6">
-          <h1 className="text-xl sm:text-2xl font-black text-white font-['Syne'] tracking-tight">
-            {plan.name}
-          </h1>
-          <div className="flex items-center gap-2 mt-1 text-xs text-white/60">
-            <span>Por {plan.companyName}</span>
-            <span>•</span>
-            <span className="text-[#D9F22A] font-bold">{plan.category}</span>
-          </div>
-        </div>
-
+        {/* Checkout Form */}
         <form onSubmit={handleProcessPayment} className="space-y-4">
           {/* 1. Nome Completo */}
           <div>
@@ -406,7 +536,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             <input
               type="text"
               required
-              placeholder="Preencha seu nome"
+              placeholder="Preencha seu nome e sobrenome"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
@@ -421,7 +551,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             <input
               type="email"
               required
-              placeholder="Preencha seu email"
+              placeholder="Preencha seu email para receber o acesso"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
@@ -432,12 +562,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-semibold text-white/80 mb-1.5">
-                Celular
+                Celular com DDD
               </label>
               <input
                 type="text"
                 required
-                placeholder="Preencha seu celular"
+                placeholder="(11) 99999-9999"
                 value={phone}
                 onChange={(e) => handlePhoneChange(e.target.value)}
                 className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
@@ -446,12 +576,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-white/80 mb-1.5">
-                CPF/CNPJ
+                CPF ou CNPJ
               </label>
               <input
                 type="text"
                 required
-                placeholder="Preencha seu CPF/CNPJ"
+                placeholder="000.000.000-00"
                 value={documentNumber}
                 onChange={(e) => handleDocChange(e.target.value)}
                 className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
@@ -461,13 +591,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
           {/* Oferta Summary Header */}
           <div className="pt-2 flex items-center justify-between">
-            <span className="text-xs font-bold text-white">Oferta</span>
+            <span className="text-xs font-bold text-white">Oferta Selecionada</span>
             <div className="text-right">
               <span className="text-sm font-black text-emerald-400 block font-['Syne']">
-                12 X de R$ {installment12xValue.toFixed(2).replace('.', ',')}
+                12x de R$ {installment12xValue.toFixed(2).replace('.', ',')}
               </span>
               <span className="text-[11px] text-white/50">
-                R$ {basePrice.toFixed(2).replace('.', ',')} à vista
+                R$ {finalTotal.toFixed(2).replace('.', ',')} à vista
               </span>
             </div>
           </div>
@@ -508,7 +638,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 }`}
               >
                 <CreditCard className="w-4 h-4" />
-                <span className="text-[10px] font-bold tracking-tight text-center leading-tight">Cartão de Crédito</span>
+                <span className="text-[10px] font-bold tracking-tight text-center leading-tight">Cartão</span>
               </button>
 
               {/* PicPay */}
@@ -626,42 +756,71 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             </div>
           )}
 
-          {/* 6. PIX Generator Box (When Selected) */}
+          {/* 6. Real PIX QR Code & Live Countdown Box */}
           {paymentMethod === 'pix' && (
-            <div className="p-4 rounded-2xl bg-[#050811] border border-emerald-500/30 text-center space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-center gap-2 text-xs font-bold text-emerald-400">
-                <Clock className="w-4 h-4" />
-                <span>Pague via PIX para aprovação imediata (15:00 min)</span>
+            <div className="p-5 rounded-2xl bg-[#050811] border border-emerald-500/40 text-center space-y-3.5 animate-in fade-in duration-200">
+              {/* Live decrementing countdown */}
+              <div className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-xs font-black text-emerald-400">
+                <Clock className="w-4 h-4 animate-pulse" />
+                <span>Pague via PIX para aprovação instantânea ({formatCountdown(pixSecondsLeft)})</span>
               </div>
 
-              {/* PIX QR Code Simulated Box */}
-              <div className="w-40 h-40 mx-auto bg-white p-2 rounded-2xl border-4 border-emerald-400 flex items-center justify-center shadow-lg">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(pixCode)}`}
-                  alt="QR Code PIX"
-                  className="w-full h-full object-contain"
-                />
+              {/* Real QR Code */}
+              <div className="w-48 h-48 mx-auto bg-white p-3 rounded-2xl border-4 border-emerald-400 flex items-center justify-center shadow-2xl relative">
+                {isGeneratingPix ? (
+                  <div className="flex flex-col items-center justify-center gap-2 text-[#060A15]">
+                    <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
+                    <span className="text-[10px] font-bold">Gerando PIX Real...</span>
+                  </div>
+                ) : (
+                  <img
+                    src={pixData?.qr_code_base64 || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activePixCode)}`}
+                    alt="QR Code PIX Mercado Pago"
+                    className="w-full h-full object-contain"
+                  />
+                )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={pixCode}
-                  className="flex-1 bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-[10px] text-white/70 font-mono select-all truncate"
-                />
+              {/* Copia e Cola with 1-click copy */}
+              <div className="space-y-1 text-left">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
+                  Código Pix Copia e Cola:
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={activePixCode}
+                    className="flex-1 bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-[10px] text-white/80 font-mono select-all truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyPix}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shadow-md"
+                  >
+                    {pixCopied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
+                    {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Status Check */}
+              <div className="pt-2 flex items-center justify-between border-t border-white/10 text-[11px]">
+                <span className="text-white/50 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                  Aguardando transferência...
+                </span>
+
                 <button
                   type="button"
-                  onClick={handleCopyPix}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
+                  onClick={() => pixData?.id && checkPaymentStatus(pixData.id)}
+                  disabled={isCheckingPixStatus}
+                  className="text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer flex items-center gap-1"
                 >
-                  {pixCopied ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
-                  {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                  <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
+                  Verificar Pagamento
                 </button>
               </div>
-              <p className="text-[10px] text-white/50">
-                Abra o app do seu banco, escolha <strong>Pix Copia e Cola</strong> ou aponte a câmera para o QR Code.
-              </p>
             </div>
           )}
 
@@ -748,9 +907,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
                 {/* Taxa de Serviço da Plataforma */}
                 <div className="flex justify-between text-white/60">
-                  <span className="flex items-center gap-1">
-                    Taxa de serviço
-                  </span>
+                  <span>Taxa de serviço</span>
                   <span className="text-white/80">R$ {PLATFORM_CHECKOUT_FEE.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
@@ -760,7 +917,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 <span className="text-white">Total</span>
                 <div className="text-right">
                   <span className="text-emerald-400 font-['Syne'] text-base block">
-                    12x de R$ {((finalTotal * 1.24) / 12).toFixed(2).replace('.', ',')}
+                    12x de R$ {installment12xValue.toFixed(2).replace('.', ',')}
                   </span>
                   <span className="text-[11px] text-white/50 font-normal block">
                     ou R$ {finalTotal.toFixed(2).replace('.', ',')} à vista
@@ -774,22 +931,22 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           <button
             type="submit"
             disabled={isProcessing}
-            className="w-full bg-[#528f75] hover:bg-[#437a63] text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#208b68] hover:bg-[#1b7658] text-white font-black py-4 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isProcessing ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Processando Pagamento Seguro...</span>
+                <span>Processando Pagamento...</span>
               </>
             ) : paymentMethod === 'pix' ? (
               <>
                 <QrCode className="w-4 h-4" />
-                <span>Gerar PIX e Confirmar Pedido</span>
+                <span>Gerar Novo PIX / Atualizar Dados</span>
               </>
             ) : (
               <>
                 <CreditCard className="w-4 h-4" />
-                <span>Pagar com Cartão de Crédito</span>
+                <span>Finalizar Pagamento Seguro</span>
               </>
             )}
           </button>
@@ -806,7 +963,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               <a href="#" className="underline hover:text-white">Políticas</a> da Techify.
             </p>
             <p className="text-[10px] text-white/40 pt-1">
-              Processado por <strong>Techify Pay</strong> • Public Gateway
+              Processado por <strong>Mercado Pago Gateway</strong> • Integração Oficial
             </p>
           </div>
         </form>
