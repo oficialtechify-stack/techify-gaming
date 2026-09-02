@@ -196,11 +196,13 @@ export async function submitVerificationRequestInFirebase(
 ) {
   const now = new Date().toISOString();
   const effectiveUserId = userId || DEFAULT_USER_ID;
+  const isCompany = profileData.verificationRoleType === 'empresa' || profileData.activeRoleMode === 'empresa' || !!profileData.companyName;
   
   // 1. Update the User's Profile to 'pending' and locked
   const profileRef = doc(db, COLLECTIONS.PROFILES, effectiveUserId);
   await setDoc(profileRef, sanitizeForFirestore({
     ...profileData,
+    hasCompanyProfile: isCompany ? true : profileData.hasCompanyProfile,
     verificationStatus: 'pending',
     verified: false,
     verificationSubmittedAt: now,
@@ -221,6 +223,21 @@ export async function submitVerificationRequestInFirebase(
     cpf: profileData.cpf || '',
     phone: profileData.phone || profileData.whatsapp || '',
     avatar: profileData.avatar || '',
+    roleType: isCompany ? 'empresa' : 'afiliado',
+    companyName: profileData.companyName || '',
+    companyLegalName: profileData.companyLegalName || '',
+    companyCnpj: profileData.companyCnpj || profileData.cnpj || '',
+    companyCategory: profileData.companyCategory || 'SaaS / B2B',
+    companyTagline: profileData.companyTagline || '',
+    companyWebsite: profileData.companyWebsite || '',
+    companyLogo: profileData.companyLogo || profileData.avatar || '',
+    companyPhone: profileData.companyPhone || profileData.whatsapp || '',
+    companyAddress: profileData.companyAddress || profileData.address || '',
+    companyCep: profileData.companyCep || profileData.cep || '',
+    companyState: profileData.companyState || profileData.state || '',
+    companyCity: profileData.companyCity || profileData.city || '',
+    companyCountry: profileData.companyCountry || profileData.country || 'Brazil',
+    companyDocType: profileData.companyDocType || 'CNPJ',
     cep: profileData.cep || '',
     country: profileData.country || 'Brazil',
     state: profileData.state || '',
@@ -229,6 +246,64 @@ export async function submitVerificationRequestInFirebase(
     status: 'pending',
     submittedAt: now
   }), { merge: true });
+
+  // 3. If Company profile, create/update company in COMPANIES collection as pending
+  if (isCompany && (profileData.companyName || profileData.name)) {
+    const compName = profileData.companyName || profileData.name || 'Minha Startup';
+    const compId = profileData.companyId || `comp-${effectiveUserId}`;
+    const compRef = doc(db, COLLECTIONS.COMPANIES, compId);
+    const compSnap = await getDoc(compRef);
+
+    const slug = compName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-');
+
+    const companyData: Partial<CompanyStartup> = {
+      name: compName,
+      slug: slug || compId,
+      tagline: profileData.companyTagline || 'Startup homologada na plataforma',
+      logo: profileData.companyLogo || profileData.avatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=200&fit=crop',
+      bannerImage: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=400&fit=crop',
+      category: profileData.companyCategory || 'SaaS / B2B',
+      description: profileData.companyTagline || `Startup e soluções digitais de ${compName}`,
+      website: profileData.companyWebsite || '',
+      email: profileData.email || '',
+      whatsapp: profileData.companyPhone || profileData.whatsapp || '',
+      cnpj: profileData.companyCnpj || profileData.cnpj || '',
+      cleanCnpj: (profileData.companyCnpj || profileData.cnpj || '').replace(/\D/g, ''),
+      docType: profileData.companyDocType || 'CNPJ',
+      status: 'pending',
+      verified: false,
+      submittedBy: effectiveUserId,
+      submittedByName: fullName,
+      submittedByEmail: profileData.email || '',
+      submittedAt: now,
+      ownerId: effectiveUserId
+    };
+
+    if (compSnap.exists()) {
+      await updateDoc(compRef, sanitizeForFirestore(companyData));
+    } else {
+      await setDoc(compRef, sanitizeForFirestore({
+        ...companyData,
+        id: compId,
+        totalPlansCount: 0,
+        totalAffiliatesCount: 0,
+        totalSalesVolume: 0,
+        commissionRange: '10% - 50%',
+        createdAt: now
+      }));
+    }
+
+    // Link companyId back to profile
+    await updateDoc(profileRef, sanitizeForFirestore({
+      companyId: compId,
+      companyName: compName
+    }));
+  }
 
   return { success: true, submittedAt: now };
 }
@@ -257,7 +332,7 @@ export function subscribeVerifications(callback: (requests: VerificationRequest[
 }
 
 /**
- * Approve Verification Request (Concede Selo Verificado e desbloqueia afiliação)
+ * Approve Verification Request (Concede Selo Verificado e desbloqueia cadastro de planos e afiliações)
  */
 export async function approveVerificationInFirebase(userId: string) {
   const now = new Date().toISOString();
@@ -268,6 +343,7 @@ export async function approveVerificationInFirebase(userId: string) {
     verified: true,
     verificationStatus: 'approved',
     verificationReviewedAt: now,
+    verificationRejectionReason: null,
     updatedAt: now
   }, { merge: true });
 
@@ -275,8 +351,25 @@ export async function approveVerificationInFirebase(userId: string) {
   const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
   await setDoc(requestRef, {
     status: 'approved',
-    reviewedAt: now
+    reviewedAt: now,
+    rejectionReason: null
   }, { merge: true });
+
+  // 3. Also approve any company owned by this user
+  try {
+    const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
+    const compSnap = await getDocs(compQ);
+    for (const cDoc of compSnap.docs) {
+      await updateDoc(cDoc.ref, {
+        status: 'approved',
+        verified: true,
+        reviewedAt: now,
+        rejectionReason: null
+      });
+    }
+  } catch (err) {
+    console.warn('Could not auto-approve owned companies:', err);
+  }
 
   return { success: true };
 }
@@ -304,6 +397,22 @@ export async function rejectVerificationInFirebase(userId: string, reason: strin
     rejectionReason: reason,
     reviewedAt: now
   }, { merge: true });
+
+  // 3. Also update company status
+  try {
+    const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
+    const compSnap = await getDocs(compQ);
+    for (const cDoc of compSnap.docs) {
+      await updateDoc(cDoc.ref, {
+        status: 'rejected',
+        verified: false,
+        rejectionReason: reason,
+        reviewedAt: now
+      });
+    }
+  } catch (err) {
+    console.warn('Could not update rejected status on owned companies:', err);
+  }
 
   return { success: true };
 }

@@ -452,10 +452,17 @@ export const DatabaseManagerView: React.FC = () => {
                           className="w-12 h-12 rounded-full object-cover border-2 border-white/20"
                         />
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="text-base font-bold text-white font-['Syne']">
                               {req.name || 'Usuário Sem Nome'}
                             </h3>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                              req.roleType === 'empresa'
+                                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                                : 'bg-[#D9F22A]/20 text-[#D9F22A] border border-[#D9F22A]/40'
+                            }`}>
+                              {req.roleType === 'empresa' ? 'Empresa / Produtor' : 'Afiliado'}
+                            </span>
                             {req.status === 'approved' && (
                               <span className="p-0.5 rounded-full bg-emerald-500 text-black" title="Selo Verificado">
                                 <Check className="w-3 h-3 stroke-[3]" />
@@ -489,8 +496,38 @@ export const DatabaseManagerView: React.FC = () => {
 
                     {/* Detailed User Data */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      {req.roleType === 'empresa' && (
+                        <div className="bg-indigo-950/30 border border-indigo-500/30 p-3 rounded-xl sm:col-span-2 space-y-1.5">
+                          <span className="text-[10px] font-bold text-indigo-300 uppercase flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5" /> Dados da Empresa / Startup
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-white/40 text-[10px] block">Razão Social / Nome Fantasia:</span>
+                              <span className="text-white font-bold">{req.companyLegalName || req.companyName || 'Não informado'}</span>
+                            </div>
+                            <div>
+                              <span className="text-white/40 text-[10px] block">CNPJ / Inscrição:</span>
+                              <span className="text-white font-mono font-bold">{req.companyCnpj || 'Não informado'}</span>
+                            </div>
+                            {req.companyCategory && (
+                              <div>
+                                <span className="text-white/40 text-[10px] block">Segmento:</span>
+                                <span className="text-[#D9F22A] font-bold">{req.companyCategory}</span>
+                              </div>
+                            )}
+                            {req.companyWebsite && (
+                              <div>
+                                <span className="text-white/40 text-[10px] block">Website / Landing:</span>
+                                <span className="text-blue-300 truncate block">{req.companyWebsite}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="bg-[#050811] p-3 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-bold text-white/40 uppercase block">CPF</span>
+                        <span className="text-[10px] font-bold text-white/40 uppercase block">CPF do Responsável</span>
                         <span className="font-mono font-bold text-white mt-0.5 block">{req.cpf || 'Não informado'}</span>
                       </div>
 

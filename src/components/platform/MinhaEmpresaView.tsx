@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CompanyStartup, CompanyPlan, UserAffiliation, SaleTransaction } from '../../types/platform';
+import { CompanyStartup, CompanyPlan, UserAffiliation, SaleTransaction, UserSellerProfile } from '../../types/platform';
 import { 
   Building2, 
   Layers, 
@@ -21,7 +21,10 @@ import {
   Clock,
   AlertTriangle,
   ShieldCheck,
-  XCircle
+  ShieldAlert,
+  XCircle,
+  Lock,
+  ArrowRight
 } from 'lucide-react';
 
 interface MinhaEmpresaViewProps {
@@ -29,6 +32,9 @@ interface MinhaEmpresaViewProps {
   plans: CompanyPlan[];
   affiliations: UserAffiliation[];
   sales: SaleTransaction[];
+  userProfile?: UserSellerProfile;
+  isCompanyVerified?: boolean;
+  onNavigateToProfile?: () => void;
   onOpenCreateCompany: () => void;
   onOpenCreatePlan: (companyId?: string) => void;
   onOpenRegisterSale: (planId?: string) => void;
@@ -42,6 +48,9 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   plans = [],
   affiliations = [],
   sales = [],
+  userProfile,
+  isCompanyVerified,
+  onNavigateToProfile,
   onOpenCreateCompany,
   onOpenCreatePlan,
   onOpenRegisterSale,
@@ -51,6 +60,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
 }) => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || '');
   const [activeTab, setActiveTab] = useState<'planos' | 'afiliados' | 'vendas'>('planos');
+  const [verificationWarningModal, setVerificationWarningModal] = useState<boolean>(false);
 
   const currentCompany = companies.find(c => c.id === selectedCompanyId) || companies[0];
 
@@ -61,8 +71,81 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   const totalRevenue = companySales.reduce((acc, s) => acc + s.amount, 0);
   const totalCommissionsPaid = companySales.reduce((acc, s) => acc + s.commissionEarned, 0);
 
+  // Check verification state
+  const isVerified = isCompanyVerified ?? (
+    userProfile?.verified === true || 
+    userProfile?.verificationStatus === 'approved' ||
+    currentCompany?.verified === true || 
+    currentCompany?.status === 'approved'
+  );
+
+  const isPending = userProfile?.verificationStatus === 'pending' || currentCompany?.status === 'pending';
+  const isRejected = userProfile?.verificationStatus === 'rejected' || currentCompany?.status === 'rejected';
+
+  // Handler to enforce verification before creating plans/products
+  const handleCreatePlanRequest = (companyId?: string) => {
+    if (!isVerified) {
+      setVerificationWarningModal(true);
+      return;
+    }
+    onOpenCreatePlan(companyId || currentCompany?.id);
+  };
+
+  const handleCreateCompanyRequest = () => {
+    if (!isVerified) {
+      setVerificationWarningModal(true);
+      return;
+    }
+    onOpenCreateCompany();
+  };
+
   return (
     <div className="flex flex-col gap-6" id="techify-minha-empresa-view">
+      {/* Verification Block Warning Modal */}
+      {verificationWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-[#0a1222] border border-amber-500/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-[0_0_50px_rgba(245,158,11,0.25)] relative text-center flex flex-col items-center">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-4 shadow-lg animate-bounce">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 mb-2">
+              Verificação Obrigatória
+            </span>
+
+            <h3 className="text-xl font-black text-white font-['Syne'] mb-2">
+              Verificação Administrativa Necessária
+            </h3>
+
+            <p className="text-xs text-white/70 leading-relaxed mb-6">
+              A empresa <strong>só pode cadastrar produtos e planos</strong> após ser verificada e aprovada pela Administração. Preencha seus dados corporativos e documentos fiscais no Perfil da Empresa para que a equipe valide sua conta.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => setVerificationWarningModal(false)}
+                className="w-full sm:w-1/2 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-white/70 hover:text-white text-xs font-bold transition-all cursor-pointer"
+              >
+                Voltar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setVerificationWarningModal(false);
+                  if (onNavigateToProfile) onNavigateToProfile();
+                }}
+                className="w-full sm:w-1/2 bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Ir para Meu Perfil</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header with quick stats & actions */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -80,23 +163,92 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
 
         <div className="flex items-center gap-2.5 w-full md:w-auto">
           <button
-            onClick={onOpenCreateCompany}
+            onClick={handleCreateCompanyRequest}
             className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 border border-white/10"
           >
             <Building2 className="w-4 h-4 text-[#D9F22A]" />
             Nova Startup
           </button>
           <button
-            onClick={() => onOpenCreatePlan(currentCompany?.id)}
-            className="flex-1 md:flex-initial bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
+            onClick={() => handleCreatePlanRequest(currentCompany?.id)}
+            className={`flex-1 md:flex-initial font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+              isVerified
+                ? 'bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] shadow-[0_0_20px_rgba(217,242,42,0.3)]'
+                : 'bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_20px_rgba(245,158,11,0.3)]'
+            }`}
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            Criar Novo Plano
+            {isVerified ? (
+              <>
+                <Plus className="w-4 h-4 stroke-[3]" />
+                Criar Novo Plano
+              </>
+            ) : (
+              <>
+                <Lock className="w-4 h-4" />
+                Criar Novo Plano (Verificar)
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* If no companies exist yet, prompt to create */}
+      {/* ================= VERIFICATION CALLOUT BANNER ================= */}
+      {!isVerified ? (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/70 via-[#261c0a] to-amber-950/70 border border-amber-500/40 shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0 shadow-lg animate-pulse">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-black text-white font-['Syne']">
+                  Verificação da Administração Necessária para Cadastrar Produtos
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" />
+                  {isPending ? 'Em Análise Cadastral' : isRejected ? 'Ajuste Necessário' : 'Não Verificada'}
+                </span>
+              </div>
+              <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
+                {isPending
+                  ? 'Os dados da sua empresa foram enviados e estão sendo analisados pela Administração. O cadastro de planos será liberado assim que o selo for concedido.'
+                  : isRejected
+                    ? 'O cadastro da sua empresa necessita de correções apontadas pelo Administrador. Clique no botão ao lado para corrigir e reenviar.'
+                    : 'A empresa só pode cadastrar produtos e planos após a homologação e aprovação pela Administração. Complete seu perfil corporativo agora para liberar o cadastro de planos.'}
+              </p>
+            </div>
+          </div>
+
+          {onNavigateToProfile && (
+            <button
+              type="button"
+              onClick={onNavigateToProfile}
+              className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap flex-shrink-0"
+            >
+              <Building2 className="w-4 h-4" />
+              {isPending ? 'Ver Status no Perfil' : 'Preencher Perfil da Empresa'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between gap-4 text-emerald-300">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <span className="text-xs font-bold">
+              Empresa Verificada & Homologada: Cadastro de planos, checkout e comissões 100% liberados!
+            </span>
+          </div>
+          <button
+            onClick={() => onOpenCreatePlan(currentCompany?.id)}
+            className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3.5 py-1.5 rounded-xl text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[3]" />
+            Adicionar Plano
+          </button>
+        </div>
+      )}
+
+      {/* If no companies exist yet, prompt to create or verify */}
       {companies.length === 0 ? (
         <div className="bg-[#080d1a] border-2 border-dashed border-[#D9F22A]/40 rounded-3xl p-8 sm:p-12 text-center flex flex-col items-center justify-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
@@ -107,10 +259,10 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
               Nenhuma Empresa ou Startup Cadastrada
             </h3>
             <p className="text-xs text-white/60 leading-relaxed mb-6">
-              Comece cadastrando o nome da sua empresa, imagem/logotipo e seus planos para que os afiliados da plataforma possam começar a divulgar seus produtos.
+              Comece cadastrando o perfil e dados oficiais da sua empresa para que os afiliados da plataforma possam começar a divulgar seus produtos e serviços.
             </p>
             <button
-              onClick={onOpenCreateCompany}
+              onClick={handleCreateCompanyRequest}
               className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-6 py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
@@ -212,37 +364,6 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             </div>
           )}
 
-          {/* Pending or Rejected Alert Banner */}
-          {currentCompany && (currentCompany.status === 'pending' || (!currentCompany.verified && currentCompany.status !== 'rejected')) && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 flex items-start gap-3.5 shadow-[0_0_20px_rgba(245,158,11,0.06)]">
-              <Clock className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-bold text-amber-300">
-                  Empresa Enviada para Análise do Administrador
-                </h4>
-                <p className="text-xs text-white/70 mt-1 leading-relaxed">
-                  Os dados da startup <strong className="text-white">{currentCompany.name}</strong> foram submetidos e estão aguardando aprovação pelo Administrador no Painel de Controle em Nuvem. Enquanto isso, você já pode cadastrar seus planos, que serão disponibilizados no Marketplace assim que aprovados.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {currentCompany && currentCompany.status === 'rejected' && (
-            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 sm:p-5 flex items-start gap-3.5 shadow-[0_0_20px_rgba(244,63,94,0.06)]">
-              <XCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-bold text-rose-300">
-                  Cadastro de Startup Recusado
-                </h4>
-                <p className="text-xs text-white/70 mt-1 leading-relaxed">
-                  {currentCompany.rejectionReason 
-                    ? `Motivo: ${currentCompany.rejectionReason}`
-                    : 'A documentação ou dados fornecidos necessitam de correções para serem aprovados.'}
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Sub Navigation: Planos | Afiliados | Vendas */}
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
@@ -255,7 +376,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                Planos & Comissões ({companyPlans.length})
+                Planos & Produtos ({companyPlans.length})
               </button>
 
               <button
@@ -299,13 +420,23 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                   <Layers className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
                   <h4 className="text-base font-bold text-white font-['Syne']">Nenhum plano cadastrado nesta empresa</h4>
                   <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
-                    Adicione planos, preços e comissões para que os afiliados possam começar a vender.
+                    {isVerified 
+                      ? 'Adicione planos, preços e comissões para que os afiliados possam começar a vender.' 
+                      : 'Complete a verificação da sua empresa no perfil para liberar o cadastro de planos e produtos.'}
                   </p>
                   <button
-                    onClick={() => onOpenCreatePlan(currentCompany?.id)}
+                    onClick={() => handleCreatePlanRequest(currentCompany?.id)}
                     className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2"
                   >
-                    <Plus className="w-4 h-4 stroke-[3]" /> Cadastrar Primeiro Plano
+                    {isVerified ? (
+                      <>
+                        <Plus className="w-4 h-4 stroke-[3]" /> Cadastrar Primeiro Plano
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4" /> Cadastrar Primeiro Plano (Verificar)
+                      </>
+                    )}
                   </button>
                 </div>
               ) : (
@@ -407,47 +538,48 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
 
           {/* TAB 2: AFILIADOS CONECTADOS */}
           {activeTab === 'afiliados' && (
-            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
-              <h3 className="text-base font-bold text-white font-['Syne'] mb-4 flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#D9F22A]" />
-                Afiliados Promovendo os Produtos da Sua Empresa
-              </h3>
-
+            <div>
               {companyAffiliations.length === 0 ? (
-                <div className="text-center py-10 px-4 bg-[#050811] rounded-xl border border-white/5">
-                  <Users className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                  <p className="text-xs text-white/60">
-                    Nenhum afiliado conectado aos seus planos ainda. Os usuários poderão se afiliar através do Marketplace.
+                <div className="text-center py-12 px-4 bg-[#080d1a] border border-white/10 rounded-2xl">
+                  <Users className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
+                  <h4 className="text-base font-bold text-white font-['Syne']">Nenhum afiliado conectado ainda</h4>
+                  <p className="text-xs text-white/50 max-w-sm mx-auto mt-1">
+                    Assim que afiliados solicitarem afiliação aos seus planos no Marketplace, eles aparecerão aqui com métricas de cliques e conversão.
                   </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="text-white/40 bg-[#050811] border-b border-white/10 uppercase tracking-wider">
-                        <th className="py-3 px-4 font-bold">Afiliado</th>
-                        <th className="py-3 px-4 font-bold">Plano Promovido</th>
-                        <th className="py-3 px-4 font-bold text-center">Comissão</th>
-                        <th className="py-3 px-4 font-bold text-center">Vendas Fechadas</th>
-                        <th className="py-3 px-4 font-bold text-right">Comissões Geradas</th>
+                      <tr className="border-b border-white/10 text-[11px] font-bold text-white/40 uppercase">
+                        <th className="py-3 px-4">Afiliado</th>
+                        <th className="py-3 px-4">Plano Vinculado</th>
+                        <th className="py-3 px-4">Cliques</th>
+                        <th className="py-3 px-4">Vendas</th>
+                        <th className="py-3 px-4">Comissão Total Paga</th>
+                        <th className="py-3 px-4 text-right">Data de Afiliação</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {companyAffiliations.map((aff) => (
-                        <tr key={aff.id} className="hover:bg-white/[0.02] transition-colors">
+                    <tbody className="divide-y divide-white/5 text-xs">
+                      {companyAffiliations.map(aff => (
+                        <tr key={aff.id} className="hover:bg-white/5 transition-colors">
                           <td className="py-3.5 px-4 font-bold text-white">
-                            <div>{aff.userName}</div>
-                            <div className="text-[10px] text-white/40 font-normal">{aff.userEmail}</div>
+                            {aff.affiliateName || 'Afiliado Techify'}
                           </td>
-                          <td className="py-3.5 px-4 text-white/80">{aff.planName}</td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span className="px-2 py-0.5 rounded bg-[#D9F22A]/10 text-[#D9F22A] font-bold">
-                              {aff.commissionPercentage}%
-                            </span>
+                          <td className="py-3.5 px-4 text-[#D9F22A] font-bold">
+                            {aff.platformName}
                           </td>
-                          <td className="py-3.5 px-4 text-center font-bold text-white">{aff.salesCount || 0}</td>
-                          <td className="py-3.5 px-4 text-right font-black text-[#D9F22A]">
-                            R$ {(aff.totalEarned || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          <td className="py-3.5 px-4 text-white/70">
+                            {aff.clicksCount}
+                          </td>
+                          <td className="py-3.5 px-4 text-white/70">
+                            {aff.salesCount}
+                          </td>
+                          <td className="py-3.5 px-4 font-black text-emerald-400">
+                            R$ {aff.totalCommissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-white/40">
+                            {new Date(aff.affiliatedAt).toLocaleDateString('pt-BR')}
                           </td>
                         </tr>
                       ))}
@@ -458,64 +590,60 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             </div>
           )}
 
-          {/* TAB 3: VENDAS DA EMPRESA */}
+          {/* TAB 3: VENDAS & CONTRATOS */}
           {activeTab === 'vendas' && (
-            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-white font-['Syne'] flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-[#D9F22A]" />
-                  Contratos & Vendas Faturadas
-                </h3>
-                <button
-                  onClick={() => onOpenRegisterSale()}
-                  className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-3.5 py-1.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Registrar Venda
-                </button>
-              </div>
-
+            <div>
               {companySales.length === 0 ? (
-                <div className="text-center py-10 px-4 bg-[#050811] rounded-xl border border-white/5">
-                  <DollarSign className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                  <p className="text-xs text-white/60">
-                    Nenhuma venda registrada ainda para os planos desta empresa.
+                <div className="text-center py-12 px-4 bg-[#080d1a] border border-white/10 rounded-2xl">
+                  <DollarSign className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
+                  <h4 className="text-base font-bold text-white font-['Syne']">Nenhuma venda registrada ainda</h4>
+                  <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
+                    Quando afiliados fecharem contratos usando seus links de afiliados ou você lançar vendas, os registros aparecerão em tempo real.
                   </p>
+                  <button
+                    onClick={() => onOpenRegisterSale()}
+                    className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2"
+                  >
+                    <DollarSign className="w-4 h-4" /> Lançar Venda de Teste
+                  </button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="text-white/40 bg-[#050811] border-b border-white/10 uppercase tracking-wider">
-                        <th className="py-3 px-4 font-bold">Código / Data</th>
-                        <th className="py-3 px-4 font-bold">Plano</th>
-                        <th className="py-3 px-4 font-bold">Cliente / Comprador</th>
-                        <th className="py-3 px-4 font-bold text-right">Valor Bruto</th>
-                        <th className="py-3 px-4 font-bold text-right">Comissão Afiliado</th>
-                        <th className="py-3 px-4 font-bold text-center">Status</th>
+                      <tr className="border-b border-white/10 text-[11px] font-bold text-white/40 uppercase">
+                        <th className="py-3 px-4">Transação</th>
+                        <th className="py-3 px-4">Plano</th>
+                        <th className="py-3 px-4">Cliente</th>
+                        <th className="py-3 px-4">Afiliado</th>
+                        <th className="py-3 px-4">Valor Bruto</th>
+                        <th className="py-3 px-4">Comissão</th>
+                        <th className="py-3 px-4 text-right">Data</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {companySales.map((s) => (
-                        <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 px-4 font-mono text-white/80">
-                            <div>{s.id}</div>
-                            <div className="text-[10px] text-white/40">{s.date} {s.time}</div>
+                    <tbody className="divide-y divide-white/5 text-xs">
+                      {companySales.map(sale => (
+                        <tr key={sale.id} className="hover:bg-white/5 transition-colors">
+                          <td className="py-3.5 px-4 font-mono text-white/50 text-[11px]">
+                            {sale.id.slice(0, 8)}...
                           </td>
-                          <td className="py-3.5 px-4 font-bold text-white">{s.platformName}</td>
-                          <td className="py-3.5 px-4">
-                            <div className="text-white font-medium">{s.buyerName}</div>
-                            <div className="text-[10px] text-white/50">{s.buyerCompany}</div>
+                          <td className="py-3.5 px-4 text-white font-bold">
+                            {sale.platformName}
                           </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-white">
-                            R$ {s.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          <td className="py-3.5 px-4 text-white/80">
+                            {sale.customerName || 'Cliente Direto'}
                           </td>
-                          <td className="py-3.5 px-4 text-right font-black text-[#D9F22A]">
-                            + R$ {s.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          <td className="py-3.5 px-4 text-[#D9F22A] font-bold">
+                            {sale.affiliateName || 'Venda Direta'}
                           </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/30">
-                              {s.status}
-                            </span>
+                          <td className="py-3.5 px-4 font-black text-white">
+                            R$ {sale.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-4 font-black text-emerald-400">
+                            R$ {sale.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-white/40">
+                            {new Date(sale.timestamp).toLocaleDateString('pt-BR')}
                           </td>
                         </tr>
                       ))}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserSellerProfile } from '../../types/platform';
+import { UserSellerProfile, CompanyStartup } from '../../types/platform';
 import { 
   User, 
   Mail, 
@@ -16,11 +16,17 @@ import {
   XCircle,
   Sparkles,
   Send,
-  HelpCircle,
+  Building2,
+  Globe,
+  Tag,
   FileCheck,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  Layers,
+  Phone,
+  Briefcase
 } from 'lucide-react';
-import { formatCPF, formatPhone, isValidCPF } from '../../services/authService';
+import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 
 interface MeuPerfilViewProps {
   userProfile: UserSellerProfile;
@@ -28,6 +34,7 @@ interface MeuPerfilViewProps {
   onSubmitForVerification?: (updates: Partial<UserSellerProfile>) => Promise<void>;
   onNavigateToTab?: (tab: any) => void;
   roleMode: 'afiliado' | 'empresa';
+  company?: CompanyStartup;
 }
 
 export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
@@ -35,7 +42,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   onSaveProfile,
   onSubmitForVerification,
   onNavigateToTab,
-  roleMode
+  roleMode,
+  company
 }) => {
   // Parse full name into firstName and lastName if not explicitly separated
   const parseNames = (fullName: string) => {
@@ -47,23 +55,53 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
   const initialNames = parseNames(userProfile.name);
 
-  // Profile Form States (Default to empty if not filled)
+  // ===================== AFFILIATE PROFILE FORM STATES =====================
   const [firstName, setFirstName] = useState<string>(userProfile.firstName || initialNames.first || '');
   const [lastName, setLastName] = useState<string>(userProfile.lastName || initialNames.last || '');
   const [email, setEmail] = useState<string>(userProfile.email || '');
   const [cpf, setCpf] = useState<string>(userProfile.cpf || '');
   const [celular, setCelular] = useState<string>(userProfile.whatsapp || userProfile.phone || '');
-  
-  // Address States (Default to empty)
-  const [cep, setCep] = useState<string>(userProfile.cep || '');
-  const [country, setCountry] = useState<string>(userProfile.country || 'Brazil');
-  const [estado, setEstado] = useState<string>(userProfile.state || '');
-  const [cidade, setCidade] = useState<string>(userProfile.city || '');
-  const [endereco, setEndereco] = useState<string>(userProfile.address || '');
-  
-  // Avatar State
   const [avatar, setAvatar] = useState<string>(userProfile.avatar || '');
-  
+
+  // ===================== COMPANY PROFILE FORM STATES =====================
+  const [companyName, setCompanyName] = useState<string>(
+    userProfile.companyName || company?.name || ''
+  );
+  const [companyOwnerName, setCompanyOwnerName] = useState<string>(
+    userProfile.name || (userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : '')
+  );
+  const [companyEmail, setCompanyEmail] = useState<string>(
+    userProfile.email || company?.email || ''
+  );
+  const [companyDocType, setCompanyDocType] = useState<'CNPJ' | 'CPF' | 'SEM_CNPJ'>(
+    (userProfile.companyDocType as any) || company?.docType || (userProfile.companyCnpj ? 'CNPJ' : 'CNPJ')
+  );
+  const [companyCnpj, setCompanyCnpj] = useState<string>(
+    userProfile.companyCnpj || company?.cnpj || userProfile.cnpj || ''
+  );
+  const [companyPhone, setCompanyPhone] = useState<string>(
+    userProfile.companyPhone || company?.whatsapp || userProfile.whatsapp || userProfile.phone || ''
+  );
+  const [companyCategory, setCompanyCategory] = useState<string>(
+    userProfile.companyCategory || company?.category || 'SaaS / B2B'
+  );
+  const [companyTagline, setCompanyTagline] = useState<string>(
+    userProfile.companyTagline || company?.tagline || ''
+  );
+  const [companyWebsite, setCompanyWebsite] = useState<string>(
+    userProfile.companyWebsite || company?.website || ''
+  );
+  const [companyLogo, setCompanyLogo] = useState<string>(
+    userProfile.companyLogo || company?.logo || userProfile.avatar || ''
+  );
+
+  // ===================== COMMON ADDRESS STATES =====================
+  const [cep, setCep] = useState<string>(userProfile.companyCep || userProfile.cep || '');
+  const [country, setCountry] = useState<string>(userProfile.companyCountry || userProfile.country || 'Brazil');
+  const [estado, setEstado] = useState<string>(userProfile.companyState || userProfile.state || '');
+  const [cidade, setCidade] = useState<string>(userProfile.companyCity || userProfile.city || '');
+  const [endereco, setEndereco] = useState<string>(userProfile.companyAddress || userProfile.address || '');
+
   // UI & Validation States
   const [cepError, setCepError] = useState<boolean>(false);
   const [isSearchingCep, setIsSearchingCep] = useState<boolean>(false);
@@ -74,7 +112,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   // Allow editing if rejected and user clicks to fix
   const [isEditingRejected, setIsEditingRejected] = useState<boolean>(false);
 
-  // Determine locked state
+  // Determine verification status
   const verificationStatus = userProfile.verificationStatus || (userProfile.verified ? 'approved' : 'unsubmitted');
   const isPending = verificationStatus === 'pending';
   const isApproved = verificationStatus === 'approved' || userProfile.verified;
@@ -83,7 +121,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   // Fields are locked when submitted/pending or approved (unless user explicitly clicks to fix a rejected submission)
   const isLocked = (isPending || isApproved || (isRejected && !isEditingRejected));
 
-  // Synchronize when userProfile changes
+  // Synchronize when userProfile or company changes
   useEffect(() => {
     const { first, last } = parseNames(userProfile.name);
     setFirstName(userProfile.firstName || first || '');
@@ -91,13 +129,26 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     setEmail(userProfile.email || '');
     setCpf(userProfile.cpf || '');
     setCelular(userProfile.whatsapp || userProfile.phone || '');
-    setCep(userProfile.cep || '');
-    setCountry(userProfile.country || 'Brazil');
-    setEstado(userProfile.state || '');
-    setCidade(userProfile.city || '');
-    setEndereco(userProfile.address || '');
     setAvatar(userProfile.avatar || '');
-  }, [userProfile]);
+
+    // Company sync
+    setCompanyName(userProfile.companyName || company?.name || '');
+    setCompanyOwnerName(userProfile.name || (userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : ''));
+    setCompanyEmail(userProfile.email || company?.email || '');
+    setCompanyCnpj(userProfile.companyCnpj || company?.cnpj || userProfile.cnpj || '');
+    setCompanyPhone(userProfile.companyPhone || company?.whatsapp || userProfile.whatsapp || userProfile.phone || '');
+    setCompanyCategory(userProfile.companyCategory || company?.category || 'SaaS / B2B');
+    setCompanyTagline(userProfile.companyTagline || company?.tagline || '');
+    setCompanyWebsite(userProfile.companyWebsite || company?.website || '');
+    setCompanyLogo(userProfile.companyLogo || company?.logo || userProfile.avatar || '');
+
+    // Address sync
+    setCep(userProfile.companyCep || userProfile.cep || '');
+    setCountry(userProfile.companyCountry || userProfile.country || 'Brazil');
+    setEstado(userProfile.companyState || userProfile.state || '');
+    setCidade(userProfile.companyCity || userProfile.city || '');
+    setEndereco(userProfile.companyAddress || userProfile.address || '');
+  }, [userProfile, company]);
 
   // CEP Mask and Search Auto-fill via ViaCEP
   const handleCepChange = async (value: string) => {
@@ -133,8 +184,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     }
   };
 
-  // Image Upload Handler
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload Handler (Avatar or Company Logo)
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'avatar' | 'companyLogo') => {
     if (isLocked) return;
     const file = e.target.files?.[0];
     if (file) {
@@ -147,53 +198,96 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
-          setAvatar(event.target.result as string);
+          const res = event.target.result as string;
+          if (target === 'companyLogo') {
+            setCompanyLogo(res);
+          } else {
+            setAvatar(res);
+          }
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Check completeness of required fields
+  // Validation Checks
   const cleanCpfDigits = cpf.replace(/\D/g, '');
-  const cleanPhoneDigits = celular.replace(/\D/g, '');
+  const cleanPhoneDigits = (roleMode === 'empresa' ? companyPhone : celular).replace(/\D/g, '');
   const cleanCepDigits = cep.replace(/\D/g, '');
+  const cleanCnpjDigits = companyCnpj.replace(/\D/g, '');
 
-  const hasFirstName = firstName.trim().length >= 2;
-  const hasLastName = lastName.trim().length >= 2;
-  const hasEmail = email.trim().includes('@') && email.trim().includes('.');
-  const hasCpf = cleanCpfDigits.length === 11;
-  const hasPhone = cleanPhoneDigits.length >= 10;
   const hasCep = cleanCepDigits.length === 8;
   const hasState = estado.trim().length >= 2;
   const hasCity = cidade.trim().length >= 2;
   const hasAddress = endereco.trim().length >= 3;
 
-  const isFormComplete = (
-    hasFirstName &&
-    hasLastName &&
-    hasEmail &&
-    hasCpf &&
-    hasPhone &&
+  // Affiliate Completeness
+  const hasAffiliateFirstName = firstName.trim().length >= 2;
+  const hasAffiliateLastName = lastName.trim().length >= 2;
+  const hasAffiliateEmail = email.trim().includes('@') && email.trim().includes('.');
+  const hasAffiliateCpf = cleanCpfDigits.length === 11;
+  const hasAffiliatePhone = cleanPhoneDigits.length >= 10;
+
+  const isAffiliateFormComplete = (
+    hasAffiliateFirstName &&
+    hasAffiliateLastName &&
+    hasAffiliateEmail &&
+    hasAffiliateCpf &&
+    hasAffiliatePhone &&
     hasCep &&
     hasState &&
     hasCity &&
     hasAddress
   );
 
-  // Submit profile data to Admin for verification & LOCK fields
+  // Company Completeness
+  const hasCompanyName = companyName.trim().length >= 2;
+  const hasCompanyOwner = companyOwnerName.trim().length >= 3;
+  const hasCompanyEmail = companyEmail.trim().includes('@') && companyEmail.trim().includes('.');
+  const hasCompanyPhone = cleanPhoneDigits.length >= 10;
+  const hasCompanyDoc = companyDocType === 'SEM_CNPJ' || 
+    (companyDocType === 'CNPJ' ? cleanCnpjDigits.length === 14 : cleanCnpjDigits.length === 11);
+
+  const isCompanyFormComplete = (
+    hasCompanyName &&
+    hasCompanyOwner &&
+    hasCompanyEmail &&
+    hasCompanyPhone &&
+    hasCompanyDoc &&
+    hasCep &&
+    hasState &&
+    hasCity &&
+    hasAddress
+  );
+
+  const isFormComplete = roleMode === 'empresa' ? isCompanyFormComplete : isAffiliateFormComplete;
+
+  // Submit profile / company data to Admin for verification & LOCK fields
   const handleSubmitForVerification = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLocked) return;
 
-    if (!isValidCPF(cleanCpfDigits)) {
-      setToastMessage({ type: 'error', text: 'CPF informado é inválido. Por favor verifique os dígitos.' });
-      setTimeout(() => setToastMessage(null), 4500);
-      return;
+    if (roleMode === 'afiliado') {
+      if (!isValidCPF(cleanCpfDigits)) {
+        setToastMessage({ type: 'error', text: 'CPF informado é inválido. Por favor verifique os dígitos.' });
+        setTimeout(() => setToastMessage(null), 4500);
+        return;
+      }
+    } else {
+      // Company Document Validation
+      if (companyDocType === 'CNPJ' && cleanCnpjDigits.length > 0 && !isValidCNPJ(cleanCnpjDigits)) {
+        setToastMessage({ type: 'error', text: 'CNPJ da empresa informado é inválido. Verifique os 14 dígitos.' });
+        setTimeout(() => setToastMessage(null), 4500);
+        return;
+      } else if (companyDocType === 'CPF' && cleanCnpjDigits.length > 0 && !isValidCPF(cleanCnpjDigits)) {
+        setToastMessage({ type: 'error', text: 'CPF do responsável informado é inválido. Verifique os 11 dígitos.' });
+        setTimeout(() => setToastMessage(null), 4500);
+        return;
+      }
     }
 
     if (!isFormComplete) {
-      setToastMessage({ type: 'error', text: 'Por favor, preencha todos os campos obrigatórios antes de enviar.' });
+      setToastMessage({ type: 'error', text: 'Por favor, preencha todos os campos obrigatórios antes de submeter para análise.' });
       setTimeout(() => setToastMessage(null), 4000);
       return;
     }
@@ -201,28 +295,75 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     setIsSubmitting(true);
     setToastMessage(null);
 
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
-    const formattedCpf = formatCPF(cleanCpfDigits);
-    const formattedPhone = formatPhone(cleanPhoneDigits);
+    let updates: Partial<UserSellerProfile>;
 
-    const updates: Partial<UserSellerProfile> = {
-      name: fullName,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email.trim(),
-      cpf: formattedCpf,
-      cleanCpf: cleanCpfDigits,
-      whatsapp: formattedPhone,
-      phone: formattedPhone,
-      cep: cep.trim(),
-      country: country,
-      state: estado.trim(),
-      city: cidade.trim(),
-      address: endereco.trim(),
-      avatar: avatar || userProfile.avatar,
-      verificationStatus: 'pending',
-      verified: false
-    };
+    if (roleMode === 'empresa') {
+      const formattedDoc = companyDocType === 'CNPJ' 
+        ? formatCNPJ(cleanCnpjDigits) 
+        : companyDocType === 'CPF' 
+          ? formatCPF(cleanCnpjDigits) 
+          : 'SEM_CNPJ';
+
+      const formattedCompanyPhone = formatPhone(cleanPhoneDigits);
+
+      updates = {
+        name: companyOwnerName.trim() || userProfile.name,
+        companyName: companyName.trim(),
+        companyLegalName: companyName.trim(),
+        companyCnpj: formattedDoc,
+        cleanCnpj: cleanCnpjDigits,
+        companyDocType: companyDocType,
+        companyPhone: formattedCompanyPhone,
+        whatsapp: formattedCompanyPhone,
+        phone: formattedCompanyPhone,
+        email: companyEmail.trim(),
+        companyCategory: companyCategory,
+        companyTagline: companyTagline.trim(),
+        companyWebsite: companyWebsite.trim(),
+        companyLogo: companyLogo || userProfile.avatar,
+        avatar: companyLogo || userProfile.avatar,
+        companyCep: cep.trim(),
+        companyCountry: country,
+        companyState: estado.trim(),
+        companyCity: cidade.trim(),
+        companyAddress: endereco.trim(),
+        cep: cep.trim(),
+        country: country,
+        state: estado.trim(),
+        city: cidade.trim(),
+        address: endereco.trim(),
+        hasCompanyProfile: true,
+        verificationRoleType: 'empresa',
+        activeRoleMode: 'empresa',
+        verificationStatus: 'pending',
+        verified: false
+      };
+    } else {
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const formattedCpf = formatCPF(cleanCpfDigits);
+      const formattedPhone = formatPhone(cleanPhoneDigits);
+
+      updates = {
+        name: fullName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        cpf: formattedCpf,
+        cleanCpf: cleanCpfDigits,
+        whatsapp: formattedPhone,
+        phone: formattedPhone,
+        cep: cep.trim(),
+        country: country,
+        state: estado.trim(),
+        city: cidade.trim(),
+        address: endereco.trim(),
+        avatar: avatar || userProfile.avatar,
+        verificationRoleType: 'afiliado',
+        activeRoleMode: 'afiliado',
+        verificationStatus: 'pending',
+        verified: false
+      };
+    }
 
     try {
       if (onSubmitForVerification) {
@@ -234,7 +375,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       setIsEditingRejected(false);
       setToastMessage({ 
         type: 'success', 
-        text: 'Dados enviados para validação com sucesso! Seus campos foram bloqueados para análise da administração.' 
+        text: roleMode === 'empresa'
+          ? 'Dados da empresa enviados para validação cadastral com sucesso! Campos bloqueados para auditoria.'
+          : 'Dados enviados para validação com sucesso! Seus campos foram bloqueados para análise da administração.' 
       });
       setTimeout(() => setToastMessage(null), 6000);
     } catch (err: any) {
@@ -251,23 +394,48 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     if (isLocked) return;
     setIsSavingDraft(true);
     try {
-      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || userProfile.name;
-      await onSaveProfile({
-        name: fullName,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim(),
-        cpf: cleanCpfDigits ? formatCPF(cleanCpfDigits) : '',
-        cleanCpf: cleanCpfDigits,
-        whatsapp: celular.trim(),
-        phone: celular.trim(),
-        cep: cep.trim(),
-        country: country,
-        state: estado.trim(),
-        city: cidade.trim(),
-        address: endereco.trim(),
-        avatar: avatar || userProfile.avatar
-      });
+      if (roleMode === 'empresa') {
+        await onSaveProfile({
+          companyName: companyName.trim(),
+          companyLegalName: companyName.trim(),
+          companyCnpj: companyDocType === 'CNPJ' ? formatCNPJ(cleanCnpjDigits) : formatCPF(cleanCnpjDigits),
+          cleanCnpj: cleanCnpjDigits,
+          companyDocType: companyDocType,
+          companyPhone: companyPhone.trim(),
+          companyCategory: companyCategory,
+          companyTagline: companyTagline.trim(),
+          companyWebsite: companyWebsite.trim(),
+          companyLogo: companyLogo || userProfile.avatar,
+          companyCep: cep.trim(),
+          companyCountry: country,
+          companyState: estado.trim(),
+          companyCity: cidade.trim(),
+          companyAddress: endereco.trim(),
+          cep: cep.trim(),
+          country: country,
+          state: estado.trim(),
+          city: cidade.trim(),
+          address: endereco.trim()
+        });
+      } else {
+        const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || userProfile.name;
+        await onSaveProfile({
+          name: fullName,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          cpf: cleanCpfDigits ? formatCPF(cleanCpfDigits) : '',
+          cleanCpf: cleanCpfDigits,
+          whatsapp: celular.trim(),
+          phone: celular.trim(),
+          cep: cep.trim(),
+          country: country,
+          state: estado.trim(),
+          city: cidade.trim(),
+          address: endereco.trim(),
+          avatar: avatar || userProfile.avatar
+        });
+      }
       setToastMessage({ type: 'success', text: 'Rascunho salvo temporariamente.' });
       setTimeout(() => setToastMessage(null), 3000);
     } catch (err: any) {
@@ -298,6 +466,33 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      {/* ================= HEADER BREADCRUMB ================= */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
+          {roleMode === 'empresa' ? (
+            <>
+              <Building2 className="w-3.5 h-3.5" />
+              Área Exclusiva da Empresa & Produtor
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Área de Verificação Cadastral de Afiliado
+            </>
+          )}
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
+          {roleMode === 'empresa' 
+            ? 'Perfil da Empresa & Verificação Cadastral' 
+            : 'Meu Perfil & Verificação de Afiliado'}
+        </h1>
+        <p className="text-xs text-white/60 mt-1 max-w-2xl">
+          {roleMode === 'empresa'
+            ? 'Preencha os dados oficiais da sua empresa (Razão Social, Responsável, CNPJ, WhatsApp, Categoria, Slogan e Endereço). Após envio, a Administração analisará seu cadastro. Uma vez aprovada, a empresa poderá cadastrar produtos e planos livremente.'
+            : 'Mantenha seus dados pessoais e de recebimento atualizados para garantir a homologação de sua conta e saques via PIX instantâneos.'}
+        </p>
+      </div>
+
       {/* ================= STATUS BANNER ================= */}
       <div className="mb-6">
         {isApproved ? (
@@ -308,9 +503,11 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 <ShieldCheck className="w-6 h-6 stroke-[2.5]" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-base font-black text-white font-['Syne']">
-                    Conta Verificada e Aprovada Oficialmente!
+                    {roleMode === 'empresa'
+                      ? 'Empresa Verificada e Aprovada Oficialmente!'
+                      : 'Conta Verificada e Aprovada Oficialmente!'}
                   </h3>
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-black flex items-center gap-1 shadow-sm">
                     <Check className="w-3 h-3 stroke-[3]" />
@@ -318,7 +515,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-emerald-200/80 mt-1 leading-relaxed">
-                  Seus dados foram validados pelo Administrador. Você agora tem acesso total e ilimitado para afiliar-se a qualquer produto no Marketplace!
+                  {roleMode === 'empresa'
+                    ? 'Sua empresa foi homologada e aprovada pela Administração. O cadastro de novos planos, produtos, checkout e comissões para afiliados está 100% liberado!'
+                    : 'Seus dados foram validados pelo Administrador. Você agora tem acesso total e ilimitado para afiliar-se a qualquer produto no Marketplace!'}
                 </p>
               </div>
             </div>
@@ -326,11 +525,20 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             {onNavigateToTab && (
               <button
                 type="button"
-                onClick={() => onNavigateToTab('vitrine')}
+                onClick={() => onNavigateToTab(roleMode === 'empresa' ? 'minha_empresa' : 'vitrine')}
                 className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap flex-shrink-0"
               >
-                <Sparkles className="w-4 h-4 fill-current" />
-                Explorar Marketplace
+                {roleMode === 'empresa' ? (
+                  <>
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    Cadastrar Novo Plano / Produto
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 fill-current" />
+                    Explorar Marketplace
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -341,9 +549,11 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               <Clock className="w-6 h-6" />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-black text-white font-['Syne']">
-                  Perfil em Análise Administrativa (Trancado)
+                  {roleMode === 'empresa' 
+                    ? 'Perfil da Empresa em Análise Administrativa (Trancado)' 
+                    : 'Perfil em Análise Administrativa (Trancado)'}
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
                   <Lock className="w-2.5 h-2.5" />
@@ -351,7 +561,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
-                Seus dados foram enviados com sucesso e estão <strong>bloqueados para edição</strong> enquanto a equipe administrativa faz a validação dos documentos. Assim que for aprovado, seu selo de Verificado será concedido automaticamente e a afiliação a produtos será liberada.
+                {roleMode === 'empresa'
+                  ? 'Os dados e documentos da sua empresa foram enviados e estão bloqueados para edição enquanto o Administrador audita o cadastro. Assim que for aprovada, o cadastro de planos e produtos será liberado imediatamente.'
+                  : 'Seus dados foram enviados com sucesso e estão bloqueados para edição enquanto a equipe administrativa faz a validação dos documentos. Assim que for aprovado, seu selo de Verificado será concedido automaticamente.'}
               </p>
             </div>
           </div>
@@ -363,16 +575,18 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 <XCircle className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-base font-black text-white font-['Syne']">
-                    Validação Recusada pelo Administrador
+                    {roleMode === 'empresa' 
+                      ? 'Validação da Empresa Recusada pelo Administrador' 
+                      : 'Validação Recusada pelo Administrador'}
                   </h3>
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40">
                     Ajuste Necessário
                   </span>
                 </div>
                 <p className="text-xs text-rose-200/80 mt-1 leading-relaxed">
-                  Motivo: {userProfile.verificationRejectionReason || 'Dados cadastrais inconsistentes ou incompletos. Por favor revise e envie novamente.'}
+                  Motivo: {userProfile.verificationRejectionReason || 'Dados cadastrais inconsistentes ou incompletos. Por favor revise as informações e envie novamente.'}
                 </p>
               </div>
             </div>
@@ -393,16 +607,20 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               <FileCheck className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-black text-white font-['Syne']">
-                  Preencha seus Dados para Validação da Conta
+                  {roleMode === 'empresa'
+                    ? 'Preencha os Dados da Empresa para Validação Cadastral'
+                    : 'Preencha seus Dados para Validação da Conta'}
                 </h3>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/10 text-white/80">
-                  Etapa Obrigatória
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#D9F22A]/20 text-[#D9F22A] border border-[#D9F22A]/30">
+                  {roleMode === 'empresa' ? 'Obrigatório para Cadastrar Produtos' : 'Etapa Obrigatória'}
                 </span>
               </div>
               <p className="text-xs text-white/70 mt-1 leading-relaxed">
-                Preencha todos os campos obrigatórios abaixo (Nome, Sobrenome, E-mail, CPF, Celular e Endereço). Assim que tudo estiver preenchido, clique no botão <strong>"Enviar para Validação"</strong>. Após o envio, os campos serão trancados para a verificação do Administrador.
+                {roleMode === 'empresa'
+                  ? 'A sua empresa só pode cadastrar produtos e planos após a homologação e aprovação da Administração. Preencha todos os campos obrigatórios abaixo e clique em "Enviar Empresa para Validação".'
+                  : 'Preencha todos os campos obrigatórios abaixo (Nome, Sobrenome, E-mail, CPF, Celular e Endereço). Assim que tudo estiver preenchido, clique no botão "Enviar para Validação". Após o envio, os campos serão trancados para a verificação do Administrador.'}
               </p>
             </div>
           </div>
@@ -410,7 +628,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* ================= LEFT CARD: USER PHOTO / AVATAR ================= */}
+        {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
         <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl backdrop-blur-md relative">
           {/* Lock overlay if in analysis or approved */}
           {isLocked && (
@@ -420,17 +638,26 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             </div>
           )}
 
-          <div className="relative group w-44 h-44 rounded-full overflow-hidden border-2 border-white/20 bg-black/60 shadow-2xl flex items-center justify-center mb-6">
-            {avatar ? (
+          <div className="relative group w-44 h-44 rounded-2xl overflow-hidden border-2 border-white/20 bg-black/60 shadow-2xl flex items-center justify-center mb-6">
+            {(roleMode === 'empresa' ? companyLogo : avatar) ? (
               <img
-                src={avatar}
-                alt="Foto de perfil"
+                src={roleMode === 'empresa' ? companyLogo : avatar}
+                alt={roleMode === 'empresa' ? 'Logotipo da Empresa' : 'Foto de perfil'}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-[#070b14] text-white/40">
-                <User className="w-16 h-16 mb-2" />
-                <span className="text-[11px] font-bold">Sem Foto</span>
+              <div className="w-full h-full flex flex-col items-center justify-center bg-[#070b14] text-white/40 p-4">
+                {roleMode === 'empresa' ? (
+                  <>
+                    <Building2 className="w-16 h-16 mb-2 text-[#D9F22A]/60" />
+                    <span className="text-[11px] font-bold">Sem Logotipo</span>
+                  </>
+                ) : (
+                  <>
+                    <User className="w-16 h-16 mb-2" />
+                    <span className="text-[11px] font-bold">Sem Foto</span>
+                  </>
+                )}
               </div>
             )}
 
@@ -438,12 +665,14 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             {!isLocked && (
               <label className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-200">
                 <Camera className="w-7 h-7 text-[#D9F22A] mb-1.5" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-white">Alterar Foto</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-white">
+                  {roleMode === 'empresa' ? 'Alterar Logo' : 'Alterar Foto'}
+                </span>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   className="hidden"
-                  onChange={handleImageUpload}
+                  onChange={(e) => handleImageUpload(e, roleMode === 'empresa' ? 'companyLogo' : 'avatar')}
                   disabled={isLocked}
                 />
               </label>
@@ -453,35 +682,65 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           {!isLocked ? (
             <label className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer border border-white/15 mb-3">
               <Upload className="w-3.5 h-3.5" />
-              <span>Escolher da Galeria</span>
+              <span>{roleMode === 'empresa' ? 'Logotipo da Empresa' : 'Escolher da Galeria'}</span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/gif,image/webp"
                 className="hidden"
-                onChange={handleImageUpload}
+                onChange={(e) => handleImageUpload(e, roleMode === 'empresa' ? 'companyLogo' : 'avatar')}
               />
             </label>
           ) : (
             <div className="inline-flex items-center justify-center gap-2 bg-white/5 text-white/40 text-xs font-bold px-4 py-2 rounded-xl border border-white/10 mb-3 cursor-not-allowed">
               <Lock className="w-3.5 h-3.5" />
-              <span>Foto Bloqueada</span>
+              <span>{roleMode === 'empresa' ? 'Logo Bloqueado' : 'Foto Bloqueada'}</span>
             </div>
           )}
 
           <p className="text-[12px] text-white/50 leading-relaxed max-w-[240px]">
-            Permitido *.jpeg, *.jpg, *.png, *.gif
+            Permitido *.jpeg, *.jpg, *.png, *.webp
             <br />
             tamanho máximo de 3.1 MB
           </p>
+
+          {/* Quick Company Info Pill in Left Card */}
+          {roleMode === 'empresa' && companyName && (
+            <div className="mt-5 pt-5 border-t border-white/10 w-full text-left">
+              <span className="text-[10px] uppercase font-bold text-white/40 block">Identificação</span>
+              <div className="text-sm font-black text-white font-['Syne'] truncate mt-0.5">
+                {companyName}
+              </div>
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D9F22A]/10 text-[#D9F22A] border border-[#D9F22A]/30">
+                  {companyCategory}
+                </span>
+                {isApproved && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    Aprovada
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ================= RIGHT CARD: DADOS PESSOAIS & ENDEREÇO ================= */}
+        {/* ================= RIGHT CARD: FORM FIELDS ================= */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          {/* SECTION 1: DADOS PESSOAIS (Matching User's Uploaded Image) */}
+          {/* SECTION 1: DADOS CADASTRAIS (EMPRESA OU AFILIADO) */}
           <div className="bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl backdrop-blur-md relative">
             <div className="flex items-center justify-between mb-5">
               <h4 className="text-sm font-bold text-white/90 flex items-center gap-2">
-                Dados pessoais
+                {roleMode === 'empresa' ? (
+                  <>
+                    <Building2 className="w-4 h-4 text-[#D9F22A]" />
+                    Dados da Empresa & Responsável Legal
+                  </>
+                ) : (
+                  <>
+                    <User className="w-4 h-4 text-[#D9F22A]" />
+                    Dados pessoais
+                  </>
+                )}
               </h4>
               {isLocked && (
                 <span className="text-[11px] font-bold text-amber-400/90 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
@@ -492,128 +751,362 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             </div>
 
             <div className="flex flex-col gap-4">
-              {/* Row: Nome e Sobrenome */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="relative">
-                  <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                    Nome <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={isLocked}
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Seu primeiro nome"
-                    className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
-                      isLocked 
-                        ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
-                        : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
-                    }`}
-                  />
-                </div>
-
-                <div className="relative">
-                  <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                    Sobrenome <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={isLocked}
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Seu sobrenome completo"
-                    className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
-                      isLocked 
-                        ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
-                        : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {/* Row: E-mail */}
-              <div className="relative">
-                <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                  E-mail <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  disabled={isLocked}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="exemplo@gmail.com"
-                  className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
-                    isLocked 
-                      ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
-                      : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
-                  }`}
-                />
-              </div>
-
-              {/* Row: CPF e Celular com WhatsApp */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="relative">
-                  <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                    CPF <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={14}
-                    required
-                    disabled={isLocked}
-                    value={cpf}
-                    onChange={(e) => setCpf(formatCPF(e.target.value))}
-                    placeholder="000.000.000-00"
-                    className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
-                      isLocked 
-                        ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
-                        : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
-                    }`}
-                  />
-                </div>
-
-                <div className="relative">
-                  <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                    Celular <span className="text-rose-400">*</span>
-                  </label>
-                  <div className="relative flex items-center">
-                    <div className="absolute left-3 flex items-center gap-1 text-xs text-white/70 font-semibold pointer-events-none">
-                      <span>🇧🇷</span>
-                      <span>+55</span>
-                      <span className="w-px h-3.5 bg-white/20 mx-1" />
+              {roleMode === 'empresa' ? (
+                /* ================= EMPRESA FIELDS ================= */
+                <>
+                  {/* Razão Social / Nome da Empresa & Responsável */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Nome da Empresa / Startup (Razão Social ou Fantasia) <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        disabled={isLocked}
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="Ex: Techify Soluções Digitais Ltda"
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
                     </div>
+
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Nome do Fundador / Responsável Legal <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        disabled={isLocked}
+                        value={companyOwnerName}
+                        onChange={(e) => setCompanyOwnerName(e.target.value)}
+                        placeholder="Nome completo do responsável"
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* E-mail Corporativo Oficial */}
+                  <div className="relative">
+                    <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                      E-mail Corporativo Oficial <span className="text-rose-400">*</span>
+                    </label>
                     <input
-                      type="text"
-                      maxLength={15}
+                      type="email"
                       required
                       disabled={isLocked}
-                      value={celular}
-                      onChange={(e) => setCelular(formatPhone(e.target.value))}
-                      placeholder="(11) 99999-9999"
-                      className={`w-full bg-[#060a15] border rounded-xl pl-20 pr-10 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                      value={companyEmail}
+                      onChange={(e) => setCompanyEmail(e.target.value)}
+                      placeholder="contato@suaempresa.com"
+                      className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
                         isLocked 
                           ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                           : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
                       }`}
                     />
-                    {/* Green WhatsApp Icon inside input */}
-                    <div className="absolute right-3 text-emerald-400">
-                      <MessageCircle className="w-4 h-4 fill-emerald-400/20" />
+                  </div>
+
+                  {/* Tipo de Documento e Número Fiscal */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Tipo de Documento Fiscal <span className="text-rose-400">*</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['CNPJ', 'CPF', 'SEM_CNPJ'] as const).map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            disabled={isLocked}
+                            onClick={() => {
+                              setCompanyDocType(type);
+                              setCompanyCnpj('');
+                            }}
+                            className={`py-2.5 px-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer text-center ${
+                              companyDocType === type
+                                ? 'bg-[#D9F22A] text-[#060A15] border-[#D9F22A]'
+                                : isLocked
+                                  ? 'opacity-50 cursor-not-allowed bg-black/40 border-white/10 text-white/40'
+                                  : 'bg-[#060a15] text-white/70 hover:text-white border-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            {type === 'CNPJ' ? 'CNPJ' : type === 'CPF' ? 'CPF / MEI' : 'Sem CNPJ'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        {companyDocType === 'CNPJ' 
+                          ? 'CNPJ da Empresa' 
+                          : companyDocType === 'CPF' 
+                            ? 'CPF do Titular' 
+                            : 'Status do Documento'}{' '}
+                        <span className="text-rose-400">*</span>
+                      </label>
+                      {companyDocType === 'SEM_CNPJ' ? (
+                        <div className="w-full bg-[#060a15] border border-white/10 rounded-xl px-4 py-3 text-xs text-amber-300">
+                          Empresa em fase de abertura / Cadastro via CPF do Fundador
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          required
+                          disabled={isLocked}
+                          maxLength={companyDocType === 'CNPJ' ? 18 : 14}
+                          value={companyCnpj}
+                          onChange={(e) => {
+                            if (companyDocType === 'CNPJ') {
+                              setCompanyCnpj(formatCNPJ(e.target.value));
+                            } else {
+                              setCompanyCnpj(formatCPF(e.target.value));
+                            }
+                          }}
+                          placeholder={companyDocType === 'CNPJ' ? '00.000.000/0000-00' : '000.000.000-00'}
+                          className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                            isLocked 
+                              ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                              : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                          }`}
+                        />
+                      )}
                     </div>
                   </div>
-                </div>
-              </div>
+
+                  {/* WhatsApp Comercial e Categoria da Empresa */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        WhatsApp Comercial / Atendimento <span className="text-rose-400">*</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <div className="absolute left-3 flex items-center gap-1 text-xs text-white/70 font-semibold pointer-events-none">
+                          <span>🇧🇷</span>
+                          <span>+55</span>
+                          <span className="w-px h-3.5 bg-white/20 mx-1" />
+                        </div>
+                        <input
+                          type="text"
+                          maxLength={15}
+                          required
+                          disabled={isLocked}
+                          value={companyPhone}
+                          onChange={(e) => setCompanyPhone(formatPhone(e.target.value))}
+                          placeholder="(11) 99999-9999"
+                          className={`w-full bg-[#060a15] border rounded-xl pl-20 pr-10 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                            isLocked 
+                              ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                              : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                          }`}
+                        />
+                        <div className="absolute right-3 text-emerald-400">
+                          <MessageCircle className="w-4 h-4 fill-emerald-400/20" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Categoria da Empresa / Solução <span className="text-rose-400">*</span>
+                      </label>
+                      <select
+                        disabled={isLocked}
+                        value={companyCategory}
+                        onChange={(e) => setCompanyCategory(e.target.value)}
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      >
+                        <option value="SaaS / B2B">SaaS / B2B & Software Corporativo</option>
+                        <option value="IA & Automação">Inteligência Artificial & Automação</option>
+                        <option value="Fintech & Pagamentos">FinTech, Pagamentos & Banking</option>
+                        <option value="Marketing & Vendas">Marketing, Tráfego & Vendas</option>
+                        <option value="E-commerce / Dropship">E-commerce, Lojas & Dropship</option>
+                        <option value="Educação / Cursos">EdTech, Cursos & Treinamentos</option>
+                        <option value="iGaming & Apostas">iGaming & Entretenimento</option>
+                        <option value="Outro">Outro Ramo de Atividade</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Tagline / Slogan e Website Oficial */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Slogan / Tagline Resumida
+                      </label>
+                      <input
+                        type="text"
+                        disabled={isLocked}
+                        value={companyTagline}
+                        onChange={(e) => setCompanyTagline(e.target.value)}
+                        placeholder="Ex: Plataforma líder em automação de vendas"
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Website Oficial / Domínio
+                      </label>
+                      <input
+                        type="text"
+                        disabled={isLocked}
+                        value={companyWebsite}
+                        onChange={(e) => setCompanyWebsite(e.target.value)}
+                        placeholder="https://minhaempresa.com"
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* ================= AFILIADO FIELDS ================= */
+                <>
+                  {/* Row: Nome e Sobrenome */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Nome <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        disabled={isLocked}
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        placeholder="Seu primeiro nome"
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Sobrenome <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        disabled={isLocked}
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        placeholder="Seu sobrenome completo"
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row: E-mail */}
+                  <div className="relative">
+                    <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                      E-mail <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      disabled={isLocked}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="exemplo@gmail.com"
+                      className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        isLocked 
+                          ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                          : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Row: CPF e Celular com WhatsApp */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        CPF <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={14}
+                        required
+                        disabled={isLocked}
+                        value={cpf}
+                        onChange={(e) => setCpf(formatCPF(e.target.value))}
+                        placeholder="000.000.000-00"
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
+                        Celular <span className="text-rose-400">*</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <div className="absolute left-3 flex items-center gap-1 text-xs text-white/70 font-semibold pointer-events-none">
+                          <span>🇧🇷</span>
+                          <span>+55</span>
+                          <span className="w-px h-3.5 bg-white/20 mx-1" />
+                        </div>
+                        <input
+                          type="text"
+                          maxLength={15}
+                          required
+                          disabled={isLocked}
+                          value={celular}
+                          onChange={(e) => setCelular(formatPhone(e.target.value))}
+                          placeholder="(11) 99999-9999"
+                          className={`w-full bg-[#060a15] border rounded-xl pl-20 pr-10 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                            isLocked 
+                              ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                              : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                          }`}
+                        />
+                        <div className="absolute right-3 text-emerald-400">
+                          <MessageCircle className="w-4 h-4 fill-emerald-400/20" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* SECTION 2: ENDEREÇO */}
+          {/* SECTION 2: ENDEREÇO DA SEDE / PESSOAL */}
           <div className="bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl backdrop-blur-md relative">
             <div className="flex items-center justify-between mb-5">
               <h4 className="text-sm font-bold text-white/90 flex items-center gap-2">
-                Endereço
+                <MapPin className="w-4 h-4 text-[#D9F22A]" />
+                {roleMode === 'empresa' ? 'Endereço da Sede & Operação' : 'Endereço'}
               </h4>
               {isLocked && (
                 <span className="text-[11px] font-bold text-amber-400/90 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
@@ -685,7 +1178,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="relative">
                   <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                    Estado <span className="text-rose-400">*</span>
+                    Estado (UF) <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -725,7 +1218,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               {/* Row: Endereço completo */}
               <div className="relative">
                 <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                  Endereço <span className="text-rose-400">*</span>
+                  {roleMode === 'empresa' ? 'Endereço da Sede Completo' : 'Endereço'}{' '}
+                  <span className="text-rose-400">*</span>
                 </label>
                 <textarea
                   rows={2}
@@ -758,7 +1252,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   Salvar Rascunho
                 </button>
 
-                {/* PROMINENT SUBMIT FOR VALIDATION BUTTON (Appears when all fields are completed) */}
+                {/* PROMINENT SUBMIT FOR VALIDATION BUTTON */}
                 {isFormComplete ? (
                   <button
                     type="submit"
@@ -773,7 +1267,11 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                     ) : (
                       <>
                         <Send className="w-4 h-4 fill-current" />
-                        <span>Enviar para Validação (Trancar e Submeter)</span>
+                        <span>
+                          {roleMode === 'empresa'
+                            ? 'Enviar Empresa para Validação (Trancar e Submeter)'
+                            : 'Enviar para Validação (Trancar e Submeter)'}
+                        </span>
                       </>
                     )}
                   </button>
@@ -788,15 +1286,32 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               <div className="w-full p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-amber-300 text-xs font-bold">
                 <div className="flex items-center gap-2">
                   <Lock className="w-4 h-4" />
-                  <span>Campos trancados. Validação em andamento pelo Administrador.</span>
+                  <span>
+                    {roleMode === 'empresa'
+                      ? 'Perfil da empresa em análise cadastral. Aguardando aprovação da administração.'
+                      : 'Campos trancados. Validação em andamento pelo Administrador.'}
+                  </span>
                 </div>
               </div>
             ) : isApproved ? (
               <div className="w-full p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-emerald-300 text-xs font-bold">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>Seus dados foram verificados com sucesso. Registro protegido.</span>
+                  <span>
+                    {roleMode === 'empresa'
+                      ? 'Empresa verificada e aprovada! Cadastro de planos e checkout liberados.'
+                      : 'Seus dados foram verificados com sucesso. Registro protegido.'}
+                  </span>
                 </div>
+                {roleMode === 'empresa' && onNavigateToTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToTab('minha_empresa')}
+                    className="text-[#D9F22A] hover:underline text-xs font-black cursor-pointer"
+                  >
+                    Gerenciar Planos →
+                  </button>
+                )}
               </div>
             ) : null}
           </div>

@@ -939,6 +939,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onSubmitForVerification={handleSubmitForVerification}
               onNavigateToTab={setActiveTab}
               roleMode={roleMode}
+              company={companies[0]}
             />
           )}
 
@@ -948,8 +949,31 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               plans={plans}
               affiliations={affiliations}
               sales={transactions}
-              onOpenCreateCompany={() => setIsCreateCompanyModalOpen(true)}
+              userProfile={userProfile}
+              isCompanyVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
+              onNavigateToProfile={() => setActiveTab('meu_perfil')}
+              onOpenCreateCompany={() => {
+                if (!userProfile.verified && userProfile.verificationStatus !== 'approved') {
+                  setLiveToast({
+                    message: 'Verificação Obrigatória',
+                    sub: 'A empresa precisa ser verificada pela administração antes de cadastrar.',
+                    amount: 'Pendente'
+                  });
+                  setActiveTab('meu_perfil');
+                  return;
+                }
+                setIsCreateCompanyModalOpen(true);
+              }}
               onOpenCreatePlan={(compId) => {
+                if (!userProfile.verified && userProfile.verificationStatus !== 'approved') {
+                  setLiveToast({
+                    message: 'Verificação Obrigatória',
+                    sub: 'A empresa só pode cadastrar produtos após a verificação da administração.',
+                    amount: 'Pendente'
+                  });
+                  setActiveTab('meu_perfil');
+                  return;
+                }
                 setEditingPlan(null);
                 setIsCreatePlanModalOpen(true);
               }}
@@ -981,8 +1005,28 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setSelectedPlanForSale(prod.id);
                 setIsRegisterSaleModalOpen(true);
               }}
-              onOpenCreateCompany={() => setIsCreateCompanyModalOpen(true)}
+              onOpenCreateCompany={() => {
+                if (!userProfile.verified && userProfile.verificationStatus !== 'approved') {
+                  setLiveToast({
+                    message: 'Verificação Obrigatória',
+                    sub: 'A empresa precisa ser verificada pela administração antes de cadastrar startups.',
+                    amount: 'Pendente'
+                  });
+                  setActiveTab('meu_perfil');
+                  return;
+                }
+                setIsCreateCompanyModalOpen(true);
+              }}
               onOpenCreatePlan={roleMode === 'empresa' ? () => {
+                if (!userProfile.verified && userProfile.verificationStatus !== 'approved') {
+                  setLiveToast({
+                    message: 'Verificação Obrigatória',
+                    sub: 'A empresa só pode cadastrar produtos após a verificação da administração.',
+                    amount: 'Pendente'
+                  });
+                  setActiveTab('meu_perfil');
+                  return;
+                }
                 setEditingPlan(null);
                 setIsCreatePlanModalOpen(true);
               } : undefined}
