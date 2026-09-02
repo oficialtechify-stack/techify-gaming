@@ -958,28 +958,46 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
         {/* VIEW CONTAINER */}
         <main className="flex-1 p-3.5 sm:p-5 md:p-6 lg:p-8 max-w-7xl w-full mx-auto min-w-0">
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              roleMode={roleMode}
-              userProfile={userProfile}
-              transactions={transactions}
-              paymentStats={paymentStats}
-              platforms={plans}
-              setActiveTab={setActiveTab}
-              onOpenSimulateSale={() => {
-                setSelectedPlanForSale(undefined);
-                setIsRegisterSaleModalOpen(true);
+          {detailedEditingPlan ? (
+            <ProductEditorView
+              plan={detailedEditingPlan}
+              onBack={() => setDetailedEditingPlan(null)}
+              onSave={async (updatedPlan) => {
+                await handleUpdatePlan(detailedEditingPlan.id, updatedPlan);
+                setDetailedEditingPlan(null);
               }}
-              onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
-              onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
-              selectedPeriod={selectedPeriod}
-              setSelectedPeriod={setSelectedPeriod}
-              selectedProductFilter={selectedProductFilter}
-              setSelectedProductFilter={setSelectedProductFilter}
-              selectedTypeFilter={selectedTypeFilter}
-              setSelectedTypeFilter={setSelectedTypeFilter}
+              onDelete={async (planId, compId) => {
+                await handleDeletePlan(planId, compId);
+                setDetailedEditingPlan(null);
+              }}
+              onOpenCheckout={(planToTest) => {
+                setLiveCheckoutPlan(planToTest);
+              }}
             />
-          )}
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <DashboardView
+                  roleMode={roleMode}
+                  userProfile={userProfile}
+                  transactions={transactions}
+                  paymentStats={paymentStats}
+                  platforms={plans}
+                  setActiveTab={setActiveTab}
+                  onOpenSimulateSale={() => {
+                    setSelectedPlanForSale(undefined);
+                    setIsRegisterSaleModalOpen(true);
+                  }}
+                  onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
+                  onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
+                  selectedPeriod={selectedPeriod}
+                  setSelectedPeriod={setSelectedPeriod}
+                  selectedProductFilter={selectedProductFilter}
+                  setSelectedProductFilter={setSelectedProductFilter}
+                  selectedTypeFilter={selectedTypeFilter}
+                  setSelectedTypeFilter={setSelectedTypeFilter}
+                />
+              )}
 
           {activeTab === 'meu_perfil' && (
             <MeuPerfilView
@@ -1146,8 +1164,28 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'relatorios' && <RelatoriosView transactions={transactions} />}
           {activeTab === 'integracoes' && <IntegracoesView />}
           {activeTab === 'database' && <DatabaseManagerView />}
+            </>
+          )}
         </main>
       </div>
+
+      {/* ===================== LIVE CHECKOUT OVERLAY (when active) ===================== */}
+      {liveCheckoutPlan && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-[#070b14]">
+          <CustomCheckoutPage
+            plan={liveCheckoutPlan}
+            onBack={() => setLiveCheckoutPlan(null)}
+            onPaymentSuccess={(tx) => {
+              setLiveToast({
+                message: 'Venda Aprovada!',
+                sub: `${tx.buyerName} comprou ${tx.platformName}`,
+                amount: `+ R$ ${tx.amount.toFixed(2)}`
+              });
+              setTimeout(() => setLiveToast(null), 5000);
+            }}
+          />
+        </div>
+      )}
 
       {/* ===================== 3. LIVE TOAST NOTIFICATION ===================== */}
       {liveToast && (
