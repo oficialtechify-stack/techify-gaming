@@ -53,6 +53,8 @@ import { CreatePlanModal } from './CreatePlanModal';
 import { RegisterSaleModal } from './RegisterSaleModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
+import { Modals } from '../Modals';
+import { ActiveModal } from '../../types';
 import { completeAffiliateProfile } from '../../services/authService';
 import { 
   LayoutDashboard, 
@@ -124,6 +126,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState<boolean>(false);
   const [selectedPlanForSale, setSelectedPlanForSale] = useState<string | undefined>(undefined);
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<CompanyPlan | null>(null);
+  const [companyAuthModal, setCompanyAuthModal] = useState<ActiveModal>(null);
 
   // Live Toast Notification
   const [liveToast, setLiveToast] = useState<{ message: string; sub: string; amount: string } | null>(null);
@@ -166,7 +169,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       const userOwnedCompanies = companies.filter(c => c.ownerId === currentUser?.uid || c.id === userProfile?.companyId);
       const hasCompany = userProfile?.hasCompanyProfile || userOwnedCompanies.length > 0 || !!userProfile?.companyId;
       if (!hasCompany) {
-        setIsCreateCompanyModalOpen(true);
+        setCompanyAuthModal('register_company');
         return;
       }
       setRoleMode('empresa');
@@ -176,7 +179,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       }
       setLiveToast({
         message: 'Modo Empresa Ativado',
-        sub: 'Gestão de soluções e planos',
+        sub: 'Gestão de soluções e planos corporativos',
         amount: 'Empresa'
       });
       setTimeout(() => setLiveToast(null), 3000);
@@ -595,41 +598,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             </div>
           </div>
 
-          {/* Quick Role Switcher Inside Sidebar */}
-          {!sidebarCollapsed && (
-            <div className="mx-3 mt-3 p-1 rounded-xl bg-[#050811] border border-white/10 flex items-center gap-1">
-              <button
-                onClick={() => {
-                  handleSwitchRole('afiliado');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  roleMode === 'afiliado'
-                    ? 'bg-[#D9F22A] text-[#060A15] shadow-sm'
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                Afiliado
-              </button>
-
-              <button
-                onClick={() => {
-                  handleSwitchRole('empresa');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  roleMode === 'empresa'
-                    ? 'bg-[#D9F22A] text-[#060A15] shadow-sm'
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                Empresa
-              </button>
-            </div>
-          )}
-
           {/* Balance / Sales Milestone Box */}
           {!sidebarCollapsed && (
             <div className="p-4 m-3 rounded-xl bg-gradient-to-b from-[#0a1222] to-[#060a15] border border-white/10 shadow-md">
@@ -746,7 +714,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       >
         {/* TOPBAR */}
         <header className="h-16 sticky top-0 z-30 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-4 min-w-0">
-          {/* Left Header: Mobile Menu Hamburger + Mode Switcher */}
+          {/* Left Header: Mobile Menu Hamburger + Current Panel Indicator */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
             {/* Hamburger Button on Mobile */}
             <button
@@ -757,49 +725,20 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               <Menu className="w-5 h-5" />
             </button>
 
-            {/* Prominent Header Mode Switcher */}
-            <div className="bg-[#050811] border border-white/15 rounded-full p-0.5 sm:p-1 flex items-center flex-shrink-0">
-              <button
-                onClick={() => handleSwitchRole('afiliado')}
-                className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 ${
-                  roleMode === 'afiliado'
-                    ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="hidden xs:inline">Modo </span>
-                <span>Afiliado</span>
-              </button>
-
-              <button
-                onClick={() => handleSwitchRole('empresa')}
-                className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 ${
-                  roleMode === 'empresa'
-                    ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="hidden xs:inline">Modo </span>
-                <span>Empresa</span>
-                <span className="hidden md:inline"> / Startup</span>
-              </button>
+            {/* Current Panel Status Badge */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 flex-shrink-0">
+              <span className={`w-2 h-2 rounded-full ${
+                roleMode === 'afiliado' ? 'bg-[#D9F22A] shadow-[0_0_8px_#D9F22A]' : 'bg-indigo-400 shadow-[0_0_8px_#818cf8]'
+              }`} />
+              <span className="text-[11px] sm:text-xs font-bold tracking-wide text-white/90">
+                {roleMode === 'afiliado' ? 'Painel do Afiliado' : 'Painel da Empresa / Startup'}
+              </span>
             </div>
           </div>
 
           {/* Right Top Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 ml-auto flex-shrink-0">
-            {roleMode === 'afiliado' ? (
-              <button
-                onClick={() => setIsCreateCompanyModalOpen(true)}
-                className="bg-white/10 hover:bg-white/20 text-[#D9F22A] border border-[#D9F22A]/30 font-bold p-1.5 sm:px-3.5 sm:py-1.5 rounded-full text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm flex-shrink-0"
-                title="Cadastrar Startup e enviar para análise do Administrador"
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Cadastrar Empresa</span>
-              </button>
-            ) : (
+            {roleMode === 'empresa' && (
               <button
                 onClick={() => setIsCreateCompanyModalOpen(true)}
                 className="bg-white/10 hover:bg-white/20 text-white font-bold p-1.5 sm:px-3.5 sm:py-1.5 rounded-full text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 border border-white/15 flex-shrink-0"
@@ -885,6 +824,15 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                         <div className="text-[11px] text-white/50 truncate">
                           {userProfile.email || 'rickmarketing81@gmail.com'}
                         </div>
+                        <div className="mt-1">
+                          <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                            roleMode === 'afiliado'
+                              ? 'bg-[#D9F22A]/15 text-[#D9F22A] border border-[#D9F22A]/30'
+                              : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                          }`}>
+                            {roleMode === 'afiliado' ? 'Conta Afiliado' : 'Conta Empresa'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -895,7 +843,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                       <button
                         onClick={() => {
                           setIsUserMenuOpen(false);
-                          setActiveTab('dashboard');
+                          if (roleMode === 'afiliado') {
+                            setActiveTab('dashboard');
+                          } else {
+                            setActiveTab('minha_empresa');
+                          }
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
                       >
@@ -927,9 +879,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                           setIsUserMenuOpen(false);
                           handleSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
                         }}
-                        className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                        className="w-full text-left px-3 py-2 text-xs font-bold text-[#D9F22A] hover:bg-[#D9F22A]/10 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
                       >
-                        {roleMode === 'afiliado' ? 'Mudar para painel da empresa' : 'Mudar para painel do aluno'}
+                        <span>{roleMode === 'afiliado' ? 'Mudar para painel da empresa' : 'Mudar para painel de afiliado'}</span>
+                        <ArrowRightLeft className="w-3.5 h-3.5 text-[#D9F22A]" />
                       </button>
                     </div>
 
@@ -942,9 +895,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                         logout();
                         onBackToHome();
                       }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
+                      className="w-full text-left px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
                     >
-                      Logout
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Logout</span>
                     </button>
                   </div>
                 </>
@@ -1164,6 +1118,23 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           setSelectedDetailProduct(null);
           setSelectedPlanForSale(product.id);
           setIsRegisterSaleModalOpen(true);
+        }}
+      />
+
+      {/* Global Auth Modal for Company / Google switch flow */}
+      <Modals
+        activeModal={companyAuthModal}
+        onClose={() => setCompanyAuthModal(null)}
+        onLoginSuccess={() => {
+          setRoleMode('empresa');
+          setUserRole('empresa');
+          setActiveTab('minha_empresa');
+          setLiveToast({
+            message: 'Painel da Empresa Conectado!',
+            sub: 'Acesso corporativo liberado com sucesso',
+            amount: 'Empresa'
+          });
+          setTimeout(() => setLiveToast(null), 4000);
         }}
       />
     </div>

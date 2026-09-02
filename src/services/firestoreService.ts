@@ -26,6 +26,19 @@ import {
   TeamMember,
   VerificationRequest
 } from '../types/platform';
+
+export type { 
+  CompanyStartup,
+  CompanyPlan,
+  PlatformProduct, 
+  UserAffiliation,
+  SaleTransaction, 
+  WithdrawalRequest, 
+  UserSellerProfile, 
+  AffiliateLinkItem,
+  TeamMember,
+  VerificationRequest
+};
 import { 
   INITIAL_USER_PROFILE, 
   INITIAL_TRANSACTIONS, 
@@ -47,6 +60,28 @@ export const COLLECTIONS = {
 };
 
 export const DEFAULT_USER_ID = 'usr_techify_main';
+
+/**
+ * Recursively removes all undefined keys from an object or array before passing to Firestore
+ */
+export function sanitizeForFirestore<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof obj === 'object' && !(obj instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = sanitizeForFirestore(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
 
 /**
  * Initialize / Seed Firestore with clean base state
@@ -142,10 +177,10 @@ export function subscribeUserProfile(callback: (profile: UserSellerProfile) => v
  */
 export async function updateUserProfileInFirebase(updates: Partial<UserSellerProfile>, userId: string = DEFAULT_USER_ID) {
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
-  await setDoc(profileRef, {
+  await setDoc(profileRef, sanitizeForFirestore({
     ...updates,
     updatedAt: new Date().toISOString()
-  }, { merge: true });
+  }), { merge: true });
 }
 
 // ==========================================
@@ -164,19 +199,19 @@ export async function submitVerificationRequestInFirebase(
   
   // 1. Update the User's Profile to 'pending' and locked
   const profileRef = doc(db, COLLECTIONS.PROFILES, effectiveUserId);
-  await setDoc(profileRef, {
+  await setDoc(profileRef, sanitizeForFirestore({
     ...profileData,
     verificationStatus: 'pending',
     verified: false,
     verificationSubmittedAt: now,
     updatedAt: now
-  }, { merge: true });
+  }), { merge: true });
 
   // 2. Add / Update document in verification_requests collection
   const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, effectiveUserId);
   const fullName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || profileData.name || 'Usuário Techify';
   
-  await setDoc(requestRef, {
+  await setDoc(requestRef, sanitizeForFirestore({
     id: effectiveUserId,
     userId: effectiveUserId,
     name: fullName,
@@ -193,7 +228,7 @@ export async function submitVerificationRequestInFirebase(
     address: profileData.address || '',
     status: 'pending',
     submittedAt: now
-  }, { merge: true });
+  }), { merge: true });
 
   return { success: true, submittedAt: now };
 }
@@ -325,7 +360,7 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
   };
 
   const docRef = doc(db, COLLECTIONS.COMPANIES, id);
-  await setDoc(docRef, newCompany);
+  await setDoc(docRef, sanitizeForFirestore(newCompany));
   return newCompany;
 }
 
@@ -335,12 +370,12 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
 export async function approveCompanyInFirebase(companyId: string) {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
   const now = new Date().toISOString();
-  await setDoc(docRef, {
+  await setDoc(docRef, sanitizeForFirestore({
     status: 'approved',
     verified: true,
     reviewedAt: now,
     rejectionReason: null
-  }, { merge: true });
+  }), { merge: true });
   return { success: true };
 }
 
@@ -350,12 +385,12 @@ export async function approveCompanyInFirebase(companyId: string) {
 export async function rejectCompanyInFirebase(companyId: string, reason: string = 'Dados da empresa necessitam de revisão') {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
   const now = new Date().toISOString();
-  await setDoc(docRef, {
+  await setDoc(docRef, sanitizeForFirestore({
     status: 'rejected',
     verified: false,
     rejectionReason: reason,
     reviewedAt: now
-  }, { merge: true });
+  }), { merge: true });
   return { success: true };
 }
 
@@ -364,7 +399,7 @@ export async function rejectCompanyInFirebase(companyId: string, reason: string 
  */
 export async function updateCompanyInFirebase(companyId: string, updates: Partial<CompanyStartup>) {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-  await updateDoc(docRef, updates);
+  await updateDoc(docRef, sanitizeForFirestore(updates));
 }
 
 /**
@@ -428,7 +463,7 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
   };
 
   const docRef = doc(db, COLLECTIONS.PLANS, id);
-  await setDoc(docRef, newPlan);
+  await setDoc(docRef, sanitizeForFirestore(newPlan));
 
   // Update Company totalPlansCount or auto-create company if not present
   if (planData.companyId) {
@@ -436,9 +471,9 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
     const compSnap = await getDoc(compRef);
     if (compSnap.exists()) {
       const compData = compSnap.data() as CompanyStartup;
-      await updateDoc(compRef, {
+      await updateDoc(compRef, sanitizeForFirestore({
         totalPlansCount: (compData.totalPlansCount || 0) + 1
-      });
+      }));
     } else {
       const newComp: CompanyStartup = {
         id: planData.companyId,
@@ -460,7 +495,7 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
         ownerId: DEFAULT_USER_ID,
         createdAt: now
       };
-      await setDoc(compRef, newComp);
+      await setDoc(compRef, sanitizeForFirestore(newComp));
     }
   }
 
@@ -482,9 +517,9 @@ export async function deleteCompanyPlanInFirebase(planId: string, companyId?: st
     const compSnap = await getDoc(compRef);
     if (compSnap.exists()) {
       const compData = compSnap.data() as CompanyStartup;
-      await updateDoc(compRef, {
+      await updateDoc(compRef, sanitizeForFirestore({
         totalPlansCount: Math.max(0, (compData.totalPlansCount || 1) - 1)
-      });
+      }));
     }
   }
 }
@@ -496,7 +531,7 @@ export const deletePlatformInFirebase = (planId: string) => deleteCompanyPlanInF
  */
 export async function updateCompanyPlanInFirebase(planId: string, updates: Partial<CompanyPlan>) {
   const docRef = doc(db, COLLECTIONS.PLANS, planId);
-  await updateDoc(docRef, updates);
+  await updateDoc(docRef, sanitizeForFirestore(updates));
 }
 
 export const updatePlatformInFirebase = updateCompanyPlanInFirebase;
@@ -558,16 +593,16 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile
     createdAt: now
   };
 
-  await setDoc(doc(db, COLLECTIONS.AFFILIATIONS, id), affiliation);
+  await setDoc(doc(db, COLLECTIONS.AFFILIATIONS, id), sanitizeForFirestore(affiliation));
 
   // Increment Plan affiliatesCount
   const planRef = doc(db, COLLECTIONS.PLANS, plan.id);
   const planSnap = await getDoc(planRef);
   if (planSnap.exists()) {
     const pData = planSnap.data() as CompanyPlan;
-    await updateDoc(planRef, {
+    await updateDoc(planRef, sanitizeForFirestore({
       affiliatesCount: (pData.affiliatesCount || 0) + 1
-    });
+    }));
   }
 
   // Increment Company affiliatesCount
@@ -576,9 +611,9 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile
     const compSnap = await getDoc(compRef);
     if (compSnap.exists()) {
       const cData = compSnap.data() as CompanyStartup;
-      await updateDoc(compRef, {
+      await updateDoc(compRef, sanitizeForFirestore({
         totalAffiliatesCount: (cData.totalAffiliatesCount || 0) + 1
-      });
+      }));
     }
   }
 
@@ -596,9 +631,9 @@ export async function deleteAffiliationInFirebase(affiliationId: string, planId?
     const planSnap = await getDoc(planRef);
     if (planSnap.exists()) {
       const pData = planSnap.data() as CompanyPlan;
-      await updateDoc(planRef, {
+      await updateDoc(planRef, sanitizeForFirestore({
         affiliatesCount: Math.max(0, (pData.affiliatesCount || 1) - 1)
-      });
+      }));
     }
   }
 }
@@ -639,7 +674,7 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
 
   // 1. Save sale document
   const saleRef = doc(db, COLLECTIONS.SALES, id);
-  await setDoc(saleRef, fullSale);
+  await setDoc(saleRef, sanitizeForFirestore(fullSale));
 
   // 2. Update Profile Balances (Credit the affiliate or seller)
   const targetUserId = saleData.affiliateId || saleData.sellerId || DEFAULT_USER_ID;
@@ -658,14 +693,14 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     else if (newTotalEarned >= 50000) level = 'Parceiro Gold';
     else if (newTotalEarned >= 20000) level = 'Parceiro Silver';
 
-    await updateDoc(profileRef, {
+    await updateDoc(profileRef, sanitizeForFirestore({
       totalEarned: newTotalEarned,
       availableBalance: newAvailable,
       totalSalesCount: newCount,
       partnerLevel: level,
       currentSalesProgress: Number(progress.toFixed(1)),
       updatedAt: now.toISOString()
-    });
+    }));
   }
 
   // 3. Update Plan total sales
@@ -674,9 +709,9 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     const planSnap = await getDoc(planRef);
     if (planSnap.exists()) {
       const pData = planSnap.data() as CompanyPlan;
-      await updateDoc(planRef, {
+      await updateDoc(planRef, sanitizeForFirestore({
         totalSales: (pData.totalSales || 0) + 1
-      });
+      }));
     }
   }
 
@@ -686,9 +721,9 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     const compSnap = await getDoc(compRef);
     if (compSnap.exists()) {
       const cData = compSnap.data() as CompanyStartup;
-      await updateDoc(compRef, {
+      await updateDoc(compRef, sanitizeForFirestore({
         totalSalesVolume: (cData.totalSalesVolume || 0) + fullSale.amount
-      });
+      }));
     }
   }
 
@@ -698,10 +733,10 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
   const affSnap = await getDoc(affRef);
   if (affSnap.exists()) {
     const affData = affSnap.data() as UserAffiliation;
-    await updateDoc(affRef, {
+    await updateDoc(affRef, sanitizeForFirestore({
       salesCount: (affData.salesCount || 0) + 1,
       totalEarned: (affData.totalEarned || 0) + fullSale.commissionEarned
-    });
+    }));
   }
 
   return fullSale;
@@ -755,7 +790,7 @@ export async function createWithdrawalInFirebase(
   };
 
   // 1. Save withdrawal doc
-  await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, id), newWth);
+  await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, id), sanitizeForFirestore(newWth));
 
   // 2. Decrement available balance
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
@@ -763,10 +798,10 @@ export async function createWithdrawalInFirebase(
   if (profileSnap.exists()) {
     const current = profileSnap.data() as UserSellerProfile;
     const newAvailable = Math.max(0, (current.availableBalance || 0) - amount);
-    await updateDoc(profileRef, {
+    await updateDoc(profileRef, sanitizeForFirestore({
       availableBalance: newAvailable,
       updatedAt: now.toISOString()
-    });
+    }));
   }
 
   return newWth;
@@ -796,7 +831,7 @@ export async function createTeamMemberInFirebase(memberData: Omit<TeamMember, 'i
     ...memberData,
     id
   };
-  await setDoc(doc(db, COLLECTIONS.TEAM, id), newMember);
+  await setDoc(doc(db, COLLECTIONS.TEAM, id), sanitizeForFirestore(newMember));
   return newMember;
 }
 
@@ -812,6 +847,97 @@ export async function saveAffiliateLinkInFirebase(link: Omit<AffiliateLinkItem, 
     id,
     createdAt: now
   };
-  await setDoc(doc(db, COLLECTIONS.AFFILIATE_LINKS, id), linkItem);
+  await setDoc(doc(db, COLLECTIONS.AFFILIATE_LINKS, id), sanitizeForFirestore(linkItem));
   return linkItem;
+}
+
+// ==========================================
+// 📊 MÉTRICAS GLOBAIS EM TEMPO REAL (FIREBASE)
+// ==========================================
+
+export interface GlobalPlatformMetrics {
+  totalRegisteredUsers: number;
+  totalStartups: number;
+  totalPlans: number;
+  totalCommissionsGenerated: number;
+  totalCommissionsPaid: number;
+  totalGrossSales: number;
+  totalSalesCount: number;
+  companies: CompanyStartup[];
+  plans: CompanyPlan[];
+}
+
+/**
+ * Subscribes to realtime updates across collections to calculate live stats:
+ * - Real users / affiliates count
+ * - Real startups and plans count
+ * - Real generated commissions
+ * - Real paid commissions via PIX
+ */
+export function subscribeGlobalPlatformMetrics(
+  callback: (metrics: GlobalPlatformMetrics) => void
+) {
+  let companiesList: CompanyStartup[] = [];
+  let plansList: CompanyPlan[] = [];
+  let salesList: SaleTransaction[] = [];
+  let withdrawalsList: WithdrawalRequest[] = [];
+  let userProfilesCount = 1;
+
+  const emit = () => {
+    const totalCommissionsGenerated = salesList.reduce((acc, s) => acc + (s.commissionEarned || 0), 0);
+    const totalCommissionsPaid = withdrawalsList
+      .filter(w => w.status === 'Concluído' || w.status === 'Aprovado')
+      .reduce((acc, w) => acc + (w.amount || 0), 0);
+    const totalGrossSales = salesList.reduce((acc, s) => acc + (s.amount || 0), 0);
+
+    callback({
+      totalRegisteredUsers: Math.max(userProfilesCount, 1),
+      totalStartups: companiesList.length,
+      totalPlans: plansList.length,
+      totalCommissionsGenerated,
+      totalCommissionsPaid,
+      totalGrossSales,
+      totalSalesCount: salesList.length,
+      companies: companiesList,
+      plans: plansList
+    });
+  };
+
+  // 1. Companies listener
+  const unsubCompanies = onSnapshot(collection(db, COLLECTIONS.COMPANIES), (snap) => {
+    companiesList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) }));
+    emit();
+  }, (err) => console.error('Error in metrics companies listener:', err));
+
+  // 2. Plans listener
+  const unsubPlans = onSnapshot(collection(db, COLLECTIONS.PLANS), (snap) => {
+    plansList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<CompanyPlan, 'id'>) }));
+    emit();
+  }, (err) => console.error('Error in metrics plans listener:', err));
+
+  // 3. Sales listener
+  const unsubSales = onSnapshot(collection(db, COLLECTIONS.SALES), (snap) => {
+    salesList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<SaleTransaction, 'id'>) }));
+    emit();
+  }, (err) => console.error('Error in metrics sales listener:', err));
+
+  // 4. Withdrawals listener
+  const unsubWithdrawals = onSnapshot(collection(db, COLLECTIONS.WITHDRAWALS), (snap) => {
+    withdrawalsList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, 'id'>) }));
+    emit();
+  }, (err) => console.error('Error in metrics withdrawals listener:', err));
+
+  // 5. User Profiles count listener
+  const unsubProfiles = onSnapshot(collection(db, COLLECTIONS.PROFILES), (snap) => {
+    userProfilesCount = Math.max(snap.size, 1);
+    emit();
+  }, (err) => console.error('Error in metrics profiles listener:', err));
+
+  return () => {
+    unsubCompanies();
+    unsubPlans();
+    unsubSales();
+    unsubWithdrawals();
+    unsubProfiles();
+  };
 }

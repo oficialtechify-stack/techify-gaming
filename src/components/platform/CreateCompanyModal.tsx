@@ -70,7 +70,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
 
     const defaultLogo = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name.trim())}`;
 
-    onCompanyCreated({
+    const payload: Partial<CompanyStartup> = {
       name: name.trim(),
       slug: name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'),
       tagline: tagline.trim() || `${category} inovador e escalável`,
@@ -82,10 +82,6 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       email: email.trim() || userProfile?.email || 'contato@empresa.com',
       whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : (userProfile?.phone ? formatPhone(userProfile.phone) : '+55 11 99999-9999'),
       docType: docType,
-      cnpj: docType === 'CNPJ' && cleanCnpj ? formatCNPJ(cleanCnpj) : undefined,
-      cleanCnpj: docType === 'CNPJ' && cleanCnpj ? cleanCnpj : undefined,
-      cpf: docType === 'CPF' && cleanCpf ? formatCPF(cleanCpf) : undefined,
-      cleanCpf: docType === 'CPF' && cleanCpf ? cleanCpf : undefined,
       hasNoCnpj: docType === 'SEM_CNPJ',
       totalPlansCount: 0,
       totalAffiliatesCount: 0,
@@ -97,7 +93,17 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       submittedBy: userProfile?.userId || 'usr_techify_main',
       submittedByName: userProfile?.name || 'Produtor Solicitante',
       submittedByEmail: userProfile?.email || 'contato@empresa.com'
-    });
+    };
+
+    if (docType === 'CNPJ' && cleanCnpj) {
+      payload.cnpj = formatCNPJ(cleanCnpj);
+      payload.cleanCnpj = cleanCnpj;
+    } else if (docType === 'CPF' && cleanCpf) {
+      payload.cpf = formatCPF(cleanCpf);
+      payload.cleanCpf = cleanCpf;
+    }
+
+    onCompanyCreated(payload as any);
 
     onClose();
   };

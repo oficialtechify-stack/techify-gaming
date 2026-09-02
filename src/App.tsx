@@ -74,7 +74,10 @@ function MainApp() {
         <StatsCounter />
         <AboutSection />
         <HowItWorksSection onOpenModal={handleOpenModal} />
-        <SponsorshipsSection />
+        <SponsorshipsSection 
+          onOpenPlatform={() => setViewPlatform(true)} 
+          onOpenRegisterCompany={() => handleOpenModal('register_company')} 
+        />
         <CultureBanner />
         <ResponsibleGamingSection onOpenModal={handleOpenModal} />
       </main>

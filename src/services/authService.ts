@@ -10,7 +10,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { COLLECTIONS, DEFAULT_USER_ID } from './firestoreService';
+import { COLLECTIONS, DEFAULT_USER_ID, sanitizeForFirestore } from './firestoreService';
 import { UserSellerProfile, CompanyStartup, UserRoleMode } from '../types/platform';
 
 export interface RegisterAffiliateData {
@@ -399,7 +399,7 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
   };
 
   // Salvar perfil atualizado no Firestore
-  await setDoc(profileRef, profile, { merge: true });
+  await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
 
   return { user, profile };
 }
@@ -512,7 +512,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     createdAt: now
   };
 
-  await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), company, { merge: true });
+  await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), sanitizeForFirestore(company), { merge: true });
 
   // 2. Criar/Atualizar Perfil de Usuário
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
@@ -547,7 +547,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     updatedAt: now
   };
 
-  await setDoc(profileRef, profile, { merge: true });
+  await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
 
   return { user, profile, company };
 }
@@ -576,7 +576,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
     if (!snap.empty) {
       profile = snap.docs[0].data() as UserSellerProfile;
-      await setDoc(profileRef, { ...profile, userId: user.uid }, { merge: true });
+      await setDoc(profileRef, sanitizeForFirestore({ ...profile, userId: user.uid }), { merge: true });
     } else {
       // Criar perfil padrão se não existir
       profile = {
@@ -597,7 +597,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
         activeRoleMode: 'afiliado',
         updatedAt: new Date().toISOString()
       };
-      await setDoc(profileRef, profile);
+      await setDoc(profileRef, sanitizeForFirestore(profile));
     }
   }
 
@@ -630,9 +630,84 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         activeRoleMode: preferredRole || existing.activeRoleMode || 'afiliado',
         updatedAt: new Date().toISOString()
       };
-      await setDoc(profileRef, profile, { merge: true });
+
+      // Se entrou com preferência 'empresa' e não tem companyId, vincular ou criar
+      if (preferredRole === 'empresa') {
+        const companyId = existing.companyId || `comp-${user.uid.slice(0, 10)}`;
+        const companyRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+        const companySnap = await getDoc(companyRef);
+        
+        if (!companySnap.exists()) {
+          const compName = existing.companyName || (user.displayName ? `${user.displayName} Tech` : 'Minha Startup');
+          const slug = compName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+          const logo = user.photoURL || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(compName)}`;
+          
+          const newCompany: CompanyStartup = {
+            id: companyId,
+            name: compName,
+            slug: slug || companyId,
+            tagline: 'Solução inovadora escalável integrada ao ecossistema Techify',
+            logo,
+            bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
+            category: 'SaaS / B2B',
+            description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} na Techify.`,
+            website: 'https://techify.com',
+            email: normalizedEmail,
+            whatsapp: '',
+            totalPlansCount: 0,
+            totalAffiliatesCount: 0,
+            totalSalesVolume: 0,
+            commissionRange: '30% - 50%',
+            verified: true,
+            ownerId: user.uid,
+            docType: 'SEM_CNPJ',
+            hasNoCnpj: true,
+            createdAt: new Date().toISOString()
+          };
+          await setDoc(companyRef, sanitizeForFirestore(newCompany), { merge: true });
+        }
+
+        profile.companyId = companyId;
+        profile.companyName = existing.companyName || (user.displayName ? `${user.displayName} Tech` : 'Minha Startup');
+        profile.hasCompanyProfile = true;
+      }
+
+      await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
     } else {
       const avatar = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+      const compName = user.displayName ? `${user.displayName} Tech` : 'Minha Startup';
+      const companyId = `comp-${user.uid.slice(0, 10)}`;
+
+      if (preferredRole === 'empresa') {
+        const companyRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+        const slug = compName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+        const logo = user.photoURL || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(compName)}`;
+        
+        const newCompany: CompanyStartup = {
+          id: companyId,
+          name: compName,
+          slug: slug || companyId,
+          tagline: 'Solução inovadora escalável integrada ao ecossistema Techify',
+          logo,
+          bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
+          category: 'SaaS / B2B',
+          description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} na Techify.`,
+          website: 'https://techify.com',
+          email: normalizedEmail,
+          whatsapp: '',
+          totalPlansCount: 0,
+          totalAffiliatesCount: 0,
+          totalSalesVolume: 0,
+          commissionRange: '30% - 50%',
+          verified: true,
+          ownerId: user.uid,
+          docType: 'SEM_CNPJ',
+          hasNoCnpj: true,
+          createdAt: new Date().toISOString()
+        };
+        await setDoc(companyRef, sanitizeForFirestore(newCompany), { merge: true });
+      }
+
       profile = {
         userId: user.uid,
         name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário Techify',
@@ -651,9 +726,11 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         hasAffiliateProfile: preferredRole === 'afiliado',
         hasCompanyProfile: preferredRole === 'empresa',
         activeRoleMode: preferredRole,
+        companyId: preferredRole === 'empresa' ? companyId : undefined,
+        companyName: preferredRole === 'empresa' ? compName : undefined,
         updatedAt: new Date().toISOString()
       };
-      await setDoc(profileRef, profile, { merge: true });
+      await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
     }
   } catch (firestoreErr) {
     console.warn('Sincronização Firestore offline ou pendente:', firestoreErr);
@@ -744,7 +821,7 @@ export async function completeAffiliateProfile(
     updatedAt: now
   };
 
-  await setDoc(profileRef, updatedProfile, { merge: true });
+  await setDoc(profileRef, sanitizeForFirestore(updatedProfile), { merge: true });
   return updatedProfile;
 }
 
@@ -817,12 +894,12 @@ export async function completeCompanyProfile(
     commissionRange: companyData.commissionRange || '30% - 50%',
     verified: true,
     ownerId: userId,
-    cnpj: formattedCnpj,
-    cleanCnpj: cleanCnpj,
+    cnpj: formattedCnpj || undefined,
+    cleanCnpj: cleanCnpj || undefined,
     createdAt: now
   };
 
-  await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), company, { merge: true });
+  await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), sanitizeForFirestore(company), { merge: true });
 
   const updatedProfile: UserSellerProfile = {
     userId,
@@ -847,12 +924,12 @@ export async function completeCompanyProfile(
     whatsapp: companyData.whatsapp ? formatPhone(companyData.whatsapp) : (existing?.whatsapp || ''),
     cpf: existing?.cpf,
     cleanCpf: existing?.cleanCpf,
-    cnpj: formattedCnpj,
-    cleanCnpj: cleanCnpj,
+    cnpj: formattedCnpj || existing?.cnpj,
+    cleanCnpj: cleanCnpj || existing?.cleanCnpj,
     updatedAt: now
   };
 
-  await setDoc(profileRef, updatedProfile, { merge: true });
+  await setDoc(profileRef, sanitizeForFirestore(updatedProfile), { merge: true });
 
   return { company, profile: updatedProfile };
 }

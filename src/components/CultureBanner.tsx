@@ -1,8 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Shield, Zap, TrendingUp, Cpu, CheckCircle } from 'lucide-react';
+import { subscribeGlobalPlatformMetrics, GlobalPlatformMetrics } from '../services/firestoreService';
 
 export const CultureBanner: React.FC = () => {
+  const [metrics, setMetrics] = useState<GlobalPlatformMetrics>({
+    totalRegisteredUsers: 1,
+    totalStartups: 0,
+    totalPlans: 0,
+    totalCommissionsGenerated: 0,
+    totalCommissionsPaid: 0,
+    totalGrossSales: 0,
+    totalSalesCount: 0,
+    companies: [],
+    plans: []
+  });
+
+  useEffect(() => {
+    const unsub = subscribeGlobalPlatformMetrics((m) => {
+      setMetrics(m);
+    });
+    return () => unsub();
+  }, []);
+
+  const formatBRL = (val: number) => {
+    return val.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   return (
     <section id="tecnologia" className="py-20 md:py-28 relative bg-[#060A15] border-t border-white/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -59,7 +88,7 @@ export const CultureBanner: React.FC = () => {
           </div>
         </div>
 
-        {/* Banner with ecosystem performance & real-time metrics (No photo) */}
+        {/* Banner with ecosystem performance & real-time metrics */}
         <motion.div 
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -69,36 +98,40 @@ export const CultureBanner: React.FC = () => {
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
             <div className="flex flex-col gap-2">
-              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Volume Total Transacionado</div>
-              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">R$ 142.500.000+</div>
-              <p className="text-xs text-white/60">Processados com split instantâneo e zero fricção de repasse.</p>
+              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Comissões Geradas</div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">
+                {formatBRL(metrics.totalCommissionsGenerated)}
+              </div>
+              <p className="text-xs text-white/60">Calculado em tempo real sobre vendas ativas dos afiliados.</p>
             </div>
 
             <div className="flex flex-col gap-2">
-              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Comissões Pagas a Afiliados</div>
-              <div className="text-3xl sm:text-4xl font-extrabold text-[#D9F22A] font-['Syne']">R$ 48.900.000+</div>
-              <p className="text-xs text-white/60">Liquidados via PIX direto na conta bancária dos vendedores.</p>
+              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Comissões Pagas via PIX</div>
+              <div className="text-3xl sm:text-4xl font-extrabold text-[#D9F22A] font-['Syne']">
+                {formatBRL(metrics.totalCommissionsPaid)}
+              </div>
+              <p className="text-xs text-white/60">Liquidados via PIX direto na chave cadastrada dos parceiros.</p>
             </div>
 
             <div className="flex flex-col gap-2">
-              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Tempo Médio de Repasse</div>
+              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Tempo de Repasse</div>
               <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">&lt; 3 Segundos</div>
-              <p className="text-xs text-white/60">Sem carência de 30 dias: o saldo é liberado assim que o pagamento é aprovado.</p>
+              <p className="text-xs text-white/60">Liquidação imediata D+0 sem carência de 30 dias.</p>
             </div>
           </div>
 
           <div className="mt-8 pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs font-bold text-white/80">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-              <span>+140 Startups Conectadas</span>
+              <span>{metrics.totalStartups} Startups Cadastradas</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-              <span>Comissões Automáticas em D+0</span>
+              <span>{metrics.totalRegisteredUsers} Usuários Conectados</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-              <span>100% Auditável e Transparente</span>
+              <span>100% Sincronizado com Banco Firestore</span>
             </div>
           </div>
         </motion.div>
@@ -106,5 +139,6 @@ export const CultureBanner: React.FC = () => {
     </section>
   );
 };
+
 
 
