@@ -30,7 +30,7 @@ interface CustomCheckoutPageProps {
   onPaymentSuccess?: (transaction: SaleTransaction) => void;
 }
 
-export const MERCADO_PAGO_PUBLIC_KEY = 'APP_USR-f4c1df9a-12c7-41ef-9ad3-54c27fe1d002';
+export const MERCADO_PAGO_PUBLIC_KEY = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-f4c1df9a-12c7-41ef-9ad3-54c27fe1d002';
 export const PLATFORM_CHECKOUT_FEE = 0.99; // 99 centavos cobrados pela plataforma
 
 export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
