@@ -206,7 +206,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setRoleMode('empresa');
       setUserRole('empresa');
       if (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios') {
-        setActiveTab('minha_empresa');
+        setActiveTab('dashboard');
       }
       setLiveToast({
         message: 'Modo Empresa Ativado',
@@ -574,12 +574,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const companyNavItems = [
+    { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
     { id: 'minha_empresa' as PlatformTab, label: 'Minha Startup & Planos', icon: Building2, badge: `${companies.length}` },
-    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
-    { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
+    { id: 'carteira' as PlatformTab, label: 'Carteira & Saques PIX', icon: Wallet },
     { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${transactions.length}` },
     { id: 'equipe' as PlatformTab, label: 'Afiliados & Equipe', icon: Users },
-    { id: 'financeiro' as PlatformTab, label: 'Repasses & Financeiro', icon: Wallet },
+    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
+    { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
     { id: 'database' as PlatformTab, label: 'Banco de Dados', icon: Database, badge: 'Cloud' }
   ];
@@ -646,29 +647,25 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <div className="p-4 m-3 rounded-xl bg-gradient-to-b from-[#0a1222] to-[#060a15] border border-white/10 shadow-md">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/60">
-                  {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'Empresas Ativas'}
+                  {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'Carteira Empresa (PIX)'}
                 </span>
                 <span className="text-[10px] text-[#D9F22A] font-black">D+0</span>
               </div>
               <div className="text-base font-black text-[#D9F22A] font-['Syne']">
-                {roleMode === 'afiliado'
-                  ? `R$ ${userProfile.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                  : `${companies.length} cadastrada(s)`}
+                {`R$ ${userProfile.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
               </div>
 
-              {roleMode === 'afiliado' && (
-                <button
-                  onClick={() => {
-                    setIsWithdrawModalOpen(true);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  disabled={userProfile.availableBalance <= 0}
-                  className="w-full mt-2.5 bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white py-1.5 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-40 disabled:pointer-events-none"
-                >
-                  <Wallet className="w-3 h-3" />
-                  Sacar via PIX
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setIsWithdrawModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                disabled={userProfile.availableBalance <= 0}
+                className="w-full mt-2.5 bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white py-1.5 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <Wallet className="w-3 h-3" />
+                Sacar via PIX
+              </button>
             </div>
           )}
 
@@ -676,7 +673,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           <nav className="p-2 space-y-1 mt-1 max-h-[calc(100vh-280px)] overflow-y-auto">
             {currentNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = activeTab === item.id;
+              const isActive = activeTab === item.id || (item.id === 'carteira' && activeTab === 'financeiro') || (item.id === 'financeiro' && activeTab === 'carteira');
               return (
                 <button
                   key={item.id}
@@ -886,15 +883,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                       <button
                         onClick={() => {
                           setIsUserMenuOpen(false);
-                          if (roleMode === 'afiliado') {
-                            setActiveTab('dashboard');
-                          } else {
-                            setActiveTab('minha_empresa');
-                          }
+                          setActiveTab('dashboard');
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
                       >
-                        Página Inicial
+                        Página Inicial (Dashboard)
                       </button>
 
                       <button
@@ -1149,7 +1142,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
 
-          {activeTab === 'financeiro' && (
+          {(activeTab === 'financeiro' || activeTab === 'carteira') && (
             <FinanceiroView
               roleMode={roleMode}
               userProfile={userProfile}

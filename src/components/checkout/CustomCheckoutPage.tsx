@@ -154,6 +154,39 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     return () => clearInterval(timer);
   }, [isPaid]);
 
+  // Persistência imediata do Código do Afiliado no localStorage ao carregar
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const refUrl = params.get('ref') || params.get('r');
+        if (refUrl && refUrl.trim()) {
+          localStorage.setItem('techify_affiliate_ref', refUrl.trim());
+          console.log('[Checkout] Código de afiliado gravado no localStorage via URL:', refUrl.trim());
+        } else if (affiliateRef && affiliateRef.trim()) {
+          localStorage.setItem('techify_affiliate_ref', affiliateRef.trim());
+        }
+      } catch (err) {
+        console.warn('Erro ao salvar techify_affiliate_ref:', err);
+      }
+    }
+  }, [affiliateRef]);
+
+  // Recupera código do afiliado do localStorage ou prop ou URL
+  const getActiveAffiliateCode = (): string | null => {
+    if (affiliateRef && affiliateRef.trim()) return affiliateRef.trim();
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('techify_affiliate_ref');
+        if (saved && saved.trim()) return saved.trim();
+        const params = new URLSearchParams(window.location.search);
+        const refParam = params.get('ref') || params.get('r');
+        if (refParam && refParam.trim()) return refParam.trim();
+      } catch (e) {}
+    }
+    return null;
+  };
+
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -166,29 +199,38 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     setIsGeneratingPix(true);
 
     try {
+      const activeAffiliate = getActiveAffiliateCode();
+      const cleanDoc = documentNumber.replace(/\D/g, '') || '11144477735';
+      const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
+
       const response = await fetch('/api/payments/pix', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          amount: finalTotal,
+          amount: cleanTotal,
+          total_amount: cleanTotal,
           description: `Compra: ${plan.name} - ${plan.companyName}`,
           payer: {
             email: email.trim() || 'cliente@techify.com',
             name: fullName.trim() || 'Cliente Techify',
-            documentNumber: documentNumber.replace(/\D/g, '') || '11144477735'
+            cpf: cleanDoc,
+            documentNumber: cleanDoc
           },
           planId: plan.id,
+          plan_id: plan.id,
           companyId: plan.companyId,
-          affiliateRef: affiliateRef || null
+          company_id: plan.companyId,
+          affiliateRef: activeAffiliate,
+          affiliate_code: activeAffiliate
         })
       });
 
       if (response.ok) {
         const data = await response.json();
         setPixData({
-          id: String(data.id),
+          id: String(data.payment_id || data.id),
           qr_code: data.qr_code,
           qr_code_base64: data.qr_code_base64,
           ticket_url: data.ticket_url,

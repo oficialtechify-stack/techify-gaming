@@ -56,7 +56,8 @@ export const COLLECTIONS = {
   PROFILES: 'user_profiles',
   AFFILIATE_LINKS: 'affiliate_links',
   TEAM: 'team_members',
-  VERIFICATIONS: 'verification_requests'
+  VERIFICATIONS: 'verification_requests',
+  PLATFORM_FINANCES: 'platform_finances'
 };
 
 export const DEFAULT_USER_ID = 'usr_techify_main';
@@ -553,6 +554,42 @@ export function subscribePlans(callback: (plans: CompanyPlan[]) => void) {
 export const subscribePlatforms = subscribePlans;
 
 /**
+ * Get a Plan by ID or Slug directly from Firestore
+ */
+export async function getCompanyPlanByIdOrSlug(idOrSlug: string): Promise<CompanyPlan | null> {
+  try {
+    const cleanId = idOrSlug.trim();
+    if (!cleanId) return null;
+
+    // 1. Direct doc lookup by ID
+    const planRef = doc(db, COLLECTIONS.PLANS, cleanId);
+    const planSnap = await getDoc(planRef);
+    if (planSnap.exists()) {
+      return { id: planSnap.id, ...(planSnap.data() as Omit<CompanyPlan, 'id'>) };
+    }
+
+    // 2. Lookup across plans by slug, checkoutSlug, or partial ID
+    const q = collection(db, COLLECTIONS.PLANS);
+    const allPlans = await getDocs(q);
+    for (const d of allPlans.docs) {
+      const data = d.data() as CompanyPlan;
+      if (
+        d.id === cleanId ||
+        data.slug === cleanId ||
+        data.checkoutSlug === cleanId ||
+        (data.slug && data.slug.toLowerCase() === cleanId.toLowerCase()) ||
+        (data.name && data.name.toLowerCase().includes(cleanId.toLowerCase()))
+      ) {
+        return { id: d.id, ...data };
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching plan by ID or Slug:', err);
+  }
+  return null;
+}
+
+/**
  * Create a new Plan / Product in Firestore
  */
 export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'id' | 'createdAt'>) {
@@ -781,14 +818,62 @@ export function subscribeSales(callback: (sales: SaleTransaction[]) => void) {
 }
 
 /**
- * Record a New Sale in Firebase Firestore & update balance of the affiliate
+ * Update Platform Global Finances (Checkout Fee R$ 0,99, Withdrawal Fee R$ 2,50)
+ */
+export async function creditPlatformFinances(type: 'checkout' | 'withdrawal', feeAmount: number) {
+  try {
+    const docRef = doc(db, COLLECTIONS.PLATFORM_FINANCES, 'global_summary');
+    const snap = await getDoc(docRef);
+    const now = new Date().toISOString();
+
+    if (snap.exists()) {
+      const data = snap.data();
+      const currentRevenue = data.totalPlatformRevenue || 0;
+      const currentCheckoutFees = data.totalCheckoutFees || 0;
+      const currentWithdrawalFees = data.totalWithdrawalFees || 0;
+      const currentSales = data.totalSalesProcessed || 0;
+      const currentWithdrawals = data.totalWithdrawalsProcessed || 0;
+
+      await updateDoc(docRef, sanitizeForFirestore({
+        totalPlatformRevenue: Number((currentRevenue + feeAmount).toFixed(2)),
+        totalCheckoutFees: type === 'checkout' ? Number((currentCheckoutFees + feeAmount).toFixed(2)) : currentCheckoutFees,
+        totalWithdrawalFees: type === 'withdrawal' ? Number((currentWithdrawalFees + feeAmount).toFixed(2)) : currentWithdrawalFees,
+        totalSalesProcessed: type === 'checkout' ? currentSales + 1 : currentSales,
+        totalWithdrawalsProcessed: type === 'withdrawal' ? currentWithdrawals + 1 : currentWithdrawals,
+        lastUpdated: now
+      }));
+    } else {
+      await setDoc(docRef, sanitizeForFirestore({
+        totalPlatformRevenue: feeAmount,
+        totalCheckoutFees: type === 'checkout' ? feeAmount : 0,
+        totalWithdrawalFees: type === 'withdrawal' ? feeAmount : 0,
+        totalSalesProcessed: type === 'checkout' ? 1 : 0,
+        totalWithdrawalsProcessed: type === 'withdrawal' ? 1 : 0,
+        lastUpdated: now
+      }));
+    }
+  } catch (err) {
+    console.warn('[Platform Finances] Warning updating global summary:', err);
+  }
+}
+
+/**
+ * Record a New Sale in Firebase Firestore & apply 9 days release hold + R$ 0.99 platform fee
  */
 export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransaction, 'id' | 'createdAt'>) {
   const id = `TX-${Math.floor(100000 + Math.random() * 900000)}`;
   const now = new Date();
+  const checkoutFee = 0.99; // Taxa de checkout retida pela plataforma Techify
+  const netCompanyAmount = Number(Math.max(0, saleData.amount - saleData.commissionEarned - checkoutFee).toFixed(2));
+  const availableAt = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000).toISOString(); // Garantia de 9 dias
+
   const fullSale: SaleTransaction = {
     ...saleData,
     id,
+    checkoutFee,
+    netCompanyAmount,
+    releaseStatus: 'pendente',
+    availableAt,
     createdAt: now.toISOString()
   };
 
@@ -796,14 +881,17 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
   const saleRef = doc(db, COLLECTIONS.SALES, id);
   await setDoc(saleRef, sanitizeForFirestore(fullSale));
 
-  // 2. Update Profile Balances (Credit the affiliate or seller)
+  // 2. Credit platform fee in global revenue account
+  await creditPlatformFinances('checkout', checkoutFee);
+
+  // 3. Update Profile Balances (Credit the affiliate/seller into PENDING balance for 9 days)
   const targetUserId = saleData.affiliateId || saleData.sellerId || DEFAULT_USER_ID;
   const profileRef = doc(db, COLLECTIONS.PROFILES, targetUserId);
   const profileSnap = await getDoc(profileRef);
   if (profileSnap.exists()) {
     const current = profileSnap.data() as UserSellerProfile;
     const newTotalEarned = (current.totalEarned || 0) + fullSale.commissionEarned;
-    const newAvailable = (current.availableBalance || 0) + fullSale.commissionEarned;
+    const newPending = (current.pendingBalance || 0) + fullSale.commissionEarned;
     const newCount = (current.totalSalesCount || 0) + 1;
     const target = current.targetGoal || 100000;
     const progress = Math.min(100, (newTotalEarned / target) * 100);
@@ -815,7 +903,7 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
 
     await updateDoc(profileRef, sanitizeForFirestore({
       totalEarned: newTotalEarned,
-      availableBalance: newAvailable,
+      pendingBalance: newPending, // Entra como pendente durante os 9 dias de garantia
       totalSalesCount: newCount,
       partnerLevel: level,
       currentSalesProgress: Number(progress.toFixed(1)),
@@ -823,7 +911,7 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     }));
   }
 
-  // 3. Update Plan total sales
+  // 4. Update Plan total sales
   if (fullSale.platformId) {
     const planRef = doc(db, COLLECTIONS.PLANS, fullSale.platformId);
     const planSnap = await getDoc(planRef);
@@ -835,7 +923,7 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     }
   }
 
-  // 4. Update Company total sales volume
+  // 5. Update Company total sales volume
   if (fullSale.companyId) {
     const compRef = doc(db, COLLECTIONS.COMPANIES, fullSale.companyId);
     const compSnap = await getDoc(compRef);
@@ -847,7 +935,7 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     }
   }
 
-  // 5. Update Affiliation salesCount and totalEarned if exists
+  // 6. Update Affiliation salesCount and totalEarned if exists
   const affId = `aff_${targetUserId}_${fullSale.platformId}`;
   const affRef = doc(db, COLLECTIONS.AFFILIATIONS, affId);
   const affSnap = await getDoc(affRef);
@@ -876,6 +964,7 @@ export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]
     snap.forEach((d) => {
       list.push({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, 'id'>) });
     });
+    list.sort((a, b) => (b.completedAt || b.requestedAt || '').localeCompare(a.completedAt || a.requestedAt || ''));
     callback(list);
   }, (err) => {
     console.error('Firestore withdrawals listener error:', err);
@@ -884,7 +973,58 @@ export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]
 }
 
 /**
- * Request a PIX Cashout in Firebase Firestore
+ * Request Withdrawal via Secure Backend Endpoint (/api/withdrawals/request)
+ */
+export async function requestWithdrawalViaBackend(
+  amount: number,
+  pixKey: string,
+  pixKeyType: string,
+  userId: string = DEFAULT_USER_ID,
+  userName?: string
+): Promise<{ success: boolean; withdrawal: WithdrawalRequest; message?: string }> {
+  const response = await fetch('/api/withdrawals/request', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      amount,
+      pixKey,
+      pixKeyType,
+      userId,
+      userName
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Erro ao processar solicitação de saque no backend');
+  }
+
+  return data;
+}
+
+/**
+ * Trigger 9-day balance release cron manually or scheduled
+ */
+export async function triggerReleaseBalancesCron(): Promise<{ releasedCount: number; message: string }> {
+  const response = await fetch('/api/cron/release-balances', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error('Falha ao acionar rotina de liberação de saldos');
+  }
+
+  return response.json();
+}
+
+/**
+ * Direct Cashout fallback if offline/client-only
  */
 export async function createWithdrawalInFirebase(
   amount: number, 
@@ -896,23 +1036,29 @@ export async function createWithdrawalInFirebase(
   const id = `WTH-${Math.floor(1000 + Math.random() * 9000)}`;
   const now = new Date();
   const formattedDate = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  const feeAmount = 2.50; // Taxa de saque fixa Techify
+  const netAmount = Number(Math.max(0, amount - feeAmount).toFixed(2));
+  const endToEndId = `E31522339${Date.now()}${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
   const newWth: WithdrawalRequest = {
     id,
     userId: userId || DEFAULT_USER_ID,
     userName: userName || INITIAL_USER_PROFILE.name,
     amount,
+    feeAmount,
+    netAmount,
     pixKey,
     pixKeyType,
-    status: 'Concluído',
+    status: 'concluido',
     requestedAt: formattedDate,
-    completedAt: now.toISOString()
+    completedAt: now.toISOString(),
+    endToEndId
   };
 
   // 1. Save withdrawal doc
   await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, id), sanitizeForFirestore(newWth));
 
-  // 2. Decrement available balance
+  // 2. Decrement full amount from available balance
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
   const profileSnap = await getDoc(profileRef);
   if (profileSnap.exists()) {
@@ -923,6 +1069,9 @@ export async function createWithdrawalInFirebase(
       updatedAt: now.toISOString()
     }));
   }
+
+  // 3. Credit R$ 2,50 to platform global account
+  await creditPlatformFinances('withdrawal', feeAmount);
 
   return newWth;
 }

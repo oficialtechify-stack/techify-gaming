@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ActiveModal } from './types';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
@@ -13,11 +13,75 @@ import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
 import { LayoutDashboard } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
+import { getCompanyPlanByIdOrSlug } from './services/firestoreService';
+import { CompanyPlan } from './types/platform';
 
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [viewPlatform, setViewPlatform] = useState<boolean>(false);
   const { isAuthenticated } = useAuth();
+
+  // Direct checkout link state
+  const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
+  const [isLoadingCheckout, setIsLoadingCheckout] = useState<boolean>(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [affiliateRef, setAffiliateRef] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        
+        // 1. Salvar imediatamente o parâmetro ?ref=... no localStorage (techify_affiliate_ref)
+        const refParam = params.get('ref') || params.get('r');
+        if (refParam && refParam.trim()) {
+          localStorage.setItem('techify_affiliate_ref', refParam.trim());
+          setAffiliateRef(refParam.trim());
+          console.log('📌 [Techify App] Código de afiliado salvo no localStorage:', refParam.trim());
+        } else {
+          const stored = localStorage.getItem('techify_affiliate_ref');
+          if (stored) setAffiliateRef(stored);
+        }
+
+        // 2. Detectar se a URL é um link direto de checkout (?checkout=... ou /checkout/...)
+        let targetPlanId: string | null = null;
+        if (params.get('checkout')) targetPlanId = params.get('checkout');
+        else if (params.get('plan')) targetPlanId = params.get('plan');
+        else if (params.get('plano')) targetPlanId = params.get('plano');
+
+        if (!targetPlanId && window.location.pathname.startsWith('/checkout')) {
+          const pathSegments = window.location.pathname.split('/').filter(Boolean);
+          if (pathSegments[1]) targetPlanId = pathSegments[1];
+        }
+
+        if (!targetPlanId && window.location.hash.includes('checkout')) {
+          const hashMatch = window.location.hash.match(/checkout[=/]([a-zA-Z0-9_-]+)/);
+          if (hashMatch && hashMatch[1]) targetPlanId = hashMatch[1];
+        }
+
+        // 3. Se houver link de checkout, carrega a oferta do Firestore
+        if (targetPlanId) {
+          setIsLoadingCheckout(true);
+          setCheckoutError(null);
+          getCompanyPlanByIdOrSlug(targetPlanId).then((plan) => {
+            setIsLoadingCheckout(false);
+            if (plan) {
+              setCheckoutPlan(plan);
+            } else {
+              setCheckoutError(`Não encontramos a oferta para "${targetPlanId}". O link pode estar incorreto ou expirado.`);
+            }
+          }).catch((err) => {
+            console.error('Erro ao buscar plano para checkout:', err);
+            setIsLoadingCheckout(false);
+            setCheckoutError('Erro ao carregar o checkout seguro. Tente novamente.');
+          });
+        }
+      } catch (e) {
+        console.warn('Erro ao processar parâmetros da URL:', e);
+      }
+    }
+  }, []);
 
   const handleOpenModal = (modal: ActiveModal) => {
     setActiveModal(modal);
@@ -30,6 +94,61 @@ function MainApp() {
   const handleLoginSuccess = () => {
     setViewPlatform(true);
   };
+
+  // Se estiver carregando o checkout direto
+  if (isLoadingCheckout) {
+    return (
+      <div className="min-h-screen bg-[#060A15] flex flex-col items-center justify-center p-6 text-white text-center">
+        <div className="w-12 h-12 border-4 border-[#208b68] border-t-transparent rounded-full animate-spin mb-4" />
+        <h2 className="text-xl font-bold font-['Syne']">Carregando Checkout Seguro...</h2>
+        <p className="text-sm text-white/60 mt-1">Ambiente criptografado Mercado Pago & Techify</p>
+      </div>
+    );
+  }
+
+  // Se abriu link direto de checkout e a oferta foi encontrada
+  if (checkoutPlan) {
+    return (
+      <div className="min-h-screen bg-[#060A15] text-white">
+        <CustomCheckoutPage
+          plan={checkoutPlan}
+          affiliateRef={affiliateRef}
+          onBack={() => {
+            setCheckoutPlan(null);
+            if (typeof window !== 'undefined' && window.history) {
+              window.history.replaceState({}, '', '/');
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Se abriu link direto de checkout mas houve erro
+  if (checkoutError) {
+    return (
+      <div className="min-h-screen bg-[#060A15] flex flex-col items-center justify-center p-6 text-white text-center">
+        <div className="p-6 rounded-2xl bg-[#080d1a] border border-red-500/30 max-w-md shadow-2xl">
+          <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-3">
+            <LayoutDashboard className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-bold text-white font-['Syne']">Checkout Indisponível</h2>
+          <p className="text-xs text-white/70 mt-2 leading-relaxed">{checkoutError}</p>
+          <button
+            onClick={() => {
+              setCheckoutError(null);
+              if (typeof window !== 'undefined' && window.history) {
+                window.history.replaceState({}, '', '/');
+              }
+            }}
+            className="mt-5 w-full py-3 bg-[#D9F22A] text-black font-black text-xs uppercase tracking-wider rounded-xl hover:bg-[#c5dc23] transition-all cursor-pointer shadow-lg"
+          >
+            Ir para a Página Inicial
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // If user opens platform or is logged in and wants to see platform
   if (viewPlatform) {

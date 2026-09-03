@@ -91,6 +91,12 @@
       "description": "Transactions and sales recorded in platform",
       "type": "object",
       "properties": {
+        "payment_id": { "type": "string" },
+        "plan_id": { "type": "string" },
+        "affiliate_code": { "type": "string" },
+        "total_amount": { "type": "number" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string" },
         "platformId": { "type": "string" },
         "platformName": { "type": "string" },
         "buyerName": { "type": "string" },
@@ -99,14 +105,13 @@
         "amount": { "type": "number" },
         "commissionEarned": { "type": "number" },
         "method": { "type": "string" },
-        "status": { "type": "string" },
         "sellerId": { "type": "string" },
         "utmSource": { "type": "string" },
         "date": { "type": "string" },
         "time": { "type": "string" },
         "createdAt": { "type": "string" }
       },
-      "required": ["platformName", "buyerName", "amount", "commissionEarned", "method", "status"]
+      "required": ["payment_id", "total_amount", "status", "created_at"]
     },
     "withdrawals": {
       "title": "Withdrawal Request",

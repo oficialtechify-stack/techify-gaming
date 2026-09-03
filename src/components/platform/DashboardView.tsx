@@ -113,15 +113,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="text-center lg:text-left flex flex-col items-center lg:items-start gap-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 text-[11px] font-bold text-[#D9F22A] uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5" />
-              PAINEL REAL DE VENDAS & AFILIADOS
+              {roleMode === 'empresa' ? 'PAINEL DE VENDAS & CARTEIRA DA EMPRESA' : 'PAINEL REAL DE VENDAS & AFILIADOS'}
             </div>
             <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne']">
-              Gestão de Vendas & Comissões B2B
+              {roleMode === 'empresa' ? 'Dashboard & Faturamento da Startup' : 'Gestão de Vendas & Comissões B2B'}
             </h3>
             <p className="text-xs text-white/70 max-w-lg">
               {roleMode === 'afiliado'
                 ? 'Afilie-se a startups parceiras, compartilhe seus links exclusivos e receba comissões automáticas via PIX instantâneo D+0.'
-                : 'Publique suas soluções de software, gerencie sua rede de afiliados e acompanhe seus contratos fechados.'}
+                : 'Acompanhe o faturamento de suas soluções, controle os repasses a afiliados, gerencie o saldo retido e solicite saques via PIX.'}
             </p>
           </div>
 
@@ -234,7 +234,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           className="bg-[#080d1a] border-l-4 border-l-[#D9F22A] border-y border-r border-white/10 rounded-xl p-5 shadow-lg relative overflow-hidden group hover:border-white/20 transition-all"
         >
           <div className="flex items-center justify-between text-white/60 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Volume de Vendas</span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {roleMode === 'empresa' ? 'Faturamento Bruto' : 'Volume de Vendas'}
+            </span>
             <button onClick={() => setShowValues(!showValues)} className="text-white/40 hover:text-white">
               {showValues ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
             </button>
@@ -269,7 +271,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </motion.div>
 
-        {/* Card 3: Suas Comissões Totais */}
+        {/* Card 3: Suas Comissões Totais ou Receita Líquida Empresa */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -277,20 +279,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           className="bg-[#080d1a] border-l-4 border-l-[#D9F22A] border-y border-r border-white/10 rounded-xl p-5 shadow-lg relative overflow-hidden group hover:border-white/20 transition-all"
         >
           <div className="flex items-center justify-between text-white/60 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#D9F22A]">Suas Comissões</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#D9F22A]">
+              {roleMode === 'empresa' ? 'Receita Líquida Empresa' : 'Suas Comissões'}
+            </span>
             <span className="px-2 py-0.5 rounded text-[10px] bg-[#D9F22A]/10 text-[#D9F22A] font-bold">
-              {totalFilteredSalesAmount > 0 ? `${Math.round((totalFilteredCommission / totalFilteredSalesAmount) * 100)}% méd.` : '0%'}
+              {roleMode === 'empresa'
+                ? (totalFilteredSalesAmount > 0 ? `${Math.round((Math.max(0, totalFilteredSalesAmount - totalFilteredCommission - (approvedSalesCount * 0.99)) / totalFilteredSalesAmount) * 100)}% líq.` : '0%')
+                : (totalFilteredSalesAmount > 0 ? `${Math.round((totalFilteredCommission / totalFilteredSalesAmount) * 100)}% méd.` : '0%')}
             </span>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-            {showValues ? `R$ ${totalFilteredCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
+            {showValues ? (
+              roleMode === 'empresa'
+                ? `R$ ${Math.max(0, totalFilteredSalesAmount - totalFilteredCommission - (approvedSalesCount * 0.99)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                : `R$ ${totalFilteredCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            ) : '•••••••'}
           </div>
           <div className="text-[11px] text-white/60 mt-2">
-            Saldo acumulado de vendas
+            {roleMode === 'empresa' ? 'Receita líquida após comissões e taxas Techify' : 'Saldo acumulado de vendas'}
           </div>
         </motion.div>
 
-        {/* Card 4: Saldo Disponível & Saque Rápido */}
+        {/* Card 4: Saldo Disponível & Saque Rápido / Carteira */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -299,7 +309,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         >
           <div>
             <div className="flex items-center justify-between text-white/70 mb-1">
-              <span className="text-xs font-bold uppercase tracking-wider">Disponível p/ Saque</span>
+              <span className="text-xs font-bold uppercase tracking-wider">
+                {roleMode === 'empresa' ? 'Carteira / Saldo PIX' : 'Disponível p/ Saque'}
+              </span>
               <DollarSign className="w-4 h-4 text-[#D9F22A]" />
             </div>
             <div className="text-xl sm:text-2xl font-black text-white">

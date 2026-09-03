@@ -115,6 +115,7 @@ export interface CompanyPlan {
   badge?: string;
   tag?: string;
   slug?: string;
+  checkoutSlug?: string;
   affiliateCode?: string;
   conversionRate?: string;
   specs?: {
@@ -175,6 +176,11 @@ export interface SaleTransaction {
   buyerCompany: string;
   amount: number;
   commissionEarned: number;
+  checkoutFee?: number; // R$ 0.99 taxa da plataforma Techify
+  netCompanyAmount?: number; // amount - commissionEarned - checkoutFee
+  releaseStatus?: 'pendente' | 'disponivel'; // Regra de liberação de 9 dias
+  availableAt?: string; // Data prevista para liberação (data + 9 dias)
+  releasedAt?: string;
   affiliateId?: string;
   affiliateName?: string;
   method: 'PIX' | 'Cartão de Crédito' | 'PicPay' | 'Crypto USDT' | string;
@@ -190,12 +196,27 @@ export interface WithdrawalRequest {
   id: string;
   userId?: string;
   userName?: string;
-  amount: number;
+  amount: number; // Valor total solicitado
+  feeAmount?: number; // R$ 2.50 taxa fixa de saque Pix
+  netAmount?: number; // Valor transferido = amount - feeAmount
   pixKey: string;
   pixKeyType: string;
-  status: 'Concluído' | 'Em Análise' | 'Recusado' | string;
+  status: 'pendente_processamento' | 'concluido' | 'recusado' | 'Concluído' | 'Em Análise' | 'Recusado' | string;
   requestedAt: string;
   completedAt?: string;
+  endToEndId?: string; // ID E2E do PIX Mercado Pago / Bacen
+  mpTransferId?: string;
+  failureReason?: string;
+}
+
+export interface PlatformFinances {
+  id?: string;
+  totalPlatformRevenue: number;
+  totalCheckoutFees: number;
+  totalWithdrawalFees: number;
+  totalSalesProcessed: number;
+  totalWithdrawalsProcessed: number;
+  lastUpdated: string;
 }
 
 export interface UserSellerProfile {
@@ -316,6 +337,7 @@ export interface TeamMember {
 
 export type PlatformTab = 
   | 'dashboard' 
+  | 'carteira'
   | 'meu_perfil'
   | 'vitrine' 
   | 'minhas_afiliacoes'
