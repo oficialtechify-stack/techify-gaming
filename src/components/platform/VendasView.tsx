@@ -28,24 +28,27 @@ export const VendasView: React.FC<VendasViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedTxDetail, setSelectedTxDetail] = useState<SaleTransaction | null>(null);
 
-  const filteredTransactions = transactions.filter(t => {
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+
+  const filteredTransactions = safeTransactions.filter(t => {
+    if (!t) return false;
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       return (
-        t.id.toLowerCase().includes(q) ||
-        t.platformName.toLowerCase().includes(q) ||
-        t.buyerName.toLowerCase().includes(q) ||
-        t.buyerCompany.toLowerCase().includes(q) ||
-        t.buyerEmail.toLowerCase().includes(q)
+        (t.id || '').toLowerCase().includes(q) ||
+        (t.platformName || '').toLowerCase().includes(q) ||
+        (t.buyerName || '').toLowerCase().includes(q) ||
+        (t.buyerCompany || '').toLowerCase().includes(q) ||
+        (t.buyerEmail || '').toLowerCase().includes(q)
       );
     }
     return true;
   });
 
-  const totalCommissionsFiltered = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? t.commissionEarned : 0), 0);
-  const totalVolumeFiltered = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? t.amount : 0), 0);
-  const totalCompanyNet = totalVolumeFiltered - totalCommissionsFiltered;
+  const totalCommissionsFiltered = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? (Number(t.commissionEarned ?? (t as any)?.commissionValue) || 0) : 0), 0);
+  const totalVolumeFiltered = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? (Number(t.amount) || 0) : 0), 0);
+  const totalCompanyNet = Math.max(0, totalVolumeFiltered - totalCommissionsFiltered);
 
   return (
     <div className="flex flex-col gap-6" id="techify-vendas-view">
@@ -84,7 +87,7 @@ export const VendasView: React.FC<VendasViewProps> = ({
             {roleMode === 'empresa' ? 'Faturamento Bruto' : 'Volume Bruto Vendido'}
           </span>
           <span className="text-xl font-black text-white font-['Syne'] mt-1 block">
-            R$ {totalVolumeFiltered.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {(Number(totalVolumeFiltered) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </span>
         </div>
         <div className="bg-[#080d1a] border border-[#D9F22A]/30 p-4 rounded-xl bg-[#D9F22A]/5">
@@ -92,7 +95,7 @@ export const VendasView: React.FC<VendasViewProps> = ({
             {roleMode === 'empresa' ? 'Receita Líquida Retida' : 'Comissões Acumuladas'}
           </span>
           <span className="text-xl font-black text-[#D9F22A] font-['Syne'] mt-1 block">
-            R$ {(roleMode === 'empresa' ? totalCompanyNet : totalCommissionsFiltered).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {(Number(roleMode === 'empresa' ? totalCompanyNet : totalCommissionsFiltered) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </span>
         </div>
       </div>
@@ -174,11 +177,11 @@ export const VendasView: React.FC<VendasViewProps> = ({
                     </td>
 
                     <td className="py-4 px-4 font-bold text-white">
-                      R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(Number(tx.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
 
                     <td className="py-4 px-4 font-black text-[#D9F22A]">
-                      + R$ {tx.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      + R$ {(Number(tx.commissionEarned ?? (tx as any)?.commissionValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
 
                     <td className="py-4 px-4 text-center">
@@ -247,11 +250,11 @@ export const VendasView: React.FC<VendasViewProps> = ({
               </div>
               <div className="flex justify-between border-b border-white/5 pb-2">
                 <span className="text-white/50">Valor Total:</span>
-                <span className="font-bold text-white">R$ {selectedTxDetail.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-bold text-white">R$ {(Number(selectedTxDetail.amount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between border-b border-white/5 pb-2">
-                <span className="text-white/50">Sua Comissão ({selectedTxDetail.status}):</span>
-                <span className="font-black text-[#D9F22A]">R$ {selectedTxDetail.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-white/50">Sua Comissão ({selectedTxDetail.status || 'Pendente'}):</span>
+                <span className="font-black text-[#D9F22A]">R$ {(Number(selectedTxDetail.commissionEarned ?? (selectedTxDetail as any)?.commissionValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-white/50">Pagamento:</span>

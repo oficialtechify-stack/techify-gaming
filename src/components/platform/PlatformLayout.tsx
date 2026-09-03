@@ -168,6 +168,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Role Security & Tab Guard
   useEffect(() => {
+    if (userRole && userRole !== roleMode) {
+      setRoleMode(userRole);
+    }
+  }, [userRole]);
+
+  useEffect(() => {
     if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
       setActiveTab('dashboard');
     } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios')) {
@@ -515,7 +521,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Handle withdrawal
   const handleWithdraw = async (amount: number, pixKey: string, pixKeyType: string) => {
     try {
-      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, userProfile.name);
+      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, userProfile?.name || 'Usuário Techify');
       setLiveToast({
         message: 'Saque PIX D+0 processado com sucesso!',
         sub: `Chave ${pixKey} (${pixKeyType})`,
@@ -652,7 +658,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 <span className="text-[10px] text-[#D9F22A] font-black">D+0</span>
               </div>
               <div className="text-base font-black text-[#D9F22A] font-['Syne']">
-                {`R$ ${userProfile.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                {`R$ ${(userProfile?.availableBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
               </div>
 
               <button
@@ -660,7 +666,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setIsWithdrawModalOpen(true);
                   setIsMobileMenuOpen(false);
                 }}
-                disabled={userProfile.availableBalance <= 0}
+                disabled={(userProfile?.availableBalance ?? 0) <= 0}
                 className="w-full mt-2.5 bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white py-1.5 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-40 disabled:pointer-events-none"
               >
                 <Wallet className="w-3 h-3" />
@@ -836,8 +842,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 title="Menu do Usuário"
               >
                 <img
-                  src={userProfile.avatar}
-                  alt={userProfile.name}
+                  src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Techify'}
+                  alt={userProfile?.name || 'Usuário'}
                   className="w-8 h-8 rounded-full object-cover border border-white/20"
                 />
               </button>
@@ -853,16 +859,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                     {/* Header User Card with Avatar, Name & Email */}
                     <div className="flex items-center gap-3 p-2.5 bg-[#232730] rounded-xl mb-2">
                       <img
-                        src={userProfile.avatar}
-                        alt={userProfile.name}
+                        src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Techify'}
+                        alt={userProfile?.name || 'Usuário'}
                         className="w-10 h-10 rounded-full object-cover border border-white/20 flex-shrink-0"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-bold text-white truncate">
-                          {userProfile.name}
+                          {userProfile?.name || 'Usuário Techify'}
                         </div>
                         <div className="text-[11px] text-white/50 truncate">
-                          {userProfile.email || 'rickmarketing81@gmail.com'}
+                          {userProfile?.email || 'contato@techify.com'}
                         </div>
                         <div className="mt-1">
                           <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
@@ -1204,10 +1210,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         isOpen={isRegisterAffiliateModalOpen}
         onClose={() => setIsRegisterAffiliateModalOpen(false)}
         onComplete={handleCompleteAffiliateProfile}
-        initialName={userProfile.name}
-        initialPixKey={userProfile.pixKey}
-        initialPixType={userProfile.pixKeyType}
-        initialWhatsapp={userProfile.whatsapp}
+        initialName={userProfile?.name || ''}
+        initialPixKey={userProfile?.pixKey || ''}
+        initialPixType={userProfile?.pixKeyType || 'CPF'}
+        initialWhatsapp={userProfile?.whatsapp || ''}
       />
 
       <CreateCompanyModal

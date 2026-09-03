@@ -90,6 +90,7 @@ export interface CompanyPlan {
   companyLogo: string;
   category: string;
   name: string;
+  tagline?: string;
   description: string;
   priceSetup: number;
   priceMonthly: number;
@@ -136,22 +137,27 @@ export interface UserAffiliation {
   id: string;
   userId: string;
   userName: string;
+  affiliateName?: string;
   userEmail: string;
   companyId: string;
   companyName: string;
   companyLogo: string;
   planId: string;
   planName: string;
+  platformName?: string;
   priceSetup: number;
   commissionPercentage: number;
   commissionValue: number;
   affiliateCode: string;
   affiliateLink: string;
   clicks: number;
+  clicksCount?: number;
   salesCount: number;
   totalEarned: number;
+  totalCommissionEarned?: number;
   status: 'Ativo' | 'Pendente';
   createdAt: string;
+  affiliatedAt?: string;
 }
 
 export interface PaymentMethodStat {
@@ -172,6 +178,7 @@ export interface SaleTransaction {
   platformId: string; // plan id
   platformName: string; // plan name
   buyerName: string;
+  customerName?: string;
   buyerEmail: string;
   buyerCompany: string;
   amount: number;
@@ -190,6 +197,7 @@ export interface SaleTransaction {
   date: string;
   time: string;
   createdAt?: string;
+  timestamp?: string;
 }
 
 export interface WithdrawalRequest {
@@ -220,6 +228,7 @@ export interface PlatformFinances {
 }
 
 export interface UserSellerProfile {
+  id?: string;
   userId?: string;
   name: string;
   firstName?: string;

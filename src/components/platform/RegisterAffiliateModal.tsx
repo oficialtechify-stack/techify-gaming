@@ -21,7 +21,18 @@ interface RegisterAffiliateModalProps {
   onClose: () => void;
   userName?: string;
   userEmail?: string;
-  onSuccess: (data: {
+  initialName?: string;
+  initialPixKey?: string;
+  initialPixType?: string;
+  initialWhatsapp?: string;
+  onSuccess?: (data: {
+    name: string;
+    cpf: string;
+    pixKey: string;
+    pixKeyType: string;
+    whatsapp?: string;
+  }) => Promise<void>;
+  onComplete?: (data: {
     name: string;
     cpf: string;
     pixKey: string;
@@ -35,13 +46,18 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
   onClose,
   userName = '',
   userEmail = '',
-  onSuccess
+  initialName,
+  initialPixKey = '',
+  initialPixType = 'CPF',
+  initialWhatsapp = '',
+  onSuccess,
+  onComplete
 }) => {
-  const [name, setName] = useState(userName);
+  const [name, setName] = useState(initialName || userName);
   const [cpf, setCpf] = useState('');
-  const [pixKey, setPixKey] = useState('');
-  const [pixKeyType, setPixKeyType] = useState('CPF');
-  const [whatsapp, setWhatsapp] = useState('');
+  const [pixKey, setPixKey] = useState(initialPixKey);
+  const [pixKeyType, setPixKeyType] = useState(initialPixType);
+  const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
   const [acceptedTerms, setAcceptedTerms] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,13 +116,16 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onSuccess({
-        name: name.trim(),
-        cpf: cpf.trim(),
-        pixKey: pixKey.trim(),
-        pixKeyType,
-        whatsapp: whatsapp.trim()
-      });
+      const callback = onSuccess || onComplete;
+      if (callback) {
+        await callback({
+          name: name.trim(),
+          cpf: cpf.trim(),
+          pixKey: pixKey.trim(),
+          pixKeyType,
+          whatsapp: whatsapp.trim()
+        });
+      }
       onClose();
     } catch (err: any) {
       console.error('Erro ao registrar afiliado:', err);

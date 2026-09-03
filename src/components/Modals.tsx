@@ -288,6 +288,8 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
     activeModal === 'register_company' || 
     activeModal === 'forgot_password';
 
+  if (!activeModal) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl bg-[#080d1a] border border-white/10 rounded-3xl p-5 sm:p-8 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">

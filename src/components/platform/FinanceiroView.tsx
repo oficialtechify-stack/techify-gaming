@@ -268,7 +268,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
 
           <button
             onClick={onOpenWithdraw}
-            disabled={userProfile.availableBalance < 50}
+            disabled={(userProfile?.availableBalance ?? 0) < 50}
             className="bg-[#D9F22A] hover:bg-[#c8e217] disabled:opacity-40 text-[#060A15] font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <ArrowUpRight className="w-4 h-4" />
@@ -295,7 +295,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             </div>
           </div>
           <div className="text-3xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-            R$ {userProfile.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {(userProfile?.availableBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
           <span className="text-[11px] text-white/50 block mt-2">
             Liberado após o período de 9 dias (Saque imediato via Pix)
@@ -311,7 +311,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             </div>
           </div>
           <div className="text-3xl font-black text-amber-400 font-['Syne'] tracking-tight">
-            R$ {userProfile.pendingBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {(userProfile?.pendingBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
           <span className="text-[11px] text-white/50 block mt-2">
             Período de garantia e proteção do consumidor contra estornos
@@ -327,7 +327,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             </div>
           </div>
           <div className="text-3xl font-black text-white font-['Syne'] tracking-tight">
-            R$ {userProfile.totalEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {(userProfile?.totalEarned ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
           <span className="text-[11px] text-white/50 block mt-2">
             Acumulado histórico como Afiliado Techify
@@ -351,15 +351,15 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
           <div className="space-y-3 text-xs bg-[#050811] p-4 rounded-xl border border-white/10">
             <div className="flex justify-between">
               <span className="text-white/50">Titular da Conta:</span>
-              <span className="font-bold text-white">{userProfile.name}</span>
+              <span className="font-bold text-white">{userProfile?.name || 'Titular da Conta'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-white/50">Tipo de Chave:</span>
-              <span className="font-bold text-white">{userProfile.pixKeyType || 'CPF'}</span>
+              <span className="font-bold text-white">{userProfile?.pixKeyType || 'CPF'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-white/50">Chave PIX:</span>
-              <span className="font-bold text-[#D9F22A] font-mono">{userProfile.pixKey || 'Não cadastrada'}</span>
+              <span className="font-bold text-[#D9F22A] font-mono">{userProfile?.pixKey || 'Não cadastrada'}</span>
             </div>
           </div>
         </div>

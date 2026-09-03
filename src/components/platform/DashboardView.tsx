@@ -68,17 +68,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   // Filter transactions based on filters
-  const filteredTransactions = transactions.filter(t => {
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  const safePlatforms = Array.isArray(platforms) ? platforms : [];
+  const safePaymentStats = Array.isArray(paymentStats) ? paymentStats : [];
+
+  const filteredTransactions = safeTransactions.filter(t => {
+    if (!t) return false;
     if (selectedProductFilter !== 'all' && t.platformId !== selectedProductFilter) return false;
     if (selectedTypeFilter !== 'all' && t.status !== selectedTypeFilter) return false;
     return true;
   });
 
-  const totalFilteredSalesAmount = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? t.amount : 0), 0);
-  const totalFilteredCommission = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? t.commissionEarned : 0), 0);
+  const totalFilteredSalesAmount = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? (Number(t.amount) || 0) : 0), 0);
+  const totalFilteredCommission = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? (Number(t.commissionEarned ?? (t as any)?.commissionValue) || 0) : 0), 0);
   const approvedSalesCount = filteredTransactions.filter(t => t.status === 'Aprovado').length;
 
-  const latestSale = transactions[0];
+  const latestSale = safeTransactions.length > 0 ? safeTransactions[0] : null;
 
   return (
     <div className="flex flex-col gap-6" id="techify-dashboard-view">
@@ -96,15 +101,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-white tracking-wide truncate">
-                  {latestSale ? `Última Venda: ${latestSale.method}` : 'Sistema de Afiliados Conectado'}
+                  {latestSale ? `Última Venda: ${latestSale.method || 'PIX'}` : 'Sistema de Afiliados Conectado'}
                 </span>
-                <span className="text-[10px] text-white/50 uppercase">{latestSale ? latestSale.time : 'Online'}</span>
+                <span className="text-[10px] text-white/50 uppercase">{latestSale ? (latestSale.time || 'Recente') : 'Online'}</span>
               </div>
               <p className="text-xs text-white/70 truncate">
-                {latestSale ? `${latestSale.platformName} (${latestSale.buyerCompany})` : (platforms.length > 0 ? `${platforms.length} plataformas ativas no catálogo` : 'Cadastre sua primeira plataforma para começar')}
+                {latestSale ? `${latestSale.platformName || 'Plataforma'} (${latestSale.buyerCompany || 'Empresa'})` : (safePlatforms.length > 0 ? `${safePlatforms.length} plataformas ativas no catálogo` : 'Cadastre sua primeira plataforma para começar')}
               </p>
               <div className="text-sm font-black text-[#D9F22A] mt-0.5">
-                {latestSale ? `Comissão creditada: R$ ${latestSale.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Comissões de 30% a 50% via PIX D+0'}
+                {latestSale ? `Comissão creditada: R$ ${(Number(latestSale.commissionEarned ?? (latestSale as any)?.commissionValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Comissões de 30% a 50% via PIX D+0'}
               </div>
             </div>
           </div>
@@ -190,7 +195,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8 md:max-w-[200px] truncate"
             >
               <option value="all">Produtos: Todas as Plataformas</option>
-              {platforms.map(p => (
+              {safePlatforms.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
@@ -242,7 +247,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-white font-['Syne'] tracking-tight">
-            {showValues ? `R$ ${totalFilteredSalesAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
+            {showValues ? `R$ ${(Number(totalFilteredSalesAmount) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-[#D9F22A] font-bold mt-2">
             <TrendingUp className="w-3.5 h-3.5" />
@@ -267,7 +272,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {showValues ? approvedSalesCount : '••••'}
           </div>
           <div className="text-[11px] text-white/50 mt-2">
-            Ticket médio: R$ {(approvedSalesCount > 0 ? (totalFilteredSalesAmount / approvedSalesCount) : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            Ticket médio: R$ {(approvedSalesCount > 0 && totalFilteredSalesAmount > 0 ? (totalFilteredSalesAmount / approvedSalesCount) : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
         </motion.div>
 
@@ -291,8 +296,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="text-2xl sm:text-3xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
             {showValues ? (
               roleMode === 'empresa'
-                ? `R$ ${Math.max(0, totalFilteredSalesAmount - totalFilteredCommission - (approvedSalesCount * 0.99)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                : `R$ ${totalFilteredCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                ? `R$ ${(Math.max(0, (totalFilteredSalesAmount || 0) - (totalFilteredCommission || 0) - (approvedSalesCount * 0.99))).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                : `R$ ${(Number(totalFilteredCommission) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
             ) : '•••••••'}
           </div>
           <div className="text-[11px] text-white/60 mt-2">
@@ -315,7 +320,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <DollarSign className="w-4 h-4 text-[#D9F22A]" />
             </div>
             <div className="text-xl sm:text-2xl font-black text-white">
-              {showValues ? `R$ ${userProfile.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
+              {showValues ? `R$ ${(Number(userProfile?.availableBalance) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
             </div>
           </div>
           <button
@@ -355,7 +360,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {paymentStats.map((item, idx) => (
+                {safePaymentStats.map((item, idx) => (
                   <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-3.5 flex items-center gap-3 font-bold text-white">
                       {/* Icon */}
@@ -374,7 +379,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 text-right font-bold text-white">
-                      {showValues ? `R$ ${item.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
+                      {showValues ? `R$ ${(Number(item.totalValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
                     </td>
                   </tr>
                 ))}
@@ -452,11 +457,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onClick={() => setActiveTab('vitrine')}
             className="text-xs font-bold text-[#D9F22A] hover:underline flex items-center gap-1 cursor-pointer"
           >
-            Ver catálogo completo ({platforms.length}) →
+            Ver catálogo completo ({safePlatforms.length}) →
           </button>
         </div>
 
-        {platforms.length === 0 ? (
+        {safePlatforms.length === 0 ? (
           <div className="text-center py-10 px-4 bg-[#050811] rounded-xl border border-white/5">
             <Layers className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
             <h4 className="text-sm font-bold text-white">Nenhuma startup ou plano cadastrado ainda</h4>
@@ -474,7 +479,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {platforms.slice(0, 3).map((product) => (
+            {safePlatforms.slice(0, 3).map((product) => (
               <div
                 key={product.id}
                 className="bg-[#050811] border border-white/10 hover:border-[#D9F22A]/50 rounded-xl p-5 flex flex-col justify-between gap-4 transition-all duration-300 group relative overflow-hidden"
@@ -482,15 +487,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-[#D9F22A]/10 text-[#D9F22A] border border-[#D9F22A]/30">
-                      {product.category}
+                      {product.category || 'Geral'}
                     </span>
-                    <span className="text-[11px] font-bold text-white/60">{product.badge}</span>
+                    <span className="text-[11px] font-bold text-white/60">{product.badge || ''}</span>
                   </div>
                   <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">
                     {product.name}
                   </h4>
                   <p className="text-xs text-white/70 line-clamp-2 mt-1.5 leading-relaxed">
-                    {product.description}
+                    {product.description || ''}
                   </p>
                 </div>
 
@@ -498,7 +503,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div>
                     <span className="text-[10px] text-white/40 uppercase block">Comissão Direta</span>
                     <span className="text-base font-black text-[#D9F22A]">
-                      R$ {product.commissionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(Number(product.commissionValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                   <button

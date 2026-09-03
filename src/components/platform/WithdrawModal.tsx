@@ -15,9 +15,10 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   userProfile,
   onWithdraw
 }) => {
-  const [amount, setAmount] = useState<number>(userProfile.availableBalance >= 50 ? Math.min(1000, userProfile.availableBalance) : 50);
-  const [pixKey, setPixKey] = useState<string>(userProfile.pixKey || userProfile.cpf || userProfile.email || '');
-  const [pixKeyType, setPixKeyType] = useState<string>(userProfile.pixKeyType || 'CPF');
+  const availableBalance = userProfile?.availableBalance ?? 0;
+  const [amount, setAmount] = useState<number>(availableBalance >= 50 ? Math.min(1000, availableBalance) : 50);
+  const [pixKey, setPixKey] = useState<string>(userProfile?.pixKey || userProfile?.cpf || userProfile?.email || '');
+  const [pixKeyType, setPixKeyType] = useState<string>(userProfile?.pixKeyType || 'CPF');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [completedWithdrawal, setCompletedWithdrawal] = useState<WithdrawalRequest | null>(null);
@@ -36,8 +37,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
       return;
     }
 
-    if (amount > userProfile.availableBalance) {
-      setErrorMessage(`Saldo disponível insuficiente. Seu saldo é de R$ ${userProfile.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
+    if (amount > availableBalance) {
+      setErrorMessage(`Saldo disponível insuficiente. Seu saldo é de R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
       return;
     }
 
@@ -53,8 +54,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         amount,
         pixKey.trim(),
         pixKeyType,
-        userProfile.id || 'usr_techify_main',
-        userProfile.name
+        userProfile?.userId || userProfile?.id || 'usr_techify_main',
+        userProfile?.name || 'Usuário Techify'
       );
 
       if (result.success && result.withdrawal) {
@@ -152,7 +153,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 <span className="text-[11px] text-white/40">Garantia de 9 dias já liberada</span>
               </div>
               <span className="text-lg font-black text-[#D9F22A]">
-                R$ {userProfile.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
 
@@ -167,7 +168,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 <input
                   type="number"
                   min="50"
-                  max={userProfile.availableBalance}
+                  max={availableBalance}
                   step="1"
                   required
                   value={amount || ''}
@@ -177,7 +178,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 />
                 <button
                   type="button"
-                  onClick={() => setAmount(userProfile.availableBalance)}
+                  onClick={() => setAmount(availableBalance)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase font-bold text-[#D9F22A] bg-[#D9F22A]/10 px-2.5 py-1 rounded cursor-pointer hover:bg-[#D9F22A]/20"
                 >
                   Máximo
@@ -246,7 +247,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
             <button
               type="submit"
-              disabled={isProcessing || amount < 50 || amount > userProfile.availableBalance}
+              disabled={isProcessing || amount < 50 || amount > availableBalance}
               className="mt-2 w-full bg-[#D9F22A] disabled:opacity-50 hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 px-6 rounded-full transition-all text-xs uppercase tracking-widest cursor-pointer shadow-[0_0_20px_rgba(217,242,42,0.3)] flex items-center justify-center gap-2"
             >
               {isProcessing ? (

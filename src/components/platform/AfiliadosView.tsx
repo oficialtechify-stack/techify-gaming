@@ -35,11 +35,13 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
   // Commission Calculator state
   const [simulatedSalesCount, setSimulatedSalesCount] = useState<number>(3);
 
-  const selectedProduct = platforms.find(p => p.id === selectedProductId) || platforms[0] || {
+  const selectedProduct: CompanyPlan = platforms.find(p => p.id === selectedProductId) || platforms[0] || {
     id: 'custom',
+    companyId: 'comp_default',
+    companyName: 'Techify Platforms',
+    companyLogo: '',
+    bannerImage: '',
     name: 'Cadastre uma plataforma',
-    slug: 'techify-platform',
-    tag: 'Novo',
     category: 'Geral',
     priceSetup: 20000,
     priceMonthly: 3000,
@@ -48,14 +50,13 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
     recurrentCommission: 15,
     description: '',
     features: [],
-    specs: { latency: '< 30ms', uptime: '99.99%', compliance: 'OK', integrationTime: '24h' },
-    activeSellersCount: 0,
     totalSales: 0,
-    conversionRate: '0%',
-    affiliateCode: 'TECH-001'
+    status: 'Ativo'
   };
 
-  const generatedAffiliateUrl = `https://techifygaming.com/checkout/${selectedProduct.slug || 'checkout'}?ref=${selectedProduct.affiliateCode || 'TECH'}&utm_source=${utmSource}&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`;
+  const selectedSlug = (selectedProduct as any).slug || selectedProduct.id || 'checkout';
+  const selectedCode = (selectedProduct as any).affiliateCode || 'TECH';
+  const generatedAffiliateUrl = `https://techifygaming.com/checkout/${selectedSlug}?ref=${selectedCode}&utm_source=${utmSource}&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedAffiliateUrl);
@@ -238,7 +239,7 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#D9F22A]" />
                 <h3 className="text-lg font-bold text-white font-['Syne']">
-                  Seu Nível: {userProfile.partnerLevel}
+                  Seu Nível: {userProfile?.partnerLevel || 'Afiliado Starter'}
                 </h3>
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#D9F22A] text-[#060A15]">

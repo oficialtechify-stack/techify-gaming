@@ -16,6 +16,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
 import { getCompanyPlanByIdOrSlug } from './services/firestoreService';
 import { CompanyPlan } from './types/platform';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -153,7 +154,9 @@ function MainApp() {
   // If user opens platform or is logged in and wants to see platform
   if (viewPlatform) {
     return (
-      <PlatformLayout onBackToHome={() => setViewPlatform(false)} />
+      <ErrorBoundary fallbackTitle="Erro ao carregar o Painel Techify" onReset={() => setViewPlatform(false)}>
+        <PlatformLayout onBackToHome={() => setViewPlatform(false)} />
+      </ErrorBoundary>
     );
   }
 
@@ -216,8 +219,10 @@ function MainApp() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <ErrorBoundary fallbackTitle="Erro ao carregar ecossistema Techify">
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
