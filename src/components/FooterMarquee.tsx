@@ -13,7 +13,7 @@ export const FooterMarquee: React.FC<FooterMarqueeProps> = ({ onOpenModal }) => 
 
   return (
     <footer className="relative bg-[#060A15] border-t border-white/5 pt-12 pb-10 overflow-hidden">
-      {/* Top sliding marquee banner with Techify Gaming branding */}
+      {/* Top sliding marquee banner with LeadsPay branding */}
       <div className="w-full overflow-hidden mb-12 py-5 border-y border-white/5 bg-[#040710]/70 flex">
         <div className="animate-marquee flex items-center gap-16 whitespace-nowrap opacity-90 select-none">
           {[1, 2, 3, 4, 5, 6].map((idx) => (
@@ -28,11 +28,11 @@ export const FooterMarquee: React.FC<FooterMarqueeProps> = ({ onOpenModal }) => 
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main Footer Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 pb-12 border-b border-white/10">
-          {/* Col 1: Techify Description & Security */}
+          {/* Col 1: LeadsPay Description & Security */}
           <div className="lg:col-span-4 flex flex-col items-start gap-4">
             <TechifyLogo size="sm" />
             <p className="text-xs text-white/70 leading-relaxed max-w-sm mt-1">
-              A Techify é a infraestrutura comercial e marketplace de startups que conecta produtos de tecnologia e SaaS a afiliados de alta performance com repasses instantâneos via PIX D+0.
+              O LeadsPay é a infraestrutura comercial e marketplace de startups que conecta produtos de tecnologia e SaaS a afiliados de alta performance com repasses instantâneos via PIX D+0.
             </p>
             <div className="flex items-center gap-2 text-[11px] text-[#D9F22A] font-bold uppercase tracking-wider bg-[#D9F22A]/10 px-3 py-1.5 rounded-lg border border-[#D9F22A]/20">
               <span>✦ Split em Tempo Real & PIX D+0</span>
@@ -91,7 +91,7 @@ export const FooterMarquee: React.FC<FooterMarqueeProps> = ({ onOpenModal }) => 
                   onClick={() => onOpenModal('about')}
                   className="hover:text-[#D9F22A] transition-colors text-left cursor-pointer"
                 >
-                  Sobre a Techify
+                  Sobre o LeadsPay
                 </button>
               </li>
               <li>
@@ -150,7 +150,7 @@ export const FooterMarquee: React.FC<FooterMarqueeProps> = ({ onOpenModal }) => 
         {/* Bottom Bar */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-white/50 text-center sm:text-left">
-            TECHIFY GAMING S/A CNPJ: 52.639.845/0001-25 Todos os direitos reservados.
+            LEADSPAY PAGAMENTOS S/A CNPJ: 52.639.845/0001-25 Todos os direitos reservados.
           </p>
 
           <button

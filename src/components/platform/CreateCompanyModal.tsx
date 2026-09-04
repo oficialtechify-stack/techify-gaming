@@ -77,7 +77,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       logo: logo.trim() || defaultLogo,
       bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
       category: category as any,
-      description: description.trim() || `Empresa ${name.trim()} integrada ao ecossistema Techify.`,
+      description: description.trim() || `Empresa ${name.trim()} integrada ao ecossistema LeadsPay.`,
       website: website.trim() || 'https://suaempresa.com',
       email: email.trim() || userProfile?.email || 'contato@empresa.com',
       whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : (userProfile?.phone ? formatPhone(userProfile.phone) : '+55 11 99999-9999'),

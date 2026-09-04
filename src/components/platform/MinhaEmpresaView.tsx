@@ -140,10 +140,10 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
     setTimeout(() => setCopiedToast(null), 3000);
   };
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://techify.app';
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
 
   return (
-    <div className="flex flex-col gap-6" id="techify-minha-empresa-view">
+    <div className="flex flex-col gap-6" id="leadspay-minha-empresa-view">
       {/* Verification Block Warning Modal */}
       {verificationWarningModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -934,7 +934,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                       {companyAffiliations.map(aff => (
                         <tr key={aff.id} className="hover:bg-white/5 transition-colors">
                           <td className="py-3.5 px-4 font-bold text-white">
-                            {aff.affiliateName || 'Afiliado Techify'}
+                            {aff.affiliateName || 'Afiliado LeadsPay'}
                           </td>
                           <td className="py-3.5 px-4 text-[#D9F22A] font-bold">
                             {aff.platformName}

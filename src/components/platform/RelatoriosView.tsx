@@ -37,7 +37,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({ transactions = [
   });
 
   return (
-    <div className="flex flex-col gap-6" id="techify-relatorios-view">
+    <div className="flex flex-col gap-6" id="leadspay-relatorios-view">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
           Relatórios & Performance de Tráfego

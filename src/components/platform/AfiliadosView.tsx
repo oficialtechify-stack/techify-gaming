@@ -38,7 +38,7 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
   const selectedProduct: CompanyPlan = platforms.find(p => p.id === selectedProductId) || platforms[0] || {
     id: 'custom',
     companyId: 'comp_default',
-    companyName: 'Techify Platforms',
+    companyName: 'LeadsPay Platforms',
     companyLogo: '',
     bannerImage: '',
     name: 'Cadastre uma plataforma',
@@ -55,8 +55,8 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
   };
 
   const selectedSlug = (selectedProduct as any).slug || selectedProduct.id || 'checkout';
-  const selectedCode = (selectedProduct as any).affiliateCode || 'TECH';
-  const generatedAffiliateUrl = `https://techifygaming.com/checkout/${selectedSlug}?ref=${selectedCode}&utm_source=${utmSource}&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`;
+  const selectedCode = (selectedProduct as any).affiliateCode || 'LEADS';
+  const generatedAffiliateUrl = `https://leadspay.com/checkout/${selectedSlug}?ref=${selectedCode}&utm_source=${utmSource}&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedAffiliateUrl);
@@ -68,13 +68,13 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
   const calculatedRecurrentTotal = simulatedSalesCount * ((selectedProduct.priceMonthly || 0) * (selectedProduct.recurrentCommission || 15) / 100);
 
   return (
-    <div className="flex flex-col gap-8" id="techify-afiliados-view">
+    <div className="flex flex-col gap-8" id="leadspay-afiliados-view">
       {/* Header Banner */}
       <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#0a1428] via-[#0e1d3a] to-[#0a1428] p-6 sm:p-8 shadow-xl">
         <div className="max-w-3xl flex flex-col items-start gap-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 text-[11px] font-bold text-[#D9F22A] uppercase tracking-wider">
             <Award className="w-3.5 h-3.5" />
-            PROGRAMA DE PARCEIROS & REVENDEDORES TECHIFY
+            PROGRAMA DE PARCEIROS & REVENDEDORES LEADSPAY
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-white font-['Syne']">
             Central de Afiliação & Rastreamento

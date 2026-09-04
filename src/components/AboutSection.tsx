@@ -18,7 +18,7 @@ export const AboutSection: React.FC = () => {
           >
             <div className="inline-flex items-center gap-2.5 bg-[#080d1a] border border-[#D9F22A]/30 rounded-full px-4 py-1.5 text-xs font-semibold text-[#D9F22A]">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>O QUE É A TECHIFY?</span>
+              <span>O QUE É O LEADSPAY?</span>
             </div>
 
             <h2 className="text-2xl sm:text-4xl font-extrabold text-white uppercase tracking-tight font-['Syne'] leading-tight">
@@ -41,7 +41,7 @@ export const AboutSection: React.FC = () => {
               Ao mesmo tempo, milhares de afiliados profissionais, gestores de tráfego e consultores de vendas buscam soluções tecnológicas robustas e de alto ticket para monetizar sua base de contatos.
             </p>
             <p className="text-white font-medium">
-              A <strong>Techify</strong> nasceu para unificar essas duas frentes: uma plataforma marketplace onde empresas publicam seus planos e um exército de afiliados capacitados gera vendas contínuas com comissões justas e liquidadas no mesmo dia.
+              O <strong>LeadsPay</strong> nasceu para unificar essas duas frentes: uma plataforma marketplace onde empresas publicam seus planos e um exército de afiliados capacitados gera vendas contínuas com comissões justas e liquidadas no mesmo dia.
             </p>
           </motion.div>
         </div>

@@ -86,7 +86,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const latestSale = safeTransactions.length > 0 ? safeTransactions[0] : null;
 
   return (
-    <div className="flex flex-col gap-6" id="techify-dashboard-view">
+    <div className="flex flex-col gap-6" id="leadspay-dashboard-view">
       {/* 1. TOP CAROUSEL & REAL-TIME SALE NOTIFICATION TICKER */}
       <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#070c18] via-[#0b1424] to-[#070c18] p-4 sm:p-6 shadow-2xl">
         {/* Subtle Neon Backlight */}
@@ -301,7 +301,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ) : '•••••••'}
           </div>
           <div className="text-[11px] text-white/60 mt-2">
-            {roleMode === 'empresa' ? 'Receita líquida após comissões e taxas Techify' : 'Saldo acumulado de vendas'}
+            {roleMode === 'empresa' ? 'Receita líquida após comissões e taxas LeadsPay' : 'Saldo acumulado de vendas'}
           </div>
         </motion.div>
 
@@ -437,7 +437,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="p-3.5 rounded-xl bg-[#050811] border border-white/5 text-[11px] text-white/60 leading-relaxed">
-            🛡️ <strong className="text-white">Garantia Techify:</strong> Todas as plataformas possuem compliance estrito, proteção antifraude e liquidação garantida ao vendedor parceiro.
+            🛡️ <strong className="text-white">Garantia LeadsPay:</strong> Todas as plataformas possuem compliance estrito, proteção antifraude e liquidação garantida ao vendedor parceiro.
           </div>
         </div>
       </div>

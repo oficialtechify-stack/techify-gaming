@@ -206,7 +206,7 @@ app.all('/api/cron/release-balances', async (req, res) => {
   }
 });
 
-// Endpoint para consultar o resumo financeiro da plataforma Techify
+// Endpoint para consultar o resumo financeiro da plataforma LeadsPay
 app.get('/api/finances/summary', async (req, res) => {
   try {
     const docRef = doc(db, 'platform_finances', 'global_summary');
@@ -270,9 +270,9 @@ app.post('/api/payments/pix', async (req, res) => {
       return res.status(400).json({ error: 'Valor total inválido para a cobrança Pix' });
     }
 
-    const finalPlanName = planName || (description ? description.replace(/^Compra:\s*/, '') : '') || (planId ? `Plano ${planId}` : 'Techify');
-    const finalEmail = (emailDoCliente || payer?.email || 'cliente@techify.com').trim();
-    const finalFullName = (nomeDoCliente || payer?.name || payer?.fullName || 'Cliente Techify').trim();
+    const finalPlanName = planName || (description ? description.replace(/^Compra:\s*/, '') : '') || (planId ? `Plano ${planId}` : 'LeadsPay');
+    const finalEmail = (emailDoCliente || payer?.email || 'cliente@leadspay.com').trim();
+    const finalFullName = (nomeDoCliente || payer?.name || payer?.fullName || 'Cliente LeadsPay').trim();
     const rawCpf = (cpfLimpo || payer?.cpf || payer?.documentNumber || payer?.identification?.number || '19119119100').toString();
     const finalCpfLimpo = rawCpf.replace(/\D/g, '') || '19119119100';
     const finalRefCode = refCode || affiliate_code || affiliateRef || null;
@@ -532,7 +532,7 @@ app.post('/api/withdrawals/request', async (req, res) => {
     await setDoc(withdrawalDocRef, {
       id: withdrawalId,
       userId: targetUserId,
-      userName: userName || userProfile.name || 'Parceiro Techify',
+      userName: userName || userProfile.name || 'Parceiro LeadsPay',
       amount: numericAmount, // Total debitado do usuário
       feeAmount: feeAmount, // Taxa de serviço fixa de R$ 2,50 armazenada para controle
       netAmount: netAmount, // Valor efetivamente enviado via Pix
@@ -554,7 +554,7 @@ app.post('/api/withdrawals/request', async (req, res) => {
         amount: netAmount,
         currency_id: 'BRL',
         payment_method_id: 'pix',
-        description: `Saque Techify Gaming #${withdrawalId}`,
+        description: `Saque LeadsPay #${withdrawalId}`,
         receiver_address: {
           receiver_type: (pixKeyType || 'CPF').toLowerCase(),
           key: pixKey.trim()
@@ -599,7 +599,7 @@ app.post('/api/withdrawals/request', async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
-    // c) Credita a taxa de serviço de R$ 2,50 na conta global da plataforma Techify
+    // c) Credita a taxa de serviço de R$ 2,50 na conta global da plataforma LeadsPay
     await creditServerPlatformFinances('withdrawal', feeAmount);
 
     console.log(`[Saque Concluído] Pix enviado com sucesso! E2E: ${endToEndId} | Novo saldo disponível: R$ ${newAvailable}`);
@@ -713,7 +713,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`⚡ Techify Server online on http://0.0.0.0:${PORT}`);
+    console.log(`⚡ LeadsPay Server online on http://0.0.0.0:${PORT}`);
   });
 }
 

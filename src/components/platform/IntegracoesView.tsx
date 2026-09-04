@@ -3,10 +3,10 @@ import { Network, Check, Copy, Webhook, Zap, Shield, Key } from 'lucide-react';
 
 export const IntegracoesView: React.FC = () => {
   const [copiedKey, setCopiedKey] = useState(false);
-  const [webhookUrl, setWebhookUrl] = useState('https://meuservidor.com.br/api/postback/techify');
+  const [webhookUrl, setWebhookUrl] = useState('https://meuservidor.com.br/api/postback/leadspay');
   const [savedWebhook, setSavedWebhook] = useState(false);
 
-  const apiKey = 'tk_live_99482710398471203948571290384';
+  const apiKey = 'lp_live_99482710398471203948571290384';
 
   const handleCopyKey = () => {
     navigator.clipboard.writeText(apiKey);
@@ -21,7 +21,7 @@ export const IntegracoesView: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6" id="techify-integracoes-view">
+    <div className="flex flex-col gap-6" id="leadspay-integracoes-view">
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
           Integrações & Webhooks (Postback)

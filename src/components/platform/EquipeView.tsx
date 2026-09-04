@@ -75,7 +75,7 @@ export const EquipeView: React.FC = () => {
   const totalTeamSales = teamMembers.reduce((acc, m) => acc + (m.salesCount || 0), 0);
 
   return (
-    <div className="flex flex-col gap-6" id="techify-equipe-view">
+    <div className="flex flex-col gap-6" id="leadspay-equipe-view">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">

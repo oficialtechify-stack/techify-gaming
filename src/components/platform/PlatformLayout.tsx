@@ -521,7 +521,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Handle withdrawal
   const handleWithdraw = async (amount: number, pixKey: string, pixKeyType: string) => {
     try {
-      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, userProfile?.name || 'Usuário Techify');
+      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, userProfile?.name || 'Usuário LeadsPay');
       setLiveToast({
         message: 'Saque PIX D+0 processado com sucesso!',
         sub: `Chave ${pixKey} (${pixKeyType})`,
@@ -842,7 +842,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 title="Menu do Usuário"
               >
                 <img
-                  src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Techify'}
+                  src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=LeadsPay'}
                   alt={userProfile?.name || 'Usuário'}
                   className="w-8 h-8 rounded-full object-cover border border-white/20"
                 />
@@ -859,16 +859,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                     {/* Header User Card with Avatar, Name & Email */}
                     <div className="flex items-center gap-3 p-2.5 bg-[#232730] rounded-xl mb-2">
                       <img
-                        src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Techify'}
+                        src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=LeadsPay'}
                         alt={userProfile?.name || 'Usuário'}
                         className="w-10 h-10 rounded-full object-cover border border-white/20 flex-shrink-0"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-bold text-white truncate">
-                          {userProfile?.name || 'Usuário Techify'}
+                          {userProfile?.name || 'Usuário LeadsPay'}
                         </div>
                         <div className="text-[11px] text-white/50 truncate">
-                          {userProfile?.email || 'contato@techify.com'}
+                          {userProfile?.email || 'contato@leadspay.com'}
                         </div>
                         <div className="mt-1">
                           <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${

@@ -36,7 +36,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
 
           {/* Subheading Narrative */}
           <p className="mt-6 text-base sm:text-xl text-white/80 max-w-3xl mx-auto font-medium leading-relaxed">
-            A <strong>Techify</strong> é a infraestrutura comercial onde empresas e startups publicam seus planos e softwares, e afiliados profissionais fecham contratos com comissões de <span className="text-[#D9F22A] font-bold">30% a 50%</span> e repasses automáticos via <span className="text-[#D9F22A] font-bold">PIX D+0</span>.
+            O <strong>LeadsPay</strong> é a infraestrutura comercial onde empresas e startups publicam seus planos e softwares, e afiliados profissionais fecham contratos com comissões de <span className="text-[#D9F22A] font-bold">30% a 50%</span> e repasses automáticos via <span className="text-[#D9F22A] font-bold">PIX D+0</span>.
           </p>
         </div>
 
@@ -84,7 +84,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
               width="575"
               height="575"
               src="https://stellargaming.com/wp-content/uploads/2025/08/frame_1321318091.webp"
-              alt="Techify 3D Emblem"
+              alt="LeadsPay 3D Emblem"
               referrerPolicy="no-referrer"
               className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_20px_50px_rgba(217,242,42,0.35)] transition-transform duration-500 hover:scale-[1.03]"
               loading="eager"

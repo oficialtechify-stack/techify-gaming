@@ -51,7 +51,7 @@ export const VendasView: React.FC<VendasViewProps> = ({
   const totalCompanyNet = Math.max(0, totalVolumeFiltered - totalCommissionsFiltered);
 
   return (
-    <div className="flex flex-col gap-6" id="techify-vendas-view">
+    <div className="flex flex-col gap-6" id="leadspay-vendas-view">
       {/* Header with Quick KPI Cards */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

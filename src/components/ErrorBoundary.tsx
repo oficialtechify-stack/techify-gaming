@@ -43,7 +43,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </h2>
             
             <p className="text-xs text-white/70 mb-6 leading-relaxed">
-              O ecossistema Techify identificou um erro temporário na interface. Seus dados continuam preservados.
+              O ecossistema LeadsPay identificou um erro temporário na interface. Seus dados continuam preservados.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full">

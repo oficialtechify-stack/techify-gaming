@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) =
     <>
       <header className="elementor-element sticky top-0 z-50 w-full bg-[#060A15]/95 backdrop-blur-md border-b border-white/5 transition-all">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 h-[88px] flex items-center justify-between">
-          {/* Logo - Techify */}
+          {/* Logo - LeadsPay */}
           <div className="elementor-widget-image">
             <a 
               href="#home" 
@@ -275,7 +275,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) =
                     className="w-full flex items-center justify-center gap-2 bg-[#D9F22A] text-[#060A15] font-black rounded-full py-3.5 px-5 cursor-pointer uppercase tracking-wider text-xs"
                   >
                     <LayoutDashboard className="w-4 h-4" />
-                    <span>Abrir Plataforma Techify</span>
+                    <span>Abrir Plataforma LeadsPay</span>
                   </button>
                 )}
                 <button

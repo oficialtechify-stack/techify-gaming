@@ -95,7 +95,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
   // Coupons
   const [coupons, setCoupons] = useState<ProductCoupon[]>(
     plan.coupons || [
-      { id: 'c-1', code: 'TECHIFY10', discountType: 'percentage', discountValue: 10, active: true, usedCount: 5 }
+      { id: 'c-1', code: 'LEADSPAY10', discountType: 'percentage', discountValue: 10, active: true, usedCount: 5 }
     ]
   );
   const [newCouponCode, setNewCouponCode] = useState<string>('');
@@ -112,7 +112,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
   // Copied link toast state
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://techify.app';
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
   const directCheckoutUrl = `${currentOrigin}?checkout=${plan.id}`;
   const salesPageUrl = `${currentOrigin}?product=${plan.id}`;
 
@@ -680,7 +680,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
               Divisão de Receita / Coprodução
             </h3>
             <p className="text-xs text-white/60">
-              Adicione parceiros e sócios para dividir automaticamente a receita de cada venda processada pela Techify.
+              Adicione parceiros e sócios para dividir automaticamente a receita de cada venda processada pelo LeadsPay.
             </p>
           </div>
           <div className="p-8 text-center rounded-2xl bg-[#050811] border border-white/10 text-xs text-white/50">
@@ -804,7 +804,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
               Links Oficiais do Produto
             </h3>
             <p className="text-xs text-white/60">
-              Links com taxa de checkout de R$ 0,99 processados com segurança pela Techify.
+              Links com taxa de checkout de R$ 0,99 processados com segurança pelo LeadsPay.
             </p>
           </div>
 

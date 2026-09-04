@@ -34,14 +34,16 @@ function MainApp() {
       try {
         const params = new URLSearchParams(window.location.search);
         
-        // 1. Salvar imediatamente o parâmetro ?ref=... no localStorage (techify_affiliate_ref)
+        // 1. Salvar imediatamente o parâmetro ?ref=... no localStorage (leadspay_affiliate_ref e techify_affiliate_ref para compatibilidade)
         const refParam = params.get('ref') || params.get('r');
         if (refParam && refParam.trim()) {
-          localStorage.setItem('techify_affiliate_ref', refParam.trim());
-          setAffiliateRef(refParam.trim());
-          console.log('📌 [Techify App] Código de afiliado salvo no localStorage:', refParam.trim());
+          const cleanRef = refParam.trim();
+          localStorage.setItem('leadspay_affiliate_ref', cleanRef);
+          localStorage.setItem('techify_affiliate_ref', cleanRef);
+          setAffiliateRef(cleanRef);
+          console.log('📌 [LeadsPay App] Código de afiliado salvo no localStorage:', cleanRef);
         } else {
-          const stored = localStorage.getItem('techify_affiliate_ref');
+          const stored = localStorage.getItem('leadspay_affiliate_ref') || localStorage.getItem('techify_affiliate_ref');
           if (stored) setAffiliateRef(stored);
         }
 
@@ -102,7 +104,7 @@ function MainApp() {
       <div className="min-h-screen bg-[#060A15] flex flex-col items-center justify-center p-6 text-white text-center">
         <div className="w-12 h-12 border-4 border-[#208b68] border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-xl font-bold font-['Syne']">Carregando Checkout Seguro...</h2>
-        <p className="text-sm text-white/60 mt-1">Ambiente criptografado Mercado Pago & Techify</p>
+        <p className="text-sm text-white/60 mt-1">Ambiente criptografado Mercado Pago & LeadsPay</p>
       </div>
     );
   }
@@ -154,7 +156,7 @@ function MainApp() {
   // If user opens platform or is logged in and wants to see platform
   if (viewPlatform) {
     return (
-      <ErrorBoundary fallbackTitle="Erro ao carregar o Painel Techify" onReset={() => setViewPlatform(false)}>
+      <ErrorBoundary fallbackTitle="Erro ao carregar o Painel LeadsPay" onReset={() => setViewPlatform(false)}>
         <PlatformLayout onBackToHome={() => setViewPlatform(false)} />
       </ErrorBoundary>
     );
@@ -176,7 +178,7 @@ function MainApp() {
           <span className="w-2.5 h-2.5 rounded-full bg-[#D9F22A] animate-ping" />
           <LayoutDashboard className="w-4 h-4 text-[#D9F22A]" />
           <span className="text-xs font-black uppercase tracking-wider text-white">
-            {isAuthenticated ? 'Meu Painel Techify' : 'Explorar Marketplace & Painel'}
+            {isAuthenticated ? 'Meu Painel LeadsPay' : 'Explorar Marketplace & Painel'}
           </span>
         </button>
       </div>
@@ -219,7 +221,7 @@ function MainApp() {
 
 export default function App() {
   return (
-    <ErrorBoundary fallbackTitle="Erro ao carregar ecossistema Techify">
+    <ErrorBoundary fallbackTitle="Erro ao carregar ecossistema LeadsPay">
       <AuthProvider>
         <MainApp />
       </AuthProvider>

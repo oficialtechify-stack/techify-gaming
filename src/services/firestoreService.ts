@@ -212,7 +212,7 @@ export async function submitVerificationRequestInFirebase(
 
   // 2. Add / Update document in verification_requests collection
   const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, effectiveUserId);
-  const fullName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || profileData.name || 'Usuário Techify';
+  const fullName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || profileData.name || 'Usuário LeadsPay';
   
   await setDoc(requestRef, sanitizeForFirestore({
     id: effectiveUserId,
@@ -623,15 +623,15 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
     } else {
       const newComp: CompanyStartup = {
         id: planData.companyId,
-        name: planData.companyName || 'Techify Solutions',
-        slug: (planData.companyName || 'techify-solutions').toLowerCase().replace(/\s+/g, '-'),
+        name: planData.companyName || 'LeadsPay Solutions',
+        slug: (planData.companyName || 'leadspay-solutions').toLowerCase().replace(/\s+/g, '-'),
         tagline: `${planData.category || 'SaaS / B2B'} de alta performance`,
         logo: planData.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80',
         bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
         category: (planData.category as any) || 'SaaS / B2B',
         description: `Empresa responsável pela distribuição do plano ${planData.name}.`,
-        website: 'https://techifygaming.com',
-        email: 'contato@techify.com',
+        website: 'https://leadspay.com',
+        email: 'contato@leadspay.com',
         whatsapp: '+55 11 99999-9999',
         commissionRange: `${planData.commissionPercentage}%`,
         totalPlansCount: 1,
@@ -725,7 +725,7 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile
   const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
   const userPart = (userId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
   const affiliateCode = `AFF-${userPart || 'USR'}-${randPart}`;
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://techify.app';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
   const affiliateLink = `${origin}/?checkout=${plan.id}&ref=${affiliateCode}`;
 
   const affiliation: UserAffiliation = {
@@ -863,7 +863,7 @@ export async function creditPlatformFinances(type: 'checkout' | 'withdrawal', fe
 export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransaction, 'id' | 'createdAt'>) {
   const id = `TX-${Math.floor(100000 + Math.random() * 900000)}`;
   const now = new Date();
-  const checkoutFee = 0.99; // Taxa de checkout retida pela plataforma Techify
+  const checkoutFee = 0.99; // Taxa de checkout retida pela plataforma LeadsPay
   const netCompanyAmount = Number(Math.max(0, saleData.amount - saleData.commissionEarned - checkoutFee).toFixed(2));
   const availableAt = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000).toISOString(); // Garantia de 9 dias
 
@@ -1036,7 +1036,7 @@ export async function createWithdrawalInFirebase(
   const id = `WTH-${Math.floor(1000 + Math.random() * 9000)}`;
   const now = new Date();
   const formattedDate = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-  const feeAmount = 2.50; // Taxa de saque fixa Techify
+  const feeAmount = 2.50; // Taxa de saque fixa LeadsPay
   const netAmount = Number(Math.max(0, amount - feeAmount).toFixed(2));
   const endToEndId = `E31522339${Date.now()}${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 

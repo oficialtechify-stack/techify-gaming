@@ -92,7 +92,7 @@ export const StatsCounter: React.FC = () => {
             DADOS REAIS EM TEMPO REAL (BANCO FIRESTORE)
           </div>
           <h2 className="text-2xl sm:text-4xl font-black text-white font-['Syne']">
-            Métricas Reais do Ecossistema Techify
+            Métricas Reais do Ecossistema LeadsPay
           </h2>
           <p className="mt-2 text-xs sm:text-sm text-white/60">
             Números sincronizados diretamente da nossa base de dados ativa.

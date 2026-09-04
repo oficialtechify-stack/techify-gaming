@@ -88,8 +88,8 @@ export const CreatePlatformModal: React.FC<CreatePlatformModalProps> = ({
       .filter(f => f.length > 0);
 
     const newPlatform: Omit<PlatformProduct, 'id' | 'createdAt'> = {
-      companyId: 'comp_techify_main',
-      companyName: 'Techify Gaming',
+      companyId: 'comp_leadspay_main',
+      companyName: 'LeadsPay',
       companyLogo: 'https://stellargaming.com/wp-content/uploads/2025/08/Stellar_Icon_v1-1.svg',
       status: 'Ativo',
       name: name.trim(),
@@ -101,7 +101,7 @@ export const CreatePlatformModal: React.FC<CreatePlatformModalProps> = ({
       commissionPercentage: Number(commissionPercentage),
       commissionValue,
       recurrentCommission: Number(recurrentCommission),
-      description: description.trim() || `Plataforma de alta performance ${name} desenvolvida pela Techify Gaming.`,
+      description: description.trim() || `Plataforma de alta performance ${name} desenvolvida pela LeadsPay.`,
       features: features.length > 0 ? features : ['Infraestrutura em Nuvem Escalável', 'Suporte Técnico 24/7'],
       specs: {
         latency,
@@ -174,7 +174,7 @@ export const CreatePlatformModal: React.FC<CreatePlatformModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Techify Casino Engine VIP"
+                  placeholder="Ex: LeadsPay SaaS Growth Suite VIP"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A]"

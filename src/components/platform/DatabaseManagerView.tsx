@@ -250,7 +250,7 @@ export const DatabaseManagerView: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col gap-6" id="techify-firebase-database-view">
+    <div className="flex flex-col gap-6" id="leadspay-database-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -646,7 +646,7 @@ export const DatabaseManagerView: React.FC = () => {
                                 {comp.category}
                               </span>
                             </div>
-                            <p className="text-xs text-white/60 line-clamp-1 mt-0.5">{comp.tagline || 'Startup Techify'}</p>
+                            <p className="text-xs text-white/60 line-clamp-1 mt-0.5">{comp.tagline || 'Startup LeadsPay'}</p>
                           </div>
                         </div>
 
@@ -745,7 +745,7 @@ export const DatabaseManagerView: React.FC = () => {
                             <span className="text-sm font-black text-[#D9F22A]">{comp.commissionRange || '30% a 50%'}</span>
                           </div>
                           <div className="text-right text-[11px] text-white/40">
-                            <span>Solicitado por: <strong className="text-white/80">{comp.submittedByName || 'Produtor Techify'}</strong></span>
+                            <span>Solicitado por: <strong className="text-white/80">{comp.submittedByName || 'Produtor LeadsPay'}</strong></span>
                             <span className="block">{comp.submittedAt ? new Date(comp.submittedAt).toLocaleString('pt-BR') : 'Data recente'}</span>
                           </div>
                         </div>

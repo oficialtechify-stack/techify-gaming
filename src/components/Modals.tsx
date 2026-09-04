@@ -313,7 +313,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
             {/* Top Badge & Title */}
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#D9F22A]">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Acesso ao Ecossistema Techify</span>
+              <span>Acesso ao Ecossistema LeadsPay</span>
             </div>
 
             {/* Navigation Tabs between Login, Register Affiliate, Register Company */}
@@ -1387,7 +1387,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A]">
               <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />
-              Ecossistema Techify
+              Ecossistema LeadsPay
             </div>
 
             <h3 className="text-2xl sm:text-3xl font-extrabold text-white font-['Syne']">
@@ -1433,12 +1433,12 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
             </div>
 
             <h3 className="text-2xl sm:text-3xl font-extrabold text-white font-['Syne']">
-              Sobre a Techify
+              Sobre o LeadsPay
             </h3>
 
             <div className="space-y-4 text-sm text-white/80 leading-relaxed">
               <p>
-                A <strong>Techify</strong> é o ecossistema e infraestrutura que acelera a aquisição de clientes para startups de tecnologia através de uma rede ativa de milhares de afiliados especializados.
+                O <strong>LeadsPay</strong> é o ecossistema e infraestrutura que acelera a aquisição de clientes para startups de tecnologia através de uma rede ativa de milhares de afiliados especializados.
               </p>
               <p>
                 Garantimos que fundadores e empresas publiquem seus produtos com controle total das comissões, enquanto afiliados recebem comissões transparentes com liquidação automática em tempo real via <strong>PIX D+0</strong>.
@@ -1466,7 +1466,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
             </div>
 
             <h3 className="text-2xl sm:text-3xl font-extrabold text-white font-['Syne']">
-              Cultura Techify
+              Cultura LeadsPay
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -201,8 +201,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       const activeAffiliate = getActiveAffiliateCode();
       const cleanDoc = documentNumber.replace(/\D/g, '') || '19119119100';
       const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
-      const cleanEmail = (email || 'cliente@techify.com').trim();
-      const cleanName = (fullName || 'Cliente Techify').trim();
+      const cleanEmail = (email || 'cliente@leadspay.com').trim();
+      const cleanName = (fullName || 'Cliente LeadsPay').trim();
 
       const response = await fetch('/api/payments/pix', {
         method: 'POST',
@@ -320,8 +320,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       companyLogo: plan.companyLogo,
       platformId: plan.id,
       platformName: plan.name,
-      buyerName: fullName.trim() || 'Cliente Techify',
-      buyerEmail: email.trim() || 'cliente@techify.com',
+      buyerName: fullName.trim() || 'Cliente LeadsPay',
+      buyerEmail: email.trim() || 'cliente@leadspay.com',
       buyerCompany: plan.companyName,
       amount: finalTotal,
       commissionEarned: commissionEarned,
@@ -372,7 +372,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         type: planCoupon.discountType
       });
       setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
-    } else if (cleanCode === 'TECHIFY10' || cleanCode === 'DESCONTO10') {
+    } else if (cleanCode === 'LEADSPAY10' || cleanCode === 'TECHIFY10' || cleanCode === 'DESCONTO10') {
       setAppliedCoupon({
         code: cleanCode,
         discount: 10,
@@ -1045,7 +1045,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             <p>
               Ao prosseguir, você concorda com os Termos de uso de {plan.name}, além dos{' '}
               <a href="#" className="underline hover:text-white">Termos</a> e{' '}
-              <a href="#" className="underline hover:text-white">Políticas</a> da Techify.
+              <a href="#" className="underline hover:text-white">Políticas</a> do LeadsPay.
             </p>
             <p className="text-[10px] text-white/40 pt-1">
               Processado por <strong>Mercado Pago Gateway</strong> • Integração Oficial

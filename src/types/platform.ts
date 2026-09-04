@@ -183,7 +183,7 @@ export interface SaleTransaction {
   buyerCompany: string;
   amount: number;
   commissionEarned: number;
-  checkoutFee?: number; // R$ 0.99 taxa da plataforma Techify
+  checkoutFee?: number; // R$ 0.99 taxa da plataforma LeadsPay
   netCompanyAmount?: number; // amount - commissionEarned - checkoutFee
   releaseStatus?: 'pendente' | 'disponivel'; // Regra de liberação de 9 dias
   availableAt?: string; // Data prevista para liberação (data + 9 dias)

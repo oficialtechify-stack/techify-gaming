@@ -38,7 +38,7 @@ export const TechifyEmblem3D: React.FC<TechifyEmblem3DProps> = ({
       onMouseLeave={handleMouseLeave}
       className={`relative flex items-center justify-center cursor-pointer select-none transition-transform duration-300 ${className}`}
       style={{ perspective: 1000 }}
-      id="techify-3d-emblem-container"
+      id="leadspay-3d-emblem-container"
     >
       {/* Background Soft Volumetric Glow */}
       <div 
@@ -222,3 +222,5 @@ export const TechifyEmblem3D: React.FC<TechifyEmblem3DProps> = ({
     </div>
   );
 };
+
+export const LeadsPayEmblem3D = TechifyEmblem3D;

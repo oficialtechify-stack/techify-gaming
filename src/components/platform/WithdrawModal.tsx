@@ -25,7 +25,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
   if (!isOpen) return null;
 
-  const feeAmount = 2.50; // Taxa de saque fixa Techify
+  const feeAmount = 2.50; // Taxa de saque fixa LeadsPay
   const netAmount = Math.max(0, amount - feeAmount);
 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
@@ -54,8 +54,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         amount,
         pixKey.trim(),
         pixKeyType,
-        userProfile?.userId || userProfile?.id || 'usr_techify_main',
-        userProfile?.name || 'Usuário Techify'
+        userProfile?.userId || userProfile?.id || 'usr_leadspay_main',
+        userProfile?.name || 'Usuário LeadsPay'
       );
 
       if (result.success && result.withdrawal) {
@@ -194,7 +194,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
               </div>
               <div className="flex justify-between text-white/70">
                 <span className="flex items-center gap-1">
-                  Taxa de Saque Pix Techify:
+                  Taxa de Saque Pix LeadsPay:
                 </span>
                 <span className="font-semibold text-amber-400">- R$ 2,50</span>
               </div>

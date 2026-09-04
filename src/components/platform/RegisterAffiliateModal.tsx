@@ -261,7 +261,7 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
               className="mt-0.5 accent-[#D9F22A] w-4 h-4 rounded cursor-pointer"
             />
             <span>
-              Concordo com os Termos do Programa de Afiliados Techify e confirmo que os dados bancários pertencem ao meu CPF.
+              Concordo com os Termos do Programa de Afiliados LeadsPay e confirmo que os dados bancários pertencem ao meu CPF.
             </span>
           </label>
 

@@ -26,7 +26,7 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
     {
       step: '03',
       title: 'Disponibilize na Vitrine Pública',
-      desc: 'Seus planos entram instantaneamente no Marketplace Techify, ficando visíveis para milhares de afiliados qualificados e gestores de tráfego.',
+      desc: 'Seus planos entram instantaneamente no Marketplace LeadsPay, ficando visíveis para milhares de afiliados qualificados e gestores de tráfego.',
       badge: 'Visibilidade Imediata',
     },
     {
@@ -76,7 +76,7 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
             FLUXO OPERACIONAL COMPLETO
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-['Syne']">
-            Como Funciona a Plataforma Techify
+            Como Funciona a Plataforma LeadsPay
           </h2>
           <p className="mt-4 text-white/70 text-sm sm:text-base leading-relaxed">
             Desenvolvemos um fluxo simples, seguro e automatizado para acelerar a conexão comercial entre quem cria tecnologia e quem gera vendas.

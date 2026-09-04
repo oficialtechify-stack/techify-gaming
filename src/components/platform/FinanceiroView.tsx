@@ -62,7 +62,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
 
   if (roleMode === 'empresa') {
     return (
-      <div className="flex flex-col gap-6" id="techify-financeiro-empresa-view">
+      <div className="flex flex-col gap-6" id="leadspay-financeiro-empresa-view">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -114,7 +114,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
           {/* Taxas de Checkout Plataforma (R$ 0,99 por venda) */}
           <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
             <div className="flex items-center justify-between text-white/60 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Taxas de Checkout Techify</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Taxas de Checkout LeadsPay</span>
               <DollarSign className="w-4 h-4 text-indigo-400" />
             </div>
             <div className="text-2xl font-black text-indigo-400 font-['Syne']">
@@ -208,7 +208,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 </h3>
               </div>
               <p className="text-xs text-white/70 leading-relaxed mb-4">
-                Quando um cliente adquire uma solução, a Techify retém R$ 0,99 da taxa de checkout, credita a comissão acordada para o afiliado, e o montante líquido da empresa é garantido e liberado após o período de 9 dias.
+                Quando um cliente adquire uma solução, o LeadsPay retém R$ 0,99 da taxa de checkout, credita a comissão acordada para o afiliado, e o montante líquido da empresa é garantido e liberado após o período de 9 dias.
               </p>
 
               <div className="space-y-2 text-xs text-white/60">
@@ -239,7 +239,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
 
   // Affiliate Mode Rendering
   return (
-    <div className="flex flex-col gap-6" id="techify-financeiro-view">
+    <div className="flex flex-col gap-6" id="leadspay-financeiro-view">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -330,7 +330,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             R$ {(userProfile?.totalEarned ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
           <span className="text-[11px] text-white/50 block mt-2">
-            Acumulado histórico como Afiliado Techify
+            Acumulado histórico como Afiliado LeadsPay
           </span>
         </div>
       </div>

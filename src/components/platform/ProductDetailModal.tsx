@@ -17,7 +17,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   if (!product) return null;
 
-  const affiliateLink = `https://techifygaming.com/plan/${product.slug || product.id}?ref=${product.affiliateCode || 'TECH'}`;
+  const affiliateLink = `https://leadspay.com/plan/${product.slug || product.id}?ref=${product.affiliateCode || 'LEADS'}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(affiliateLink);

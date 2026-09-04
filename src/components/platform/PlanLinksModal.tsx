@@ -32,7 +32,7 @@ export const PlanLinksModal: React.FC<PlanLinksModalProps> = ({
 
   if (!isOpen || !plan) return null;
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://techify.app';
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
   const checkoutUrl = `${currentOrigin}?checkout=${plan.id}`;
   const salesPageUrl = `${currentOrigin}?product=${plan.id}`;
 

@@ -15,7 +15,7 @@ export const ResponsibleGamingSection: React.FC<ResponsibleGamingSectionProps> =
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-          {/* Left Column: Techify Security & Split Visual Architecture (No photo) */}
+          {/* Left Column: LeadsPay Security & Split Visual Architecture (No photo) */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.94, y: 30 }}
             whileInView={{ opacity: 1, scale: 1, y: 0 }}

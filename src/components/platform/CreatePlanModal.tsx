@@ -199,7 +199,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         affiliatesCount: initialData?.affiliatesCount || 0,
         totalSales: initialData?.totalSales || 0,
         badge: badge.trim() || 'Destaque',
-        checkoutUrl: checkoutUrl.trim() || 'https://pay.techify.com/checkout',
+        checkoutUrl: checkoutUrl.trim() || 'https://pay.leadspay.com/checkout',
         status: initialData?.status || 'Ativo'
       };
 

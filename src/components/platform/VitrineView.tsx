@@ -116,10 +116,10 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     }
   };
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://techify.app';
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
 
   return (
-    <div className="flex flex-col gap-8" id="techify-vitrine-view">
+    <div className="flex flex-col gap-8" id="leadspay-vitrine-view">
       {/* Header Banner */}
       <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#070d1c] via-[#0b162c] to-[#070d1c] p-6 sm:p-8 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">

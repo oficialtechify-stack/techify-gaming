@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               ...INITIAL_USER_PROFILE,
               ...data,
               userId: user.uid,
-              name: data.name || user.displayName || user.email?.split('@')[0] || 'Usuário Techify',
+              name: data.name || user.displayName || user.email?.split('@')[0] || 'Usuário LeadsPay',
               email: data.email || user.email || '',
               avatar: data.avatar || user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
               availableBalance: typeof data.availableBalance === 'number' && !isNaN(data.availableBalance) ? data.availableBalance : 0,
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const initialNewProfile: UserSellerProfile = {
               ...INITIAL_USER_PROFILE,
               userId: user.uid,
-              name: user.displayName || user.email?.split('@')[0] || 'Usuário Techify',
+              name: user.displayName || user.email?.split('@')[0] || 'Usuário LeadsPay',
               email: user.email || '',
               avatar: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
               availableBalance: 0,

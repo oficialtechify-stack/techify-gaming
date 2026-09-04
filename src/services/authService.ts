@@ -236,18 +236,18 @@ export function getAuthErrorMessage(error: any): string {
     return 'O CNPJ informado é inválido. Por favor, verifique os 14 dígitos digitados.';
   }
   if (code.includes('custom/cpf-already-in-use') || code.includes('cpf-already-in-use')) {
-    return 'Este CPF já está vinculado a outra conta no Techify. Cada afiliado pode possuir apenas uma conta por CPF.';
+    return 'Este CPF já está vinculado a outra conta no LeadsPay. Cada afiliado pode possuir apenas uma conta por CPF.';
   }
   if (code.includes('custom/cnpj-already-in-use') || code.includes('cnpj-already-in-use')) {
-    return 'Este CNPJ já está cadastrado em outra empresa parceira no Techify.';
+    return 'Este CNPJ já está cadastrado em outra empresa parceira no LeadsPay.';
   }
   if (code.includes('custom/email-already-in-use')) {
-    return 'Este e-mail já possui uma conta no Techify. Você pode fazer login diretamente com sua senha.';
+    return 'Este e-mail já possui uma conta no LeadsPay. Você pode fazer login diretamente com sua senha.';
   }
 
   // Firebase Authentication Errors
   if (code.includes('auth/email-already-in-use')) {
-    return 'Este e-mail já possui uma conta cadastrada no Techify. Por favor, utilize a aba "Fazer Login" ou recupere sua senha.';
+    return 'Este e-mail já possui uma conta cadastrada no LeadsPay. Por favor, utilize a aba "Fazer Login" ou recupere sua senha.';
   }
   if (code.includes('auth/invalid-email')) {
     return 'O formato do e-mail informado é inválido. Digite um e-mail válido (ex: seuemail@exemplo.com).';
@@ -493,8 +493,8 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     logo,
     bannerImage,
     category: data.category as any,
-    description: data.description?.trim() || `Empresa parceira ${data.companyName} integrada ao ecossistema Techify.`,
-    website: data.website?.trim() || 'https://techify.com',
+    description: data.description?.trim() || `Empresa parceira ${data.companyName} integrada ao ecossistema LeadsPay.`,
+    website: data.website?.trim() || 'https://leadspay.com',
     email: normalizedEmail,
     whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : '',
     totalPlansCount: 0,
@@ -583,7 +583,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
         userId: user.uid,
         name: user.displayName || normalizedEmail.split('@')[0],
         email: normalizedEmail,
-        role: 'Usuário Techify',
+        role: 'Usuário LeadsPay',
         avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
         pixKey: '',
         pixKeyType: 'Chave Aleatória',
@@ -646,12 +646,12 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
             id: companyId,
             name: compName,
             slug: slug || companyId,
-            tagline: 'Solução inovadora escalável integrada ao ecossistema Techify',
+            tagline: 'Solução inovadora escalável integrada ao ecossistema LeadsPay',
             logo,
             bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
             category: 'SaaS / B2B',
-            description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} na Techify.`,
-            website: 'https://techify.com',
+            description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} no LeadsPay.`,
+            website: 'https://leadspay.com',
             email: normalizedEmail,
             whatsapp: '',
             totalPlansCount: 0,
@@ -687,12 +687,12 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
           id: companyId,
           name: compName,
           slug: slug || companyId,
-          tagline: 'Solução inovadora escalável integrada ao ecossistema Techify',
+          tagline: 'Solução inovadora escalável integrada ao ecossistema LeadsPay',
           logo,
           bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
           category: 'SaaS / B2B',
-          description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} na Techify.`,
-          website: 'https://techify.com',
+          description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} no LeadsPay.`,
+          website: 'https://leadspay.com',
           email: normalizedEmail,
           whatsapp: '',
           totalPlansCount: 0,
@@ -710,7 +710,7 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
 
       profile = {
         userId: user.uid,
-        name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário Techify',
+        name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário LeadsPay',
         email: normalizedEmail,
         role: preferredRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
         avatar,
@@ -736,7 +736,7 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
     console.warn('Sincronização Firestore offline ou pendente:', firestoreErr);
     profile = {
       userId: user.uid,
-      name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário Techify',
+      name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário LeadsPay',
       email: normalizedEmail,
       role: preferredRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
       avatar: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
@@ -795,7 +795,7 @@ export async function completeAffiliateProfile(
   const now = new Date().toISOString();
   const updatedProfile: UserSellerProfile = {
     userId,
-    name: data.name.trim() || existing?.name || 'Afiliado Techify',
+    name: data.name.trim() || existing?.name || 'Afiliado LeadsPay',
     email: existing?.email || '',
     role: 'Afiliado de Alta Performance',
     avatar: existing?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userId)}`,
@@ -880,12 +880,12 @@ export async function completeCompanyProfile(
     id: companyId,
     name: companyData.companyName.trim(),
     slug: slug || companyId,
-    tagline: companyData.tagline?.trim() || `${companyData.category} escalável no ecossistema Techify`,
+    tagline: companyData.tagline?.trim() || `${companyData.category} escalável no ecossistema LeadsPay`,
     logo,
     bannerImage,
     category: companyData.category as any,
-    description: companyData.description?.trim() || `Empresa ${companyData.companyName} integrada à Techify.`,
-    website: companyData.website?.trim() || 'https://techify.com',
+    description: companyData.description?.trim() || `Empresa ${companyData.companyName} integrada ao LeadsPay.`,
+    website: companyData.website?.trim() || 'https://leadspay.com',
     email: existing?.email || '',
     whatsapp: companyData.whatsapp ? formatPhone(companyData.whatsapp) : '',
     totalPlansCount: 0,

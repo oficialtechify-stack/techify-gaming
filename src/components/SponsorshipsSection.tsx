@@ -96,7 +96,7 @@ export const SponsorshipsSection: React.FC<SponsorshipsSectionProps> = ({
 
           <div className="lg:max-w-xl text-white/80 text-sm sm:text-base leading-relaxed flex flex-col gap-3">
             <p>
-              Conecte-se às startups e plataformas ativas no ecossistema Techify. Todos os produtos possuem split automatizado em D+0 e comissões garantidas em tempo real.
+              Conecte-se às startups e plataformas ativas no ecossistema LeadsPay. Todos os produtos possuem split automatizado em D+0 e comissões garantidas em tempo real.
             </p>
             {onOpenRegisterCompany && (
               <button
@@ -220,7 +220,7 @@ export const SponsorshipsSection: React.FC<SponsorshipsSectionProps> = ({
             INFRAESTRUTURA & PARCEIROS TECNOLÓGICOS CONECTADOS
           </div>
           <p className="text-xs text-white/50 text-center max-w-xl mx-auto mb-8">
-            Gateways de pagamento instantâneo, provedores de computação em nuvem e inteligência artificial que alimentam a infraestrutura da Techify.
+            Gateways de pagamento instantâneo, provedores de computação em nuvem e inteligência artificial que alimentam a infraestrutura do LeadsPay.
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">

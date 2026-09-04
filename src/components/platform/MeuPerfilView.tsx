@@ -447,7 +447,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   };
 
   return (
-    <div className="relative animate-in fade-in duration-200 pb-16" id="techify-meu-perfil-view">
+    <div className="relative animate-in fade-in duration-200 pb-16" id="leadspay-meu-perfil-view">
       {/* Toast feedback */}
       {toastMessage && (
         <div 
@@ -766,7 +766,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         disabled={isLocked}
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
-                        placeholder="Ex: Techify Soluções Digitais Ltda"
+                        placeholder="Ex: LeadsPay Soluções Digitais Ltda"
                         className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
