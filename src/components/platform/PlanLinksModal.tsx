@@ -33,8 +33,9 @@ export const PlanLinksModal: React.FC<PlanLinksModalProps> = ({
   if (!isOpen || !plan) return null;
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
-  const checkoutUrl = `${currentOrigin}?checkout=${plan.id}`;
-  const salesPageUrl = `${currentOrigin}?product=${plan.id}`;
+  const planTarget = plan.slug || plan.id;
+  const checkoutUrl = `${currentOrigin}/plan/${planTarget}`;
+  const salesPageUrl = `${currentOrigin}/plan/${planTarget}`;
 
   const copyToClipboard = (text: string, linkType: string) => {
     navigator.clipboard.writeText(text);

@@ -14,7 +14,9 @@ import {
   getDoc, 
   getDocs, 
   setDoc, 
-  updateDoc 
+  updateDoc,
+  query,
+  where
 } from 'firebase/firestore';
 
 const app = express();
@@ -245,6 +247,321 @@ app.get('/api/payments/config', (req, res) => {
   });
 });
 
+/**
+ * Extrai o código de afiliado a partir do payload ou do cabeçalho de Cookie (15 dias)
+ */
+function getAffiliateRefFromReq(req: express.Request): string | null {
+  const bodyRef = req.body?.affiliate_code || req.body?.affiliateRef || req.body?.refCode;
+  if (bodyRef && String(bodyRef).trim()) return String(bodyRef).trim();
+
+  const cookieHeader = req.headers?.cookie;
+  if (cookieHeader) {
+    const match = cookieHeader.match(/(?:^|;\s*)affiliate_ref=([^;]+)/);
+    if (match && match[1]) {
+      try {
+        return decodeURIComponent(match[1]).trim();
+      } catch (e) {
+        return match[1].trim();
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Credita automaticamente a porcentagem de comissão ao afiliado e o valor líquido à empresa na aprovação do pagamento
+ */
+async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: any) {
+  try {
+    const saleRef = doc(db, 'sales', String(paymentId));
+    const saleSnap = await getDoc(saleRef);
+    if (!saleSnap.exists()) {
+      console.warn(`[Credit Commission] Venda ${paymentId} não encontrada para creditar.`);
+      return;
+    }
+
+    const sale = saleSnap.data();
+
+    // Idempotência: impede creditar duas vezes
+    if (sale.commissionCredited === true) {
+      console.log(`[Credit Commission] Transação ${paymentId} já foi creditada anteriormente.`);
+      return;
+    }
+
+    const totalAmount = Number(sale.total_amount || sale.amount || paymentData?.transaction_amount || 0);
+    const planId = sale.plan_id || sale.platformId || paymentData?.metadata?.plan_id;
+    const affiliateCode = sale.affiliate_code || sale.affiliateCode || paymentData?.metadata?.affiliate_code || paymentData?.metadata?.affiliate_ref;
+
+    console.log(`[Credit Commission] Processando comissão da venda ${paymentId}: R$ ${totalAmount} | Ref: ${affiliateCode} | Plano: ${planId}`);
+
+    // 1. Busca dados do Plano (para obter percentual de comissão e companyId)
+    let commissionPercentage = 30; // padrão 30%
+    let companyId = sale.companyId || null;
+    let planName = sale.platformName || 'Plano LeadsPay';
+
+    if (planId) {
+      try {
+        const planRef = doc(db, 'plans', String(planId));
+        const planSnap = await getDoc(planRef);
+        if (planSnap.exists()) {
+          const pData = planSnap.data();
+          if (pData.commissionPercentage && pData.commissionPercentage > 0) {
+            commissionPercentage = Number(pData.commissionPercentage);
+          }
+          if (!companyId && pData.companyId) {
+            companyId = pData.companyId;
+          }
+          if (pData.name) {
+            planName = pData.name;
+          }
+        }
+      } catch (pErr) {
+        console.warn('Erro ao buscar plano no credit commission:', pErr);
+      }
+    }
+
+    const commissionEarned = Number(((totalAmount * commissionPercentage) / 100).toFixed(2));
+    const checkoutFee = 0.99;
+    const netCompanyAmount = Math.max(0, Number((totalAmount - commissionEarned - checkoutFee).toFixed(2)));
+
+    // 2. Busca e identifica o afiliado no banco de dados
+    let affiliateUserId = sale.affiliateId || sale.sellerId || null;
+
+    if (affiliateCode) {
+      try {
+        const affColl = collection(db, 'affiliations');
+        const q1 = query(affColl, where('affiliateCode', '==', affiliateCode));
+        let affSnaps = await getDocs(q1);
+
+        if (affSnaps.empty) {
+          const q2 = query(affColl, where('affiliate_code', '==', affiliateCode));
+          affSnaps = await getDocs(q2);
+        }
+
+        if (!affSnaps.empty) {
+          const affDoc = affSnaps.docs[0];
+          const affData = affDoc.data();
+          affiliateUserId = affData.userId || affData.user_id;
+
+          // Atualiza estatísticas do documento de afiliação
+          const currentSales = affData.salesCount || 0;
+          const currentEarned = affData.totalEarned || 0;
+          await updateDoc(affDoc.ref, {
+            salesCount: currentSales + 1,
+            totalEarned: Number((currentEarned + commissionEarned).toFixed(2)),
+            lastSaleAt: new Date().toISOString()
+          });
+          console.log(`✅ [Credit Commission] Estatísticas da afiliação ${affDoc.id} atualizadas (+R$ ${commissionEarned}).`);
+        }
+      } catch (affErr) {
+        console.warn('Erro ao consultar afiliação:', affErr);
+      }
+    }
+
+    // 3. Credita a conta do Afiliado no sistema (user_profiles)
+    if (affiliateUserId) {
+      try {
+        const profRef = doc(db, 'user_profiles', String(affiliateUserId));
+        const profSnap = await getDoc(profRef);
+        if (profSnap.exists()) {
+          const profData = profSnap.data();
+          const oldAvailable = profData.availableBalance || 0;
+          const oldTotalEarned = profData.totalEarned || 0;
+          const oldSalesCount = profData.salesCount || 0;
+
+          await updateDoc(profRef, {
+            availableBalance: Number((oldAvailable + commissionEarned).toFixed(2)),
+            totalEarned: Number((oldTotalEarned + commissionEarned).toFixed(2)),
+            salesCount: oldSalesCount + 1,
+            updatedAt: new Date().toISOString()
+          });
+          console.log(`💰 [Credit Commission] Afiliado ${affiliateUserId} creditado com comissão de R$ ${commissionEarned}!`);
+        }
+      } catch (uErr) {
+        console.warn('Erro ao creditar perfil do afiliado:', uErr);
+      }
+    }
+
+    // 4. Credita a Empresa parceira (se houver)
+    if (companyId) {
+      try {
+        const compProfRef = doc(db, 'user_profiles', String(companyId));
+        const compProfSnap = await getDoc(compProfRef);
+        if (compProfSnap.exists()) {
+          const cProf = compProfSnap.data();
+          const cAvailable = cProf.availableBalance || 0;
+          const cTotal = cProf.totalEarned || 0;
+          const cSales = cProf.salesCount || 0;
+
+          await updateDoc(compProfRef, {
+            availableBalance: Number((cAvailable + netCompanyAmount).toFixed(2)),
+            totalEarned: Number((cTotal + netCompanyAmount).toFixed(2)),
+            salesCount: cSales + 1,
+            updatedAt: new Date().toISOString()
+          });
+          console.log(`🏢 [Credit Commission] Empresa ${companyId} creditada com valor líquido de R$ ${netCompanyAmount}.`);
+        }
+      } catch (cErr) {
+        console.warn('Erro ao creditar perfil da empresa:', cErr);
+      }
+    }
+
+    // 5. Credita a taxa da plataforma (R$ 0,99)
+    await creditServerPlatformFinances('checkout', checkoutFee);
+
+    // 6. Atualiza a transação como aprovada e comissão creditada
+    await updateDoc(saleRef, {
+      status: 'approved',
+      status_detail: 'accredited',
+      approved_at: new Date().toISOString(),
+      commissionCredited: true,
+      commissionPercentage,
+      commissionEarned,
+      checkoutFee,
+      netCompanyAmount,
+      affiliateId: affiliateUserId || sale.affiliateId || null,
+      affiliate_code: affiliateCode || null,
+      companyId: companyId || null,
+      releaseStatus: 'disponivel',
+      platformName: planName,
+      updated_at: new Date().toISOString()
+    });
+
+    console.log(`🎯 [Credit Commission] Transação ${paymentId} liquidada e comissões distribuídas!`);
+  } catch (err) {
+    console.error('Erro ao creditar comissão da venda:', err);
+  }
+}
+
+// Endpoint para afiliar-se com 1 Clique vinculando user_id, plan_id e affiliate_code
+app.post('/api/affiliates/join', async (req, res) => {
+  try {
+    const { planId, userId, userName, userEmail } = req.body;
+
+    if (!planId || !userId) {
+      return res.status(400).json({ error: 'planId e userId são obrigatórios para afiliação.' });
+    }
+
+    const cleanPlanId = String(planId).trim();
+    const cleanUserId = String(userId).trim();
+
+    // 1. Busca dados do plano no Firestore
+    const planRef = doc(db, 'plans', cleanPlanId);
+    const planSnap = await getDoc(planRef);
+    if (!planSnap.exists()) {
+      return res.status(404).json({ error: 'Plano não encontrado no catálogo.' });
+    }
+    const planData = planSnap.data();
+
+    // 2. Busca informações do usuário se não enviadas
+    let finalUserName = userName;
+    let finalUserEmail = userEmail;
+    if (!finalUserName || !finalUserEmail) {
+      try {
+        const userRef = doc(db, 'user_profiles', cleanUserId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const uData = userSnap.data();
+          finalUserName = finalUserName || uData.name || 'Afiliado LeadsPay';
+          finalUserEmail = finalUserEmail || uData.email || '';
+        }
+      } catch (uErr) {
+        console.warn('Erro ao buscar perfil do usuário para afiliação:', uErr);
+      }
+    }
+
+    // 3. Verifica se o usuário já possui afiliação registrada para este plano
+    const affId = `aff_${cleanUserId}_${cleanPlanId}`;
+    const affRef = doc(db, 'affiliations', affId);
+    const affSnap = await getDoc(affRef);
+
+    // Domínio base dinâmico
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const reqOrigin = req.headers.origin as string;
+    const baseUrl = process.env.VITE_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || reqOrigin || `${protocol}://${host}`;
+
+    const planSlugOrId = planData.slug || cleanPlanId;
+
+    if (affSnap.exists()) {
+      const existing = affSnap.data();
+      const existingCode = existing.affiliateCode || existing.affiliate_code;
+      const formattedLink = `${baseUrl}/plan/${planSlugOrId}?ref=${existingCode}`;
+
+      return res.json({
+        success: true,
+        alreadyAffiliated: true,
+        affiliation: {
+          id: affId,
+          ...existing,
+          affiliateLink: formattedLink
+        },
+        affiliateCode: existingCode,
+        affiliateLink: formattedLink,
+        message: 'Você já é afiliado deste plano!'
+      });
+    }
+
+    // 4. Gera código único do afiliado
+    const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const userPart = cleanUserId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
+    const affiliateCode = `AFF-${userPart || 'USR'}-${randPart}`;
+    const affiliateLink = `${baseUrl}/plan/${planSlugOrId}?ref=${affiliateCode}`;
+    const nowIso = new Date().toISOString();
+
+    const affiliationPayload = {
+      id: affId,
+      userId: cleanUserId,
+      user_id: cleanUserId,
+      planId: cleanPlanId,
+      plan_id: cleanPlanId,
+      affiliateCode,
+      affiliate_code: affiliateCode,
+      affiliateLink,
+      userName: finalUserName || 'Afiliado LeadsPay',
+      userEmail: finalUserEmail || '',
+      companyId: planData.companyId || '',
+      companyName: planData.companyName || '',
+      companyLogo: planData.companyLogo || '',
+      planName: planData.name || '',
+      priceSetup: planData.priceSetup || 0,
+      commissionPercentage: planData.commissionPercentage || 30,
+      commissionValue: planData.commissionValue || 0,
+      clicks: 0,
+      salesCount: 0,
+      totalEarned: 0,
+      status: 'Ativo',
+      createdAt: nowIso
+    };
+
+    // Salva vinculação no Firestore
+    await setDoc(affRef, affiliationPayload);
+
+    // Incrementa contagem de afiliados no plano
+    try {
+      await updateDoc(planRef, {
+        affiliatesCount: (planData.affiliatesCount || 0) + 1
+      });
+    } catch (cntErr) {
+      console.warn('Aviso ao incrementar affiliatesCount do plano:', cntErr);
+    }
+
+    console.log(`✅ [POST /api/affiliates/join] user_id=${cleanUserId} vinculado ao plan_id=${cleanPlanId} com código ${affiliateCode}`);
+
+    return res.json({
+      success: true,
+      affiliation: affiliationPayload,
+      affiliateCode,
+      affiliateLink,
+      message: 'Afiliação realizada com sucesso!'
+    });
+
+  } catch (error: any) {
+    console.error('Erro ao processar /api/affiliates/join:', error);
+    return res.status(500).json({ error: error.message || 'Erro ao processar afiliação' });
+  }
+});
+
 // 3. Create Real PIX Payment using Official Mercado Pago SDK
 app.post('/api/payments/pix', async (req, res) => {
   try {
@@ -275,7 +592,8 @@ app.post('/api/payments/pix', async (req, res) => {
     const finalFullName = (nomeDoCliente || payer?.name || payer?.fullName || 'Cliente LeadsPay').trim();
     const rawCpf = (cpfLimpo || payer?.cpf || payer?.documentNumber || payer?.identification?.number || '19119119100').toString();
     const finalCpfLimpo = rawCpf.replace(/\D/g, '') || '19119119100';
-    const finalRefCode = refCode || affiliate_code || affiliateRef || null;
+    const cookieRef = getAffiliateRefFromReq(req);
+    const finalRefCode = refCode || affiliate_code || affiliateRef || cookieRef || null;
     const finalPlanId = (planId || plan_id || null)?.toString() || null;
 
     // Inicialização da SDK oficial do Mercado Pago conforme especificação
@@ -308,7 +626,8 @@ app.post('/api/payments/pix', async (req, res) => {
       email: body.payer.email,
       first_name: body.payer.first_name,
       doc_type: body.payer.identification.type,
-      plan_id: finalPlanId
+      plan_id: finalPlanId,
+      affiliate_code: finalRefCode
     });
 
     const result = await payment.create({ body });
@@ -334,6 +653,7 @@ app.post('/api/payments/pix', async (req, res) => {
         id: String(payment_id),
         plan_id: finalPlanId,
         affiliate_code: finalRefCode,
+        affiliateCode: finalRefCode,
         total_amount: body.transaction_amount,
         amount: body.transaction_amount,
         status: result.status || 'pending',
@@ -347,9 +667,10 @@ app.post('/api/payments/pix', async (req, res) => {
         buyerEmail: finalEmail,
         buyerCpf: finalCpfLimpo,
         platformId: finalPlanId || '',
-        platformName: `Plano ${finalPlanName}`
+        platformName: `Plano ${finalPlanName}`,
+        commissionCredited: false
       }, { merge: true });
-      console.log(`✅ [Firestore sales] Transação real gravada: ${payment_id}`);
+      console.log(`✅ [Firestore sales] Transação real gravada com affiliate_code=${finalRefCode}: ${payment_id}`);
     } catch (dbErr) {
       console.error('Erro ao salvar registro de venda no Firestore:', dbErr);
     }
@@ -390,13 +711,9 @@ app.get('/api/payments/pix/:id', async (req, res) => {
         if (paymentData && paymentData.id) {
           if (paymentData.status === 'approved') {
             try {
-              const saleRef = doc(db, 'sales', String(paymentData.id));
-              await updateDoc(saleRef, {
-                status: 'approved',
-                approved_at: new Date().toISOString()
-              });
+              await creditSaleCommissionAndBalances(String(paymentData.id), paymentData);
             } catch (err) {
-              console.warn('Erro ao atualizar status approved no sales:', err);
+              console.warn('Erro ao creditar comissão no status check:', err);
             }
           }
 
@@ -423,13 +740,9 @@ app.get('/api/payments/pix/:id', async (req, res) => {
           const data = await response.json();
           if (data.status === 'approved') {
             try {
-              const saleRef = doc(db, 'sales', String(data.id));
-              await updateDoc(saleRef, {
-                status: 'approved',
-                approved_at: new Date().toISOString()
-              });
+              await creditSaleCommissionAndBalances(data.id, data);
             } catch (err) {
-              console.warn('Erro ao atualizar status approved no sales:', err);
+              console.warn('Erro ao creditar comissão no status check fallback:', err);
             }
           }
 
@@ -665,6 +978,9 @@ app.all(['/api/webhooks/mercadopago', '/api/payments/webhook'], async (req, res)
         }
         await updateDoc(saleRef, updatePayload);
         console.log(`✅ [Webhook sales] Documento ${paymentId} atualizado para status: ${status}`);
+        if (status === 'approved') {
+          await creditSaleCommissionAndBalances(String(paymentId), paymentData);
+        }
       } else {
         // Se ainda não existia, cria o documento na coleção sales
         const planId = paymentData?.metadata?.plan_id || null;
@@ -686,6 +1002,9 @@ app.all(['/api/webhooks/mercadopago', '/api/payments/webhook'], async (req, res)
           method: 'PIX'
         }, { merge: true });
         console.log(`✅ [Webhook sales] Novo documento ${paymentId} criado no sales com status: ${status}`);
+        if (status === 'approved') {
+          await creditSaleCommissionAndBalances(String(paymentId), paymentData);
+        }
       }
     }
 

@@ -726,22 +726,26 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile
   const userPart = (userId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
   const affiliateCode = `AFF-${userPart || 'USR'}-${randPart}`;
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
-  const affiliateLink = `${origin}/?checkout=${plan.id}&ref=${affiliateCode}`;
+  const planTarget = plan.slug || plan.id;
+  const affiliateLink = `${origin}/plan/${planTarget}?ref=${affiliateCode}`;
 
   const affiliation: UserAffiliation = {
     id,
     userId: userId,
+    user_id: userId,
     userName: userProfile.name,
     userEmail: userProfile.email,
     companyId: plan.companyId,
     companyName: plan.companyName,
     companyLogo: plan.companyLogo,
     planId: plan.id,
+    plan_id: plan.id,
     planName: plan.name,
     priceSetup: plan.priceSetup,
     commissionPercentage: plan.commissionPercentage,
     commissionValue: plan.commissionValue,
     affiliateCode,
+    affiliate_code: affiliateCode,
     affiliateLink,
     clicks: 0,
     salesCount: 0,

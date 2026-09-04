@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyPlan, CompanyStartup, UserAffiliation } from '../../types/platform';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Sparkles, 
   Copy, 
@@ -28,7 +29,8 @@ import {
   Share2,
   CreditCard,
   Sliders,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 
 interface VitrineViewProps {
@@ -73,6 +75,14 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   const [minCommission, setMinCommission] = useState<number>(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedAffModal, setSelectedAffModal] = useState<{ plan: CompanyPlan; aff: UserAffiliation } | null>(null);
+  const [localAffiliations, setLocalAffiliations] = useState<UserAffiliation[]>(affiliations);
+  const [joiningPlanId, setJoiningPlanId] = useState<string | null>(null);
+
+  const { currentUser, userProfile } = useAuth();
+
+  useEffect(() => {
+    setLocalAffiliations(affiliations);
+  }, [affiliations]);
 
   const categories = [
     'all', 
@@ -97,11 +107,11 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   });
 
   const isAffiliated = (planId: string) => {
-    return affiliations.some(a => a.planId === planId);
+    return localAffiliations.some(a => a.planId === planId);
   };
 
   const getAffiliation = (planId: string) => {
-    return affiliations.find(a => a.planId === planId);
+    return localAffiliations.find(a => a.planId === planId);
   };
 
   const handleCopyLink = (text: string, id: string) => {
@@ -110,9 +120,58 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  const handleAffiliateClick = (product: CompanyPlan) => {
-    if (onJoinAffiliate) {
-      onJoinAffiliate(product);
+  const handleAffiliateClick = async (product: CompanyPlan) => {
+    if (joiningPlanId) return;
+    try {
+      setJoiningPlanId(product.id);
+
+      const effectiveUserId = userProfile?.id || currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('leadspay_user_id') : null) || 'usr_afiliado_leadspay';
+      const effectiveName = userProfile?.name || currentUser?.displayName || 'Afiliado LeadsPay';
+      const effectiveEmail = userProfile?.email || currentUser?.email || 'afiliado@leadspay.com';
+
+      const response = await fetch('/api/affiliates/join', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          planId: product.id,
+          userId: effectiveUserId,
+          userName: effectiveName,
+          userEmail: effectiveEmail
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success && data.affiliation) {
+        const newAff = data.affiliation as UserAffiliation;
+        setLocalAffiliations(prev => {
+          const exists = prev.some(a => a.planId === product.id);
+          if (exists) {
+            return prev.map(a => a.planId === product.id ? newAff : a);
+          }
+          return [...prev, newAff];
+        });
+
+        if (onJoinAffiliate) {
+          onJoinAffiliate(product);
+        }
+
+        // Abre o modal de divulgação exibindo imediatamente o link formatado com ?ref=MEU_CODIGO
+        setSelectedAffModal({ plan: product, aff: newAff });
+      } else {
+        if (onJoinAffiliate) {
+          onJoinAffiliate(product);
+        }
+      }
+    } catch (err) {
+      console.error('Erro na requisição /api/affiliates/join:', err);
+      if (onJoinAffiliate) {
+        onJoinAffiliate(product);
+      }
+    } finally {
+      setJoiningPlanId(null);
     }
   };
 
@@ -238,7 +297,8 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           {filteredPlatforms.map((product) => {
             const affiliated = isAffiliated(product.id);
             const userAff = getAffiliation(product.id);
-            const checkoutUrl = userAff?.affiliateLink || `${currentOrigin}/?checkout=${product.id}${userAff?.affiliateCode ? `&ref=${userAff.affiliateCode}` : ''}`;
+            const planSlugOrId = product.slug || product.id;
+            const checkoutUrl = userAff?.affiliateLink || `${currentOrigin}/plan/${planSlugOrId}${userAff?.affiliateCode ? `?ref=${userAff.affiliateCode}` : ''}`;
 
             return (
               <div
@@ -398,10 +458,10 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                           <div className="flex items-center gap-2 pt-1">
                             <button
                               onClick={() => setSelectedAffModal({ plan: product, aff: userAff })}
-                              className="flex-1 bg-white/10 hover:bg-white/15 text-white text-[11px] font-bold py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-white/10"
+                              className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                             >
                               <Share2 className="w-3.5 h-3.5 text-[#D9F22A]" />
-                              Divulgar Produto
+                              Ver Link de Divulgação
                             </button>
 
                             <button
@@ -417,10 +477,20 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                       ) : (
                         <button
                           onClick={() => handleAffiliateClick(product)}
-                          className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
+                          disabled={joiningPlanId === product.id}
+                          className="w-full bg-[#D9F22A] hover:bg-[#c8e217] disabled:opacity-75 disabled:cursor-not-allowed text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
                         >
-                          <Sparkles className="w-4 h-4 fill-current" />
-                          <span>Afiliar-se com 1 Clique (Ganhe {product.commissionPercentage}%)</span>
+                          {joiningPlanId === product.id ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Vinculando Afiliação...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 fill-current" />
+                              <span>Afiliar-se com 1 Clique (Ganhe {product.commissionPercentage}%)</span>
+                            </>
+                          )}
                         </button>
                       )}
 
@@ -521,11 +591,11 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                   <input
                     type="text"
                     readOnly
-                    value={`${currentOrigin}/?checkout=${selectedAffModal.plan.id}&ref=${selectedAffModal.aff.affiliateCode}`}
+                    value={`${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`}
                     className="flex-1 bg-[#080d1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono select-all truncate"
                   />
                   <button
-                    onClick={() => handleCopyLink(`${currentOrigin}/?checkout=${selectedAffModal.plan.id}&ref=${selectedAffModal.aff.affiliateCode}`, 'checkout')}
+                    onClick={() => handleCopyLink(`${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`, 'checkout')}
                     className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
                   >
                     {copiedId === 'checkout' ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
@@ -535,7 +605,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
                 <div className="pt-1 flex items-center justify-between text-xs">
                   <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Olá! Conheça o ${selectedAffModal.plan.name} da ${selectedAffModal.plan.companyName}. Acesse o link oficial para contratar com condições exclusivas: ${currentOrigin}/?checkout=${selectedAffModal.plan.id}&ref=${selectedAffModal.aff.affiliateCode}`)}`}
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Olá! Conheça o ${selectedAffModal.plan.name} da ${selectedAffModal.plan.companyName}. Acesse o link oficial para contratar com condições exclusivas: ${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
@@ -561,7 +631,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
               <div className="p-4 bg-[#050811] border border-white/10 rounded-2xl flex items-center gap-4">
                 <div className="w-24 h-24 bg-white p-2 rounded-xl border flex-shrink-0 flex items-center justify-center">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${currentOrigin}/?checkout=${selectedAffModal.plan.id}&ref=${selectedAffModal.aff.affiliateCode}`)}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`)}`}
                     alt="QR Code do Checkout"
                     className="w-full h-full"
                   />

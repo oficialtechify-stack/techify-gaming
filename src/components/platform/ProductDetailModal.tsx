@@ -17,7 +17,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   if (!product) return null;
 
-  const affiliateLink = `https://leadspay.com/plan/${product.slug || product.id}?ref=${product.affiliateCode || 'LEADS'}`;
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
+  const affiliateLink = `${currentOrigin}/plan/${product.slug || product.id}?ref=${product.affiliateCode || 'LEADS'}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(affiliateLink);

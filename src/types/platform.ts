@@ -136,6 +136,7 @@ export type PlatformProduct = CompanyPlan;
 export interface UserAffiliation {
   id: string;
   userId: string;
+  user_id?: string;
   userName: string;
   affiliateName?: string;
   userEmail: string;
@@ -143,12 +144,14 @@ export interface UserAffiliation {
   companyName: string;
   companyLogo: string;
   planId: string;
+  plan_id?: string;
   planName: string;
   platformName?: string;
   priceSetup: number;
   commissionPercentage: number;
   commissionValue: number;
   affiliateCode: string;
+  affiliate_code?: string;
   affiliateLink: string;
   clicks: number;
   clicksCount?: number;

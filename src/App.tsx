@@ -17,6 +17,7 @@ import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
 import { getCompanyPlanByIdOrSlug } from './services/firestoreService';
 import { CompanyPlan } from './types/platform';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliateTracking';
 
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -34,36 +35,32 @@ function MainApp() {
       try {
         const params = new URLSearchParams(window.location.search);
         
-        // 1. Salvar imediatamente o parâmetro ?ref=... no localStorage (leadspay_affiliate_ref e techify_affiliate_ref para compatibilidade)
-        const refParam = params.get('ref') || params.get('r');
-        if (refParam && refParam.trim()) {
-          const cleanRef = refParam.trim();
-          localStorage.setItem('leadspay_affiliate_ref', cleanRef);
-          localStorage.setItem('techify_affiliate_ref', cleanRef);
-          setAffiliateRef(cleanRef);
-          console.log('📌 [LeadsPay App] Código de afiliado salvo no localStorage:', cleanRef);
+        // 1. Capturar código do afiliado via Cookie de 15 dias e localStorage
+        const capturedRef = handleAffiliateTracking();
+        if (capturedRef) {
+          setAffiliateRef(capturedRef);
         } else {
-          const stored = localStorage.getItem('leadspay_affiliate_ref') || localStorage.getItem('techify_affiliate_ref');
+          const stored = getActiveAffiliateRef();
           if (stored) setAffiliateRef(stored);
         }
 
-        // 2. Detectar se a URL é um link direto de checkout (?checkout=... ou /checkout/...)
+        // 2. Detectar se a URL é um link direto de plano/checkout (/plan/[id], /checkout/[id], ?plan=... ou ?checkout=...)
         let targetPlanId: string | null = null;
         if (params.get('checkout')) targetPlanId = params.get('checkout');
         else if (params.get('plan')) targetPlanId = params.get('plan');
         else if (params.get('plano')) targetPlanId = params.get('plano');
 
-        if (!targetPlanId && window.location.pathname.startsWith('/checkout')) {
+        if (!targetPlanId && (window.location.pathname.startsWith('/plan') || window.location.pathname.startsWith('/checkout'))) {
           const pathSegments = window.location.pathname.split('/').filter(Boolean);
           if (pathSegments[1]) targetPlanId = pathSegments[1];
         }
 
-        if (!targetPlanId && window.location.hash.includes('checkout')) {
-          const hashMatch = window.location.hash.match(/checkout[=/]([a-zA-Z0-9_-]+)/);
+        if (!targetPlanId && (window.location.hash.includes('checkout') || window.location.hash.includes('plan'))) {
+          const hashMatch = window.location.hash.match(/(?:checkout|plan)[=/]([a-zA-Z0-9_-]+)/);
           if (hashMatch && hashMatch[1]) targetPlanId = hashMatch[1];
         }
 
-        // 3. Se houver link de checkout, carrega a oferta do Firestore
+        // 3. Se houver link de plano/checkout, carrega a oferta do Firestore
         if (targetPlanId) {
           setIsLoadingCheckout(true);
           setCheckoutError(null);

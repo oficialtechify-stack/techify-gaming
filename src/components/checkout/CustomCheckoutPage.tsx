@@ -21,6 +21,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { createSaleTransactionInFirebase } from '../../services/firestoreService';
+import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
 
 interface CustomCheckoutPageProps {
   plan: CompanyPlan;
@@ -152,37 +153,15 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     return () => clearInterval(timer);
   }, [isPaid]);
 
-  // Persistência imediata do Código do Afiliado no localStorage ao carregar
+  // Persistência do Código do Afiliado via Cookie de 15 dias e localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const refUrl = params.get('ref') || params.get('r');
-        if (refUrl && refUrl.trim()) {
-          localStorage.setItem('techify_affiliate_ref', refUrl.trim());
-          console.log('[Checkout] Código de afiliado gravado no localStorage via URL:', refUrl.trim());
-        } else if (affiliateRef && affiliateRef.trim()) {
-          localStorage.setItem('techify_affiliate_ref', affiliateRef.trim());
-        }
-      } catch (err) {
-        console.warn('Erro ao salvar techify_affiliate_ref:', err);
-      }
-    }
+    handleAffiliateTracking();
   }, [affiliateRef]);
 
-  // Recupera código do afiliado do localStorage ou prop ou URL
+  // Recupera código do afiliado do Cookie de 15 dias ou localStorage ou prop ou URL
   const getActiveAffiliateCode = (): string | null => {
     if (affiliateRef && affiliateRef.trim()) return affiliateRef.trim();
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('techify_affiliate_ref');
-        if (saved && saved.trim()) return saved.trim();
-        const params = new URLSearchParams(window.location.search);
-        const refParam = params.get('ref') || params.get('r');
-        if (refParam && refParam.trim()) return refParam.trim();
-      } catch (e) {}
-    }
-    return null;
+    return getActiveAffiliateRef();
   };
 
   const formatCountdown = (seconds: number) => {
