@@ -76,6 +76,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [isCheckingPixStatus, setIsCheckingPixStatus] = useState<boolean>(false);
   const [pixCopied, setPixCopied] = useState<boolean>(false);
   const [pixSecondsLeft, setPixSecondsLeft] = useState<number>(900); // 15:00 min real timer
+  const [pixError, setPixError] = useState<string | null>(null);
 
   // Processing & completion states
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -103,11 +104,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   // Installment price calculation
   const installment12xValue = Number(((finalTotal * 1.24) / 12).toFixed(2));
 
-  // Dynamic fallback PIX Code
-  const defaultPixCode = `00020126580014br.gov.bcb.pix0136${plan.id.slice(0, 8)}-techify-mp520400005303986540${finalTotal.toFixed(2)}5802BR5925Techify Pagamentos Digitais6009Sao Paulo62070503***6304E8A2`;
-
-  // Active PIX string
-  const activePixCode = pixData?.qr_code || defaultPixCode;
+  // Active PIX string (strictly from official Mercado Pago response, no simulated mocks)
+  const activePixCode = pixData?.qr_code || '';
 
   // Handle format phone
   const handlePhoneChange = (val: string) => {
@@ -197,11 +195,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const generateRealPixPayment = async () => {
     if (isGeneratingPix) return;
     setIsGeneratingPix(true);
+    setPixError(null);
 
     try {
       const activeAffiliate = getActiveAffiliateCode();
-      const cleanDoc = documentNumber.replace(/\D/g, '') || '11144477735';
+      const cleanDoc = documentNumber.replace(/\D/g, '') || '19119119100';
       const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
+      const cleanEmail = (email || 'cliente@techify.com').trim();
+      const cleanName = (fullName || 'Cliente Techify').trim();
 
       const response = await fetch('/api/payments/pix', {
         method: 'POST',
@@ -209,12 +210,18 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          valorTotal: cleanTotal,
           amount: cleanTotal,
           total_amount: cleanTotal,
-          description: `Compra: ${plan.name} - ${plan.companyName}`,
+          planName: plan.name,
+          description: `Plano ${plan.name}`,
+          emailDoCliente: cleanEmail,
+          nomeDoCliente: cleanName,
+          cpfLimpo: cleanDoc,
           payer: {
-            email: email.trim() || 'cliente@techify.com',
-            name: fullName.trim() || 'Cliente Techify',
+            email: cleanEmail,
+            name: cleanName,
+            first_name: cleanName.split(' ')[0] || 'Cliente',
             cpf: cleanDoc,
             documentNumber: cleanDoc
           },
@@ -222,24 +229,34 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           plan_id: plan.id,
           companyId: plan.companyId,
           company_id: plan.companyId,
+          refCode: activeAffiliate,
           affiliateRef: activeAffiliate,
           affiliate_code: activeAffiliate
         })
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+
+      if (response.ok && data.qr_code) {
         setPixData({
           id: String(data.payment_id || data.id),
           qr_code: data.qr_code,
           qr_code_base64: data.qr_code_base64,
           ticket_url: data.ticket_url,
-          status: data.status
+          status: data.status || 'pending'
         });
+        setPixError(null);
         setPixSecondsLeft(900); // Reset 15:00 min timer
+      } else {
+        const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Erro ao gerar o código Pix oficial na API do Mercado Pago.');
+        console.error('[Checkout Pix Error]:', errorMsg);
+        setPixError(errorMsg);
+        setPixData(null);
       }
-    } catch (err) {
-      console.warn('Erro ao gerar PIX via backend:', err);
+    } catch (err: any) {
+      console.error('Erro ao gerar PIX via backend:', err);
+      setPixError(err.message || 'Falha de conexão com o servidor');
+      setPixData(null);
     } finally {
       setIsGeneratingPix(false);
     }
@@ -807,62 +824,88 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 <span>Pague via PIX para aprovação instantânea ({formatCountdown(pixSecondsLeft)})</span>
               </div>
 
-              {/* Real QR Code */}
-              <div className="w-48 h-48 mx-auto bg-white p-3 rounded-2xl border-4 border-emerald-400 flex items-center justify-center shadow-2xl relative">
-                {isGeneratingPix ? (
-                  <div className="flex flex-col items-center justify-center gap-2 text-[#060A15]">
-                    <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
-                    <span className="text-[10px] font-bold">Gerando PIX Real...</span>
-                  </div>
-                ) : (
-                  <img
-                    src={pixData?.qr_code_base64 || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activePixCode)}`}
-                    alt="QR Code PIX Mercado Pago"
-                    className="w-full h-full object-contain"
-                  />
-                )}
-              </div>
-
-              {/* Copia e Cola with 1-click copy */}
-              <div className="space-y-1 text-left">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
-                  Código Pix Copia e Cola:
-                </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={activePixCode}
-                    className="flex-1 bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-[10px] text-white/80 font-mono select-all truncate"
-                  />
+              {pixError ? (
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs space-y-2">
+                  <p className="font-bold">Não foi possível gerar a cobrança PIX:</p>
+                  <p className="text-[11px] text-white/80">{pixError}</p>
                   <button
                     type="button"
-                    onClick={handleCopyPix}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shadow-md"
+                    onClick={generateRealPixPayment}
+                    className="mt-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-xs transition cursor-pointer"
                   >
-                    {pixCopied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
-                    {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                    Tentar Novamente
                   </button>
                 </div>
-              </div>
+              ) : (
+                <>
+                  {/* Real Official QR Code Image from Mercado Pago */}
+                  <div className="w-52 h-52 mx-auto bg-white p-3 rounded-2xl border-4 border-emerald-400 flex items-center justify-center shadow-2xl relative">
+                    {isGeneratingPix || !pixData ? (
+                      <div className="flex flex-col items-center justify-center gap-2 text-[#060A15]">
+                        <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
+                        <span className="text-[10px] font-bold">Gerando PIX Oficial Mercado Pago...</span>
+                      </div>
+                    ) : pixData?.qr_code_base64 ? (
+                      <img
+                        src={
+                          pixData.qr_code_base64.startsWith('data:')
+                            ? pixData.qr_code_base64
+                            : `data:image/png;base64,${pixData.qr_code_base64}`
+                        }
+                        alt="QR Code PIX Mercado Pago Oficial"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-[#060A15] p-2 text-center">
+                        <span className="text-xs font-bold">Utilize o Pix Copia e Cola abaixo para pagar no seu app de banco.</span>
+                      </div>
+                    )}
+                  </div>
 
-              {/* Quick Status Check */}
-              <div className="pt-2 flex items-center justify-between border-t border-white/10 text-[11px]">
-                <span className="text-white/50 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
-                  Aguardando transferência...
-                </span>
+                  {/* Copia e Cola with 1-click copy */}
+                  {pixData?.qr_code && (
+                    <div className="space-y-1 text-left">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
+                        Código Pix Copia e Cola Oficial:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={pixData.qr_code}
+                          className="flex-1 bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-[10px] text-white/80 font-mono select-all truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyPix}
+                          className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shadow-md"
+                        >
+                          {pixCopied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
+                          {pixCopied ? 'Copiado!' : 'Copiar PIX'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                <button
-                  type="button"
-                  onClick={() => pixData?.id && checkPaymentStatus(pixData.id)}
-                  disabled={isCheckingPixStatus}
-                  className="text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
-                  Verificar Pagamento
-                </button>
-              </div>
+                  {/* Quick Status Check */}
+                  <div className="pt-2 flex items-center justify-between border-t border-white/10 text-[11px]">
+                    <span className="text-white/50 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                      Aguardando transferência...
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => pixData?.id && checkPaymentStatus(pixData.id)}
+                      disabled={isCheckingPixStatus}
+                      className="text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
+                      Verificar Pagamento
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

@@ -245,287 +245,132 @@ app.get('/api/payments/config', (req, res) => {
   });
 });
 
-// Helper function to generate standard EMV BRCode if needed
-function generateEmvPixPayload(key: string, amount: number, name: string, city: string, txid: string): string {
-  const formattedAmount = amount.toFixed(2);
-  const cleanKey = key.trim();
-  const cleanName = name.slice(0, 25).trim();
-  const cleanCity = city.slice(0, 15).trim();
-  const cleanTxid = (txid || '***').slice(0, 25).replace(/[^a-zA-Z0-9]/g, '');
-
-  const pKey = `0014br.gov.bcb.pix01${cleanKey.length.toString().padStart(2, '0')}${cleanKey}`;
-  const f26 = `26${pKey.length.toString().padStart(2, '0')}${pKey}`;
-  const f52 = '52040000';
-  const f53 = '5303986';
-  const f54 = `54${formattedAmount.length.toString().padStart(2, '0')}${formattedAmount}`;
-  const f58 = '5802BR';
-  const f59 = `59${cleanName.length.toString().padStart(2, '0')}${cleanName}`;
-  const f60 = `60${cleanCity.length.toString().padStart(2, '0')}${cleanCity}`;
-  const p62 = `05${cleanTxid.length.toString().padStart(2, '0')}${cleanTxid}`;
-  const f62 = `62${p62.length.toString().padStart(2, '0')}${p62}`;
-
-  const payloadWithoutCrc = `000201${f26}${f52}${f53}${f54}${f58}${f59}${f60}${f62}6304`;
-  
-  // Calculate CRC16 CCITT
-  let crc = 0xFFFF;
-  for (let i = 0; i < payloadWithoutCrc.length; i++) {
-    crc ^= payloadWithoutCrc.charCodeAt(i) << 8;
-    for (let j = 0; j < 8; j++) {
-      if ((crc & 0x8000) !== 0) {
-        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
-      } else {
-        crc = (crc << 1) & 0xFFFF;
-      }
-    }
-  }
-  const crcHex = crc.toString(16).toUpperCase().padStart(4, '0');
-  return `${payloadWithoutCrc}${crcHex}`;
-}
-
 // 3. Create Real PIX Payment using Official Mercado Pago SDK
 app.post('/api/payments/pix', async (req, res) => {
   try {
     const { 
-      amount, 
-      total_amount, 
-      description, 
-      payer, 
-      planId, 
-      plan_id, 
-      companyId, 
-      company_id, 
-      affiliateRef, 
-      affiliate_code 
+      valorTotal,
+      total_amount,
+      amount,
+      planName,
+      description,
+      payer,
+      emailDoCliente,
+      nomeDoCliente,
+      cpfLimpo,
+      refCode,
+      affiliate_code,
+      affiliateRef,
+      planId,
+      plan_id
     } = req.body;
 
-    // 1. Limpeza e Validação de Valor (Float ex: 197.99)
-    const rawAmount = total_amount !== undefined ? total_amount : amount;
-    const numAmount = Number(parseFloat(String(rawAmount || 0)).toFixed(2));
-
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return res.status(400).json({ error: 'Valor inválido para o PIX' });
+    const finalAmount = Number(valorTotal ?? total_amount ?? amount);
+    if (isNaN(finalAmount) || finalAmount <= 0) {
+      return res.status(400).json({ error: 'Valor total inválido para a cobrança Pix' });
     }
 
-    // 2. Limpeza dos Dados do Pagador (CPF apenas números, sem pontuação)
-    const payerObj = payer || {};
-    const payerEmail = (payerObj.email || 'cliente@techify.com').trim();
-    const fullName = (payerObj.name || payerObj.fullName || 'Cliente Techify').trim();
-    const nameParts = fullName.split(' ').filter(Boolean);
-    const firstName = nameParts[0] || 'Cliente';
-    const lastName = nameParts.slice(1).join(' ') || 'Techify';
+    const finalPlanName = planName || (description ? description.replace(/^Compra:\s*/, '') : '') || (planId ? `Plano ${planId}` : 'Techify');
+    const finalEmail = (emailDoCliente || payer?.email || 'cliente@techify.com').trim();
+    const finalFullName = (nomeDoCliente || payer?.name || payer?.fullName || 'Cliente Techify').trim();
+    const rawCpf = (cpfLimpo || payer?.cpf || payer?.documentNumber || payer?.identification?.number || '19119119100').toString();
+    const finalCpfLimpo = rawCpf.replace(/\D/g, '') || '19119119100';
+    const finalRefCode = refCode || affiliate_code || affiliateRef || null;
+    const finalPlanId = (planId || plan_id || null)?.toString() || null;
 
-    const rawDoc = (payerObj.cpf || payerObj.documentNumber || payerObj.identification?.number || '11144477735').toString();
-    const cleanDoc = rawDoc.replace(/\D/g, '');
-    const validDoc = cleanDoc.length === 11 || cleanDoc.length === 14 ? cleanDoc : '11144477735';
-    const docType = validDoc.length === 14 ? 'CNPJ' : 'CPF';
+    // Inicialização da SDK oficial do Mercado Pago conforme especificação
+    const client = new MercadoPagoConfig({ 
+      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || MP_ACCESS_TOKEN 
+    });
+    const payment = new Payment(client);
 
-    const finalPlanId = (plan_id || planId || null)?.toString() || null;
-    const finalCompanyId = (company_id || companyId || null)?.toString() || null;
-    const finalAffiliateCode = (affiliate_code || affiliateRef || null)?.toString() || null;
+    const body = {
+      transaction_amount: Number(finalAmount.toFixed(2)),
+      description: `Plano ${finalPlanName}`,
+      payment_method_id: 'pix',
+      payer: {
+        email: finalEmail,
+        first_name: finalFullName.split(' ')[0] || 'Cliente',
+        identification: {
+          type: finalCpfLimpo.length > 11 ? 'CNPJ' : 'CPF',
+          number: finalCpfLimpo
+        }
+      },
+      metadata: {
+        affiliate_code: finalRefCode,
+        plan_id: finalPlanId
+      }
+    };
 
-    const idempotencyKey = `pix-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
-    console.log('[Mercado Pago SDK] Gerando pagamento PIX oficial:', {
-      amount: numAmount,
-      payerEmail,
-      fullName,
-      cleanDoc,
-      docType,
-      plan_id: finalPlanId,
-      affiliate_code: finalAffiliateCode
+    console.log('[Mercado Pago SDK] Chamando payment.create():', {
+      transaction_amount: body.transaction_amount,
+      description: body.description,
+      email: body.payer.email,
+      first_name: body.payer.first_name,
+      doc_type: body.payer.identification.type,
+      plan_id: finalPlanId
     });
 
-    let paymentId: string = '';
-    let qrCode: string = '';
-    let qrCodeBase64: string | null = null;
-    let ticketUrl: string | null = null;
-    let paymentStatus: string = 'pending';
-    let statusDetail: string = 'waiting_transfer';
+    const result = await payment.create({ body });
 
-    // Tentativa 1: SDK Oficial Mercado Pago
-    try {
-      const sdkResponse = await mpPaymentService.create({
-        body: {
-          transaction_amount: numAmount,
-          description: (description || `Plano Techify: ${finalPlanId || ''}`).slice(0, 100),
-          payment_method_id: 'pix',
-          notification_url: `${req.protocol}://${req.get('host')}/api/webhooks/mercadopago`,
-          payer: {
-            email: payerEmail,
-            first_name: firstName,
-            last_name: lastName,
-            identification: {
-              type: docType,
-              number: validDoc
-            }
-          },
-          metadata: {
-            plan_id: finalPlanId,
-            company_id: finalCompanyId,
-            affiliate_code: finalAffiliateCode
-          }
-        },
-        requestOptions: {
-          idempotencyKey
-        }
+    if (!result || !result.id || !result.point_of_interaction?.transaction_data?.qr_code) {
+      console.error('[Mercado Pago SDK Error] Resposta incompleta do Mercado Pago:', result);
+      return res.status(500).json({
+        error: 'Mercado Pago não retornou os dados completos do Pix (qr_code ausente).'
       });
-
-      if (sdkResponse && sdkResponse.id) {
-        paymentId = String(sdkResponse.id);
-        paymentStatus = sdkResponse.status || 'pending';
-        statusDetail = sdkResponse.status_detail || 'waiting_transfer';
-        qrCode = sdkResponse.point_of_interaction?.transaction_data?.qr_code || '';
-        qrCodeBase64 = sdkResponse.point_of_interaction?.transaction_data?.qr_code_base64 || null;
-        ticketUrl = sdkResponse.point_of_interaction?.transaction_data?.ticket_url || null;
-      }
-    } catch (sdkError: any) {
-      console.warn('[Mercado Pago SDK Warning]:', sdkError.message || sdkError);
     }
 
-    // Tentativa 2: Direct HTTP Fetch API Mercado Pago
-    if (!paymentId) {
-      try {
-        const mpPayload = {
-          transaction_amount: numAmount,
-          description: (description || `Plano Techify: ${finalPlanId || ''}`).slice(0, 100),
-          payment_method_id: 'pix',
-          notification_url: `${req.protocol}://${req.get('host')}/api/webhooks/mercadopago`,
-          payer: {
-            email: payerEmail,
-            first_name: firstName,
-            last_name: lastName,
-            identification: {
-              type: docType,
-              number: validDoc
-            }
-          },
-          metadata: {
-            plan_id: finalPlanId,
-            company_id: finalCompanyId,
-            affiliate_code: finalAffiliateCode
-          }
-        };
+    const qr_code = result.point_of_interaction.transaction_data.qr_code;
+    const qr_code_base64 = result.point_of_interaction.transaction_data.qr_code_base64;
+    const payment_id = result.id;
+    const ticket_url = result.point_of_interaction.transaction_data.ticket_url || null;
 
-        const response = await fetch('https://api.mercadopago.com/v1/payments', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
-            'X-Idempotency-Key': idempotencyKey
-          },
-          body: JSON.stringify(mpPayload)
-        });
-
-        const data = await response.json();
-        if (response.ok && data.id) {
-          paymentId = String(data.id);
-          paymentStatus = data.status || 'pending';
-          statusDetail = data.status_detail || 'waiting_transfer';
-          qrCode = data.point_of_interaction?.transaction_data?.qr_code || '';
-          qrCodeBase64 = data.point_of_interaction?.transaction_data?.qr_code_base64 || null;
-          ticketUrl = data.point_of_interaction?.transaction_data?.ticket_url || null;
-        }
-      } catch (httpErr: any) {
-        console.warn('[Mercado Pago Direct HTTP Warning]:', httpErr.message || httpErr);
-      }
-    }
-
-    // Fallback garantido de EMV BRCode se token em modo teste ou offline
-    if (!paymentId) {
-      paymentId = `MP-${Date.now().toString().slice(-8)}`;
-      qrCode = generateEmvPixPayload(
-        '09021052ddde4037f8daf9e7dbde717d',
-        numAmount,
-        'Techify Pagamentos',
-        'Sao Paulo',
-        paymentId
-      );
-      ticketUrl = `https://www.mercadopago.com.br/payments/${paymentId}/ticket`;
-      paymentStatus = 'pending';
-      statusDetail = 'waiting_transfer';
-    }
-
-    // Garantir que qr_code_base64 SEMPRE exista e seja válido para renderização <img src=...>
-    let finalQrCodeBase64: string = '';
-    if (qrCodeBase64) {
-      finalQrCodeBase64 = qrCodeBase64.startsWith('data:') 
-        ? qrCodeBase64 
-        : `data:image/png;base64,${qrCodeBase64}`;
-    } else if (qrCode) {
-      try {
-        finalQrCodeBase64 = await QRCode.toDataURL(qrCode, {
-          margin: 1,
-          width: 300,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-          }
-        });
-      } catch (qrErr) {
-        console.warn('Erro gerando QRCode base64 via lib:', qrErr);
-      }
-    }
-
-    // 3. GRAVAÇÃO AUTOMÁTICA NA COLEÇÃO sales DO FIRESTORE
-    // Requisitos: payment_id, plan_id, affiliate_code, total_amount, status, created_at
+    // Persistência no Firestore da coleção sales com o ID real retornado pela SDK
     const nowIso = new Date().toISOString();
     try {
-      const saleDocRef = doc(db, 'sales', String(paymentId));
-      const saleRecord = {
-        payment_id: String(paymentId),
+      const saleDocRef = doc(db, 'sales', String(payment_id));
+      await setDoc(saleDocRef, {
+        payment_id: String(payment_id),
+        id: String(payment_id),
         plan_id: finalPlanId,
-        affiliate_code: finalAffiliateCode,
-        total_amount: numAmount,
-        status: paymentStatus, // 'pending' ou 'approved'
-        created_at: nowIso,
-
-        // Metadados adicionais para retrocompatibilidade com o painel Techify:
-        id: String(paymentId),
-        amount: numAmount,
-        platformId: finalPlanId || '',
-        platformName: description || (finalPlanId ? `Plano ${finalPlanId}` : 'Plano Techify'),
-        companyId: finalCompanyId || '',
-        buyerName: fullName,
-        buyerEmail: payerEmail,
-        buyerCpf: validDoc,
+        affiliate_code: finalRefCode,
+        total_amount: body.transaction_amount,
+        amount: body.transaction_amount,
+        status: result.status || 'pending',
+        status_detail: result.status_detail || 'waiting_transfer',
+        created_at: result.date_created || nowIso,
+        qr_code,
+        qr_code_base64,
+        ticket_url,
         method: 'PIX',
-        utmSource: finalAffiliateCode ? `ref_${finalAffiliateCode}` : 'checkout_direto',
-        qr_code: qrCode,
-        qr_code_base64: finalQrCodeBase64
-      };
-
-      await setDoc(saleDocRef, saleRecord, { merge: true });
-      console.log(`✅ [Firestore sales] Documento gravado com sucesso! payment_id: ${paymentId}`, {
-        payment_id: String(paymentId),
-        plan_id: finalPlanId,
-        affiliate_code: finalAffiliateCode,
-        total_amount: numAmount,
-        status: paymentStatus,
-        created_at: nowIso
-      });
+        buyerName: finalFullName,
+        buyerEmail: finalEmail,
+        buyerCpf: finalCpfLimpo,
+        platformId: finalPlanId || '',
+        platformName: `Plano ${finalPlanName}`
+      }, { merge: true });
+      console.log(`✅ [Firestore sales] Transação real gravada: ${payment_id}`);
     } catch (dbErr) {
-      console.error('❌ [Firestore sales] Erro ao gravar venda na coleção sales:', dbErr);
+      console.error('Erro ao salvar registro de venda no Firestore:', dbErr);
     }
 
-    // 4. Retorno ao Front-end com qr_code e qr_code_base64
+    // Retorno da resposta REAL do Mercado Pago para o front-end
     return res.json({
-      id: String(paymentId),
-      payment_id: String(paymentId),
-      status: paymentStatus,
-      status_detail: statusDetail,
-      qr_code: qrCode,
-      qr_code_base64: finalQrCodeBase64,
-      ticket_url: ticketUrl,
-      total_amount: numAmount,
-      amount: numAmount,
-      plan_id: finalPlanId,
-      affiliate_code: finalAffiliateCode,
-      created_at: nowIso
+      qr_code,
+      qr_code_base64,
+      payment_id,
+      id: String(payment_id),
+      status: result.status || 'pending',
+      ticket_url
     });
 
   } catch (error: any) {
-    console.error('Erro no endpoint de criação do PIX:', error);
-    res.status(500).json({ error: error.message || 'Erro ao comunicar com Mercado Pago' });
+    console.error('[Mercado Pago API Error]:', error);
+    const reason = error?.message || error?.error || 'Erro ao processar cobrança Pix no Mercado Pago';
+    return res.status(500).json({ 
+      error: reason,
+      details: error?.causes || error?.cause || null
+    });
   }
 });
 
