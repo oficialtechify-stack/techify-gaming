@@ -18,6 +18,12 @@ import {
   query,
   where
 } from 'firebase/firestore';
+import { 
+  getOrCreateCustomer, 
+  createPixPayment, 
+  createCreditCardPayment, 
+  cleanDocument 
+} from './lib/asaas';
 
 const app = express();
 const PORT = 3000;
@@ -432,6 +438,377 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
     console.error('Erro ao creditar comissão da venda:', err);
   }
 }
+
+// =========================================================================
+// 🚀 ENDPOINTS DE PAGAMENTO ASAAS V3 (PIX, CARTÃO DE CRÉDITO E WEBHOOK)
+// =========================================================================
+
+/**
+ * POST /api/payments
+ * Processa pagamentos via Asaas v3 (PIX ou Cartão de Crédito)
+ */
+app.post('/api/payments', async (req, res) => {
+  try {
+    const {
+      paymentMethod,
+      amount,
+      valorTotal,
+      total_amount,
+      description,
+      user,
+      creditCard,
+      holderInfo,
+      planId,
+      plan_id,
+      companyId,
+      company_id,
+      refCode,
+      affiliate_code,
+      affiliateRef
+    } = req.body || {};
+
+    const normalizedMethod = String(paymentMethod || 'PIX').toUpperCase().trim();
+    if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD') {
+      return res.status(400).json({ 
+        error: 'Método de pagamento inválido. Utilize "PIX" ou "CREDIT_CARD".',
+        received: paymentMethod 
+      });
+    }
+
+    const rawAmount = amount ?? valorTotal ?? total_amount;
+    const finalAmount = Number(parseFloat(String(rawAmount)).toFixed(2));
+    if (isNaN(finalAmount) || finalAmount <= 0) {
+      return res.status(400).json({ error: 'Valor da cobrança inválido ou não informado.' });
+    }
+
+    const customerData = user || {
+      name: req.body.nomeDoCliente || req.body.name || 'Cliente LeadsPay',
+      email: req.body.emailDoCliente || req.body.email,
+      cpfCnpj: req.body.cpfLimpo || req.body.cpf || req.body.documentNumber,
+      phone: req.body.telefone || req.body.phone,
+      mobilePhone: req.body.celular || req.body.mobilePhone,
+      postalCode: req.body.postalCode || req.body.cep,
+      address: req.body.address,
+      addressNumber: req.body.addressNumber
+    };
+
+    if (!customerData?.email) {
+      return res.status(400).json({ error: 'O e-mail do cliente é obrigatório para processar a cobrança.' });
+    }
+
+    const cleanCpf = cleanDocument(customerData.cpfCnpj);
+    if (!cleanCpf) {
+      return res.status(400).json({ error: 'CPF ou CNPJ válido é obrigatório para o cadastro e cobrança no Asaas.' });
+    }
+
+    const cookieRef = getAffiliateRefFromReq(req);
+    const finalRefCode = refCode || affiliate_code || affiliateRef || cookieRef || null;
+    const finalPlanId = (planId || plan_id || null)?.toString() || null;
+    const finalCompanyId = (companyId || company_id || null)?.toString() || null;
+    const finalDescription = description || `Assinatura Plano ${finalPlanId || 'LeadsPay'}`;
+
+    // 1. Obter ou Criar Cliente no Asaas
+    let customerId: string;
+    try {
+      customerId = await getOrCreateCustomer({
+        name: customerData.name || 'Cliente LeadsPay',
+        email: customerData.email,
+        cpfCnpj: cleanCpf,
+        phone: customerData.phone,
+        mobilePhone: customerData.mobilePhone || customerData.phone,
+        postalCode: customerData.postalCode || customerData.cep,
+        address: customerData.address,
+        addressNumber: customerData.addressNumber
+      });
+    } catch (custError: any) {
+      return res.status(400).json({ 
+        error: custError.message || 'Erro ao registrar cliente no Asaas.',
+        code: 'CUSTOMER_CREATION_FAILED'
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // 2. Cobrança PIX via Asaas
+    if (normalizedMethod === 'PIX') {
+      try {
+        const pixResult = await createPixPayment(customerId, finalAmount, finalDescription);
+
+        // Persiste registro na coleção 'sales' do Firestore
+        try {
+          const saleDocRef = doc(db, 'sales', String(pixResult.paymentId));
+          await setDoc(saleDocRef, {
+            id: String(pixResult.paymentId),
+            payment_id: String(pixResult.paymentId),
+            gateway: 'Asaas v3',
+            method: 'PIX',
+            billingType: 'PIX',
+            plan_id: finalPlanId,
+            platformId: finalPlanId || '',
+            platformName: finalDescription,
+            companyId: finalCompanyId,
+            affiliate_code: finalRefCode,
+            affiliateCode: finalRefCode,
+            total_amount: finalAmount,
+            amount: finalAmount,
+            status: pixResult.status || 'PENDING',
+            status_detail: 'waiting_transfer',
+            created_at: nowIso,
+            qr_code: pixResult.payload,
+            qr_code_base64: pixResult.encodedImage,
+            ticket_url: pixResult.invoiceUrl || pixResult.bankSlipUrl || null,
+            buyerName: customerData.name || 'Cliente LeadsPay',
+            buyerEmail: customerData.email,
+            buyerCpf: cleanCpf,
+            commissionCredited: false
+          }, { merge: true });
+          console.log(`✅ [Firestore Asaas Sales] Venda PIX registrada: ${pixResult.paymentId}`);
+        } catch (dbErr) {
+          console.warn('Aviso ao salvar venda Asaas PIX no Firestore:', dbErr);
+        }
+
+        return res.status(200).json({
+          success: true,
+          gateway: 'Asaas v3',
+          billingType: 'PIX',
+          paymentId: pixResult.paymentId,
+          payment_id: pixResult.paymentId,
+          id: pixResult.paymentId,
+          status: pixResult.status,
+          amount: pixResult.value,
+          payload: pixResult.payload,
+          encodedImage: pixResult.encodedImage,
+          qr_code: pixResult.payload,
+          qr_code_base64: pixResult.encodedImage,
+          expirationDate: pixResult.expirationDate,
+          invoiceUrl: pixResult.invoiceUrl,
+          ticket_url: pixResult.invoiceUrl,
+          metadata: {
+            planId: finalPlanId,
+            companyId: finalCompanyId,
+            affiliateRef: finalRefCode,
+            customerId
+          }
+        });
+      } catch (pixErr: any) {
+        return res.status(400).json({ 
+          error: pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.',
+          code: 'PIX_GENERATION_FAILED'
+        });
+      }
+    }
+
+    // 3. Cobrança Cartão de Crédito via Asaas
+    if (normalizedMethod === 'CREDIT_CARD') {
+      if (!creditCard || !creditCard.number || !creditCard.expiryMonth || !creditCard.expiryYear || !creditCard.ccv) {
+        return res.status(400).json({
+          error: 'Dados do cartão de crédito incompletos (número, mês, ano e CCV são obrigatórios).',
+          code: 'INVALID_CREDIT_CARD'
+        });
+      }
+
+      const cardHolderInfo = holderInfo || {
+        name: creditCard.holderName || customerData.name,
+        email: customerData.email,
+        cpfCnpj: cleanCpf,
+        postalCode: customerData.postalCode || '01310100',
+        addressNumber: customerData.addressNumber || '100',
+        phone: customerData.phone || customerData.mobilePhone || '11999999999'
+      };
+
+      try {
+        const cardResult = await createCreditCardPayment(
+          customerId,
+          finalAmount,
+          finalDescription,
+          creditCard,
+          cardHolderInfo
+        );
+
+        const isApproved = cardResult.status === 'CONFIRMED' || cardResult.status === 'RECEIVED';
+
+        // Persiste registro na coleção 'sales' do Firestore
+        try {
+          const saleDocRef = doc(db, 'sales', String(cardResult.paymentId));
+          await setDoc(saleDocRef, {
+            id: String(cardResult.paymentId),
+            payment_id: String(cardResult.paymentId),
+            gateway: 'Asaas v3',
+            method: 'CREDIT_CARD',
+            billingType: 'CREDIT_CARD',
+            plan_id: finalPlanId,
+            platformId: finalPlanId || '',
+            platformName: finalDescription,
+            companyId: finalCompanyId,
+            affiliate_code: finalRefCode,
+            affiliateCode: finalRefCode,
+            total_amount: finalAmount,
+            amount: finalAmount,
+            status: isApproved ? 'approved' : cardResult.status,
+            status_detail: isApproved ? 'accredited' : 'pending',
+            created_at: nowIso,
+            approved_at: isApproved ? nowIso : null,
+            buyerName: customerData.name || 'Cliente LeadsPay',
+            buyerEmail: customerData.email,
+            buyerCpf: cleanCpf,
+            commissionCredited: false
+          }, { merge: true });
+
+          // Se o pagamento no cartão já foi aprovado instantaneamente, credita comissão
+          if (isApproved) {
+            await creditSaleCommissionAndBalances(String(cardResult.paymentId), {
+              transaction_amount: finalAmount,
+              plan_id: finalPlanId,
+              affiliate_code: finalRefCode
+            });
+          }
+        } catch (dbErr) {
+          console.warn('Aviso ao salvar venda Asaas Cartão no Firestore:', dbErr);
+        }
+
+        return res.status(200).json({
+          success: true,
+          gateway: 'Asaas v3',
+          billingType: 'CREDIT_CARD',
+          paymentId: cardResult.paymentId,
+          payment_id: cardResult.paymentId,
+          id: cardResult.paymentId,
+          status: cardResult.status,
+          amount: cardResult.value,
+          confirmedDate: cardResult.confirmedDate,
+          invoiceUrl: cardResult.invoiceUrl,
+          metadata: {
+            planId: finalPlanId,
+            companyId: finalCompanyId,
+            affiliateRef: finalRefCode,
+            customerId
+          }
+        });
+      } catch (cardErr: any) {
+        return res.status(400).json({
+          error: cardErr.message || 'Cartão de crédito recusado ou inválido.',
+          code: 'CARD_PAYMENT_DECLINED'
+        });
+      }
+    }
+
+    return res.status(400).json({ error: 'Operação não suportada' });
+  } catch (err: any) {
+    console.error('[POST /api/payments] Erro interno:', err);
+    return res.status(500).json({ 
+      error: err.message || 'Erro interno no servidor ao processar pagamento.',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
+  }
+});
+
+/**
+ * GET /api/payments/asaas/:id
+ * Consulta status atualizado da cobrança no Asaas
+ */
+app.get('/api/payments/asaas/:id', async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+    if (!paymentId) {
+      return res.status(400).json({ error: 'ID da cobrança Asaas é obrigatório.' });
+    }
+
+    const apiKey = process.env.ASAAS_API_KEY || '';
+    const apiUrl = (process.env.ASAAS_API_URL || 'https://www.asaas.com/api/v3').replace(/\/+$/, '');
+
+    const response = await fetch(`${apiUrl}/payments/${paymentId}`, {
+      headers: {
+        'access_token': apiKey,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Erro ao consultar cobrança no Asaas (${response.status})` });
+    }
+
+    const data = await response.json();
+    const isApproved = data.status === 'RECEIVED' || data.status === 'CONFIRMED';
+
+    // Se aprovado, sincroniza liberação e comissão
+    if (isApproved) {
+      try {
+        await creditSaleCommissionAndBalances(String(paymentId), {
+          transaction_amount: data.value,
+          ...data
+        });
+      } catch (cErr) {
+        console.warn('Aviso ao sincronizar comissão no status Asaas:', cErr);
+      }
+    }
+
+    return res.json({
+      id: data.id,
+      paymentId: data.id,
+      status: isApproved ? 'approved' : data.status,
+      rawStatus: data.status,
+      value: data.value,
+      amount: data.value,
+      billingType: data.billingType,
+      invoiceUrl: data.invoiceUrl
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro interno ao consultar Asaas' });
+  }
+});
+
+/**
+ * POST /api/webhooks/asaas
+ * Webhook Oficial do Asaas para recebimento de notificações de pagamento em tempo real
+ */
+app.post('/api/webhooks/asaas', async (req, res) => {
+  try {
+    const { event, payment } = req.body || {};
+    console.log(`[Webhook Asaas Server] Evento recebido: ${event}`, {
+      paymentId: payment?.id,
+      customer: payment?.customer,
+      value: payment?.value
+    });
+
+    // Intercepta eventos PAYMENT_RECEIVED e PAYMENT_CONFIRMED
+    if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
+      const paymentId = payment?.id;
+      const customerId = payment?.customer;
+      const amountPaid = payment?.value;
+
+      console.log(`✅ [Webhook Asaas Server] Pagamento confirmado! ID: ${paymentId} | Cliente: ${customerId} | R$ ${amountPaid}`);
+
+      if (paymentId) {
+        const saleRef = doc(db, 'sales', String(paymentId));
+        const saleSnap = await getDoc(saleRef);
+        const nowIso = new Date().toISOString();
+
+        if (saleSnap.exists()) {
+          await updateDoc(saleRef, {
+            status: 'approved',
+            status_detail: 'accredited',
+            approved_at: nowIso,
+            updated_at: nowIso
+          });
+
+          // Credita comissões ao afiliado, empresa e taxa de plataforma
+          await creditSaleCommissionAndBalances(String(paymentId), {
+            transaction_amount: amountPaid,
+            ...saleSnap.data()
+          });
+
+          console.log(`[Webhook Asaas Server] Assinatura e comissões liberadas no Firestore para a venda ${paymentId}.`);
+        }
+      }
+    }
+
+    // O Asaas exige estritamente status 200 para confirmar o recebimento do webhook
+    return res.status(200).json({ received: true });
+  } catch (err: any) {
+    console.error('[Webhook Asaas Server Error]:', err);
+    return res.status(200).json({ received: true, error: err.message });
+  }
+});
 
 // Endpoint para afiliar-se com 1 Clique vinculando user_id, plan_id e affiliate_code
 app.post('/api/affiliates/join', async (req, res) => {

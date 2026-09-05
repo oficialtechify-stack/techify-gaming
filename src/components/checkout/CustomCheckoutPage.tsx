@@ -52,6 +52,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   
   // Credit card fields
   const [cardNumber, setCardNumber] = useState<string>('');
+  const [cardHolderName, setCardHolderName] = useState<string>('');
   const [cardExpiry, setCardExpiry] = useState<string>('');
   const [cardCvv, setCardCvv] = useState<string>('');
   const [installments, setInstallments] = useState<number>(12);
@@ -170,7 +171,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} min`;
   };
 
-  // Trigger Real Mercado Pago PIX Generation
+  // Trigger Real PIX Generation via Asaas API (with fallback)
   const generateRealPixPayment = async () => {
     if (isGeneratingPix) return;
     setIsGeneratingPix(true);
@@ -182,28 +183,29 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
       const cleanEmail = (email || 'cliente@leadspay.com').trim();
       const cleanName = (fullName || 'Cliente LeadsPay').trim();
+      const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
 
-      const response = await fetch('/api/payments/pix', {
+      // 1. Tenta endpoint principal do Asaas (/api/payments)
+      let response = await fetch('/api/payments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          valorTotal: cleanTotal,
+          paymentMethod: 'PIX',
           amount: cleanTotal,
+          valorTotal: cleanTotal,
           total_amount: cleanTotal,
-          planName: plan.name,
           description: `Plano ${plan.name}`,
+          user: {
+            name: cleanName,
+            email: cleanEmail,
+            cpfCnpj: cleanDoc,
+            phone: cleanPhone
+          },
           emailDoCliente: cleanEmail,
           nomeDoCliente: cleanName,
           cpfLimpo: cleanDoc,
-          payer: {
-            email: cleanEmail,
-            name: cleanName,
-            first_name: cleanName.split(' ')[0] || 'Cliente',
-            cpf: cleanDoc,
-            documentNumber: cleanDoc
-          },
           planId: plan.id,
           plan_id: plan.id,
           companyId: plan.companyId,
@@ -214,31 +216,59 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         })
       });
 
-      const responseText = await response.text();
+      // Se falhar ou não retornar qr_code, tenta fallback para /api/payments/pix
       let data: any = {};
+      const responseText = await response.text();
       try {
         data = JSON.parse(responseText);
       } catch (parseErr) {
-        console.error('[Checkout Pix] Resposta não-JSON recebida:', responseText);
-        throw new Error(
-          response.ok
-            ? 'Resposta inesperada do processador de pagamento Pix.'
-            : `Erro no servidor (${response.status}): ${responseText.slice(0, 100)}`
-        );
+        console.warn('[Checkout Pix] Falha no parse JSON de /api/payments:', responseText);
       }
 
-      if (response.ok && data.qr_code) {
+      if (!response.ok || (!data.payload && !data.qr_code)) {
+        console.log('[Checkout Pix] Alternando para fallback /api/payments/pix...');
+        const fbRes = await fetch('/api/payments/pix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            valorTotal: cleanTotal,
+            amount: cleanTotal,
+            total_amount: cleanTotal,
+            planName: plan.name,
+            description: `Plano ${plan.name}`,
+            emailDoCliente: cleanEmail,
+            nomeDoCliente: cleanName,
+            cpfLimpo: cleanDoc,
+            planId: plan.id,
+            companyId: plan.companyId,
+            refCode: activeAffiliate
+          })
+        });
+        if (fbRes.ok) {
+          const fbData = await fbRes.json();
+          if (fbData.qr_code) {
+            data = fbData;
+            response = fbRes;
+          }
+        }
+      }
+
+      const activeQrCode = data.payload || data.qr_code;
+      const activeQrCodeBase64 = data.encodedImage || data.qr_code_base64;
+      const activePaymentId = data.paymentId || data.payment_id || data.id;
+
+      if (activeQrCode) {
         setPixData({
-          id: String(data.payment_id || data.id),
-          qr_code: data.qr_code,
-          qr_code_base64: data.qr_code_base64,
-          ticket_url: data.ticket_url,
+          id: String(activePaymentId),
+          qr_code: activeQrCode,
+          qr_code_base64: activeQrCodeBase64,
+          ticket_url: data.invoiceUrl || data.ticket_url,
           status: data.status || 'pending'
         });
         setPixError(null);
         setPixSecondsLeft(900); // Reset 15:00 min timer
       } else {
-        const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Erro ao gerar o código Pix oficial na API do Mercado Pago.');
+        const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Erro ao gerar o código Pix oficial.');
         console.error('[Checkout Pix Error]:', errorMsg);
         setPixError(errorMsg);
         setPixData(null);
@@ -259,19 +289,24 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   }, [paymentMethod, finalTotal]);
 
-  // Check PIX payment status in Mercado Pago
+  // Check PIX payment status in Asaas or fallback
   const checkPaymentStatus = async (paymentId: string) => {
     if (!paymentId || isPaid) return;
     setIsCheckingPixStatus(true);
 
     try {
-      const res = await fetch(`/api/payments/pix/${paymentId}`);
+      // 1. Tenta rota do Asaas
+      let res = await fetch(`/api/payments/asaas/${paymentId}`);
+      if (!res.ok) {
+        res = await fetch(`/api/payments/pix/${paymentId}`);
+      }
+
       if (res.ok) {
         const text = await res.text();
         try {
           const data = JSON.parse(text);
-          if (data.status === 'approved') {
-            await finalizeApprovedPayment('PIX', data.id);
+          if (data.status === 'approved' || data.status === 'CONFIRMED' || data.status === 'RECEIVED') {
+            await finalizeApprovedPayment('PIX', data.id || paymentId);
           }
         } catch (parseErr) {
           console.warn('Erro ao parsear status de pagamento:', parseErr);
@@ -441,13 +476,67 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     setIsProcessing(true);
 
     try {
-      // Direct processing for Card, Apple Pay, Google Pay, PicPay
+      if (paymentMethod === 'credit_card') {
+        const activeAffiliate = getActiveAffiliateCode();
+        const cleanDoc = documentNumber.replace(/\D/g, '') || '19119119100';
+        const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
+        const cleanEmail = (email || 'cliente@leadspay.com').trim();
+        const cleanName = (fullName || 'Cliente LeadsPay').trim();
+        const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
+        const [expMonth, expYear] = cardExpiry.split('/');
+
+        const res = await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentMethod: 'CREDIT_CARD',
+            amount: cleanTotal,
+            description: `Plano ${plan.name}`,
+            user: {
+              name: cleanName,
+              email: cleanEmail,
+              cpfCnpj: cleanDoc,
+              phone: cleanPhone
+            },
+            creditCard: {
+              holderName: cardHolderName || cleanName,
+              number: cardNumber.replace(/\D/g, ''),
+              expiryMonth: expMonth?.trim(),
+              expiryYear: expYear?.length === 2 ? `20${expYear.trim()}` : expYear?.trim(),
+              ccv: cardCvv.trim()
+            },
+            holderInfo: {
+              name: cardHolderName || cleanName,
+              email: cleanEmail,
+              cpfCnpj: cleanDoc,
+              phone: cleanPhone,
+              postalCode: '01310100',
+              addressNumber: '100'
+            },
+            planId: plan.id,
+            companyId: plan.companyId,
+            refCode: activeAffiliate
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && (data.status === 'CONFIRMED' || data.status === 'RECEIVED' || data.status === 'approved' || data.success)) {
+          await finalizeApprovedPayment('Cartão de Crédito', data.paymentId || data.id);
+          return;
+        } else {
+          const errMsg = data.error || 'Cartão não autorizado pela operadora. Verifique os dados e tente novamente.';
+          alert(errMsg);
+          return;
+        }
+      }
+
+      // Direct processing for Apple Pay, Google Pay, PicPay
       let paymentMethodName = 'Cartão de Crédito';
       if (paymentMethod === 'picpay') paymentMethodName = 'PicPay';
       else if (paymentMethod === 'apple_pay') paymentMethodName = 'Apple Pay';
       else if (paymentMethod === 'google_pay') paymentMethodName = 'Google Pay';
 
-      await finalizeApprovedPayment(paymentMethodName, `MP-${Date.now().toString().slice(-8)}`);
+      await finalizeApprovedPayment(paymentMethodName, `PAY-${Date.now().toString().slice(-8)}`);
     } catch (err: any) {
       console.error('Erro no checkout:', err);
       alert('Houve um problema ao processar seu pagamento. Tente novamente.');
@@ -757,6 +846,19 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   />
                   <CreditCard className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-white/40" />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1.5">
+                  Nome impresso no cartão
+                </label>
+                <input
+                  type="text"
+                  placeholder="Como está gravado no cartão"
+                  value={cardHolderName}
+                  onChange={(e) => setCardHolderName(e.target.value.toUpperCase())}
+                  className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors uppercase"
+                />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
