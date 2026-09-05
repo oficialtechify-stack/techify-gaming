@@ -21,6 +21,7 @@ import {
   subscribeCompanies,
   subscribePlans,
   subscribeUserAffiliations,
+  subscribeAllAffiliations,
   subscribeSales,
   subscribeWithdrawals,
   createCompanyInFirebase,
@@ -98,17 +99,25 @@ interface PlatformLayoutProps {
   onBackToHome: () => void;
 }
 
+const SUPERADMIN_EMAIL = 'rickmarketing81@gmail.com';
+
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
   const { currentUser, userProfile, userRole, setUserRole, logout } = useAuth();
   const [roleMode, setRoleMode] = useState<UserRoleMode>(userRole || 'afiliado');
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
+  const isSuperAdmin = Boolean(
+    (currentUser?.email && currentUser.email.toLowerCase() === SUPERADMIN_EMAIL) ||
+    (userProfile?.email && userProfile.email.toLowerCase() === SUPERADMIN_EMAIL)
+  );
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
   const [plans, setPlans] = useState<CompanyPlan[]>([]);
   const [affiliations, setAffiliations] = useState<UserAffiliation[]>([]);
+  const [allAffiliations, setAllAffiliations] = useState<UserAffiliation[]>([]);
   const [transactions, setTransactions] = useState<SaleTransaction[]>([]);
   const [paymentStats, setPaymentStats] = useState<PaymentMethodStat[]>(INITIAL_PAYMENT_STATS);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
@@ -174,12 +183,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   }, [userRole]);
 
   useEffect(() => {
-    if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
+    if (activeTab === 'database' && !isSuperAdmin) {
+      setActiveTab('dashboard');
+    } else if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
       setActiveTab('dashboard');
     } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios')) {
       setActiveTab('minha_empresa');
     }
-  }, [roleMode, activeTab]);
+  }, [roleMode, activeTab, isSuperAdmin]);
 
   // Robust Role Switcher with Mandatory Registration
   const handleSwitchRole = (targetRole: UserRoleMode) => {
@@ -265,6 +276,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setAffiliations(affList);
     });
 
+    // 5.1 Realtime listener for All Affiliations (Company & Marketplace)
+    const unsubAllAffiliations = subscribeAllAffiliations((allAffList) => {
+      setAllAffiliations(allAffList);
+    });
+
     // 6. Realtime listener for Sales Transactions
     const unsubSales = subscribeSales((salesList) => {
       setTransactions(salesList);
@@ -334,6 +350,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       unsubCompanies();
       unsubPlans();
       unsubAffiliations();
+      unsubAllAffiliations();
       unsubSales();
       unsubWith();
     };
@@ -464,19 +481,54 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   };
 
-  // Handle delete affiliation
+  // Handle delete affiliation (Afiliado sai voluntariamente)
   const handleDeleteAffiliation = async (affId: string, planId?: string, companyId?: string) => {
-    if (!confirm('Deseja cancelar sua afiliação a este plano?')) return;
     try {
       await deleteAffiliationInFirebase(affId, planId, companyId);
+      // Limpa chave local de persistência para que o usuário possa se afiliar novamente se desejar
+      if (planId && currentUser?.uid) {
+        try {
+          localStorage.removeItem(`leadspay_aff_${planId}_${currentUser.uid}`);
+        } catch (e) {
+          // ignore
+        }
+      }
+      setAffiliations(prev => prev.filter(a => a.id !== affId));
+      setAllAffiliations(prev => prev.filter(a => a.id !== affId));
       setLiveToast({
-        message: 'Afiliação cancelada',
-        sub: 'Item removido dos seus links',
+        message: 'Afiliação encerrada com sucesso',
+        sub: 'Você saiu da afiliação deste plano.',
         amount: 'OK'
       });
-      setTimeout(() => setLiveToast(null), 3000);
+      setTimeout(() => setLiveToast(null), 3500);
     } catch (err: any) {
       console.error('Error removing affiliation:', err);
+      alert(`Erro ao sair da afiliação: ${err.message}`);
+    }
+  };
+
+  // Handle remove affiliate (Empresa desvincula um afiliado dos seus produtos)
+  const handleCompanyRemoveAffiliate = async (affId: string, planId?: string, companyId?: string, affiliateName?: string) => {
+    try {
+      await deleteAffiliationInFirebase(affId, planId, companyId);
+      if (planId && currentUser?.uid) {
+        try {
+          localStorage.removeItem(`leadspay_aff_${planId}_${currentUser.uid}`);
+        } catch (e) {
+          // ignore
+        }
+      }
+      setAllAffiliations(prev => prev.filter(a => a.id !== affId));
+      setAffiliations(prev => prev.filter(a => a.id !== affId));
+      setLiveToast({
+        message: 'Afiliado desvinculado com sucesso',
+        sub: `${affiliateName || 'Afiliado'} foi removido dos planos da empresa.`,
+        amount: 'OK'
+      });
+      setTimeout(() => setLiveToast(null), 3500);
+    } catch (err: any) {
+      console.error('Error removing affiliate by company:', err);
+      alert(`Erro ao desvincular afiliado: ${err.message}`);
     }
   };
 
@@ -571,12 +623,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
-    { id: 'minhas_afiliacoes' as PlatformTab, label: 'Meus Produtos Afiliados', icon: Link2, badge: `${affiliations.length}` },
+    { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações (Sair)', icon: Link2, badge: `${affiliations.length}` },
     { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${transactions.length}` },
     { id: 'financeiro' as PlatformTab, label: 'Saldo & Saque PIX', icon: Wallet },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
-    { id: 'database' as PlatformTab, label: 'Banco de Dados', icon: Database, badge: 'Cloud' }
+    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Banco de Dados', icon: Database, badge: 'Admin' }] : [])
   ];
 
   const companyNavItems = [
@@ -584,11 +636,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'minha_empresa' as PlatformTab, label: 'Minha Startup & Planos', icon: Building2, badge: `${companies.length}` },
     { id: 'carteira' as PlatformTab, label: 'Carteira & Saques PIX', icon: Wallet },
     { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${transactions.length}` },
-    { id: 'equipe' as PlatformTab, label: 'Afiliados & Equipe', icon: Users },
+    { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${allAffiliations.length}` },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
-    { id: 'database' as PlatformTab, label: 'Banco de Dados', icon: Database, badge: 'Cloud' }
+    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Banco de Dados', icon: Database, badge: 'Admin' }] : [])
   ];
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
@@ -1007,7 +1059,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <MinhaEmpresaView
               companies={companies}
               plans={plans}
-              affiliations={affiliations}
+              affiliations={allAffiliations}
               sales={transactions}
               userProfile={userProfile}
               isCompanyVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
@@ -1057,6 +1109,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               }}
               onDeleteCompany={handleDeleteCompany}
               onDeletePlan={handleDeletePlan}
+              onRemoveAffiliate={handleCompanyRemoveAffiliate}
             />
           )}
 
@@ -1157,10 +1210,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
 
-          {activeTab === 'equipe' && <EquipeView />}
+          {activeTab === 'equipe' && (
+            <EquipeView
+              companies={companies}
+              plans={plans}
+              affiliations={allAffiliations}
+              currentUserId={currentUser?.uid}
+              onRemoveAffiliate={handleCompanyRemoveAffiliate}
+            />
+          )}
           {activeTab === 'relatorios' && <RelatoriosView transactions={transactions} />}
           {activeTab === 'integracoes' && <IntegracoesView />}
-          {activeTab === 'database' && <DatabaseManagerView />}
+          {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
             </>
           )}
         </main>

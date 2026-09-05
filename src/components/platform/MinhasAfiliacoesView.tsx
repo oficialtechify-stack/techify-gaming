@@ -14,7 +14,9 @@ import {
   ArrowUpRight, 
   ShoppingBag,
   Sparkles,
-  Sliders
+  Sliders,
+  UserMinus,
+  AlertTriangle
 } from 'lucide-react';
 
 interface MinhasAfiliacoesViewProps {
@@ -34,6 +36,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedAffiliationForUtm, setSelectedAffiliationForUtm] = useState<UserAffiliation | null>(null);
+  const [leavingAffiliationModal, setLeavingAffiliationModal] = useState<UserAffiliation | null>(null);
   const [utmSource, setUtmSource] = useState('instagram');
   const [utmMedium, setUtmMedium] = useState('bio_link');
   const [utmCampaign, setUtmCampaign] = useState('lancamento');
@@ -43,6 +46,23 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleConfirmLeaveAffiliation = () => {
+    if (!leavingAffiliationModal) return;
+    const aff = leavingAffiliationModal;
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`leadspay_aff_${aff.planId}_${aff.userId}`);
+        localStorage.removeItem(`leadspay_aff_${aff.planId}`);
+        const effectiveUserId = localStorage.getItem('leadspay_user_id');
+        if (effectiveUserId) {
+          localStorage.removeItem(`leadspay_aff_${aff.planId}_${effectiveUserId}`);
+        }
+      }
+    } catch (e) {}
+    onDeleteAffiliation(aff.id, aff.planId, aff.companyId);
+    setLeavingAffiliationModal(null);
   };
 
   const totalCommissions = affiliations.reduce((acc, a) => acc + (a.totalEarned || 0), 0);
@@ -232,7 +252,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-white/10 gap-2">
+                <div className="flex flex-wrap items-center justify-between pt-3 border-t border-white/10 gap-2">
                   <button
                     onClick={() => setSelectedAffiliationForUtm(aff)}
                     className="text-[11px] font-bold text-white/70 hover:text-white flex items-center gap-1 cursor-pointer"
@@ -248,18 +268,80 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                     >
                       <Zap className="w-3 h-3 fill-current" /> Registrar Venda
                     </button>
+                    
                     <button
-                      onClick={() => onDeleteAffiliation(aff.id, aff.planId, aff.companyId)}
-                      className="text-[10px] text-white/40 hover:text-red-400 p-1.5 cursor-pointer"
-                      title="Cancelar Afiliação"
+                      onClick={() => setLeavingAffiliationModal(aff)}
+                      className="text-[11px] font-bold text-red-400/80 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                      title="Sair da afiliação deste plano"
                     >
-                      Remover
+                      <UserMinus className="w-3.5 h-3.5" />
+                      <span>Sair da Afiliação</span>
                     </button>
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal de Confirmação: Sair da Afiliação */}
+      {leavingAffiliationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-[#080d1a] border border-red-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col gap-4">
+            <button
+              onClick={() => setLeavingAffiliationModal(null)}
+              className="absolute top-5 right-5 text-white/50 hover:text-white cursor-pointer text-sm"
+            >
+              ✕
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">
+                Ação do Afiliado
+              </span>
+              <h3 className="text-xl font-black text-white font-['Syne'] mt-1">
+                Sair da Afiliação?
+              </h3>
+              <p className="text-xs text-white/70 mt-2 leading-relaxed">
+                Você está prestes a encerrar sua afiliação com o plano <strong className="text-white">{leavingAffiliationModal.planName}</strong> da empresa <strong className="text-white">{leavingAffiliationModal.companyName}</strong>.
+              </p>
+            </div>
+
+            <div className="bg-[#050811] border border-white/10 rounded-2xl p-3.5 space-y-1.5 text-xs text-white/60">
+              <div className="flex items-center justify-between text-[11px]">
+                <span>Código Atual:</span>
+                <span className="font-mono text-[#D9F22A] font-bold">{leavingAffiliationModal.affiliateCode}</span>
+              </div>
+              <p className="text-[11px] text-amber-300/80">
+                • Seu link exclusivo não gerará mais comissões a partir de agora.
+              </p>
+              <p className="text-[11px] text-white/50">
+                • Você poderá se afiliar novamente a este produto na Vitrine sempre que desejar.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setLeavingAffiliationModal(null)}
+                className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Continuar Afiliado
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLeaveAffiliation}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-lg shadow-red-500/20"
+              >
+                Confirmar e Sair
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

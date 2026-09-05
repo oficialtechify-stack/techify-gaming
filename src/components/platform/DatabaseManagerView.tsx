@@ -43,10 +43,20 @@ import {
   Send
 } from 'lucide-react';
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
+import { useAuth } from '../../context/AuthContext';
 import firebaseConfig from '../../../firebase-applet-config.json';
 
+const SUPERADMIN_EMAIL = 'rickmarketing81@gmail.com';
+
 export const DatabaseManagerView: React.FC = () => {
+  const { currentUser, userProfile } = useAuth();
   const [activeCollection, setActiveCollection] = useState<string>(COLLECTIONS.VERIFICATIONS);
+
+  const isSuperAdmin = Boolean(
+    (currentUser?.email && currentUser.email.toLowerCase() === SUPERADMIN_EMAIL) ||
+    (userProfile?.email && userProfile.email.toLowerCase() === SUPERADMIN_EMAIL)
+  );
+
   const [documents, setDocuments] = useState<any[]>([]);
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -59,6 +69,7 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Subscribe to realtime verification requests & companies
   useEffect(() => {
+    if (!isSuperAdmin) return;
     const unsubVerifs = subscribeVerifications((reqs) => {
       setVerifications(reqs);
     });
@@ -69,7 +80,34 @@ export const DatabaseManagerView: React.FC = () => {
       unsubVerifs();
       unsubComps();
     };
-  }, []);
+  }, [isSuperAdmin]);
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="min-h-[500px] flex items-center justify-center p-6">
+        <div className="bg-[#080d1a] border border-red-500/30 rounded-3xl p-8 sm:p-10 max-w-lg w-full text-center shadow-2xl flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-2">
+            <Lock className="w-8 h-8" />
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-red-400 bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
+            Acesso Restrito
+          </span>
+          <h2 className="text-2xl font-black text-white font-['Syne']">
+            Área Exclusiva do Administrador
+          </h2>
+          <p className="text-xs text-white/60 leading-relaxed">
+            O painel de validação e gerenciamento do banco de dados Cloud é protegido e acessível apenas pelo administrador mestre da plataforma:
+          </p>
+          <div className="bg-[#050811] border border-white/10 rounded-xl px-4 py-2.5 font-mono text-xs text-[#D9F22A] font-bold">
+            rickmarketing81@gmail.com
+          </div>
+          <p className="text-[11px] text-white/40 mt-1">
+            Seu usuário atual ({currentUser?.email || 'Visitante'}) não possui privilégios de superadministrador.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const fetchCollectionDocs = async (collName: string) => {
     setLoading(true);

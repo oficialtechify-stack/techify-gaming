@@ -107,12 +107,67 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     return true;
   });
 
+  const effectiveUserId = userProfile?.id || currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('leadspay_user_id') : null) || 'usr_afiliado_leadspay';
+
+  // Load permanent local affiliations on mount
+  useEffect(() => {
+    try {
+      const storedKeys = Object.keys(localStorage).filter(k => k.startsWith('leadspay_aff_'));
+      const storedAffs: UserAffiliation[] = [];
+      storedKeys.forEach(k => {
+        try {
+          const item = JSON.parse(localStorage.getItem(k) || '');
+          if (item && (item.planId || item.plan_id)) {
+            storedAffs.push(item);
+          }
+        } catch (e) {}
+      });
+
+      if (storedAffs.length > 0) {
+        setLocalAffiliations(prev => {
+          const merged = [...prev];
+          storedAffs.forEach(st => {
+            const planId = st.planId || st.plan_id;
+            if (!merged.some(m => (m.planId || m.plan_id) === planId)) {
+              merged.push(st);
+            }
+          });
+          return merged;
+        });
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar afiliações persistentes do localStorage:', err);
+    }
+  }, []);
+
   const isAffiliated = (planId: string) => {
-    return localAffiliations.some(a => a.planId === planId);
+    // 1. Checa estado reativo
+    const inState = localAffiliations.some(a => (a.planId || a.plan_id) === planId);
+    if (inState) return true;
+
+    // 2. Checa persistência permanente local
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`) || localStorage.getItem(`leadspay_aff_${planId}`);
+        if (stored) return true;
+      }
+    } catch (e) {}
+    return false;
   };
 
-  const getAffiliation = (planId: string) => {
-    return localAffiliations.find(a => a.planId === planId);
+  const getAffiliation = (planId: string): UserAffiliation | undefined => {
+    const inState = localAffiliations.find(a => (a.planId || a.plan_id) === planId);
+    if (inState) return inState;
+
+    try {
+      if (typeof window !== 'undefined') {
+        const storedStr = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`) || localStorage.getItem(`leadspay_aff_${planId}`);
+        if (storedStr) {
+          return JSON.parse(storedStr) as UserAffiliation;
+        }
+      }
+    } catch (e) {}
+    return undefined;
   };
 
   const handleCopyLink = (text: string, id: string) => {
@@ -126,9 +181,49 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     try {
       setJoiningPlanId(product.id);
 
-      const effectiveUserId = userProfile?.id || currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('leadspay_user_id') : null) || 'usr_afiliado_leadspay';
       const effectiveName = userProfile?.name || currentUser?.displayName || 'Afiliado LeadsPay';
       const effectiveEmail = userProfile?.email || currentUser?.email || 'afiliado@leadspay.com';
+
+      // Cria afiliação imediata para feedback instantâneo e permanência garantida
+      const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const userPart = effectiveUserId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
+      const generatedCode = `AFF-${userPart || 'USR'}-${randPart}`;
+      const tempAff: UserAffiliation = {
+        id: `aff_${effectiveUserId}_${product.id}`,
+        userId: effectiveUserId,
+        user_id: effectiveUserId,
+        userName: effectiveName,
+        userEmail: effectiveEmail,
+        companyId: product.companyId,
+        companyName: product.companyName,
+        companyLogo: product.companyLogo,
+        planId: product.id,
+        plan_id: product.id,
+        planName: product.name,
+        priceSetup: product.priceSetup,
+        commissionPercentage: product.commissionPercentage,
+        commissionValue: product.commissionValue,
+        affiliateCode: generatedCode,
+        affiliate_code: generatedCode,
+        affiliateLink: formatAffiliatePlanUrl(product.id, generatedCode),
+        clicks: 0,
+        salesCount: 0,
+        totalEarned: 0,
+        status: 'Ativo',
+        createdAt: new Date().toISOString()
+      };
+
+      // Grava no localStorage para permanência instantânea
+      try {
+        localStorage.setItem(`leadspay_aff_${product.id}_${effectiveUserId}`, JSON.stringify(tempAff));
+        localStorage.setItem(`leadspay_aff_${product.id}`, JSON.stringify(tempAff));
+      } catch (e) {}
+
+      // Atualiza o estado visual instantaneamente
+      setLocalAffiliations(prev => {
+        const filtered = prev.filter(a => (a.planId || a.plan_id) !== product.id);
+        return [...filtered, tempAff];
+      });
 
       const response = await fetch('/api/affiliates/join', {
         method: 'POST',
@@ -153,12 +248,13 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
       if (response.ok && data.success && data.affiliation) {
         const newAff = data.affiliation as UserAffiliation;
+        try {
+          localStorage.setItem(`leadspay_aff_${product.id}_${effectiveUserId}`, JSON.stringify(newAff));
+          localStorage.setItem(`leadspay_aff_${product.id}`, JSON.stringify(newAff));
+        } catch (e) {}
+
         setLocalAffiliations(prev => {
-          const exists = prev.some(a => a.planId === product.id);
-          if (exists) {
-            return prev.map(a => a.planId === product.id ? newAff : a);
-          }
-          return [...prev, newAff];
+          return prev.map(a => ((a.planId || a.plan_id) === product.id ? newAff : a));
         });
 
         if (onJoinAffiliate) {
@@ -171,6 +267,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
         if (onJoinAffiliate) {
           onJoinAffiliate(product);
         }
+        setSelectedAffModal({ plan: product, aff: tempAff });
       }
     } catch (err) {
       console.error('Erro na requisição /api/affiliates/join:', err);

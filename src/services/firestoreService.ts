@@ -690,13 +690,13 @@ export const updatePlatformInFirebase = updateCompanyPlanInFirebase;
 /**
  * Realtime User Affiliations Listener
  */
-export function subscribeUserAffiliations(callback: (affiliations: UserAffiliation[]) => void, userId: string = DEFAULT_USER_ID) {
+export function subscribeUserAffiliations(callback: (affiliations: UserAffiliation[]) => void, userId?: string) {
   const q = collection(db, COLLECTIONS.AFFILIATIONS);
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
       const data = d.data() as UserAffiliation;
-      if (!userId || data.userId === userId) {
+      if (!userId || data.userId === userId || data.user_id === userId) {
         list.push({ id: d.id, ...data });
       }
     });
@@ -704,6 +704,25 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
     callback(list);
   }, (err) => {
     console.error('Firestore affiliations listener error:', err);
+    callback([]);
+  });
+}
+
+/**
+ * Realtime All Affiliations Listener (for Company & Superadmin dashboards)
+ */
+export function subscribeAllAffiliations(callback: (affiliations: UserAffiliation[]) => void) {
+  const q = collection(db, COLLECTIONS.AFFILIATIONS);
+  return onSnapshot(q, (snap) => {
+    const list: UserAffiliation[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as UserAffiliation;
+      list.push({ id: d.id, ...data });
+    });
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    callback(list);
+  }, (err) => {
+    console.error('Firestore all affiliations listener error:', err);
     callback([]);
   });
 }
@@ -800,13 +819,32 @@ export async function deleteAffiliationInFirebase(affiliationId: string, planId?
   await deleteDoc(doc(db, COLLECTIONS.AFFILIATIONS, affiliationId));
 
   if (planId) {
-    const planRef = doc(db, COLLECTIONS.PLANS, planId);
-    const planSnap = await getDoc(planRef);
-    if (planSnap.exists()) {
-      const pData = planSnap.data() as CompanyPlan;
-      await updateDoc(planRef, sanitizeForFirestore({
-        affiliatesCount: Math.max(0, (pData.affiliatesCount || 1) - 1)
-      }));
+    try {
+      const planRef = doc(db, COLLECTIONS.PLANS, planId);
+      const planSnap = await getDoc(planRef);
+      if (planSnap.exists()) {
+        const pData = planSnap.data() as CompanyPlan;
+        await updateDoc(planRef, sanitizeForFirestore({
+          affiliatesCount: Math.max(0, (pData.affiliatesCount || 1) - 1)
+        }));
+      }
+    } catch (e) {
+      console.warn('Erro ao atualizar contador de afiliados do plano:', e);
+    }
+  }
+
+  if (companyId) {
+    try {
+      const compRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+      const compSnap = await getDoc(compRef);
+      if (compSnap.exists()) {
+        const cData = compSnap.data() as CompanyStartup;
+        await updateDoc(compRef, sanitizeForFirestore({
+          totalAffiliatesCount: Math.max(0, (cData.totalAffiliatesCount || 1) - 1)
+        }));
+      }
+    } catch (e) {
+      console.warn('Erro ao atualizar contador de afiliados da empresa:', e);
     }
   }
 }

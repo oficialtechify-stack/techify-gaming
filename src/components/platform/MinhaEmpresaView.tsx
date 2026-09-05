@@ -34,7 +34,8 @@ import {
   LayoutGrid,
   List,
   CreditCard,
-  Eye
+  Eye,
+  UserX
 } from 'lucide-react';
 import { PlanLinksModal } from './PlanLinksModal';
 import { PlanReviewsModal } from './PlanReviewsModal';
@@ -56,6 +57,7 @@ interface MinhaEmpresaViewProps {
   onOpenCheckout?: (plan: CompanyPlan) => void;
   onDuplicatePlan?: (plan: CompanyPlan) => void;
   onAddReview?: (planId: string, review: ProductReview) => void;
+  onRemoveAffiliate?: (affiliationId: string, planId?: string, companyId?: string, affiliateName?: string) => void;
 }
 
 export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
@@ -74,11 +76,13 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   onDeletePlan,
   onOpenCheckout,
   onDuplicatePlan,
-  onAddReview
+  onAddReview,
+  onRemoveAffiliate
 }) => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || '');
   const [activeTab, setActiveTab] = useState<'planos' | 'afiliados' | 'vendas'>('planos');
   const [verificationWarningModal, setVerificationWarningModal] = useState<boolean>(false);
+  const [removingAffiliateModal, setRemovingAffiliateModal] = useState<UserAffiliation | null>(null);
 
   // Plan Management table/search/actions state
   const [planViewMode, setPlanViewMode] = useState<'table' | 'cards'>('table');
@@ -923,36 +927,66 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                     <thead>
                       <tr className="border-b border-white/10 text-[11px] font-bold text-white/40 uppercase">
                         <th className="py-3 px-4">Afiliado</th>
+                        <th className="py-3 px-4">Código</th>
                         <th className="py-3 px-4">Plano Vinculado</th>
-                        <th className="py-3 px-4">Cliques</th>
-                        <th className="py-3 px-4">Vendas</th>
-                        <th className="py-3 px-4">Comissão Total Paga</th>
-                        <th className="py-3 px-4 text-right">Data de Afiliação</th>
+                        <th className="py-3 px-4 text-center">Cliques</th>
+                        <th className="py-3 px-4 text-center">Vendas</th>
+                        <th className="py-3 px-4">Comissão Paga</th>
+                        <th className="py-3 px-4 text-center">Data</th>
+                        <th className="py-3 px-4 text-right">Ação Exclusiva</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-xs">
-                      {companyAffiliations.map(aff => (
-                        <tr key={aff.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-3.5 px-4 font-bold text-white">
-                            {aff.affiliateName || 'Afiliado LeadsPay'}
-                          </td>
-                          <td className="py-3.5 px-4 text-[#D9F22A] font-bold">
-                            {aff.platformName}
-                          </td>
-                          <td className="py-3.5 px-4 text-white/70">
-                            {aff.clicksCount}
-                          </td>
-                          <td className="py-3.5 px-4 text-white/70">
-                            {aff.salesCount}
-                          </td>
-                          <td className="py-3.5 px-4 font-black text-emerald-400">
-                            R$ {aff.totalCommissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3.5 px-4 text-right text-white/40">
-                            {new Date(aff.affiliatedAt).toLocaleDateString('pt-BR')}
-                          </td>
-                        </tr>
-                      ))}
+                      {companyAffiliations.map(aff => {
+                        const affName = aff.userName || aff.affiliateName || 'Afiliado LeadsPay';
+                        const affCode = aff.affiliateCode || aff.affiliate_code || '---';
+                        const planName = aff.planName || aff.platformName || 'Plano Oficial';
+                        const clicksCount = aff.clicks ?? aff.clicksCount ?? 0;
+                        const salesCount = aff.salesCount ?? 0;
+                        const totalEarned = aff.totalEarned ?? aff.totalCommissionEarned ?? 0;
+                        const dateFormatted = aff.createdAt || aff.affiliatedAt 
+                          ? new Date(aff.createdAt || aff.affiliatedAt).toLocaleDateString('pt-BR') 
+                          : 'Recente';
+
+                        return (
+                          <tr key={aff.id} className="hover:bg-white/5 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <span className="font-bold text-white block">{affName}</span>
+                              <span className="text-[10px] text-white/50">{aff.userEmail || 'afiliado@leadspay.com'}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono font-bold text-[#D9F22A]">
+                              {affCode}
+                            </td>
+                            <td className="py-3.5 px-4 text-white font-bold">
+                              {planName}
+                            </td>
+                            <td className="py-3.5 px-4 text-center text-white/70">
+                              {clicksCount}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                {salesCount}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 font-black text-emerald-400">
+                              R$ {totalEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3.5 px-4 text-center text-white/40">
+                              {dateFormatted}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <button
+                                onClick={() => setRemovingAffiliateModal(aff)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/40 text-[11px] font-bold transition-all cursor-pointer"
+                                title="Remover este afiliado (Ação da Empresa)"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                                <span>Remover</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1024,6 +1058,76 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             </div>
           )}
         </>
+      )}
+
+      {/* Modal da Empresa: Remover Afiliado */}
+      {removingAffiliateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-[#080d1a] border border-red-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col gap-4">
+            <button
+              onClick={() => setRemovingAffiliateModal(null)}
+              className="absolute top-5 right-5 text-white/50 hover:text-white cursor-pointer text-sm"
+            >
+              ✕
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">
+                Ação da Empresa
+              </span>
+              <h3 className="text-xl font-black text-white font-['Syne'] mt-1">
+                Desvincular Afiliado?
+              </h3>
+              <p className="text-xs text-white/70 mt-2 leading-relaxed">
+                Tem certeza que deseja remover o afiliado <strong className="text-white">{removingAffiliateModal.userName || removingAffiliateModal.affiliateName || 'Afiliado'}</strong> do plano <strong className="text-white">{removingAffiliateModal.planName || removingAffiliateModal.platformName}</strong>?
+              </p>
+            </div>
+
+            <div className="bg-[#050811] border border-white/10 rounded-2xl p-3.5 space-y-1.5 text-xs text-white/60">
+              <div className="flex items-center justify-between text-[11px]">
+                <span>Código do Afiliado:</span>
+                <span className="font-mono text-[#D9F22A] font-bold">{removingAffiliateModal.affiliateCode || removingAffiliateModal.affiliate_code}</span>
+              </div>
+              <p className="text-[11px] text-amber-300/80">
+                • O link exclusivo do afiliado deixará de funcionar imediatamente.
+              </p>
+              <p className="text-[11px] text-white/50">
+                • Ele não receberá comissões por novas compras deste produto.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRemovingAffiliateModal(null)}
+                className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onRemoveAffiliate) {
+                    onRemoveAffiliate(
+                      removingAffiliateModal.id, 
+                      removingAffiliateModal.planId || removingAffiliateModal.plan_id, 
+                      removingAffiliateModal.companyId, 
+                      removingAffiliateModal.userName || removingAffiliateModal.affiliateName
+                    );
+                  }
+                  setRemovingAffiliateModal(null);
+                }}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-lg shadow-red-500/20"
+              >
+                Confirmar Remoção
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
