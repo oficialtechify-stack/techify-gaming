@@ -31,7 +31,6 @@ interface CustomCheckoutPageProps {
   onPaymentSuccess?: (transaction: SaleTransaction) => void;
 }
 
-export const MERCADO_PAGO_PUBLIC_KEY = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-f4c1df9a-12c7-41ef-9ad3-54c27fe1d002';
 export const PLATFORM_CHECKOUT_FEE = 0.99; // 99 centavos cobrados pela plataforma
 
 export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
@@ -66,11 +65,11 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   // Order bump addon state
   const [includeOrderBump, setIncludeOrderBump] = useState<boolean>(false);
 
-  // Real PIX state from Mercado Pago API
+  // Real PIX state from Asaas v3 API
   const [pixData, setPixData] = useState<{
     id: string;
-    qr_code: string;
-    qr_code_base64: string | null;
+    qrCodeBase64: string | null;
+    copyAndPaste: string;
     ticket_url?: string;
     status?: string;
   } | null>(null);
@@ -106,8 +105,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   // Installment price calculation
   const installment12xValue = Number(((finalTotal * 1.24) / 12).toFixed(2));
 
-  // Active PIX string (strictly from official Mercado Pago response, no simulated mocks)
-  const activePixCode = pixData?.qr_code || '';
+  // Active PIX string from official Asaas response
+  const activePixCode = pixData?.copyAndPaste || '';
 
   // Handle format phone
   const handlePhoneChange = (val: string) => {
@@ -171,7 +170,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} min`;
   };
 
-  // Trigger Real PIX Generation via Asaas API (with fallback)
+  // Trigger Real PIX Generation via Asaas API
   const generateRealPixPayment = async () => {
     if (isGeneratingPix) return;
     setIsGeneratingPix(true);
@@ -185,8 +184,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       const cleanName = (fullName || 'Cliente LeadsPay').trim();
       const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
 
-      // 1. Tenta endpoint principal do Asaas (/api/payments)
-      let response = await fetch('/api/payments', {
+      // Requisição POST direta para o endpoint oficial do Asaas /api/payments
+      const response = await fetch('/api/payments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -216,7 +215,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         })
       });
 
-      // Se falhar ou não retornar qr_code, tenta fallback para /api/payments/pix
       let data: any = {};
       const responseText = await response.text();
       try {
@@ -225,57 +223,31 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         console.warn('[Checkout Pix] Falha no parse JSON de /api/payments:', responseText);
       }
 
-      if (!response.ok || (!data.payload && !data.qr_code)) {
-        console.log('[Checkout Pix] Alternando para fallback /api/payments/pix...');
-        const fbRes = await fetch('/api/payments/pix', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            valorTotal: cleanTotal,
-            amount: cleanTotal,
-            total_amount: cleanTotal,
-            planName: plan.name,
-            description: `Plano ${plan.name}`,
-            emailDoCliente: cleanEmail,
-            nomeDoCliente: cleanName,
-            cpfLimpo: cleanDoc,
-            planId: plan.id,
-            companyId: plan.companyId,
-            refCode: activeAffiliate
-          })
-        });
-        if (fbRes.ok) {
-          const fbData = await fbRes.json();
-          if (fbData.qr_code) {
-            data = fbData;
-            response = fbRes;
-          }
-        }
-      }
-
-      const activeQrCode = data.payload || data.qr_code;
-      const activeQrCodeBase64 = data.encodedImage || data.qr_code_base64;
+      // Adequação do Payload PIX conforme solicitado:
+      // response.qrCodeBase64 e response.copyAndPaste
+      const qrCodeBase64 = data.qrCodeBase64 || data.encodedImage || data.qr_code_base64;
+      const copyAndPaste = data.copyAndPaste || data.payload || data.qr_code;
       const activePaymentId = data.paymentId || data.payment_id || data.id;
 
-      if (activeQrCode) {
+      if (response.ok && (copyAndPaste || qrCodeBase64)) {
         setPixData({
           id: String(activePaymentId),
-          qr_code: activeQrCode,
-          qr_code_base64: activeQrCodeBase64,
+          qrCodeBase64: qrCodeBase64 || null,
+          copyAndPaste: copyAndPaste || '',
           ticket_url: data.invoiceUrl || data.ticket_url,
           status: data.status || 'pending'
         });
         setPixError(null);
         setPixSecondsLeft(900); // Reset 15:00 min timer
       } else {
-        const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Erro ao gerar o código Pix oficial.');
+        const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Erro ao gerar o código Pix no Asaas.');
         console.error('[Checkout Pix Error]:', errorMsg);
         setPixError(errorMsg);
         setPixData(null);
       }
     } catch (err: any) {
       console.error('Erro ao gerar PIX via backend:', err);
-      setPixError(err.message || 'Falha de conexão com o servidor');
+      setPixError(err.message || 'Falha de conexão com o servidor de pagamentos.');
       setPixData(null);
     } finally {
       setIsGeneratingPix(false);
@@ -289,17 +261,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   }, [paymentMethod, finalTotal]);
 
-  // Check PIX payment status in Asaas or fallback
+  // Check PIX payment status in Asaas
   const checkPaymentStatus = async (paymentId: string) => {
     if (!paymentId || isPaid) return;
     setIsCheckingPixStatus(true);
 
     try {
-      // 1. Tenta rota do Asaas
-      let res = await fetch(`/api/payments/asaas/${paymentId}`);
-      if (!res.ok) {
-        res = await fetch(`/api/payments/pix/${paymentId}`);
-      }
+      const res = await fetch(`/api/payments/asaas/${paymentId}`);
 
       if (res.ok) {
         const text = await res.text();
@@ -423,7 +391,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
   // Copy PIX Code
   const handleCopyPix = () => {
-    navigator.clipboard.writeText(activePixCode);
+    const textToCopy = pixData?.copyAndPaste || activePixCode;
+    if (!textToCopy) return;
+    navigator.clipboard.writeText(textToCopy);
     setPixCopied(true);
     setTimeout(() => setPixCopied(false), 3000);
   };
@@ -634,7 +604,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
           <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider">
-            Checkout Seguro Mercado Pago
+            Checkout Seguro Asaas Gateway
           </span>
         </div>
       </div>
@@ -935,21 +905,21 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 </div>
               ) : (
                 <>
-                  {/* Real Official QR Code Image from Mercado Pago */}
+                  {/* Real Official QR Code Image from Asaas */}
                   <div className="w-52 h-52 mx-auto bg-white p-3 rounded-2xl border-4 border-emerald-400 flex items-center justify-center shadow-2xl relative">
                     {isGeneratingPix || !pixData ? (
                       <div className="flex flex-col items-center justify-center gap-2 text-[#060A15]">
                         <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
-                        <span className="text-[10px] font-bold">Gerando PIX Oficial Mercado Pago...</span>
+                        <span className="text-[10px] font-bold">Gerando PIX Oficial Asaas...</span>
                       </div>
-                    ) : pixData?.qr_code_base64 ? (
+                    ) : pixData?.qrCodeBase64 ? (
                       <img
                         src={
-                          pixData.qr_code_base64.startsWith('data:')
-                            ? pixData.qr_code_base64
-                            : `data:image/png;base64,${pixData.qr_code_base64}`
+                          pixData.qrCodeBase64.startsWith('data:')
+                            ? pixData.qrCodeBase64
+                            : `data:image/png;base64,${pixData.qrCodeBase64}`
                         }
-                        alt="QR Code PIX Mercado Pago Oficial"
+                        alt="QR Code PIX Asaas Oficial"
                         className="w-full h-full object-contain"
                       />
                     ) : (
@@ -960,7 +930,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   </div>
 
                   {/* Copia e Cola with 1-click copy */}
-                  {pixData?.qr_code && (
+                  {pixData?.copyAndPaste && (
                     <div className="space-y-1 text-left">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
                         Código Pix Copia e Cola Oficial:
@@ -969,7 +939,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                         <input
                           type="text"
                           readOnly
-                          value={pixData.qr_code}
+                          value={pixData.copyAndPaste}
                           className="flex-1 bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-[10px] text-white/80 font-mono select-all truncate"
                         />
                         <button
@@ -1145,7 +1115,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               <a href="#" className="underline hover:text-white">Políticas</a> do LeadsPay.
             </p>
             <p className="text-[10px] text-white/40 pt-1">
-              Processado por <strong>Mercado Pago Gateway</strong> • Integração Oficial
+              Processado por <strong>Asaas Pagamentos</strong> • Integração Oficial v3
             </p>
           </div>
         </form>

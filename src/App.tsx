@@ -101,7 +101,7 @@ function MainApp() {
       <div className="min-h-screen bg-[#060A15] flex flex-col items-center justify-center p-6 text-white text-center">
         <div className="w-12 h-12 border-4 border-[#208b68] border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-xl font-bold font-['Syne']">Carregando Checkout Seguro...</h2>
-        <p className="text-sm text-white/60 mt-1">Ambiente criptografado Mercado Pago & LeadsPay</p>
+        <p className="text-sm text-white/60 mt-1">Ambiente criptografado Asaas & LeadsPay</p>
       </div>
     );
   }

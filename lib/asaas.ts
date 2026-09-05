@@ -358,3 +358,26 @@ export async function createCreditCardPayment(
     bankSlipUrl: responseData.bankSlipUrl
   };
 }
+
+/**
+ * Consulta o status de um pagamento específico no Asaas
+ */
+export async function getAsaasPaymentStatus(paymentId: string): Promise<any> {
+  const { apiKey, apiUrl } = getAsaasConfig();
+  if (!apiKey) {
+    throw new Error('Chave de API do Asaas não configurada');
+  }
+
+  const headers = getHeaders();
+  const response = await fetch(`${apiUrl}/payments/${paymentId}`, {
+    method: 'GET',
+    headers
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao consultar pagamento no Asaas: ${response.status}`);
+  }
+
+  return await response.json();
+}
+

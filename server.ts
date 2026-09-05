@@ -444,10 +444,10 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
 // =========================================================================
 
 /**
- * POST /api/payments
+ * POST /api/payments, /api/payments/pix, /api/pix, /api/checkout
  * Processa pagamentos via Asaas v3 (PIX ou Cartão de Crédito)
  */
-app.post('/api/payments', async (req, res) => {
+app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], async (req, res) => {
   try {
     const {
       paymentMethod,
@@ -576,6 +576,8 @@ app.post('/api/payments', async (req, res) => {
           id: pixResult.paymentId,
           status: pixResult.status,
           amount: pixResult.value,
+          qrCodeBase64: pixResult.encodedImage,
+          copyAndPaste: pixResult.payload,
           payload: pixResult.payload,
           encodedImage: pixResult.encodedImage,
           qr_code: pixResult.payload,
@@ -703,10 +705,10 @@ app.post('/api/payments', async (req, res) => {
 });
 
 /**
- * GET /api/payments/asaas/:id
+ * GET /api/payments/asaas/:id, /api/payments/pix/:id, /api/pix/:id
  * Consulta status atualizado da cobrança no Asaas
  */
-app.get('/api/payments/asaas/:id', async (req, res) => {
+app.get(['/api/payments/asaas/:id', '/api/payments/pix/:id', '/api/pix/:id'], async (req, res) => {
   try {
     const paymentId = req.params.id;
     if (!paymentId) {
@@ -946,217 +948,6 @@ app.post('/api/affiliates/join', async (req, res) => {
   } catch (error: any) {
     console.error('Erro ao processar /api/affiliates/join:', error);
     return res.status(500).json({ error: error.message || 'Erro ao processar afiliação' });
-  }
-});
-
-// 3. Create Real PIX Payment using Official Mercado Pago SDK
-app.post('/api/payments/pix', async (req, res) => {
-  try {
-    const { 
-      valorTotal,
-      total_amount,
-      amount,
-      planName,
-      description,
-      payer,
-      emailDoCliente,
-      nomeDoCliente,
-      cpfLimpo,
-      refCode,
-      affiliate_code,
-      affiliateRef,
-      planId,
-      plan_id
-    } = req.body;
-
-    const finalAmount = Number(valorTotal ?? total_amount ?? amount);
-    if (isNaN(finalAmount) || finalAmount <= 0) {
-      return res.status(400).json({ error: 'Valor total inválido para a cobrança Pix' });
-    }
-
-    const finalPlanName = planName || (description ? description.replace(/^Compra:\s*/, '') : '') || (planId ? `Plano ${planId}` : 'LeadsPay');
-    const finalEmail = (emailDoCliente || payer?.email || 'cliente@leadspay.com').trim();
-    const finalFullName = (nomeDoCliente || payer?.name || payer?.fullName || 'Cliente LeadsPay').trim();
-    const rawCpf = (cpfLimpo || payer?.cpf || payer?.documentNumber || payer?.identification?.number || '19119119100').toString();
-    const finalCpfLimpo = rawCpf.replace(/\D/g, '') || '19119119100';
-    const cookieRef = getAffiliateRefFromReq(req);
-    const finalRefCode = refCode || affiliate_code || affiliateRef || cookieRef || null;
-    const finalPlanId = (planId || plan_id || null)?.toString() || null;
-
-    // Inicialização da SDK oficial do Mercado Pago conforme especificação
-    const client = new MercadoPagoConfig({ 
-      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || MP_ACCESS_TOKEN 
-    });
-    const payment = new Payment(client);
-
-    const body = {
-      transaction_amount: Number(finalAmount.toFixed(2)),
-      description: `Plano ${finalPlanName}`,
-      payment_method_id: 'pix',
-      payer: {
-        email: finalEmail,
-        first_name: finalFullName.split(' ')[0] || 'Cliente',
-        identification: {
-          type: finalCpfLimpo.length > 11 ? 'CNPJ' : 'CPF',
-          number: finalCpfLimpo
-        }
-      },
-      metadata: {
-        affiliate_code: finalRefCode,
-        plan_id: finalPlanId
-      }
-    };
-
-    console.log('[Mercado Pago SDK] Chamando payment.create():', {
-      transaction_amount: body.transaction_amount,
-      description: body.description,
-      email: body.payer.email,
-      first_name: body.payer.first_name,
-      doc_type: body.payer.identification.type,
-      plan_id: finalPlanId,
-      affiliate_code: finalRefCode
-    });
-
-    const result = await payment.create({ body });
-
-    if (!result || !result.id || !result.point_of_interaction?.transaction_data?.qr_code) {
-      console.error('[Mercado Pago SDK Error] Resposta incompleta do Mercado Pago:', result);
-      return res.status(500).json({
-        error: 'Mercado Pago não retornou os dados completos do Pix (qr_code ausente).'
-      });
-    }
-
-    const qr_code = result.point_of_interaction.transaction_data.qr_code;
-    const qr_code_base64 = result.point_of_interaction.transaction_data.qr_code_base64;
-    const payment_id = result.id;
-    const ticket_url = result.point_of_interaction.transaction_data.ticket_url || null;
-
-    // Persistência no Firestore da coleção sales com o ID real retornado pela SDK
-    const nowIso = new Date().toISOString();
-    try {
-      const saleDocRef = doc(db, 'sales', String(payment_id));
-      await setDoc(saleDocRef, {
-        payment_id: String(payment_id),
-        id: String(payment_id),
-        plan_id: finalPlanId,
-        affiliate_code: finalRefCode,
-        affiliateCode: finalRefCode,
-        total_amount: body.transaction_amount,
-        amount: body.transaction_amount,
-        status: result.status || 'pending',
-        status_detail: result.status_detail || 'waiting_transfer',
-        created_at: result.date_created || nowIso,
-        qr_code,
-        qr_code_base64,
-        ticket_url,
-        method: 'PIX',
-        buyerName: finalFullName,
-        buyerEmail: finalEmail,
-        buyerCpf: finalCpfLimpo,
-        platformId: finalPlanId || '',
-        platformName: `Plano ${finalPlanName}`,
-        commissionCredited: false
-      }, { merge: true });
-      console.log(`✅ [Firestore sales] Transação real gravada com affiliate_code=${finalRefCode}: ${payment_id}`);
-    } catch (dbErr) {
-      console.error('Erro ao salvar registro de venda no Firestore:', dbErr);
-    }
-
-    // Retorno da resposta REAL do Mercado Pago para o front-end
-    return res.json({
-      qr_code,
-      qr_code_base64,
-      payment_id,
-      id: String(payment_id),
-      status: result.status || 'pending',
-      ticket_url
-    });
-
-  } catch (error: any) {
-    console.error('[Mercado Pago API Error]:', error);
-    const reason = error?.message || error?.error || 'Erro ao processar cobrança Pix no Mercado Pago';
-    return res.status(500).json({ 
-      error: reason,
-      details: error?.causes || error?.cause || null
-    });
-  }
-});
-
-// 4. Check Payment Status with Official SDK
-app.get('/api/payments/pix/:id', async (req, res) => {
-  try {
-    const paymentId = req.params.id;
-
-    if (!paymentId) {
-      return res.status(400).json({ error: 'ID do pagamento é obrigatório' });
-    }
-
-    // If it's a numeric Mercado Pago ID, check via SDK or direct endpoint
-    if (/^\d+$/.test(paymentId)) {
-      try {
-        const paymentData = await mpPaymentService.get({ id: paymentId });
-        if (paymentData && paymentData.id) {
-          if (paymentData.status === 'approved') {
-            try {
-              await creditSaleCommissionAndBalances(String(paymentData.id), paymentData);
-            } catch (err) {
-              console.warn('Erro ao creditar comissão no status check:', err);
-            }
-          }
-
-          return res.json({
-            id: paymentData.id,
-            payment_id: String(paymentData.id),
-            status: paymentData.status,
-            status_detail: paymentData.status_detail,
-            date_approved: paymentData.date_approved,
-            amount: paymentData.transaction_amount,
-            total_amount: paymentData.transaction_amount,
-            payer: paymentData.payer
-          });
-        }
-      } catch (sdkErr) {
-        // Fallback to direct fetch
-        const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-          headers: {
-            'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.status === 'approved') {
-            try {
-              await creditSaleCommissionAndBalances(data.id, data);
-            } catch (err) {
-              console.warn('Erro ao creditar comissão no status check fallback:', err);
-            }
-          }
-
-          return res.json({
-            id: data.id,
-            payment_id: String(data.id),
-            status: data.status,
-            status_detail: data.status_detail,
-            date_approved: data.date_approved,
-            amount: data.transaction_amount,
-            total_amount: data.transaction_amount,
-            payer: data.payer
-          });
-        }
-      }
-    }
-
-    return res.json({
-      id: paymentId,
-      payment_id: paymentId,
-      status: 'pending',
-      status_detail: 'waiting_payment'
-    });
-
-  } catch (error: any) {
-    console.error('Erro ao verificar status do pagamento:', error);
-    res.status(500).json({ error: error.message });
   }
 });
 

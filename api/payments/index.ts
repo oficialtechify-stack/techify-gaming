@@ -111,6 +111,8 @@ export default async function handler(req: any, res: any) {
           id: pixResult.paymentId,
           status: pixResult.status,
           amount: pixResult.value,
+          qrCodeBase64: pixResult.encodedImage,
+          copyAndPaste: pixResult.payload,
           payload: pixResult.payload,
           encodedImage: pixResult.encodedImage,
           qr_code: pixResult.payload,

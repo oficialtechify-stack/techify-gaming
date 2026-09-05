@@ -1,6 +1,4 @@
-import { MercadoPagoConfig, Payment } from 'mercadopago';
-
-const MP_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5352039864226161-090210-52ddde4037f8daf9e7dbde717d0cd562-3152233934';
+import { getAsaasPaymentStatus } from '../../lib/asaas';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -24,17 +22,18 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN });
-    const payment = new Payment(client);
-    const paymentData = await payment.get({ id: String(paymentId) });
+    const paymentData = await getAsaasPaymentStatus(String(paymentId));
+    const isApproved = paymentData.status === 'CONFIRMED' || paymentData.status === 'RECEIVED';
 
     return res.status(200).json({
       id: paymentData.id,
-      status: paymentData.status,
-      status_detail: paymentData.status_detail,
-      date_approved: paymentData.date_approved
+      status: isApproved ? 'approved' : paymentData.status?.toLowerCase(),
+      status_detail: paymentData.status,
+      date_approved: paymentData.confirmedDate || paymentData.paymentDate || null,
+      amount: paymentData.value,
+      total_amount: paymentData.value
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Erro ao verificar status do pagamento' });
+    return res.status(500).json({ error: err.message || 'Erro ao verificar status do pagamento no Asaas' });
   }
 }

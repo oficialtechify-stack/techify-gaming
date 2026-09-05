@@ -115,6 +115,8 @@ export async function POST(req: Request) {
             paymentId: pixResult.paymentId,
             status: pixResult.status,
             amount: pixResult.value,
+            qrCodeBase64: pixResult.encodedImage, // QR Code Base64
+            copyAndPaste: pixResult.payload, // Pix Copia e Cola
             payload: pixResult.payload, // Pix Copia e Cola
             encodedImage: pixResult.encodedImage, // QR Code Base64
             qr_code: pixResult.payload, // Compatibilidade com frontend
