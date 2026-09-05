@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyPlan, CompanyStartup, UserAffiliation } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
+import { formatAffiliatePlanUrl, getAppBaseUrl } from '../../utils/affiliateTracking';
 import { 
   Sparkles, 
   Copy, 
@@ -142,7 +143,13 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
         })
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.warn('Resposta não-JSON de /api/affiliates/join:', text);
+      }
 
       if (response.ok && data.success && data.affiliation) {
         const newAff = data.affiliation as UserAffiliation;
@@ -175,7 +182,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     }
   };
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
+  const currentOrigin = getAppBaseUrl();
 
   return (
     <div className="flex flex-col gap-8" id="leadspay-vitrine-view">
@@ -297,8 +304,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           {filteredPlatforms.map((product) => {
             const affiliated = isAffiliated(product.id);
             const userAff = getAffiliation(product.id);
-            const planSlugOrId = product.slug || product.id;
-            const checkoutUrl = userAff?.affiliateLink || `${currentOrigin}/plan/${planSlugOrId}${userAff?.affiliateCode ? `?ref=${userAff.affiliateCode}` : ''}`;
+            const checkoutUrl = userAff ? formatAffiliatePlanUrl(product.id, userAff.affiliateCode) : formatAffiliatePlanUrl(product.id, 'LEADS');
 
             return (
               <div
@@ -591,11 +597,11 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                   <input
                     type="text"
                     readOnly
-                    value={`${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`}
+                    value={formatAffiliatePlanUrl(selectedAffModal.plan.id, selectedAffModal.aff.affiliateCode)}
                     className="flex-1 bg-[#080d1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono select-all truncate"
                   />
                   <button
-                    onClick={() => handleCopyLink(`${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`, 'checkout')}
+                    onClick={() => handleCopyLink(formatAffiliatePlanUrl(selectedAffModal.plan.id, selectedAffModal.aff.affiliateCode), 'checkout')}
                     className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
                   >
                     {copiedId === 'checkout' ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
@@ -605,7 +611,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
                 <div className="pt-1 flex items-center justify-between text-xs">
                   <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Olá! Conheça o ${selectedAffModal.plan.name} da ${selectedAffModal.plan.companyName}. Acesse o link oficial para contratar com condições exclusivas: ${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`)}`}
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Olá! Conheça o ${selectedAffModal.plan.name} da ${selectedAffModal.plan.companyName}. Acesse o link oficial para contratar com condições exclusivas: ${formatAffiliatePlanUrl(selectedAffModal.plan.id, selectedAffModal.aff.affiliateCode)}`)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
@@ -631,7 +637,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
               <div className="p-4 bg-[#050811] border border-white/10 rounded-2xl flex items-center gap-4">
                 <div className="w-24 h-24 bg-white p-2 rounded-xl border flex-shrink-0 flex items-center justify-center">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${currentOrigin}/plan/${selectedAffModal.plan.slug || selectedAffModal.plan.id}?ref=${selectedAffModal.aff.affiliateCode}`)}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(formatAffiliatePlanUrl(selectedAffModal.plan.id, selectedAffModal.aff.affiliateCode))}`}
                     alt="QR Code do Checkout"
                     className="w-full h-full"
                   />

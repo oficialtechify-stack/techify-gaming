@@ -475,18 +475,29 @@ app.post('/api/affiliates/join', async (req, res) => {
     const affRef = doc(db, 'affiliations', affId);
     const affSnap = await getDoc(affRef);
 
-    // Domínio base dinâmico
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const reqOrigin = req.headers.origin as string;
-    const baseUrl = process.env.VITE_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || reqOrigin || `${protocol}://${host}`;
-
+    // Domínio base oficial da aplicação
+    const baseUrl = (process.env.VITE_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://techify-gaming.vercel.app').replace(/\/+$/, '');
     const planSlugOrId = planData.slug || cleanPlanId;
+    const nowIso = new Date().toISOString();
+
+    // Garante atualização do status do usuário para afiliado no banco (user_profiles)
+    try {
+      const userRef = doc(db, 'user_profiles', cleanUserId);
+      await setDoc(userRef, {
+        isAffiliate: true,
+        role: 'affiliate',
+        affiliateStatus: 'active',
+        updatedAt: nowIso
+      }, { merge: true });
+      console.log(`✅ [POST /api/affiliates/join] Perfil ${cleanUserId} atualizado com status de afiliado no Firestore.`);
+    } catch (uUpdateErr) {
+      console.warn('Aviso ao atualizar status de afiliado no user_profiles:', uUpdateErr);
+    }
 
     if (affSnap.exists()) {
       const existing = affSnap.data();
       const existingCode = existing.affiliateCode || existing.affiliate_code;
-      const formattedLink = `${baseUrl}/plan/${planSlugOrId}?ref=${existingCode}`;
+      const formattedLink = `${baseUrl}/plan/${cleanPlanId}?ref=${existingCode}`;
 
       return res.json({
         success: true,
@@ -506,8 +517,7 @@ app.post('/api/affiliates/join', async (req, res) => {
     const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
     const userPart = cleanUserId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
     const affiliateCode = `AFF-${userPart || 'USR'}-${randPart}`;
-    const affiliateLink = `${baseUrl}/plan/${planSlugOrId}?ref=${affiliateCode}`;
-    const nowIso = new Date().toISOString();
+    const affiliateLink = `${baseUrl}/plan/${cleanPlanId}?ref=${affiliateCode}`;
 
     const affiliationPayload = {
       id: affId,

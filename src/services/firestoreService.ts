@@ -26,6 +26,7 @@ import {
   TeamMember,
   VerificationRequest
 } from '../types/platform';
+import { formatAffiliatePlanUrl } from '../utils/affiliateTracking';
 
 export type { 
   CompanyStartup,
@@ -725,9 +726,7 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile
   const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
   const userPart = (userId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
   const affiliateCode = `AFF-${userPart || 'USR'}-${randPart}`;
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
-  const planTarget = plan.slug || plan.id;
-  const affiliateLink = `${origin}/plan/${planTarget}?ref=${affiliateCode}`;
+  const affiliateLink = formatAffiliatePlanUrl(plan.id, affiliateCode);
 
   const affiliation: UserAffiliation = {
     id,
@@ -755,6 +754,19 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile
   };
 
   await setDoc(doc(db, COLLECTIONS.AFFILIATIONS, id), sanitizeForFirestore(affiliation));
+
+  // Atualiza o status do usuário no banco para Afiliado Ativo
+  try {
+    const userRef = doc(db, COLLECTIONS.PROFILES, userId);
+    await setDoc(userRef, sanitizeForFirestore({
+      isAffiliate: true,
+      role: 'affiliate',
+      affiliateStatus: 'active',
+      updatedAt: now
+    }), { merge: true });
+  } catch (uErr) {
+    console.warn('Erro ao atualizar status de afiliado no user_profiles:', uErr);
+  }
 
   // Increment Plan affiliatesCount
   const planRef = doc(db, COLLECTIONS.PLANS, plan.id);

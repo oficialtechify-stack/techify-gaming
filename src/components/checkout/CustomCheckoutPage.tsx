@@ -214,7 +214,18 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         })
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error('[Checkout Pix] Resposta não-JSON recebida:', responseText);
+        throw new Error(
+          response.ok
+            ? 'Resposta inesperada do processador de pagamento Pix.'
+            : `Erro no servidor (${response.status}): ${responseText.slice(0, 100)}`
+        );
+      }
 
       if (response.ok && data.qr_code) {
         setPixData({
@@ -256,9 +267,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     try {
       const res = await fetch(`/api/payments/pix/${paymentId}`);
       if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'approved') {
-          await finalizeApprovedPayment('PIX', data.id);
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          if (data.status === 'approved') {
+            await finalizeApprovedPayment('PIX', data.id);
+          }
+        } catch (parseErr) {
+          console.warn('Erro ao parsear status de pagamento:', parseErr);
         }
       }
     } catch (err) {

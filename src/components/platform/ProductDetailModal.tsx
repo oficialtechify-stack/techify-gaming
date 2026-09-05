@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CompanyPlan } from '../../types/platform';
 import { Sparkles, Building2, CheckCircle2, Copy, Check, Zap, X } from 'lucide-react';
+import { formatAffiliatePlanUrl } from '../../utils/affiliateTracking';
 
 interface ProductDetailModalProps {
   product: CompanyPlan | null;
@@ -17,8 +18,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   if (!product) return null;
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
-  const affiliateLink = `${currentOrigin}/plan/${product.slug || product.id}?ref=${product.affiliateCode || 'LEADS'}`;
+  const affiliateLink = formatAffiliatePlanUrl(product.id, product.affiliateCode || 'LEADS');
 
   const handleCopy = () => {
     navigator.clipboard.writeText(affiliateLink);

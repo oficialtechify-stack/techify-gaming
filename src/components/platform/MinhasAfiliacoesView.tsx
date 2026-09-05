@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UserAffiliation, CompanyPlan } from '../../types/platform';
+import { formatAffiliatePlanUrl, getAppBaseUrl } from '../../utils/affiliateTracking';
 import { 
   Link2, 
   Copy, 
@@ -47,7 +48,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   const totalCommissions = affiliations.reduce((acc, a) => acc + (a.totalEarned || 0), 0);
   const totalSales = affiliations.reduce((acc, a) => acc + (a.salesCount || 0), 0);
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
+  const currentOrigin = getAppBaseUrl();
 
   const generateUtmLink = (baseLink: string) => {
     const url = new URL(baseLink || `${currentOrigin}`);
@@ -198,11 +199,11 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                     <input
                       type="text"
                       readOnly
-                      value={aff.affiliateLink || `${currentOrigin}/plan/${aff.planId}?ref=${aff.affiliateCode}`}
+                      value={formatAffiliatePlanUrl(aff.planId, aff.affiliateCode)}
                       className="flex-1 bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-mono truncate select-all focus:outline-none"
                     />
                     <button
-                      onClick={() => handleCopy(aff.affiliateLink || `${currentOrigin}/plan/${aff.planId}?ref=${aff.affiliateCode}`, aff.id)}
+                      onClick={() => handleCopy(formatAffiliatePlanUrl(aff.planId, aff.affiliateCode), aff.id)}
                       className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
                       title="Copiar Link de Divulgação"
                     >
@@ -219,7 +220,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                       )}
                     </button>
                     <a
-                      href={aff.affiliateLink || `${currentOrigin}/plan/${aff.planId}?ref=${aff.affiliateCode}`}
+                      href={formatAffiliatePlanUrl(aff.planId, aff.affiliateCode)}
                       target="_blank"
                       rel="noreferrer"
                       className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center flex-shrink-0"
