@@ -92,14 +92,15 @@ export default async function handler(req: any, res: any) {
       });
     } catch (custError: any) {
       console.error('[API Payments Customer Error] Erro ao registrar cliente no Asaas:', custError);
-      const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro ao registrar cliente no Asaas.';
+      const status = custError.status || custError.statusCode || 400;
+      const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro desconhecido na API do Asaas';
       const errList = custError.errors || custError.details?.errors || (Array.isArray(custError.details) ? custError.details : [{ description: errMsg }]);
-      return res.status(400).json({ 
+      return res.status(status).json({ 
         error: true,
         message: errMsg,
         description: errMsg,
         errors: errList,
-        details: custError.details || null,
+        details: custError.details || custError.responseData || null,
         code: 'CUSTOMER_CREATION_FAILED'
       });
     }
@@ -136,14 +137,15 @@ export default async function handler(req: any, res: any) {
         });
       } catch (pixErr: any) {
         console.error('[API Payments PIX Error] Erro detalhado ao gerar cobrança PIX:', pixErr);
-        const errMsg = pixErr.errors?.[0]?.description || pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.';
+        const status = pixErr.status || pixErr.statusCode || 400;
+        const errMsg = pixErr.errors?.[0]?.description || pixErr.message || 'Erro desconhecido na API do Asaas';
         const errList = pixErr.errors || pixErr.details?.errors || (Array.isArray(pixErr.details) ? pixErr.details : [{ description: errMsg }]);
-        return res.status(400).json({ 
+        return res.status(status).json({ 
           error: true,
           message: errMsg,
           description: errMsg,
           errors: errList,
-          details: pixErr.details || null,
+          details: pixErr.details || pixErr.responseData || null,
           invoiceUrl: pixErr.invoiceUrl || null,
           code: 'PIX_GENERATION_FAILED' 
         });

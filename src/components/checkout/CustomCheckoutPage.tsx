@@ -254,19 +254,21 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         setPixError(null);
         setPixSecondsLeft(900); // Reset 15:00 min timer
       } else {
-        // Exibe estritamente data.errors[0].description ou data.message retornado pela API do Asaas
+        // Exibe estritamente o erro retornado pela API do Asaas ou backend
         const asaasDescription = data?.errors?.[0]?.description;
-        const asaasMessage = typeof data?.message === 'string' ? data.message : null;
+        const asaasMessage = typeof data?.message === 'string' && data.message ? data.message : null;
         const asaasDetails = Array.isArray(data?.details) 
-          ? data.details.map((d: any) => d.description || d.message).filter(Boolean).join(' | ') 
+          ? data.details.map((d: any) => d?.description || d?.message || (typeof d === 'string' ? d : JSON.stringify(d))).filter(Boolean).join(' | ') 
           : (typeof data?.details === 'string' ? data.details : (data?.details?.description || data?.details?.message));
-        const asaasError = typeof data?.error === 'string' ? data.error : null;
+        const asaasError = typeof data?.error === 'string' && data.error !== 'true' ? data.error : null;
+        const fallbackText = responseText && !responseText.startsWith('<!DOCTYPE') && responseText.length < 500 ? responseText : null;
 
         const errorMsg = 
           asaasDescription || 
           asaasMessage || 
           asaasDetails || 
           asaasError || 
+          fallbackText ||
           'Erro ao processar cobrança na API do Asaas.';
 
         console.error('[Checkout Pix Error Asaas]:', errorMsg, data);

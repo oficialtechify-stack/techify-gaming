@@ -189,16 +189,17 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<
   }
 
   const createData = await createRes.json().catch(() => null);
+  console.error('RESPOSTA BRUTA ASAAS (CLIENTE):', JSON.stringify(createData, null, 2));
 
   if (!createRes.ok) {
-    // Log detalhado do objeto de erro completo que o Asaas retorna
-    console.error('[Asaas API Error] Objeto completo de erro ao criar cliente (createData.errors):', JSON.stringify(createData, null, 2));
     const errorMessage = 
-      createData?.errors?.map((e: any) => e.description).join(' | ') || 
       createData?.errors?.[0]?.description || 
       createData?.message || 
-      `Falha ao criar cliente no Asaas (${createRes.status})`;
+      'Erro desconhecido na API do Asaas ao cadastrar cliente';
     const errorObj: any = new Error(errorMessage);
+    errorObj.status = createRes.status;
+    errorObj.statusCode = createRes.status;
+    errorObj.responseData = createData;
     errorObj.details = createData?.errors || createData;
     errorObj.errors = createData?.errors || [{ description: errorMessage }];
     throw errorObj;
@@ -257,22 +258,24 @@ export async function createPixPayment(
     throw new Error(`Falha de conexão com Asaas: ${netErr.message}`);
   }
 
-  const paymentData = await paymentRes.json().catch(() => null);
+  const responseData = await paymentRes.json().catch(() => null);
+  console.error('RESPOSTA BRUTA ASAAS:', JSON.stringify(responseData, null, 2));
 
   if (!paymentRes.ok) {
-    // Log detalhado do objeto de erro completo retornado pelo Asaas
-    console.error('[Asaas API Error] Erro completo ao criar pagamento PIX (payment.errors):', JSON.stringify(paymentData, null, 2));
     const errorMsg = 
-      paymentData?.errors?.map((e: any) => e.description).join(' | ') || 
-      paymentData?.errors?.[0]?.description || 
-      paymentData?.message || 
-      `Erro ao gerar cobrança PIX no Asaas (${paymentRes.status})`;
+      responseData?.errors?.[0]?.description || 
+      responseData?.message || 
+      'Erro desconhecido na API do Asaas';
     const errorObj: any = new Error(errorMsg);
-    errorObj.details = paymentData?.errors || paymentData;
-    errorObj.errors = paymentData?.errors || [{ description: errorMsg }];
+    errorObj.status = paymentRes.status;
+    errorObj.statusCode = paymentRes.status;
+    errorObj.responseData = responseData;
+    errorObj.details = responseData?.errors || responseData;
+    errorObj.errors = responseData?.errors || [{ description: errorMsg }];
     throw errorObj;
   }
 
+  const paymentData = responseData;
   const paymentId = paymentData.id;
   console.log(`[Asaas] Cobrança criada com ID ${paymentId}. Resgatando QR Code PIX...`);
 
@@ -289,16 +292,17 @@ export async function createPixPayment(
   }
 
   const qrData = await qrRes.json().catch(() => null);
+  console.error('RESPOSTA BRUTA ASAAS (PIX QR CODE):', JSON.stringify(qrData, null, 2));
 
   if (!qrRes.ok) {
-    // Log detalhado do objeto de erro completo retornado pelo Asaas
-    console.error('[Asaas API Error] Erro completo ao buscar QR Code PIX (pixQrCode.errors):', JSON.stringify(qrData, null, 2));
     const qrError = 
-      qrData?.errors?.map((e: any) => e.description).join(' | ') || 
       qrData?.errors?.[0]?.description || 
-      qrData?.message ||
-      'Erro ao resgatar QR Code PIX do Asaas.';
+      qrData?.message || 
+      'Erro desconhecido ao resgatar QR Code Pix';
     const errorObj: any = new Error(qrError);
+    errorObj.status = qrRes.status;
+    errorObj.statusCode = qrRes.status;
+    errorObj.responseData = qrData;
     errorObj.details = qrData?.errors || qrData;
     errorObj.errors = qrData?.errors || [{ description: qrError }];
     errorObj.invoiceUrl = paymentData.invoiceUrl;

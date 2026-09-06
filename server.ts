@@ -470,7 +470,8 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     const normalizedMethod = String(paymentMethod || 'PIX').toUpperCase().trim();
     if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD') {
       return res.status(400).json({ 
-        error: 'Método de pagamento inválido. Utilize "PIX" ou "CREDIT_CARD".',
+        error: true,
+        message: 'Método de pagamento inválido. Utilize "PIX" ou "CREDIT_CARD".',
         received: paymentMethod 
       });
     }
@@ -478,7 +479,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     const rawAmount = amount ?? valorTotal ?? total_amount;
     const finalAmount = Number(parseFloat(String(rawAmount)).toFixed(2));
     if (isNaN(finalAmount) || finalAmount <= 0) {
-      return res.status(400).json({ error: 'Valor da cobrança inválido ou não informado.' });
+      return res.status(400).json({ error: true, message: 'Valor da cobrança inválido ou não informado.' });
     }
 
     const rawCustomer = user || req.body.customer || {};
@@ -494,12 +495,12 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     };
 
     if (!customerData?.email) {
-      return res.status(400).json({ error: 'O e-mail do cliente é obrigatório para processar a cobrança.' });
+      return res.status(400).json({ error: true, message: 'O e-mail do cliente é obrigatório para processar a cobrança.' });
     }
 
     const cleanCpf = cleanDocument(customerData.cpfCnpj);
     if (!cleanCpf) {
-      return res.status(400).json({ error: 'CPF ou CNPJ válido é obrigatório para o cadastro e cobrança no Asaas.' });
+      return res.status(400).json({ error: true, message: 'CPF ou CNPJ válido é obrigatório para o cadastro e cobrança no Asaas.' });
     }
 
     const cookieRef = getAffiliateRefFromReq(req);
@@ -523,14 +524,15 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       });
     } catch (custError: any) {
       console.error('[Server Asaas Customer Error] Falha detalhada ao obter/criar cliente:', custError);
-      const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro ao registrar cliente no Asaas.';
+      const status = custError.status || custError.statusCode || 400;
+      const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro desconhecido na API do Asaas';
       const errList = custError.errors || custError.details?.errors || (Array.isArray(custError.details) ? custError.details : [{ description: errMsg }]);
-      return res.status(400).json({ 
+      return res.status(status).json({ 
         error: true,
         message: errMsg,
         description: errMsg,
         errors: errList,
-        details: custError.details || null,
+        details: custError.details || custError.responseData || null,
         code: 'CUSTOMER_CREATION_FAILED'
       });
     }
@@ -602,14 +604,15 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
         });
       } catch (pixErr: any) {
         console.error('[Server Asaas PIX Error] Falha detalhada ao gerar cobrança PIX:', pixErr);
-        const errMsg = pixErr.errors?.[0]?.description || pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.';
+        const status = pixErr.status || pixErr.statusCode || 400;
+        const errMsg = pixErr.errors?.[0]?.description || pixErr.message || 'Erro desconhecido na API do Asaas';
         const errList = pixErr.errors || pixErr.details?.errors || (Array.isArray(pixErr.details) ? pixErr.details : [{ description: errMsg }]);
-        return res.status(400).json({ 
+        return res.status(status).json({ 
           error: true,
           message: errMsg,
           description: errMsg,
           errors: errList,
-          details: pixErr.details || null,
+          details: pixErr.details || pixErr.responseData || null,
           invoiceUrl: pixErr.invoiceUrl || null,
           code: 'PIX_GENERATION_FAILED'
         });
