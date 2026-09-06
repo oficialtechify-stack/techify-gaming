@@ -203,12 +203,19 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           valorTotal: cleanTotal,
           total_amount: cleanTotal,
           description: `Plano ${plan.name}`,
+          customer: {
+            name: cleanName || 'Cliente LeadsPay',
+            email: cleanEmail || 'cliente@leadspay.com',
+            cpfCnpj: cleanDoc,
+            phone: cleanPhone || '11999999999'
+          },
           user: {
             name: cleanName || 'Cliente LeadsPay',
             email: cleanEmail || 'cliente@leadspay.com',
             cpfCnpj: cleanDoc,
             phone: cleanPhone || '11999999999'
           },
+          email: cleanEmail || 'cliente@leadspay.com',
           emailDoCliente: cleanEmail || 'cliente@leadspay.com',
           nomeDoCliente: cleanName || 'Cliente LeadsPay',
           cpfLimpo: cleanDoc,
@@ -247,16 +254,22 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         setPixError(null);
         setPixSecondsLeft(900); // Reset 15:00 min timer
       } else {
-        let errorMsg = data.error;
-        if (Array.isArray(data.details) && data.details.length > 0) {
-          errorMsg = data.details.map((d: any) => d.description || d.message).filter(Boolean).join(' | ');
-        } else if (data.details && typeof data.details === 'object') {
-          errorMsg = data.details.description || data.details.message || JSON.stringify(data.details);
-        }
-        if (!errorMsg) {
-          errorMsg = 'Erro ao gerar o código Pix no Asaas.';
-        }
-        console.error('[Checkout Pix Error Detalhado]:', errorMsg, data);
+        // Exibe estritamente data.errors[0].description ou data.message retornado pela API do Asaas
+        const asaasDescription = data?.errors?.[0]?.description;
+        const asaasMessage = data?.message;
+        const asaasDetails = Array.isArray(data?.details) 
+          ? data.details.map((d: any) => d.description || d.message).join(' | ') 
+          : (data?.details?.description || data?.details?.message);
+        const asaasError = data?.error;
+
+        const errorMsg = 
+          asaasDescription || 
+          asaasMessage || 
+          asaasDetails || 
+          asaasError || 
+          'Erro ao processar cobrança na API do Asaas.';
+
+        console.error('[Checkout Pix Error Asaas]:', errorMsg, data);
         setPixError(errorMsg);
         setPixData(null);
       }
@@ -910,9 +923,19 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               </div>
 
               {pixError ? (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs space-y-2">
-                  <p className="font-bold">Não foi possível gerar a cobrança PIX:</p>
-                  <p className="text-[11px] text-white/80">{pixError}</p>
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs space-y-2.5">
+                  <div className="flex items-center justify-center gap-1.5 font-bold text-rose-400 text-sm">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Retorno da API Asaas:</span>
+                  </div>
+                  <div className="bg-black/50 p-3 rounded-lg border border-red-500/20 text-xs text-white font-mono break-words">
+                    {pixError}
+                  </div>
+                  {pixError.includes('chave Pix') && (
+                    <p className="text-[11px] text-amber-300/90 font-medium">
+                      💡 <strong>Dica de configuração:</strong> Acesse seu painel do Asaas em <em>Configurações &gt; Pix &gt; Minhas Chaves Pix</em> e cadastre uma chave Pix (CPF, CNPJ, e-mail ou chave aleatória) para habilitar o recebimento via Pix.
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={generateRealPixPayment}
@@ -925,10 +948,16 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 <>
                   {/* Real Official QR Code Image from Asaas */}
                   <div className="w-52 h-52 mx-auto bg-white p-3 rounded-2xl border-4 border-emerald-400 flex items-center justify-center shadow-2xl relative">
-                    {isGeneratingPix || !pixData ? (
+                    {isGeneratingPix ? (
                       <div className="flex flex-col items-center justify-center gap-2 text-[#060A15]">
                         <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
                         <span className="text-[10px] font-bold">Gerando PIX Oficial Asaas...</span>
+                      </div>
+                    ) : !pixData ? (
+                      <div className="flex flex-col items-center justify-center p-3 text-center text-[#060A15] gap-1.5">
+                        <QrCode className="w-9 h-9 text-emerald-600" />
+                        <span className="text-[11px] font-black leading-tight">Aguardando dados</span>
+                        <span className="text-[10px] text-gray-600 leading-tight">Preencha seu Nome, E-mail e CPF acima para gerar seu QR Code</span>
                       </div>
                     ) : pixData?.qrCodeBase64 ? (
                       <img

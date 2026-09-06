@@ -66,26 +66,43 @@ export interface AsaasCreditCardResponse {
 
 function getAsaasConfig() {
   const apiKey = (process.env.ASAAS_API_KEY || '').trim();
-  let apiUrl = (process.env.ASAAS_API_URL || 'https://api.asaas.com/v3').trim();
-  // Assegura a URL oficial de API (substitui www.asaas.com por api.asaas.com)
+  let apiUrl = (process.env.ASAAS_API_URL || '').trim();
+
+  // Sincronia automática estrita de ambientes:
+  // Chave de Sandbox: inicia com $aact_hml_ ou contém 'hml'/'sandbox'
+  // Chave de Produção: inicia com $aact_prod_ ou $aact_
+  const isSandbox = apiKey.includes('_hml_') || apiKey.includes('sandbox') || apiUrl.includes('sandbox');
+
+  if (isSandbox) {
+    apiUrl = 'https://sandbox.asaas.com/api/v3';
+  } else {
+    apiUrl = 'https://api.asaas.com/v3';
+  }
+
+  // Normalização caso contenha www.asaas.com ou barra final
   if (apiUrl.includes('www.asaas.com')) {
     apiUrl = apiUrl.replace('www.asaas.com', 'api.asaas.com');
   }
-  if (apiUrl.endsWith('/')) {
-    apiUrl = apiUrl.slice(0, -1);
+  apiUrl = apiUrl.replace(/\/+$/, '');
+
+  if (!apiKey) {
+    console.error('[Asaas Service] ERRO CRÍTICO: process.env.ASAAS_API_KEY está undefined ou vazia!');
+  } else {
+    console.log(`[Asaas Service] Ambiente sincronizado: ${isSandbox ? 'SANDBOX' : 'PRODUÇÃO'} (${apiUrl})`);
   }
-  return { apiKey, apiUrl };
+
+  return { apiKey, apiUrl, isSandbox };
 }
 
 function getHeaders() {
   const { apiKey } = getAsaasConfig();
-  if (!apiKey) {
-    console.error('[Asaas Service] ERRO CRÍTICO: ASAAS_API_KEY não configurada no ambiente.');
+  const token = process.env.ASAAS_API_KEY || apiKey;
+  if (!token) {
+    console.error('[Asaas Service] ERRO CRÍTICO: process.env.ASAAS_API_KEY está undefined ao montar headers!');
   }
   return {
     'Content-Type': 'application/json',
-    'access_token': apiKey,
-    'User-Agent': 'LeadsPay/1.0'
+    'access_token': token
   };
 }
 
@@ -277,9 +294,12 @@ export async function createPixPayment(
     const qrError = 
       qrData?.errors?.map((e: any) => e.description).join(' | ') || 
       qrData?.errors?.[0]?.description || 
+      qrData?.message ||
       'Erro ao resgatar QR Code PIX do Asaas.';
     const errorObj: any = new Error(qrError);
     errorObj.details = qrData?.errors || qrData;
+    errorObj.errors = qrData?.errors || [{ description: qrError }];
+    errorObj.invoiceUrl = paymentData.invoiceUrl;
     throw errorObj;
   }
 

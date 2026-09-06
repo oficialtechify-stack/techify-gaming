@@ -481,15 +481,16 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       return res.status(400).json({ error: 'Valor da cobrança inválido ou não informado.' });
     }
 
-    const customerData = user || {
-      name: req.body.nomeDoCliente || req.body.name || 'Cliente LeadsPay',
-      email: req.body.emailDoCliente || req.body.email,
-      cpfCnpj: req.body.cpfLimpo || req.body.cpf || req.body.documentNumber,
-      phone: req.body.telefone || req.body.phone,
-      mobilePhone: req.body.celular || req.body.mobilePhone,
-      postalCode: req.body.postalCode || req.body.cep,
-      address: req.body.address,
-      addressNumber: req.body.addressNumber
+    const rawCustomer = user || req.body.customer || {};
+    const customerData = {
+      name: rawCustomer.name || req.body.nomeDoCliente || req.body.name || 'Cliente LeadsPay',
+      email: rawCustomer.email || req.body.emailDoCliente || req.body.email,
+      cpfCnpj: rawCustomer.cpfCnpj || rawCustomer.cpf || req.body.cpfLimpo || req.body.cpf || req.body.documentNumber,
+      phone: rawCustomer.phone || req.body.telefone || req.body.phone,
+      mobilePhone: rawCustomer.mobilePhone || req.body.celular || req.body.mobilePhone,
+      postalCode: rawCustomer.postalCode || req.body.postalCode || req.body.cep,
+      address: rawCustomer.address || req.body.address,
+      addressNumber: rawCustomer.addressNumber || req.body.addressNumber
     };
 
     if (!customerData?.email) {
@@ -516,14 +517,18 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
         cpfCnpj: cleanCpf,
         phone: customerData.phone,
         mobilePhone: customerData.mobilePhone || customerData.phone,
-        postalCode: customerData.postalCode || customerData.cep,
+        postalCode: customerData.postalCode,
         address: customerData.address,
         addressNumber: customerData.addressNumber
       });
     } catch (custError: any) {
       console.error('[Server Asaas Customer Error] Falha detalhada ao obter/criar cliente:', custError);
+      const errMsg = custError.message || 'Erro ao registrar cliente no Asaas.';
+      const errList = custError.errors || custError.details?.errors || (Array.isArray(custError.details) ? custError.details : [{ description: errMsg }]);
       return res.status(400).json({ 
-        error: custError.message || 'Erro ao registrar cliente no Asaas.',
+        error: errMsg,
+        message: errMsg,
+        errors: errList,
         details: custError.details || null,
         code: 'CUSTOMER_CREATION_FAILED'
       });
@@ -596,9 +601,14 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
         });
       } catch (pixErr: any) {
         console.error('[Server Asaas PIX Error] Falha detalhada ao gerar cobrança PIX:', pixErr);
+        const errMsg = pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.';
+        const errList = pixErr.errors || pixErr.details?.errors || (Array.isArray(pixErr.details) ? pixErr.details : [{ description: errMsg }]);
         return res.status(400).json({ 
-          error: pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.',
+          error: errMsg,
+          message: errMsg,
+          errors: errList,
           details: pixErr.details || null,
+          invoiceUrl: pixErr.invoiceUrl || null,
           code: 'PIX_GENERATION_FAILED'
         });
       }
