@@ -482,16 +482,16 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       return res.status(400).json({ error: true, message: 'Valor da cobrança inválido ou não informado.' });
     }
 
-    const rawCustomer = user || req.body.customer || {};
+    const rawCustomer = (user && typeof user === 'object') ? user : (req.body?.customer && typeof req.body.customer === 'object' ? req.body.customer : {});
     const customerData = {
-      name: rawCustomer.name || req.body.nomeDoCliente || req.body.name || 'Cliente LeadsPay',
-      email: rawCustomer.email || req.body.emailDoCliente || req.body.email,
-      cpfCnpj: rawCustomer.cpfCnpj || rawCustomer.cpf || req.body.cpfLimpo || req.body.cpf || req.body.documentNumber,
-      phone: rawCustomer.phone || req.body.telefone || req.body.phone,
-      mobilePhone: rawCustomer.mobilePhone || req.body.celular || req.body.mobilePhone,
-      postalCode: rawCustomer.postalCode || req.body.postalCode || req.body.cep,
-      address: rawCustomer.address || req.body.address,
-      addressNumber: rawCustomer.addressNumber || req.body.addressNumber
+      name: rawCustomer.name || req.body?.nomeDoCliente || req.body?.name || 'Cliente LeadsPay',
+      email: rawCustomer.email || req.body?.emailDoCliente || req.body?.email,
+      cpfCnpj: rawCustomer.cpfCnpj || rawCustomer.cpf || req.body?.cpfLimpo || req.body?.cpf || req.body?.documentNumber,
+      phone: rawCustomer.phone || req.body?.telefone || req.body?.phone,
+      mobilePhone: rawCustomer.mobilePhone || req.body?.celular || req.body?.mobilePhone,
+      postalCode: rawCustomer.postalCode || req.body?.postalCode || req.body?.cep,
+      address: rawCustomer.address || req.body?.address,
+      addressNumber: rawCustomer.addressNumber || req.body?.addressNumber
     };
 
     if (!customerData?.email) {
@@ -713,11 +713,12 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
     }
 
-    return res.status(400).json({ error: 'Operação não suportada' });
+    return res.status(400).json({ error: true, message: 'Operação não suportada' });
   } catch (err: any) {
-    console.error('[POST /api/payments] Erro interno:', err);
+    console.error('ERRO FATAL NA ROTA PAYMENTS:', err);
     return res.status(500).json({ 
-      error: err.message || 'Erro interno no servidor ao processar pagamento.',
+      error: true,
+      message: err?.message || 'Erro interno no servidor de pagamentos',
       code: 'INTERNAL_SERVER_ERROR'
     });
   }

@@ -102,14 +102,14 @@ function getHeaders() {
   }
   return {
     'Content-Type': 'application/json',
-    'access_token': token
+    'access_token': token || ''
   };
 }
 
 /**
  * Normaliza e remove qualquer caractere não numérico de CPF ou CNPJ
  */
-export function cleanDocument(docStr: string): string {
+export function cleanDocument(docStr?: string | number | null): string {
   if (!docStr) return '';
   return String(docStr).replace(/\D/g, '').trim();
 }
@@ -122,9 +122,13 @@ export function cleanDocument(docStr: string): string {
  * 4. Se não existir, faz POST para ${ASAAS_API_URL}/customers para cadastrar e retorna o novo id.
  */
 export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<string> {
-  const { apiUrl } = getAsaasConfig();
+  const { apiUrl, apiKey } = getAsaasConfig();
+  if (!apiKey) {
+    throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
+  }
+
   const headers = getHeaders();
-  const cpfCnpj = cleanDocument(userData.cpfCnpj);
+  const cpfCnpj = cleanDocument(userData?.cpfCnpj);
 
   if (!cpfCnpj) {
     throw new Error('CPF ou CNPJ obrigatório para localizar ou criar cliente no Asaas.');
@@ -220,7 +224,11 @@ export async function createPixPayment(
   amount: number, 
   description?: string
 ): Promise<AsaasPixResponse> {
-  const { apiUrl } = getAsaasConfig();
+  const { apiUrl, apiKey } = getAsaasConfig();
+  if (!apiKey) {
+    throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
+  }
+
   const headers = getHeaders();
 
   if (!customerId) {
@@ -276,6 +284,10 @@ export async function createPixPayment(
   }
 
   const paymentData = responseData;
+  if (!paymentData || !paymentData.id) {
+    throw new Error('Resposta do Asaas não contém o identificador da cobrança criada.');
+  }
+
   const paymentId = paymentData.id;
   console.log(`[Asaas] Cobrança criada com ID ${paymentId}. Resgatando QR Code PIX...`);
 
@@ -314,11 +326,11 @@ export async function createPixPayment(
   return {
     paymentId: paymentId,
     status: paymentData.status || 'PENDING',
-    value: paymentData.value,
+    value: paymentData.value || cleanAmount,
     netValue: paymentData.netValue,
-    payload: qrData.payload, // Código PIX Copia e Cola
-    encodedImage: qrData.encodedImage, // QR Code em imagem Base64
-    expirationDate: qrData.expirationDate,
+    payload: qrData?.payload || qrData?.copyAndPaste || '',
+    encodedImage: qrData?.encodedImage || '',
+    expirationDate: qrData?.expirationDate || paymentData.dueDate,
     invoiceUrl: paymentData.invoiceUrl,
     bankSlipUrl: paymentData.bankSlipUrl
   };
@@ -337,7 +349,10 @@ export async function createCreditCardPayment(
   creditCard: AsaasCreditCard,
   holderInfo: AsaasCreditCardHolderInfo
 ): Promise<AsaasCreditCardResponse> {
-  const { apiUrl } = getAsaasConfig();
+  const { apiUrl, apiKey } = getAsaasConfig();
+  if (!apiKey) {
+    throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
+  }
   const headers = getHeaders();
 
   if (!customerId) {
