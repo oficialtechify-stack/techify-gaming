@@ -256,11 +256,11 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       } else {
         // Exibe estritamente data.errors[0].description ou data.message retornado pela API do Asaas
         const asaasDescription = data?.errors?.[0]?.description;
-        const asaasMessage = data?.message;
+        const asaasMessage = typeof data?.message === 'string' ? data.message : null;
         const asaasDetails = Array.isArray(data?.details) 
-          ? data.details.map((d: any) => d.description || d.message).join(' | ') 
-          : (data?.details?.description || data?.details?.message);
-        const asaasError = data?.error;
+          ? data.details.map((d: any) => d.description || d.message).filter(Boolean).join(' | ') 
+          : (typeof data?.details === 'string' ? data.details : (data?.details?.description || data?.details?.message));
+        const asaasError = typeof data?.error === 'string' ? data.error : null;
 
         const errorMsg = 
           asaasDescription || 

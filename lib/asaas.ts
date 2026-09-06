@@ -200,6 +200,7 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<
       `Falha ao criar cliente no Asaas (${createRes.status})`;
     const errorObj: any = new Error(errorMessage);
     errorObj.details = createData?.errors || createData;
+    errorObj.errors = createData?.errors || [{ description: errorMessage }];
     throw errorObj;
   }
 
@@ -268,6 +269,7 @@ export async function createPixPayment(
       `Erro ao gerar cobrança PIX no Asaas (${paymentRes.status})`;
     const errorObj: any = new Error(errorMsg);
     errorObj.details = paymentData?.errors || paymentData;
+    errorObj.errors = paymentData?.errors || [{ description: errorMsg }];
     throw errorObj;
   }
 

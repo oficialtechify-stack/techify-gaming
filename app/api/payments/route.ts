@@ -94,12 +94,13 @@ export async function POST(req: Request) {
       });
     } catch (custError: any) {
       console.error('[Route Asaas Customer Error] Erro ao cadastrar/obter cliente Asaas:', custError);
-      const errMsg = custError.message || 'Erro ao registrar cliente no Asaas.';
+      const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro ao registrar cliente no Asaas.';
       const errList = custError.errors || custError.details?.errors || (Array.isArray(custError.details) ? custError.details : [{ description: errMsg }]);
       return Response.json(
         { 
-          error: errMsg,
+          error: true,
           message: errMsg,
+          description: errMsg,
           errors: errList,
           details: custError.details || null,
           code: 'CUSTOMER_CREATION_FAILED'
@@ -140,12 +141,13 @@ export async function POST(req: Request) {
         );
       } catch (pixErr: any) {
         console.error('[Route Asaas PIX Error] Erro detalhado ao gerar cobrança PIX:', pixErr);
-        const errMsg = pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.';
+        const errMsg = pixErr.errors?.[0]?.description || pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.';
         const errList = pixErr.errors || pixErr.details?.errors || (Array.isArray(pixErr.details) ? pixErr.details : [{ description: errMsg }]);
         return Response.json(
           { 
-            error: errMsg,
+            error: true,
             message: errMsg,
+            description: errMsg,
             errors: errList,
             details: pixErr.details || null,
             invoiceUrl: pixErr.invoiceUrl || null,
