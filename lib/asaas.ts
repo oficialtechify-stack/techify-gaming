@@ -65,8 +65,12 @@ export interface AsaasCreditCardResponse {
 }
 
 function getAsaasConfig() {
-  const apiKey = process.env.ASAAS_API_KEY || '';
-  let apiUrl = (process.env.ASAAS_API_URL || 'https://www.asaas.com/api/v3').trim();
+  const apiKey = (process.env.ASAAS_API_KEY || '').trim();
+  let apiUrl = (process.env.ASAAS_API_URL || 'https://api.asaas.com/v3').trim();
+  // Assegura a URL oficial de API (substitui www.asaas.com por api.asaas.com)
+  if (apiUrl.includes('www.asaas.com')) {
+    apiUrl = apiUrl.replace('www.asaas.com', 'api.asaas.com');
+  }
   if (apiUrl.endsWith('/')) {
     apiUrl = apiUrl.slice(0, -1);
   }
@@ -76,7 +80,7 @@ function getAsaasConfig() {
 function getHeaders() {
   const { apiKey } = getAsaasConfig();
   if (!apiKey) {
-    console.warn('[Asaas Service] AVISO: ASAAS_API_KEY não configurada no ambiente.');
+    console.error('[Asaas Service] ERRO CRÍTICO: ASAAS_API_KEY não configurada no ambiente.');
   }
   return {
     'Content-Type': 'application/json',
@@ -86,7 +90,7 @@ function getHeaders() {
 }
 
 /**
- * Normaliza e remove caracteres não numéricos de CPF ou CNPJ
+ * Normaliza e remove qualquer caractere não numérico de CPF ou CNPJ
  */
 export function cleanDocument(docStr: string): string {
   if (!docStr) return '';
@@ -95,7 +99,7 @@ export function cleanDocument(docStr: string): string {
 
 /**
  * getOrCreateCustomer(userData)
- * 1. Limpa o CPF/CNPJ removendo caracteres não numéricos.
+ * 1. Limpa o CPF/CNPJ removendo qualquer pontuação (apenas dígitos).
  * 2. Faz GET para ${ASAAS_API_URL}/customers?cpfCnpj=${cpfCnpj} com o header 'access_token'.
  * 3. Se o cliente já existir no Asaas, retorna o id encontrado.
  * 4. Se não existir, faz POST para ${ASAAS_API_URL}/customers para cadastrar e retorna o novo id.
@@ -109,7 +113,7 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<
     throw new Error('CPF ou CNPJ obrigatório para localizar ou criar cliente no Asaas.');
   }
 
-  // 1. Busca cliente existente por CPF/CNPJ
+  // 1. Busca cliente existente por CPF/CNPJ (apenas dígitos)
   try {
     const searchUrl = `${apiUrl}/customers?cpfCnpj=${encodeURIComponent(cpfCnpj)}`;
     const searchRes = await fetch(searchUrl, {
@@ -117,28 +121,33 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<
       headers
     });
 
-    if (searchRes.ok) {
-      const searchData = await searchRes.json();
+    const searchData = await searchRes.json().catch(() => null);
+
+    if (searchRes.ok && searchData) {
       if (searchData.data && Array.isArray(searchData.data) && searchData.data.length > 0) {
         const existingCustomer = searchData.data[0];
-        console.log(`[Asaas] Cliente existente encontrado: ${existingCustomer.id} (${existingCustomer.name})`);
+        console.log(`[Asaas] Cliente existente localizado no Asaas: ${existingCustomer.id} (${existingCustomer.name})`);
         return existingCustomer.id;
       }
     } else {
-      console.warn(`[Asaas] Consulta de cliente retornou status ${searchRes.status}. Tentando criar.`);
+      console.error('[Asaas API Error] Erro ao consultar cliente existente (searchData.errors):', {
+        status: searchRes.status,
+        errors: searchData?.errors,
+        fullResponse: searchData
+      });
     }
   } catch (searchErr) {
-    console.warn('[Asaas] Erro ao pesquisar cliente existente:', searchErr);
+    console.error('[Asaas API Error] Exceção de rede ao pesquisar cliente existente:', searchErr);
   }
 
-  // 2. Não encontrado -> Cadastra novo cliente no Asaas
+  // 2. Não encontrado -> Cadastra novo cliente no Asaas com dados formatados
   const cleanPhone = userData.phone ? cleanDocument(userData.phone) : undefined;
   const cleanMobile = userData.mobilePhone ? cleanDocument(userData.mobilePhone) : cleanPhone;
 
   const payload = {
     name: userData.name || 'Cliente LeadsPay',
     email: userData.email || 'cliente@leadspay.com',
-    cpfCnpj: cpfCnpj,
+    cpfCnpj: cpfCnpj, // Estritamente numérico sem pontuação
     phone: cleanPhone || undefined,
     mobilePhone: cleanMobile || undefined,
     postalCode: userData.postalCode ? cleanDocument(userData.postalCode) : undefined,
@@ -150,21 +159,31 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<
     notificationDisabled: false
   };
 
-  const createRes = await fetch(`${apiUrl}/customers`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload)
-  });
+  let createRes: Response;
+  try {
+    createRes = await fetch(`${apiUrl}/customers`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+  } catch (netErr: any) {
+    console.error('[Asaas API Error] Falha de rede ao criar cliente no Asaas:', netErr);
+    throw new Error(`Falha de conexão com Asaas: ${netErr.message}`);
+  }
 
-  const createData = await createRes.json();
+  const createData = await createRes.json().catch(() => null);
 
   if (!createRes.ok) {
+    // Log detalhado do objeto de erro completo que o Asaas retorna
+    console.error('[Asaas API Error] Objeto completo de erro ao criar cliente (createData.errors):', JSON.stringify(createData, null, 2));
     const errorMessage = 
+      createData?.errors?.map((e: any) => e.description).join(' | ') || 
       createData?.errors?.[0]?.description || 
       createData?.message || 
       `Falha ao criar cliente no Asaas (${createRes.status})`;
-    console.error('[Asaas] Erro ao criar cliente:', createData);
-    throw new Error(errorMessage);
+    const errorObj: any = new Error(errorMessage);
+    errorObj.details = createData?.errors || createData;
+    throw errorObj;
   }
 
   console.log(`[Asaas] Novo cliente criado com sucesso: ${createData.id}`);
@@ -173,9 +192,9 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<
 
 /**
  * createPixPayment(customerId, amount, description)
- * 1. Faz POST para ${ASAAS_API_URL}/payments com billingType: 'PIX', valor e vencimento hoje.
+ * 1. Faz POST para ${ASAAS_API_URL}/payments com billingType: 'PIX', valor numérico e vencimento YYYY-MM-DD.
  * 2. Faz GET para ${ASAAS_API_URL}/payments/${paymentId}/pixQrCode para obter Copia e Cola e QR Code em Base64.
- * 3. Retorna os dados completos do PIX.
+ * 3. Retorna os dados completos do PIX com logs de erro detalhados.
  */
 export async function createPixPayment(
   customerId: string, 
@@ -189,12 +208,13 @@ export async function createPixPayment(
     throw new Error('ID do cliente Asaas é obrigatório para gerar PIX.');
   }
 
+  // 1. Valor numérico (ex: 197.99)
   const cleanAmount = Number(parseFloat(String(amount)).toFixed(2));
   if (isNaN(cleanAmount) || cleanAmount <= 0) {
     throw new Error('Valor inválido para cobrança PIX no Asaas.');
   }
 
-  // Data de vencimento: hoje (formato YYYY-MM-DD)
+  // 2. Data de vencimento estritamente no formato YYYY-MM-DD
   const today = new Date().toISOString().split('T')[0];
 
   const paymentPayload = {
@@ -205,40 +225,65 @@ export async function createPixPayment(
     description: description || 'Pagamento LeadsPay'
   };
 
-  console.log('[Asaas] Criando cobrança PIX:', paymentPayload);
+  console.log('[Asaas] Solicitando criação de cobrança PIX:', paymentPayload);
 
-  const paymentRes = await fetch(`${apiUrl}/payments`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(paymentPayload)
-  });
+  let paymentRes: Response;
+  try {
+    paymentRes = await fetch(`${apiUrl}/payments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(paymentPayload)
+    });
+  } catch (netErr: any) {
+    console.error('[Asaas API Error] Erro de rede ao requisitar criação de pagamento PIX:', netErr);
+    throw new Error(`Falha de conexão com Asaas: ${netErr.message}`);
+  }
 
-  const paymentData = await paymentRes.json();
+  const paymentData = await paymentRes.json().catch(() => null);
 
   if (!paymentRes.ok) {
+    // Log detalhado do objeto de erro completo retornado pelo Asaas
+    console.error('[Asaas API Error] Erro completo ao criar pagamento PIX (payment.errors):', JSON.stringify(paymentData, null, 2));
     const errorMsg = 
+      paymentData?.errors?.map((e: any) => e.description).join(' | ') || 
       paymentData?.errors?.[0]?.description || 
       paymentData?.message || 
       `Erro ao gerar cobrança PIX no Asaas (${paymentRes.status})`;
-    console.error('[Asaas] Erro ao criar pagamento PIX:', paymentData);
-    throw new Error(errorMsg);
+    const errorObj: any = new Error(errorMsg);
+    errorObj.details = paymentData?.errors || paymentData;
+    throw errorObj;
   }
 
   const paymentId = paymentData.id;
+  console.log(`[Asaas] Cobrança criada com ID ${paymentId}. Resgatando QR Code PIX...`);
 
-  // 2. Busca QR Code dinâmico e código Pix Copia e Cola
-  const qrRes = await fetch(`${apiUrl}/payments/${paymentId}/pixQrCode`, {
-    method: 'GET',
-    headers
-  });
+  // 3. Busca QR Code dinâmico e código Pix Copia e Cola
+  let qrRes: Response;
+  try {
+    qrRes = await fetch(`${apiUrl}/payments/${paymentId}/pixQrCode`, {
+      method: 'GET',
+      headers
+    });
+  } catch (qrNetErr: any) {
+    console.error('[Asaas API Error] Erro de rede ao resgatar QR Code PIX:', qrNetErr);
+    throw new Error(`Falha ao buscar QR Code PIX: ${qrNetErr.message}`);
+  }
 
-  const qrData = await qrRes.json();
+  const qrData = await qrRes.json().catch(() => null);
 
   if (!qrRes.ok) {
-    const qrError = qrData?.errors?.[0]?.description || 'Erro ao resgatar QR Code PIX do Asaas.';
-    console.error('[Asaas] Erro ao resgatar QR Code PIX:', qrData);
-    throw new Error(qrError);
+    // Log detalhado do objeto de erro completo retornado pelo Asaas
+    console.error('[Asaas API Error] Erro completo ao buscar QR Code PIX (pixQrCode.errors):', JSON.stringify(qrData, null, 2));
+    const qrError = 
+      qrData?.errors?.map((e: any) => e.description).join(' | ') || 
+      qrData?.errors?.[0]?.description || 
+      'Erro ao resgatar QR Code PIX do Asaas.';
+    const errorObj: any = new Error(qrError);
+    errorObj.details = qrData?.errors || qrData;
+    throw errorObj;
   }
+
+  console.log(`[Asaas] QR Code PIX e Copia e Cola obtidos com sucesso para ${paymentId}`);
 
   return {
     paymentId: paymentId,
@@ -324,21 +369,30 @@ export async function createCreditCardPayment(
     holderName: payload.creditCard.holderName
   });
 
-  const response = await fetch(`${apiUrl}/payments`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/payments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+  } catch (netErr: any) {
+    console.error('[Asaas API Error] Falha de rede ao processar cartão de crédito:', netErr);
+    throw new Error(`Falha de conexão com Asaas: ${netErr.message}`);
+  }
 
-  const responseData = await response.json();
+  const responseData = await response.json().catch(() => null);
 
   if (!response.ok) {
+    console.error('[Asaas API Error] Erro completo no pagamento de cartão (payment.errors):', JSON.stringify(responseData, null, 2));
     const errorDetail = 
+      responseData?.errors?.map((e: any) => e.description).join(' | ') || 
       responseData?.errors?.[0]?.description || 
       responseData?.message || 
       `Cartão de crédito recusado ou inválido (${response.status})`;
-    console.error('[Asaas] Erro no pagamento de cartão:', responseData);
-    throw new Error(errorDetail);
+    const errorObj: any = new Error(errorDetail);
+    errorObj.details = responseData?.errors || responseData;
+    throw errorObj;
   }
 
   // Verifica status de recusa imediata pelo adquirente

@@ -91,8 +91,10 @@ export default async function handler(req: any, res: any) {
         addressNumber: customerData.addressNumber
       });
     } catch (custError: any) {
+      console.error('[API Payments Customer Error] Erro ao registrar cliente no Asaas:', custError);
       return res.status(400).json({ 
         error: custError.message || 'Erro ao registrar cliente no Asaas.',
+        details: custError.details || null,
         code: 'CUSTOMER_CREATION_FAILED'
       });
     }
@@ -128,8 +130,10 @@ export default async function handler(req: any, res: any) {
           }
         });
       } catch (pixErr: any) {
+        console.error('[API Payments PIX Error] Erro detalhado ao gerar cobrança PIX:', pixErr);
         return res.status(400).json({ 
           error: pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.',
+          details: pixErr.details || null,
           code: 'PIX_GENERATION_FAILED' 
         });
       }

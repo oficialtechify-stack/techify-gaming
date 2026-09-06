@@ -178,11 +178,18 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
     try {
       const activeAffiliate = getActiveAffiliateCode();
-      const cleanDoc = documentNumber.replace(/\D/g, '') || '19119119100';
+      const cleanDoc = documentNumber.replace(/\D/g, '');
       const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
-      const cleanEmail = (email || 'cliente@leadspay.com').trim();
-      const cleanName = (fullName || 'Cliente LeadsPay').trim();
-      const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
+      const cleanEmail = email.trim();
+      const cleanName = fullName.trim();
+      const cleanPhone = phone.replace(/\D/g, '');
+
+      if (!cleanDoc || cleanDoc.length < 11) {
+        setPixError('Por favor, informe seu CPF completo no formulário acima para gerar o Pix.');
+        setPixData(null);
+        setIsGeneratingPix(false);
+        return;
+      }
 
       // Requisição POST direta para o endpoint oficial do Asaas /api/payments
       const response = await fetch('/api/payments', {
@@ -197,13 +204,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           total_amount: cleanTotal,
           description: `Plano ${plan.name}`,
           user: {
-            name: cleanName,
-            email: cleanEmail,
+            name: cleanName || 'Cliente LeadsPay',
+            email: cleanEmail || 'cliente@leadspay.com',
             cpfCnpj: cleanDoc,
-            phone: cleanPhone
+            phone: cleanPhone || '11999999999'
           },
-          emailDoCliente: cleanEmail,
-          nomeDoCliente: cleanName,
+          emailDoCliente: cleanEmail || 'cliente@leadspay.com',
+          nomeDoCliente: cleanName || 'Cliente LeadsPay',
           cpfLimpo: cleanDoc,
           planId: plan.id,
           plan_id: plan.id,
@@ -240,8 +247,16 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         setPixError(null);
         setPixSecondsLeft(900); // Reset 15:00 min timer
       } else {
-        const errorMsg = data.error || (data.details ? JSON.stringify(data.details) : 'Erro ao gerar o código Pix no Asaas.');
-        console.error('[Checkout Pix Error]:', errorMsg);
+        let errorMsg = data.error;
+        if (Array.isArray(data.details) && data.details.length > 0) {
+          errorMsg = data.details.map((d: any) => d.description || d.message).filter(Boolean).join(' | ');
+        } else if (data.details && typeof data.details === 'object') {
+          errorMsg = data.details.description || data.details.message || JSON.stringify(data.details);
+        }
+        if (!errorMsg) {
+          errorMsg = 'Erro ao gerar o código Pix no Asaas.';
+        }
+        console.error('[Checkout Pix Error Detalhado]:', errorMsg, data);
         setPixError(errorMsg);
         setPixData(null);
       }
@@ -254,12 +269,15 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // Auto-generate PIX on first mount or when switching to PIX
+  // Auto-generate PIX on first mount or when switching to PIX or when CPF is completed
   useEffect(() => {
     if (paymentMethod === 'pix' && !pixData) {
-      generateRealPixPayment();
+      const cleanDoc = documentNumber.replace(/\D/g, '');
+      if (cleanDoc.length >= 11) {
+        generateRealPixPayment();
+      }
     }
-  }, [paymentMethod, finalTotal]);
+  }, [paymentMethod, finalTotal, documentNumber]);
 
   // Check PIX payment status in Asaas
   const checkPaymentStatus = async (paymentId: string) => {

@@ -93,9 +93,11 @@ export async function POST(req: Request) {
         addressNumber: customerData.addressNumber
       });
     } catch (custError: any) {
+      console.error('[Route Asaas Customer Error] Erro ao cadastrar/obter cliente Asaas:', custError);
       return Response.json(
         { 
           error: custError.message || 'Erro ao registrar cliente no Asaas.',
+          details: custError.details || null,
           code: 'CUSTOMER_CREATION_FAILED'
         },
         { status: 400 }
@@ -133,9 +135,11 @@ export async function POST(req: Request) {
           { status: 200 }
         );
       } catch (pixErr: any) {
+        console.error('[Route Asaas PIX Error] Erro detalhado ao gerar cobrança PIX:', pixErr);
         return Response.json(
           { 
             error: pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.',
+            details: pixErr.details || null,
             code: 'PIX_GENERATION_FAILED' 
           },
           { status: 400 }

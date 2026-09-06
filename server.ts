@@ -521,8 +521,10 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
         addressNumber: customerData.addressNumber
       });
     } catch (custError: any) {
+      console.error('[Server Asaas Customer Error] Falha detalhada ao obter/criar cliente:', custError);
       return res.status(400).json({ 
         error: custError.message || 'Erro ao registrar cliente no Asaas.',
+        details: custError.details || null,
         code: 'CUSTOMER_CREATION_FAILED'
       });
     }
@@ -593,8 +595,10 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           }
         });
       } catch (pixErr: any) {
+        console.error('[Server Asaas PIX Error] Falha detalhada ao gerar cobrança PIX:', pixErr);
         return res.status(400).json({ 
           error: pixErr.message || 'Falha ao gerar cobrança PIX no Asaas.',
+          details: pixErr.details || null,
           code: 'PIX_GENERATION_FAILED'
         });
       }
@@ -715,8 +719,14 @@ app.get(['/api/payments/asaas/:id', '/api/payments/pix/:id', '/api/pix/:id'], as
       return res.status(400).json({ error: 'ID da cobrança Asaas é obrigatório.' });
     }
 
-    const apiKey = process.env.ASAAS_API_KEY || '';
-    const apiUrl = (process.env.ASAAS_API_URL || 'https://www.asaas.com/api/v3').replace(/\/+$/, '');
+    const apiKey = (process.env.ASAAS_API_KEY || '').trim();
+    let apiUrl = (process.env.ASAAS_API_URL || 'https://api.asaas.com/v3').trim();
+    if (apiUrl.includes('www.asaas.com')) {
+      apiUrl = apiUrl.replace('www.asaas.com', 'api.asaas.com');
+    }
+    if (apiUrl.endsWith('/')) {
+      apiUrl = apiUrl.slice(0, -1);
+    }
 
     const response = await fetch(`${apiUrl}/payments/${paymentId}`, {
       headers: {
@@ -726,7 +736,12 @@ app.get(['/api/payments/asaas/:id', '/api/payments/pix/:id', '/api/pix/:id'], as
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: `Erro ao consultar cobrança no Asaas (${response.status})` });
+      const errData = await response.json().catch(() => null);
+      console.error('[Server Asaas Status Error] Erro ao consultar pagamento Asaas:', errData);
+      return res.status(response.status).json({ 
+        error: `Erro ao consultar cobrança no Asaas (${response.status})`,
+        details: errData?.errors || errData
+      });
     }
 
     const data = await response.json();
