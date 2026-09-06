@@ -9,54 +9,54 @@ interface HeroSectionProps {
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPlatform }) => {
   return (
-    <section id="home" className="relative pt-6 pb-16 md:pt-12 md:pb-24 overflow-hidden">
+    <section id="home" className="relative pt-6 pb-14 md:pt-10 md:pb-20 overflow-hidden">
       {/* Background glow orbs */}
       <div className="blur blur-1" />
       <div className="blur blur-2" />
 
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top Tagline Pill */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-[#0d1527]/90 border border-[#D9F22A]/40 text-[#D9F22A] text-xs sm:text-sm font-bold uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.2)]">
-            <Sparkles className="w-4 h-4 text-[#D9F22A] animate-pulse" />
-            <span>MARKETPLACE DE STARTUPS & ECOSSISTEMA DE AFILIADOS B2B</span>
+        <div className="flex justify-center mb-5 sm:mb-6">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-[#0d1527]/90 border border-[#D9F22A]/40 text-[#D9F22A] text-[11px] sm:text-xs font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.18)]">
+            <Sparkles className="w-3.5 h-3.5 text-[#D9F22A] animate-pulse" />
+            <span>Marketplace de Startups & Rede de Afiliados B2B</span>
           </div>
         </div>
 
-        {/* Main Hero Headline - Clear and Direct */}
-        <div className="text-center max-w-5xl mx-auto mb-6 sm:mb-8">
-          <h1 className="elementor-heading-title text-3xl sm:text-5xl md:text-6xl lg:text-[68px] font-extrabold tracking-tight uppercase leading-[1.06]">
-            <span className="cor block">
-              CONECTAMOS STARTUPS INOVADORAS
+        {/* Main Hero Headline - Centered, Balanced, Clear */}
+        <div className="text-center max-w-4xl mx-auto mb-6 sm:mb-8">
+          <h1 className="elementor-heading-title text-2xl sm:text-4xl md:text-5xl lg:text-[48px] font-extrabold tracking-tight uppercase leading-[1.12] sm:leading-[1.16] [text-wrap:balance]">
+            <span className="cor block drop-shadow-[0_0_25px_rgba(217,242,42,0.3)]">
+              Conectamos Startups Inovadoras
             </span>
-            <span className="text-white block mt-1 sm:mt-2">
-              A UMA REDE DE AFILIADOS QUE VENDE TODOS OS DIAS.
+            <span className="text-white block mt-1.5 sm:mt-2 text-xl sm:text-3xl md:text-4xl lg:text-[42px] font-bold">
+              a uma Rede de Afiliados que Vende Todos os Dias
             </span>
           </h1>
 
           {/* Subheading Narrative */}
-          <p className="mt-6 text-base sm:text-xl text-white/80 max-w-3xl mx-auto font-medium leading-relaxed">
-            O <strong>LeadsPay</strong> é a infraestrutura comercial onde empresas e startups publicam seus planos e softwares, e afiliados profissionais fecham contratos com comissões de <span className="text-[#D9F22A] font-bold">30% a 50%</span> e repasses automáticos via <span className="text-[#D9F22A] font-bold">PIX D+0</span>.
+          <p className="mt-5 sm:mt-6 text-sm sm:text-base md:text-lg text-white/80 max-w-2xl mx-auto font-normal leading-relaxed text-center">
+            A infraestrutura comercial definitiva: startups e empresas escalam distribuição sem custo fixo, enquanto afiliados e vendedores profissionais monetizam comissões de <span className="text-[#D9F22A] font-bold">30% a 50%</span> e repasses automáticos via <span className="text-[#D9F22A] font-bold">PIX D+0</span>.
           </p>
         </div>
 
         {/* Central Call-to-Actions */}
-        <div className="flex flex-wrap items-center justify-center gap-4 mb-12">
+        <div className="flex flex-wrap items-center justify-center gap-3.5 sm:gap-4 mb-10 sm:mb-12">
           {onOpenPlatform ? (
             <button
               onClick={onOpenPlatform}
-              className="group flex items-center gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-4 px-8 rounded-2xl text-sm sm:text-base uppercase tracking-wider shadow-[0_0_35px_rgba(217,242,42,0.45)] hover:scale-105 transition-all duration-300 cursor-pointer"
+              className="group flex items-center gap-2.5 sm:gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-6 sm:py-4 sm:px-8 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider shadow-[0_0_30px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300 cursor-pointer"
             >
               <span>Explorar Marketplace de Startups</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
             </button>
           ) : (
             <button
               onClick={() => onOpenModal('login')}
-              className="group flex items-center gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-4 px-8 rounded-2xl text-sm sm:text-base uppercase tracking-wider shadow-[0_0_35px_rgba(217,242,42,0.45)] hover:scale-105 transition-all duration-300 cursor-pointer"
+              className="group flex items-center gap-2.5 sm:gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-6 sm:py-4 sm:px-8 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider shadow-[0_0_30px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300 cursor-pointer"
             >
               <span>Acessar Plataforma & Vitrine</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
             </button>
           )}
 
@@ -67,17 +67,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
               const el = document.getElementById('como-funciona');
               if (el) el.scrollIntoView({ behavior: 'smooth' });
             }}
-            className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white border border-white/15 font-bold py-4 px-7 rounded-2xl text-sm sm:text-base uppercase tracking-wider transition-all duration-300 cursor-pointer backdrop-blur-sm"
+            className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white border border-white/15 font-bold py-3.5 px-6 sm:py-4 sm:px-7 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider transition-all duration-300 cursor-pointer backdrop-blur-sm"
           >
-            <span>Como Funciona o Ecossistema</span>
+            <span>Como Funciona</span>
           </a>
         </div>
 
         {/* Central 3D Glowing Emblem */}
-        <div className="relative flex justify-center items-center my-8">
-          <div className="relative w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] aspect-square flex items-center justify-center group">
+        <div className="relative flex justify-center items-center my-6 sm:my-8">
+          <div className="relative w-full max-w-[280px] sm:max-w-[360px] md:max-w-[420px] aspect-square flex items-center justify-center group">
             {/* Ambient Volumetric Backlight Glow */}
-            <div className="absolute inset-0 bg-[#D9F22A]/25 rounded-full blur-[100px] pointer-events-none group-hover:scale-105 transition-transform duration-700" />
+            <div className="absolute inset-0 bg-[#D9F22A]/20 rounded-full blur-[80px] sm:blur-[100px] pointer-events-none group-hover:scale-105 transition-transform duration-700" />
             
             {/* 3D High-Res Emblem Image */}
             <img
@@ -86,7 +86,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
               src="https://stellargaming.com/wp-content/uploads/2025/08/frame_1321318091.webp"
               alt="LeadsPay 3D Emblem"
               referrerPolicy="no-referrer"
-              className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_20px_50px_rgba(217,242,42,0.35)] transition-transform duration-500 hover:scale-[1.03]"
+              className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_20px_40px_rgba(217,242,42,0.3)] transition-transform duration-500 hover:scale-[1.02]"
               loading="eager"
             />
           </div>
@@ -158,5 +158,3 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
     </section>
   );
 };
-
-

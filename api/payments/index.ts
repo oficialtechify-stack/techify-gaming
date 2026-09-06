@@ -1,13 +1,9 @@
-import { 
-  getOrCreateCustomer, 
-  createPixPayment, 
-  createCreditCardPayment, 
-  cleanDocument 
-} from '../../lib/asaas';
-
 /**
- * Extrai e normaliza o corpo da requisição com total segurança para Serverless Functions
+ * Handler Vercel Serverless Function
+ * POST /api/payments
+ * Blindagem 100% contra FUNCTION_INVOCATION_FAILED na Vercel
  */
+
 async function parseRequestBody(req: any): Promise<any> {
   if (!req) return {};
   if (req.body) {
@@ -40,10 +36,6 @@ async function parseRequestBody(req: any): Promise<any> {
   return {};
 }
 
-/**
- * Handler Vercel Serverless Function
- * POST /api/payments
- */
 export default async function handler(req: any, res: any) {
   // Configuração global de CORS
   try {
@@ -65,285 +57,330 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req?.method !== 'POST') {
-    return res.status(405).json({ error: true, message: 'Método não permitido. Use POST.' });
+    return res.status(200).json({ error: true, message: 'Método não permitido. Utilize POST.' });
   }
 
   try {
-    const body = await parseRequestBody(req);
-
-    const {
-      paymentMethod,
-      billingType,
-      amount,
-      valorTotal,
-      total_amount,
-      value,
-      description,
-      user,
-      customer,
-      creditCard,
-      holderInfo,
-      planId,
-      plan_id,
-      companyId,
-      company_id,
-      refCode,
-      affiliate_code,
-      affiliateRef
-    } = body;
-
-    // 1. Validação do método de pagamento
-    const normalizedMethod = String(paymentMethod || billingType || 'PIX').toUpperCase().trim();
-    if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD') {
-      return res.status(400).json({ 
-        error: true,
-        message: 'Método de pagamento inválido. Utilize "PIX" ou "CREDIT_CARD".',
-        received: paymentMethod || billingType 
-      });
+    // 1. Validação e Tratamento de Entrada com parse seguro do body
+    let body: any = {};
+    try {
+      body = await parseRequestBody(req);
+    } catch (e) {
+      body = {};
     }
 
-    // 2. Validação segura do valor da cobrança
-    const rawAmount = amount ?? valorTotal ?? total_amount ?? value;
-    const finalAmount = Number(parseFloat(String(rawAmount || 0)).toFixed(2));
-    if (isNaN(finalAmount) || finalAmount <= 0) {
-      return res.status(400).json({ 
-        error: true, 
-        message: 'Valor da cobrança inválido ou não informado. Deve ser um número maior que zero.' 
-      });
+    if (!body || typeof body !== 'object') {
+      body = {};
     }
 
-    // 3. Validação segura e normalização dos dados do cliente (evita undefined)
-    const rawCustomer = (user && typeof user === 'object') 
-      ? user 
-      : (customer && typeof customer === 'object') 
-        ? customer 
-        : {};
+    // 2. Trate todas as variáveis com fallbacks seguros para evitar leitura de propriedade em undefined
+    const rawCustomer = (body.user && typeof body.user === 'object')
+      ? body.user
+      : (body.customer && typeof body.customer === 'object' ? body.customer : {});
 
     const customerName = String(
+      body.name || 
+      body.userName || 
       rawCustomer.name || 
-      body?.nomeDoCliente || 
-      body?.name || 
-      'Cliente LeadsPay'
+      body.nomeDoCliente || 
+      "Cliente"
     ).trim();
 
     const customerEmail = String(
+      body.email || 
+      body.userEmail || 
       rawCustomer.email || 
-      body?.emailDoCliente || 
-      body?.email || 
-      ''
+      body.emailDoCliente || 
+      "email@dominio.com"
     ).trim().toLowerCase();
 
-    const customerCpfRaw = String(
+    // Documento: Remova pontos e traços com .replace(/\D/g, '') garantindo que não quebre se o campo for nulo
+    const rawDoc = String(
+      body.documentNumber || 
+      body.cpfCnpj || 
+      body.cpf || 
+      body.cpfLimpo || 
       rawCustomer.cpfCnpj || 
       rawCustomer.cpf || 
-      body?.cpfLimpo || 
-      body?.cpf || 
-      body?.documentNumber || 
-      ''
-    ).trim();
+      ""
+    );
+    const cleanCpf = rawDoc.replace(/\D/g, '').trim();
 
-    const customerPhone = String(
-      rawCustomer.phone || 
-      rawCustomer.mobilePhone || 
-      body?.telefone || 
-      body?.phone || 
-      ''
-    ).trim();
+    // Valor: Number(body.amount || body.value || 197.99)
+    const rawAmount = body.amount ?? body.value ?? body.valorTotal ?? body.total_amount;
+    const finalAmount = Number(parseFloat(String(rawAmount || 197.99)).toFixed(2));
 
-    const customerMobile = String(
-      rawCustomer.mobilePhone || 
-      rawCustomer.celular || 
-      body?.celular || 
-      customerPhone || 
-      ''
-    ).trim();
+    const paymentMethod = String(body.paymentMethod || body.billingType || 'PIX').toUpperCase().trim();
+    const description = String(body.description || `Assinatura Plano ${body.planId || body.plan_id || 'LeadsPay'}`).trim();
 
-    const postalCode = String(
-      rawCustomer.postalCode || 
-      rawCustomer.cep || 
-      body?.cep || 
-      ''
-    ).trim();
-
-    const address = String(
-      rawCustomer.address || 
-      rawCustomer.endereco || 
-      body?.address || 
-      ''
-    ).trim();
-
-    const addressNumber = String(
-      rawCustomer.addressNumber || 
-      rawCustomer.numero || 
-      body?.addressNumber || 
-      ''
-    ).trim();
-
+    // Validações com retorno status 200 ({ error: true, message: ... }) para evitar crash 500 na Vercel
     if (!customerEmail || !customerEmail.includes('@')) {
-      return res.status(400).json({ 
+      return res.status(200).json({ 
         error: true, 
         message: 'O e-mail do cliente é obrigatório e deve ser válido para processar a cobrança.' 
       });
     }
 
-    const cleanCpf = cleanDocument(customerCpfRaw);
     if (!cleanCpf || cleanCpf.length < 11) {
-      return res.status(400).json({ 
+      return res.status(200).json({ 
         error: true, 
-        message: 'CPF ou CNPJ válido é obrigatório para o cadastro e cobrança no Asaas.' 
+        message: 'CPF ou CNPJ válido é obrigatório para processar a cobrança no Asaas.' 
       });
     }
 
-    const finalPlanId = (planId || plan_id || null)?.toString() || null;
-    const finalRefCode = (refCode || affiliate_code || affiliateRef || null)?.toString() || null;
-    const finalCompanyId = (companyId || company_id || null)?.toString() || null;
-    const finalDescription = description || `Assinatura Plano ${finalPlanId || 'LeadsPay'}`;
+    if (isNaN(finalAmount) || finalAmount <= 0) {
+      return res.status(200).json({ 
+        error: true, 
+        message: 'Valor da cobrança inválido. Deve ser maior que zero.' 
+      });
+    }
 
-    // 4. Obter ou Criar Cliente no Asaas com tratamento de erro
-    let customerId: string;
+    // 3. Obter configuração do Asaas
+    const apiKey = (process.env.ASAAS_API_KEY || '').trim();
+    const isSandbox = process.env.ASAAS_ENV === 'sandbox' || apiKey.startsWith('$aact_YTU5YTE0M2M6N2I4');
+    const apiUrl = process.env.ASAAS_API_URL || (isSandbox ? 'https://sandbox.asaas.com/api/v3' : 'https://api.asaas.com/v3');
+
+    if (!apiKey) {
+      return res.status(200).json({ 
+        error: true, 
+        message: 'Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente da Vercel.' 
+      });
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'access_token': apiKey
+    };
+
+    // 4. Localizar ou Criar Cliente no Asaas em bloco try/catch isolado (sem throw)
+    let customerId = '';
     try {
-      customerId = await getOrCreateCustomer({
-        name: customerName,
-        email: customerEmail,
-        cpfCnpj: cleanCpf,
-        phone: customerPhone || undefined,
-        mobilePhone: customerMobile || undefined,
-        postalCode: postalCode || undefined,
-        address: address || undefined,
-        addressNumber: addressNumber || undefined
+      const searchRes = await fetch(`${apiUrl}/customers?cpfCnpj=${encodeURIComponent(cleanCpf)}`, {
+        method: 'GET',
+        headers
       });
-    } catch (custError: any) {
-      console.error('[API Payments Customer Error] Erro ao registrar cliente no Asaas:', custError);
-      const status = custError.status || custError.statusCode || 400;
-      const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro desconhecido na API do Asaas ao registrar cliente';
-      const errList = custError.errors || custError.details?.errors || (Array.isArray(custError.details) ? custError.details : [{ description: errMsg }]);
-      return res.status(status).json({ 
-        error: true,
-        message: errMsg,
-        description: errMsg,
-        errors: errList,
-        details: custError.details || custError.responseData || null,
-        code: 'CUSTOMER_CREATION_FAILED'
-      });
+      const searchData = await searchRes.json().catch(() => null);
+      if (searchRes.ok && searchData?.data && Array.isArray(searchData.data) && searchData.data.length > 0) {
+        customerId = searchData.data[0].id;
+      }
+    } catch (searchErr: any) {
+      console.warn('[Asaas] Falha não impeditiva na busca de cliente:', searchErr?.message);
     }
 
-    // 5. Cobrança PIX
-    if (normalizedMethod === 'PIX') {
+    if (!customerId) {
       try {
-        const pixResult = await createPixPayment(customerId, finalAmount, finalDescription);
+        const createRes = await fetch(`${apiUrl}/customers`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            name: customerName,
+            email: customerEmail,
+            cpfCnpj: cleanCpf,
+            phone: String(body.phone || rawCustomer.phone || '').replace(/\D/g, '') || undefined,
+            notificationDisabled: false
+          })
+        });
+
+        const createData = await createRes.json().catch(() => null);
+
+        if (!createRes.ok || !createData?.id) {
+          const errMsg = createData?.errors?.[0]?.description || createData?.message || 'Erro ao cadastrar cliente no Asaas.';
+          return res.status(200).json({ 
+            error: true, 
+            message: errMsg, 
+            description: errMsg,
+            errors: createData?.errors || [{ description: errMsg }],
+            code: 'CUSTOMER_CREATION_FAILED'
+          });
+        }
+        customerId = createData.id;
+      } catch (custErr: any) {
+        return res.status(200).json({ 
+          error: true, 
+          message: custErr?.message || 'Falha de conexão com a API do Asaas ao cadastrar cliente.' 
+        });
+      }
+    }
+
+    // 5. Chamada de Cobrança PIX sem Throw/Crash
+    if (paymentMethod === 'PIX') {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const paymentPayload = {
+          customer: customerId,
+          billingType: 'PIX',
+          value: finalAmount,
+          dueDate: today,
+          description: description
+        };
+
+        const paymentRes = await fetch(`${apiUrl}/payments`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(paymentPayload)
+        });
+
+        const paymentData = await paymentRes.json().catch(() => null);
+
+        if (!paymentRes.ok || !paymentData?.id) {
+          const errMsg = paymentData?.errors?.[0]?.description || paymentData?.message || 'Erro ao gerar cobrança PIX no Asaas.';
+          return res.status(200).json({ 
+            error: true, 
+            message: errMsg, 
+            description: errMsg,
+            errors: paymentData?.errors || [{ description: errMsg }],
+            code: 'PIX_GENERATION_FAILED'
+          });
+        }
+
+        const paymentId = paymentData.id;
+
+        // Buscar QR Code PIX
+        const qrRes = await fetch(`${apiUrl}/payments/${paymentId}/pixQrCode`, {
+          method: 'GET',
+          headers
+        });
+        const qrData = await qrRes.json().catch(() => null);
+
+        if (!qrRes.ok) {
+          const errMsg = qrData?.errors?.[0]?.description || qrData?.message || 'Erro ao resgatar QR Code do PIX no Asaas.';
+          return res.status(200).json({ 
+            error: true, 
+            message: errMsg, 
+            description: errMsg,
+            errors: qrData?.errors || [{ description: errMsg }],
+            invoiceUrl: paymentData.invoiceUrl,
+            code: 'PIX_QRCODE_FAILED'
+          });
+        }
+
+        const qrCodeBase64 = qrData?.encodedImage || '';
+        const copyAndPaste = qrData?.payload || qrData?.copyAndPaste || '';
 
         return res.status(200).json({
           success: true,
           gateway: 'Asaas v3',
           billingType: 'PIX',
-          paymentId: pixResult.paymentId,
-          payment_id: pixResult.paymentId,
-          id: pixResult.paymentId,
-          status: pixResult.status,
-          amount: pixResult.value,
-          qrCodeBase64: pixResult.encodedImage,
-          copyAndPaste: pixResult.payload,
-          payload: pixResult.payload,
-          encodedImage: pixResult.encodedImage,
-          qr_code: pixResult.payload,
-          qr_code_base64: pixResult.encodedImage,
-          expirationDate: pixResult.expirationDate,
-          invoiceUrl: pixResult.invoiceUrl,
-          ticket_url: pixResult.invoiceUrl,
+          paymentId: paymentId,
+          payment_id: paymentId,
+          id: paymentId,
+          status: paymentData.status || 'PENDING',
+          amount: paymentData.value || finalAmount,
+          qrCodeBase64: qrCodeBase64,
+          copyAndPaste: copyAndPaste,
+          payload: copyAndPaste,
+          encodedImage: qrCodeBase64,
+          qr_code: copyAndPaste,
+          qr_code_base64: qrCodeBase64,
+          expirationDate: qrData?.expirationDate || paymentData.dueDate,
+          invoiceUrl: paymentData.invoiceUrl,
+          ticket_url: paymentData.invoiceUrl,
           metadata: {
-            planId: finalPlanId,
-            companyId: finalCompanyId,
-            affiliateRef: finalRefCode,
+            planId: body.planId || body.plan_id || null,
+            companyId: body.companyId || body.company_id || null,
+            affiliateRef: body.refCode || body.affiliate_code || body.affiliateRef || null,
             customerId
           }
         });
       } catch (pixErr: any) {
-        console.error('[API Payments PIX Error] Erro detalhado ao gerar cobrança PIX:', pixErr);
-        const status = pixErr.status || pixErr.statusCode || 400;
-        const errMsg = pixErr.errors?.[0]?.description || pixErr.message || 'Erro desconhecido na API do Asaas ao gerar PIX';
-        const errList = pixErr.errors || pixErr.details?.errors || (Array.isArray(pixErr.details) ? pixErr.details : [{ description: errMsg }]);
-        return res.status(status).json({ 
-          error: true,
-          message: errMsg,
-          description: errMsg,
-          errors: errList,
-          details: pixErr.details || pixErr.responseData || null,
-          invoiceUrl: pixErr.invoiceUrl || null,
-          code: 'PIX_GENERATION_FAILED' 
+        return res.status(200).json({ 
+          error: true, 
+          message: pixErr?.message || 'Falha de rede ao processar cobrança PIX no Asaas.' 
         });
       }
     }
 
-    // 6. Cobrança Cartão de Crédito
-    if (normalizedMethod === 'CREDIT_CARD') {
-      if (
-        !creditCard || 
-        typeof creditCard !== 'object' || 
-        !creditCard.number || 
-        !creditCard.expiryMonth || 
-        !creditCard.expiryYear || 
-        !creditCard.ccv
-      ) {
-        return res.status(400).json({
-          error: true,
-          message: 'Dados do cartão de crédito incompletos (número, mês, ano e CCV são obrigatórios).',
-          code: 'INVALID_CREDIT_CARD'
-        });
-      }
-
-      const holderObj = (holderInfo && typeof holderInfo === 'object') ? holderInfo : {};
-      const cardHolderInfo = {
-        name: holderObj.name || creditCard.holderName || customerName,
-        email: holderObj.email || customerEmail,
-        cpfCnpj: cleanDocument(holderObj.cpfCnpj) || cleanCpf,
-        postalCode: cleanDocument(holderObj.postalCode || postalCode || '01310100'),
-        addressNumber: String(holderObj.addressNumber || addressNumber || '100').trim(),
-        phone: String(holderObj.phone || customerPhone || customerMobile || '11999999999').trim()
-      };
-
+    // 6. Chamada de Cobrança Cartão de Crédito sem Throw/Crash
+    if (paymentMethod === 'CREDIT_CARD') {
       try {
-        const cardResult = await createCreditCardPayment(
-          customerId,
-          finalAmount,
-          finalDescription,
-          creditCard,
-          cardHolderInfo
-        );
+        const creditCard = body.creditCard || {};
+        const holderInfo = body.holderInfo || {};
+
+        if (!creditCard.number || !creditCard.expiryMonth || !creditCard.expiryYear || !creditCard.ccv) {
+          return res.status(200).json({ 
+            error: true, 
+            message: 'Dados do cartão de crédito incompletos (número, mês, ano e CCV são obrigatórios).' 
+          });
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        const cardPayload = {
+          customer: customerId,
+          billingType: 'CREDIT_CARD',
+          value: finalAmount,
+          dueDate: today,
+          description: description,
+          creditCard: {
+            holderName: creditCard.holderName || customerName,
+            number: String(creditCard.number).replace(/\D/g, ''),
+            expiryMonth: String(creditCard.expiryMonth).padStart(2, '0'),
+            expiryYear: String(creditCard.expiryYear).length === 2 ? `20${creditCard.expiryYear}` : String(creditCard.expiryYear),
+            ccv: String(creditCard.ccv).trim()
+          },
+          creditCardHolderInfo: {
+            name: holderInfo.name || creditCard.holderName || customerName,
+            email: holderInfo.email || customerEmail,
+            cpfCnpj: String(holderInfo.cpfCnpj || cleanCpf).replace(/\D/g, ''),
+            postalCode: String(holderInfo.postalCode || '01310100').replace(/\D/g, ''),
+            addressNumber: String(holderInfo.addressNumber || '100').trim(),
+            phone: String(holderInfo.phone || '11999999999').replace(/\D/g, '')
+          }
+        };
+
+        const cardRes = await fetch(`${apiUrl}/payments`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(cardPayload)
+        });
+
+        const cardData = await cardRes.json().catch(() => null);
+
+        if (!cardRes.ok || !cardData?.id) {
+          const errMsg = cardData?.errors?.[0]?.description || cardData?.message || 'Cartão de crédito recusado ou inválido.';
+          return res.status(200).json({ 
+            error: true, 
+            message: errMsg, 
+            description: errMsg,
+            errors: cardData?.errors || [{ description: errMsg }] 
+          });
+        }
 
         return res.status(200).json({
           success: true,
           gateway: 'Asaas v3',
           billingType: 'CREDIT_CARD',
-          paymentId: cardResult.paymentId,
-          payment_id: cardResult.paymentId,
-          id: cardResult.paymentId,
-          status: cardResult.status,
-          amount: cardResult.value,
-          confirmedDate: cardResult.confirmedDate,
-          invoiceUrl: cardResult.invoiceUrl,
+          paymentId: cardData.id,
+          payment_id: cardData.id,
+          id: cardData.id,
+          status: cardData.status || 'CONFIRMED',
+          amount: cardData.value || finalAmount,
+          confirmedDate: cardData.confirmedDate,
+          invoiceUrl: cardData.invoiceUrl,
           metadata: {
-            planId: finalPlanId,
-            companyId: finalCompanyId,
-            affiliateRef: finalRefCode,
+            planId: body.planId || body.plan_id || null,
+            companyId: body.companyId || body.company_id || null,
+            affiliateRef: body.refCode || body.affiliate_code || body.affiliateRef || null,
             customerId
           }
         });
       } catch (cardErr: any) {
-        return res.status(400).json({
-          error: true,
-          message: cardErr.message || 'Cartão de crédito recusado ou inválido.',
-          code: 'CARD_PAYMENT_DECLINED'
+        return res.status(200).json({ 
+          error: true, 
+          message: cardErr?.message || 'Falha de comunicação ao processar cartão de crédito no Asaas.' 
         });
       }
     }
 
-    return res.status(400).json({ error: true, message: 'Operação não suportada' });
+    return res.status(200).json({ 
+      error: true, 
+      message: 'Método de pagamento não suportado. Utilize "PIX" ou "CREDIT_CARD".' 
+    });
 
   } catch (error: any) {
     console.error('ERRO FATAL NA ROTA PAYMENTS:', error);
-    return res.status(500).json({ 
-      error: true,
-      message: error?.message || 'Erro interno no servidor de pagamentos'
+    return res.status(200).json({ 
+      error: true, 
+      message: error?.message || "Erro interno no servidor" 
     });
   }
 }

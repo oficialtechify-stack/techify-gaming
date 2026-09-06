@@ -243,7 +243,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       const copyAndPaste = data.copyAndPaste || data.payload || data.qr_code;
       const activePaymentId = data.paymentId || data.payment_id || data.id;
 
-      if (response.ok && (copyAndPaste || qrCodeBase64)) {
+      if (response.ok && !data.error && (copyAndPaste || qrCodeBase64)) {
         setPixData({
           id: String(activePaymentId),
           qrCodeBase64: qrCodeBase64 || null,
@@ -522,12 +522,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           })
         });
 
-        const data = await res.json();
-        if (res.ok && (data.status === 'CONFIRMED' || data.status === 'RECEIVED' || data.status === 'approved' || data.success)) {
+        const data = await res.json().catch(() => ({ error: true, message: 'Falha ao processar resposta do servidor.' }));
+        if (res.ok && !data.error && (data.status === 'CONFIRMED' || data.status === 'RECEIVED' || data.status === 'approved' || data.success)) {
           await finalizeApprovedPayment('Cartão de Crédito', data.paymentId || data.id);
           return;
         } else {
-          const errMsg = data.error || 'Cartão não autorizado pela operadora. Verifique os dados e tente novamente.';
+          const errMsg = data?.errors?.[0]?.description || data?.message || (typeof data?.error === 'string' ? data.error : null) || 'Cartão não autorizado pela operadora. Verifique os dados e tente novamente.';
           alert(errMsg);
           return;
         }

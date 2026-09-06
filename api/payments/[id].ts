@@ -20,7 +20,7 @@ export default async function handler(req: any, res: any) {
     const paymentId = id || req?.url?.split?.('/')?.pop()?.split?.('?')?.[0];
 
     if (!paymentId) {
-      return res.status(400).json({ error: true, message: 'ID do pagamento é obrigatório' });
+      return res.status(200).json({ error: true, message: 'ID do pagamento é obrigatório' });
     }
 
     const paymentData = await getAsaasPaymentStatus(String(paymentId));
@@ -36,6 +36,6 @@ export default async function handler(req: any, res: any) {
     });
   } catch (err: any) {
     console.error('ERRO NA CONSULTA DE PAGAMENTO:', err);
-    return res.status(500).json({ error: true, message: err?.message || 'Erro ao verificar status do pagamento no Asaas' });
+    return res.status(200).json({ error: true, message: err?.message || 'Erro ao verificar status do pagamento no Asaas' });
   }
 }

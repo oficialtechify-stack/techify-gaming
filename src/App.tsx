@@ -167,15 +167,15 @@ function MainApp() {
       <div className="fixed top-2/3 left-10 w-[500px] h-[500px] bg-[#1e3a8a]/[0.08] rounded-full blur-[180px] pointer-events-none -z-20" />
 
       {/* Floating Quick Access to Platform Pill */}
-      <div className="fixed bottom-6 right-6 z-40">
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40">
         <button
           onClick={() => setViewPlatform(true)}
-          className="group flex items-center gap-2.5 bg-[#080d1a]/90 hover:bg-[#080d1a] border-2 border-[#D9F22A] text-white rounded-full py-2.5 px-5 shadow-[0_0_30px_rgba(217,242,42,0.35)] backdrop-blur-md transition-all duration-300 hover:scale-105 cursor-pointer"
+          className="group flex items-center gap-2 bg-[#080d1a]/95 hover:bg-[#0c1427] border border-[#D9F22A]/60 hover:border-[#D9F22A] text-white rounded-full py-2 px-3.5 sm:px-4 shadow-[0_0_20px_rgba(217,242,42,0.25)] backdrop-blur-md transition-all duration-300 hover:scale-105 cursor-pointer"
         >
-          <span className="w-2.5 h-2.5 rounded-full bg-[#D9F22A] animate-ping" />
-          <LayoutDashboard className="w-4 h-4 text-[#D9F22A]" />
-          <span className="text-xs font-black uppercase tracking-wider text-white">
-            {isAuthenticated ? 'Meu Painel LeadsPay' : 'Explorar Marketplace & Painel'}
+          <span className="w-2 h-2 rounded-full bg-[#D9F22A] animate-pulse" />
+          <LayoutDashboard className="w-3.5 h-3.5 text-[#D9F22A]" />
+          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-white">
+            {isAuthenticated ? 'Meu Painel' : 'Marketplace & Painel'}
           </span>
         </button>
       </div>
