@@ -17,7 +17,10 @@ export interface CompanyStartup {
   cpf?: string;
   cleanCpf?: string;
   hasNoCnpj?: boolean;
-  docType?: 'CNPJ' | 'CPF' | 'SEM_CNPJ';
+  docType?: 'CNPJ' | 'CPF' | 'MEI' | 'SEM_CNPJ';
+  asaasSubaccountId?: string;
+  asaasWalletId?: string;
+  documentType?: 'CNPJ' | 'MEI' | 'CPF';
   totalPlansCount: number;
   totalAffiliatesCount: number;
   totalSalesVolume: number;
@@ -275,7 +278,10 @@ export interface UserSellerProfile {
   companyState?: string;
   companyCity?: string;
   companyCountry?: string;
-  companyDocType?: 'CNPJ' | 'CPF' | 'SEM_CNPJ';
+  companyDocType?: 'CNPJ' | 'CPF' | 'MEI' | 'SEM_CNPJ';
+  asaasSubaccountId?: string;
+  asaasWalletId?: string;
+  documentType?: 'CNPJ' | 'MEI' | 'CPF';
   verificationRoleType?: 'afiliado' | 'empresa';
   cep?: string;
   country?: string;

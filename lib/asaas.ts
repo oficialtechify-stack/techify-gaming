@@ -506,3 +506,133 @@ export async function getAsaasPaymentStatus(paymentId: string): Promise<any> {
   return await response.json();
 }
 
+export interface CreateSubaccountData {
+  name: string;
+  email: string;
+  cpfCnpj: string;
+  phone?: string;
+  mobilePhone?: string;
+  address?: string;
+  addressNumber?: string;
+  complement?: string;
+  province?: string;
+  postalCode?: string;
+  companyType?: string;
+}
+
+export interface AsaasSubaccountResult {
+  id: string;
+  walletId: string;
+  name: string;
+  email: string;
+  cpfCnpj: string;
+  apiKey?: string;
+  raw?: any;
+}
+
+/**
+ * Cria ou recupera uma subconta no Asaas v3 (POST /v3/accounts)
+ */
+export async function createAsaasSubaccount(data: CreateSubaccountData): Promise<AsaasSubaccountResult> {
+  const { apiKey, apiUrl } = getAsaasConfig();
+  if (!apiKey) {
+    throw new Error('Chave de API do Asaas não configurada no ambiente.');
+  }
+
+  const cleanDoc = cleanDocument(data.cpfCnpj);
+  if (!cleanDoc || (cleanDoc.length !== 11 && cleanDoc.length !== 14)) {
+    throw new Error('CPF/CNPJ inválido para criação de subconta Asaas. Deve conter 11 (CPF) ou 14 (CNPJ) dígitos.');
+  }
+
+  const cleanPhone = cleanDocument(data.phone || data.mobilePhone || '');
+  const cleanPostalCode = cleanDocument(data.postalCode || '');
+
+  const payload: Record<string, any> = {
+    name: (data.name || '').trim(),
+    email: (data.email || '').trim(),
+    cpfCnpj: cleanDoc
+  };
+
+  if (cleanPhone) {
+    payload.phone = cleanPhone;
+    payload.mobilePhone = cleanPhone;
+  }
+  if (data.address) payload.address = data.address.trim();
+  if (data.addressNumber) payload.addressNumber = data.addressNumber.trim();
+  if (data.complement) payload.complement = data.complement.trim();
+  if (data.province) payload.province = data.province.trim();
+  if (cleanPostalCode) payload.postalCode = cleanPostalCode;
+  if (data.companyType) payload.companyType = data.companyType;
+
+  console.log(`[Asaas Subaccounts] Criando subconta no Asaas para: ${payload.name} (${cleanDoc.length === 14 ? 'CNPJ' : 'CPF'}: ${cleanDoc})`);
+
+  const headers = getHeaders();
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/accounts`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+  } catch (netErr: any) {
+    console.error('[Asaas Subaccounts] Erro de rede ao criar subconta:', netErr);
+    throw new Error(`Falha de conexão com Asaas: ${netErr.message}`);
+  }
+
+  const resData = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.warn('[Asaas Subaccounts] Resposta de erro ao criar subconta:', JSON.stringify(resData, null, 2));
+
+    // Se a conta já existir para este CPF/CNPJ, recupera a subconta existente
+    const errorMessage = resData?.errors?.[0]?.description || resData?.message || '';
+    const isAlreadyExists = 
+      errorMessage.toLowerCase().includes('já existe') || 
+      errorMessage.toLowerCase().includes('already exists') ||
+      errorMessage.toLowerCase().includes('duplicad') ||
+      response.status === 400;
+
+    if (isAlreadyExists) {
+      console.log(`[Asaas Subaccounts] Tentando recuperar subconta existente para documento ${cleanDoc}...`);
+      try {
+        const searchRes = await fetch(`${apiUrl}/accounts?cpfCnpj=${cleanDoc}`, {
+          method: 'GET',
+          headers
+        });
+        const searchData = await searchRes.json().catch(() => null);
+        if (searchRes.ok && searchData?.data && searchData.data.length > 0) {
+          const acc = searchData.data[0];
+          console.log(`[Asaas Subaccounts] Subconta existente encontrada com sucesso: ${acc.id} (Wallet: ${acc.walletId})`);
+          return {
+            id: acc.id,
+            walletId: acc.walletId,
+            name: acc.name,
+            email: acc.email,
+            cpfCnpj: acc.cpfCnpj,
+            apiKey: acc.apiKey,
+            raw: acc
+          };
+        }
+      } catch (searchErr) {
+        console.warn('[Asaas Subaccounts] Erro ao buscar subconta existente:', searchErr);
+      }
+    }
+
+    const detail = resData?.errors?.map((e: any) => e.description).join(' | ') || errorMessage || `Erro ao criar subconta no Asaas (${response.status})`;
+    throw new Error(detail);
+  }
+
+  console.log(`✅ [Asaas Subaccounts] Subconta criada com sucesso: ${resData.id} (Wallet: ${resData.walletId})`);
+
+  return {
+    id: resData.id,
+    walletId: resData.walletId,
+    name: resData.name,
+    email: resData.email,
+    cpfCnpj: resData.cpfCnpj,
+    apiKey: resData.apiKey,
+    raw: resData
+  };
+}
+
+

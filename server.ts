@@ -22,7 +22,8 @@ import {
   getOrCreateCustomer, 
   createPixPayment, 
   createCreditCardPayment, 
-  cleanDocument 
+  cleanDocument,
+  createAsaasSubaccount
 } from './lib/asaas';
 
 const app = express();
@@ -440,6 +441,182 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
 }
 
 // =========================================================================
+// 🚀 ENDPOINT DE CRIAÇÃO E VINCULAÇÃO DE SUBCONTAS ASAAS V3
+// =========================================================================
+
+/**
+ * POST /api/subaccounts/create, /api/subaccounts
+ * Suporta dinamicamente cadastros com CNPJ, MEI ou CPF do Fundador.
+ * Cria a subconta na API do Asaas v3 (POST /v3/accounts) e grava no Firestore:
+ * - asaasSubaccountId: data.id (ex: "acc_...")
+ * - asaasWalletId: data.walletId
+ * - documentType: "CNPJ" | "MEI" | "CPF"
+ */
+app.post(['/api/subaccounts/create', '/api/subaccounts'], async (req, res) => {
+  try {
+    const body = req.body || {};
+    const {
+      userId,
+      ownerId,
+      companyId,
+      companyName,
+      companyLegalName,
+      name,
+      ownerName,
+      founderName,
+      companyOwnerName,
+      fullName,
+      email,
+      companyEmail,
+      phone,
+      whatsapp,
+      companyPhone,
+      cnpj,
+      cpf,
+      cpfCnpj,
+      document,
+      documentType,
+      companyDocType,
+      cep,
+      postalCode,
+      address,
+      endereco,
+      addressNumber,
+      number,
+      province,
+      bairro,
+      city,
+      cidade,
+      state,
+      estado
+    } = body;
+
+    const rawDoc = cpfCnpj || cnpj || cpf || document || '';
+    const cleanDoc = cleanDocument(rawDoc);
+
+    if (!cleanDoc) {
+      return res.status(400).json({
+        error: true,
+        message: 'Documento fiscal (CNPJ, MEI ou CPF) é obrigatório para cadastrar a subconta.'
+      });
+    }
+
+    // Identifica documentType: "CNPJ" | "MEI" | "CPF"
+    const requestedType = String(documentType || companyDocType || '').toUpperCase().trim();
+    let finalDocType: 'CNPJ' | 'MEI' | 'CPF' = 'CNPJ';
+
+    if (cleanDoc.length === 11) {
+      finalDocType = 'CPF';
+    } else if (cleanDoc.length === 14) {
+      if (requestedType === 'MEI' || requestedType.includes('MEI')) {
+        finalDocType = 'MEI';
+      } else {
+        finalDocType = 'CNPJ';
+      }
+    } else {
+      if (requestedType === 'CPF') finalDocType = 'CPF';
+      else if (requestedType === 'MEI') finalDocType = 'MEI';
+      else finalDocType = 'CNPJ';
+    }
+
+    // Regra de Nome:
+    // - Se houver CNPJ/MEI preenchido: Razão Social / Nome Fantasia da Empresa
+    // - Se for CPF do Fundador: Nome Completo do Fundador (ex: "MACOS HENRIQUE")
+    let accountName = '';
+    if (finalDocType === 'CNPJ') {
+      accountName = (companyLegalName || companyName || name || '').trim();
+    } else if (finalDocType === 'MEI') {
+      accountName = (companyLegalName || companyName || ownerName || founderName || name || '').trim();
+    } else {
+      // CPF do Fundador
+      accountName = (ownerName || founderName || companyOwnerName || fullName || name || '').trim();
+    }
+
+    if (!accountName) {
+      accountName = (companyName || ownerName || name || 'Fundador LeadsPay').trim();
+    }
+
+    const accountEmail = (companyEmail || email || '').trim() || `empresa_${cleanDoc || Date.now()}@leadspay.com.br`;
+    const accountPhone = (companyPhone || phone || whatsapp || '').trim();
+
+    console.log(`[API Subaccounts] Criando subconta Asaas: Nome="${accountName}", Doc="${cleanDoc}" (${finalDocType}), Email="${accountEmail}"`);
+
+    // Cria ou recupera subconta via Asaas SDK
+    const subaccount = await createAsaasSubaccount({
+      name: accountName,
+      email: accountEmail,
+      cpfCnpj: cleanDoc,
+      phone: accountPhone,
+      mobilePhone: accountPhone,
+      address: address || endereco,
+      addressNumber: addressNumber || number,
+      province: province || bairro,
+      postalCode: postalCode || cep,
+      companyType: finalDocType === 'MEI' ? 'MEI' : (finalDocType === 'CNPJ' ? 'LIMITED' : undefined)
+    });
+
+    const targetUserId = userId || ownerId;
+    const targetCompanyId = companyId;
+
+    const firestoreUpdates: Record<string, any> = {
+      asaasSubaccountId: subaccount.id,
+      asaasWalletId: subaccount.walletId,
+      documentType: finalDocType,
+      updatedAt: new Date().toISOString()
+    };
+
+    // 1. Grava no Firestore do Usuário (users/{userId})
+    if (targetUserId) {
+      try {
+        await setDoc(doc(db, 'users', String(targetUserId)), firestoreUpdates, { merge: true });
+        console.log(`✅ [Firestore Subaccount] users/${targetUserId} atualizado com asaasSubaccountId: ${subaccount.id}`);
+      } catch (uErr) {
+        console.warn('Aviso ao atualizar users no Firestore:', uErr);
+      }
+
+      // 2. Grava no Firestore do Perfil (user_profiles/{userId})
+      try {
+        await setDoc(doc(db, 'user_profiles', String(targetUserId)), firestoreUpdates, { merge: true });
+        console.log(`✅ [Firestore Subaccount] user_profiles/${targetUserId} atualizado com asaasSubaccountId: ${subaccount.id}`);
+      } catch (pErr) {
+        console.warn('Aviso ao atualizar user_profiles no Firestore:', pErr);
+      }
+    }
+
+    // 3. Grava no Firestore da Empresa (companies/{companyId})
+    if (targetCompanyId) {
+      try {
+        await setDoc(doc(db, 'companies', String(targetCompanyId)), firestoreUpdates, { merge: true });
+        console.log(`✅ [Firestore Subaccount] companies/${targetCompanyId} atualizado com asaasSubaccountId: ${subaccount.id}`);
+      } catch (cErr) {
+        console.warn('Aviso ao atualizar companies no Firestore:', cErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Subconta Asaas criada e vinculada com sucesso.',
+      asaasSubaccountId: subaccount.id,
+      asaasWalletId: subaccount.walletId,
+      documentType: finalDocType,
+      account: {
+        id: subaccount.id,
+        name: subaccount.name,
+        email: subaccount.email,
+        cpfCnpj: subaccount.cpfCnpj,
+        walletId: subaccount.walletId
+      }
+    });
+  } catch (err: any) {
+    console.error('❌ [API Subaccounts] Erro ao criar subconta no Asaas:', err);
+    return res.status(400).json({
+      error: true,
+      message: err.message || 'Erro inesperado ao criar subconta no Asaas.'
+    });
+  }
+});
+
+// =========================================================================
 // 🚀 ENDPOINTS DE PAGAMENTO ASAAS V3 (PIX, CARTÃO DE CRÉDITO E WEBHOOK)
 // =========================================================================
 
@@ -469,27 +646,27 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       affiliateRef
     } = body;
 
-    let subaccountId = body.subaccountId;
+    let sellerSubaccountId = body.subaccountId;
 
-    // Se o subaccountId não veio no payload, busca no Firestore:
+    // Se o subaccountId não veio no payload, resolve no Firestore:
     // 1) users/{sellerId}.asaasSubaccountId
     // 2) user_profiles/{sellerId}.asaasSubaccountId
     // 3) companies/{companyId}.asaasSubaccountId
     // 4) plans/{planId}.asaasSubaccountId
-    if (!subaccountId) {
+    if (!sellerSubaccountId) {
       const candidateSellerId = sellerId || body.ownerId || body.userId || companyId || company_id || (planId || plan_id);
       if (candidateSellerId) {
         try {
           const userDoc = await getDoc(doc(db, 'users', String(candidateSellerId)));
           if (userDoc.exists()) {
             const uData = userDoc.data();
-            subaccountId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
+            sellerSubaccountId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
           }
-          if (!subaccountId) {
+          if (!sellerSubaccountId) {
             const profDoc = await getDoc(doc(db, 'user_profiles', String(candidateSellerId)));
             if (profDoc.exists()) {
               const pData = profDoc.data();
-              subaccountId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
+              sellerSubaccountId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
             }
           }
         } catch (dbErr) {
@@ -499,16 +676,16 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 
       // Se ainda não encontrou e temos companyId
       const targetCompId = companyId || company_id;
-      if (!subaccountId && targetCompId) {
+      if (!sellerSubaccountId && targetCompId) {
         try {
           const compDoc = await getDoc(doc(db, 'companies', String(targetCompId)));
           if (compDoc.exists()) {
             const cData = compDoc.data();
-            subaccountId = cData?.asaasSubaccountId || cData?.subaccountId;
-            if (!subaccountId && cData?.ownerId) {
+            sellerSubaccountId = cData?.asaasSubaccountId || cData?.subaccountId;
+            if (!sellerSubaccountId && cData?.ownerId) {
               const ownerDoc = await getDoc(doc(db, 'users', String(cData.ownerId)));
               if (ownerDoc.exists()) {
-                subaccountId = ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
+                sellerSubaccountId = ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
               }
             }
           }
@@ -519,16 +696,22 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 
       // Se ainda não encontrou e temos planId
       const targetPlId = planId || plan_id;
-      if (!subaccountId && targetPlId) {
+      if (!sellerSubaccountId && targetPlId) {
         try {
           const planDoc = await getDoc(doc(db, 'plans', String(targetPlId)));
           if (planDoc.exists()) {
             const plData = planDoc.data();
-            subaccountId = plData?.asaasSubaccountId || plData?.subaccountId;
-            if (!subaccountId && plData?.companyId) {
+            sellerSubaccountId = plData?.asaasSubaccountId || plData?.subaccountId;
+            if (!sellerSubaccountId && plData?.companyId) {
               const compDoc = await getDoc(doc(db, 'companies', String(plData.companyId)));
               if (compDoc.exists()) {
-                subaccountId = compDoc.data()?.asaasSubaccountId || compDoc.data()?.subaccountId;
+                sellerSubaccountId = compDoc.data()?.asaasSubaccountId || compDoc.data()?.subaccountId;
+                if (!sellerSubaccountId && compDoc.data()?.ownerId) {
+                  const ownerDoc = await getDoc(doc(db, 'users', String(compDoc.data()?.ownerId)));
+                  if (ownerDoc.exists()) {
+                    sellerSubaccountId = ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
+                  }
+                }
               }
             }
           }
@@ -536,11 +719,20 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           console.warn('[Server Asaas] Erro ao consultar plano no Firestore:', pErr);
         }
       }
-
-      if (subaccountId) {
-        body.subaccountId = subaccountId;
-      }
     }
+
+    // BLOQUEIO DINÂMICO NO CHECKOUT (PROIBIDO FALLBACK PARA CONTA MASTER)
+    if (!sellerSubaccountId) {
+      console.warn(`[Checkout Asaas] Tentativa de pagamento bloqueada: Empresa/vendedor sem subconta Asaas. PlanId: ${planId || plan_id}, CompanyId: ${companyId || company_id}, SellerId: ${sellerId || body.ownerId}`);
+      return res.status(400).json({
+        error: true,
+        message: "Esta empresa ainda não possui uma subconta ativa no Asaas para receber pagamentos."
+      });
+    }
+
+    // INJEÇÃO OBRIGATÓRIA: Toda chamada à API do Asaas v3 deve conter o header 'account'
+    body.subaccountId = sellerSubaccountId;
+    console.log(`🔒 [Checkout Asaas] Header 'account' injetado com sucesso para a subconta Asaas: ${sellerSubaccountId}`);
 
     const normalizedMethod = String(paymentMethod || 'PIX').toUpperCase().trim();
     if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD') {

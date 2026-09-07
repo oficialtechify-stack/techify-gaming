@@ -73,8 +73,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [companyEmail, setCompanyEmail] = useState<string>(
     userProfile.email || company?.email || ''
   );
-  const [companyDocType, setCompanyDocType] = useState<'CNPJ' | 'CPF' | 'SEM_CNPJ'>(
-    (userProfile.companyDocType as any) || company?.docType || (userProfile.companyCnpj ? 'CNPJ' : 'CNPJ')
+  const [companyDocType, setCompanyDocType] = useState<'CNPJ' | 'CPF'>(
+    userProfile.companyDocType === 'CPF' ? 'CPF' : 'CNPJ'
   );
   const [companyCnpj, setCompanyCnpj] = useState<string>(
     userProfile.companyCnpj || company?.cnpj || userProfile.cnpj || ''
@@ -245,8 +245,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const hasCompanyOwner = companyOwnerName.trim().length >= 3;
   const hasCompanyEmail = companyEmail.trim().includes('@') && companyEmail.trim().includes('.');
   const hasCompanyPhone = cleanPhoneDigits.length >= 10;
-  const hasCompanyDoc = companyDocType === 'SEM_CNPJ' || 
-    (companyDocType === 'CNPJ' ? cleanCnpjDigits.length === 14 : cleanCnpjDigits.length === 11);
+  const hasCompanyDoc = companyDocType === 'CNPJ' 
+    ? cleanCnpjDigits.length === 14 
+    : (cleanCnpjDigits.length === 11 || cleanCnpjDigits.length === 14);
 
   const isCompanyFormComplete = (
     hasCompanyName &&
@@ -275,14 +276,20 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       }
     } else {
       // Company Document Validation
-      if (companyDocType === 'CNPJ' && cleanCnpjDigits.length > 0 && !isValidCNPJ(cleanCnpjDigits)) {
-        setToastMessage({ type: 'error', text: 'CNPJ da empresa informado é inválido. Verifique os 14 dígitos.' });
-        setTimeout(() => setToastMessage(null), 4500);
-        return;
-      } else if (companyDocType === 'CPF' && cleanCnpjDigits.length > 0 && !isValidCPF(cleanCnpjDigits)) {
-        setToastMessage({ type: 'error', text: 'CPF do responsável informado é inválido. Verifique os 11 dígitos.' });
-        setTimeout(() => setToastMessage(null), 4500);
-        return;
+      if (companyDocType === 'CNPJ') {
+        if (!isValidCNPJ(cleanCnpjDigits)) {
+          setToastMessage({ type: 'error', text: 'CNPJ da empresa informado é inválido. Verifique os 14 dígitos.' });
+          setTimeout(() => setToastMessage(null), 4500);
+          return;
+        }
+      } else {
+        // CPF ou MEI
+        const isValid = cleanCnpjDigits.length === 14 ? isValidCNPJ(cleanCnpjDigits) : isValidCPF(cleanCnpjDigits);
+        if (!isValid) {
+          setToastMessage({ type: 'error', text: 'Documento informado (CPF ou CNPJ MEI) é inválido. Verifique os dígitos.' });
+          setTimeout(() => setToastMessage(null), 4500);
+          return;
+        }
       }
     }
 
@@ -300,11 +307,57 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     if (roleMode === 'empresa') {
       const formattedDoc = companyDocType === 'CNPJ' 
         ? formatCNPJ(cleanCnpjDigits) 
-        : companyDocType === 'CPF' 
-          ? formatCPF(cleanCnpjDigits) 
-          : 'SEM_CNPJ';
+        : cleanCnpjDigits.length === 14 
+          ? formatCNPJ(cleanCnpjDigits) 
+          : formatCPF(cleanCnpjDigits);
 
       const formattedCompanyPhone = formatPhone(cleanPhoneDigits);
+
+      // Criação e vinculação imediata da subconta no Asaas v3
+      let subaccountId: string | undefined = userProfile.asaasSubaccountId || (company as any)?.asaasSubaccountId;
+      let walletId: string | undefined = userProfile.asaasWalletId || (company as any)?.asaasWalletId;
+      let resolvedDocType: 'CNPJ' | 'MEI' | 'CPF' = cleanCnpjDigits.length === 14
+        ? (companyDocType === 'CPF' ? 'MEI' : 'CNPJ')
+        : 'CPF';
+
+      try {
+        console.log('[MeuPerfilView] Gerando e vinculando subconta Asaas...');
+        const subRes = await fetch('/api/subaccounts/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userProfile.id || userProfile.uid,
+            ownerId: userProfile.id || userProfile.uid,
+            companyId: company?.id,
+            companyName: companyName.trim(),
+            companyLegalName: companyName.trim(),
+            ownerName: companyOwnerName.trim() || userProfile.name,
+            companyOwnerName: companyOwnerName.trim() || userProfile.name,
+            email: companyEmail.trim(),
+            companyEmail: companyEmail.trim(),
+            phone: formattedCompanyPhone,
+            companyPhone: formattedCompanyPhone,
+            document: cleanCnpjDigits,
+            documentType: resolvedDocType,
+            cep: cep.trim(),
+            address: endereco.trim(),
+            state: estado.trim(),
+            city: cidade.trim()
+          })
+        });
+
+        const subData = await subRes.json().catch(() => null);
+        if (subRes.ok && subData?.asaasSubaccountId) {
+          subaccountId = subData.asaasSubaccountId;
+          walletId = subData.asaasWalletId;
+          resolvedDocType = subData.documentType || resolvedDocType;
+          console.log('✅ [MeuPerfilView] Subconta Asaas vinculada com sucesso:', subaccountId);
+        } else if (!subRes.ok) {
+          console.warn('⚠️ [MeuPerfilView] Aviso ao criar subconta no Asaas:', subData?.message);
+        }
+      } catch (subErr) {
+        console.warn('⚠️ [MeuPerfilView] Erro ao conectar com /api/subaccounts/create:', subErr);
+      }
 
       updates = {
         name: companyOwnerName.trim() || userProfile.name,
@@ -313,6 +366,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         companyCnpj: formattedDoc,
         cleanCnpj: cleanCnpjDigits,
         companyDocType: companyDocType,
+        asaasSubaccountId: subaccountId,
+        asaasWalletId: walletId,
+        documentType: resolvedDocType,
         companyPhone: formattedCompanyPhone,
         whatsapp: formattedCompanyPhone,
         phone: formattedCompanyPhone,
