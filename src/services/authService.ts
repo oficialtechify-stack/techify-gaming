@@ -395,6 +395,8 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     companyName: existingData?.companyName,
     cnpj: existingData?.cnpj,
     cleanCnpj: existingData?.cleanCnpj,
+    verified: existingData?.verified ?? false,
+    verificationStatus: existingData?.verificationStatus ?? 'unsubmitted',
     updatedAt: now
   };
 
@@ -501,7 +503,8 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     totalAffiliatesCount: 0,
     totalSalesVolume: 0,
     commissionRange: '30% - 50%',
-    verified: true,
+    verified: false,
+    status: 'pending',
     ownerId: user.uid,
     docType: docType as any,
     cnpj: docType === 'CNPJ' ? formattedCnpj : undefined,
@@ -544,6 +547,8 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     cleanCpf: docType === 'CPF' ? cleanCpf : (existingData?.cleanCpf || ''),
     cnpj: docType === 'CNPJ' ? formattedCnpj : (existingData?.cnpj || ''),
     cleanCnpj: docType === 'CNPJ' ? cleanCnpj : (existingData?.cleanCnpj || ''),
+    verified: false,
+    verificationStatus: 'pending',
     updatedAt: now
   };
 
@@ -658,7 +663,8 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
             totalAffiliatesCount: 0,
             totalSalesVolume: 0,
             commissionRange: '30% - 50%',
-            verified: true,
+            verified: false,
+            status: 'pending',
             ownerId: user.uid,
             docType: 'SEM_CNPJ',
             hasNoCnpj: true,
@@ -699,7 +705,8 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
           totalAffiliatesCount: 0,
           totalSalesVolume: 0,
           commissionRange: '30% - 50%',
-          verified: true,
+          verified: false,
+          status: 'pending',
           ownerId: user.uid,
           docType: 'SEM_CNPJ',
           hasNoCnpj: true,
@@ -728,6 +735,8 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         activeRoleMode: preferredRole,
         companyId: preferredRole === 'empresa' ? companyId : undefined,
         companyName: preferredRole === 'empresa' ? compName : undefined,
+        verified: false,
+        verificationStatus: 'unsubmitted',
         updatedAt: new Date().toISOString()
       };
       await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PlatformTab, 
   CompanyStartup,
@@ -254,110 +254,202 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     setTimeout(() => setLiveToast(null), 4500);
   };
 
-  // Realtime Firebase Subscriptions on mount
+  const effectiveUserId = currentUser?.uid || userProfile?.id || userProfile?.userId || '';
+
+  // 1. Global subscriptions (companies, plans, all affiliations for marketplace, and sales)
   useEffect(() => {
-    // 1. Initial Firestore check / seed
     seedFirestoreIfEmpty().then(() => {
       setDbConnected(true);
     });
 
-    // 2. Realtime listener for Companies
     const unsubCompanies = subscribeCompanies((compList) => {
       setCompanies(compList);
     });
 
-    // 4. Realtime listener for Plans / Products
     const unsubPlans = subscribePlans((planList) => {
       setPlans(planList);
     });
 
-    // 5. Realtime listener for User Affiliations
-    const unsubAffiliations = subscribeUserAffiliations((affList) => {
-      setAffiliations(affList);
-    });
-
-    // 5.1 Realtime listener for All Affiliations (Company & Marketplace)
     const unsubAllAffiliations = subscribeAllAffiliations((allAffList) => {
       setAllAffiliations(allAffList);
     });
 
-    // 6. Realtime listener for Sales Transactions
     const unsubSales = subscribeSales((salesList) => {
       setTransactions(salesList);
-
-      // Recompute payment stats dynamically from sales in Firestore
-      let pixVal = 0, pixCount = 0;
-      let cardVal = 0, cardCount = 0;
-      let picpayVal = 0, picpayCount = 0;
-      let cryptoVal = 0, cryptoCount = 0;
-
-      salesList.forEach((s) => {
-        if (s.method === 'PIX') { pixVal += s.amount; pixCount++; }
-        else if (s.method === 'Cartão de Crédito') { cardVal += s.amount; cardCount++; }
-        else if (s.method === 'PicPay') { picpayVal += s.amount; picpayCount++; }
-        else if (s.method === 'Crypto USDT') { cryptoVal += s.amount; cryptoCount++; }
-      });
-
-      const totalCount = pixCount + cardCount + picpayCount + cryptoCount;
-      const totalVol = pixVal + cardVal + picpayVal + cryptoVal || (totalCount > 0 ? 1 : 0);
-
-      setPaymentStats([
-        {
-          method: 'PIX Instantâneo',
-          count: pixCount,
-          totalValue: pixVal,
-          percentage: totalVol > 0 ? Number(((pixVal / totalVol) * 100).toFixed(1)) : 0,
-          conversionRate: totalCount > 0 ? `${((pixCount / totalCount) * 100).toFixed(1)}%` : '0%',
-          badge: 'D+0 Direto',
-          iconType: 'pix'
-        },
-        {
-          method: 'Cartão de Crédito',
-          count: cardCount,
-          totalValue: cardVal,
-          percentage: totalVol > 0 ? Number(((cardVal / totalVol) * 100).toFixed(1)) : 0,
-          conversionRate: totalCount > 0 ? `${((cardCount / totalCount) * 100).toFixed(1)}%` : '0%',
-          badge: '12x Sem Juros',
-          iconType: 'credit-card'
-        },
-        {
-          method: 'PicPay Carteira',
-          count: picpayCount,
-          totalValue: picpayVal,
-          percentage: totalVol > 0 ? Number(((picpayVal / totalVol) * 100).toFixed(1)) : 0,
-          conversionRate: totalCount > 0 ? `${((picpayCount / totalCount) * 100).toFixed(1)}%` : '0%',
-          badge: 'QR Code',
-          iconType: 'picpay'
-        },
-        {
-          method: 'Crypto USDT (TRC-20)',
-          count: cryptoCount,
-          totalValue: cryptoVal,
-          percentage: totalVol > 0 ? Number(((cryptoVal / totalVol) * 100).toFixed(1)) : 0,
-          conversionRate: totalCount > 0 ? `${((cryptoCount / totalCount) * 100).toFixed(1)}%` : '0%',
-          badge: 'Global Web3',
-          iconType: 'crypto'
-        }
-      ]);
-    });
-
-    // 7. Realtime listener for Withdrawals
-    const unsubWith = subscribeWithdrawals((withList) => {
-      setWithdrawals(withList);
     });
 
     return () => {
       unsubCompanies();
       unsubPlans();
-      unsubAffiliations();
       unsubAllAffiliations();
       unsubSales();
-      unsubWith();
     };
   }, []);
 
+  // 2. User-specific subscriptions (user affiliations, user withdrawals strictly isolated to this account)
+  useEffect(() => {
+    if (!effectiveUserId) return;
+
+    const unsubAffiliations = subscribeUserAffiliations((affList) => {
+      const isVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
+      if (!isVerified) {
+        setAffiliations([]);
+      } else {
+        setAffiliations(affList);
+      }
+    }, effectiveUserId);
+
+    const unsubWith = subscribeWithdrawals((withList) => {
+      setWithdrawals(withList);
+    }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId);
+
+    return () => {
+      unsubAffiliations();
+      unsubWith();
+    };
+  }, [effectiveUserId, isSuperAdmin, roleMode, userProfile.verified, userProfile.verificationStatus]);
+
+  // Affiliate Codes belonging strictly to THIS user
+  const userAffiliationCodes = useMemo(() => {
+    return affiliations.map(a => a.affiliateCode || a.affiliate_code).filter(Boolean) as string[];
+  }, [affiliations]);
+
+  // Companies owned strictly by THIS user
+  const myCompanies = useMemo(() => {
+    if (!effectiveUserId) return [];
+    if (roleMode === 'admin' && isSuperAdmin) return companies;
+    return companies.filter(c => 
+      c.ownerId === effectiveUserId || 
+      c.submittedBy === effectiveUserId || 
+      (userProfile?.companyId && c.id === userProfile.companyId)
+    );
+  }, [companies, effectiveUserId, userProfile?.companyId, roleMode, isSuperAdmin]);
+
+  const myCompanyIds = useMemo(() => myCompanies.map(c => c.id), [myCompanies]);
+
+  // Plans belonging strictly to THIS user's companies
+  const myCompanyPlans = useMemo(() => {
+    if (!effectiveUserId) return [];
+    if (roleMode === 'admin' && isSuperAdmin) return plans;
+    return plans.filter(p => myCompanyIds.includes(p.companyId));
+  }, [plans, myCompanyIds, roleMode, isSuperAdmin]);
+
+  const myCompanyPlanIds = useMemo(() => myCompanyPlans.map(p => p.id), [myCompanyPlans]);
+
+  // Affiliations of affiliates linked to MY company's plans
+  const myCompanyAffiliations = useMemo(() => {
+    if (!effectiveUserId) return [];
+    if (roleMode === 'admin' && isSuperAdmin) return allAffiliations;
+    if (myCompanyIds.length === 0 && myCompanyPlanIds.length === 0) return [];
+    return allAffiliations.filter(a => 
+      (a.companyId && myCompanyIds.includes(a.companyId)) ||
+      ((a.planId || a.plan_id) && myCompanyPlanIds.includes(a.planId || a.plan_id))
+    );
+  }, [allAffiliations, myCompanyIds, myCompanyPlanIds, roleMode, isSuperAdmin, effectiveUserId]);
+
+  // STRICT USER DATA ISOLATION:
+  // Every user/account is unique and receives only its OWN sales!
+  // - Affiliate: only sees sales where affiliateId matches, or affiliateCode matches, or utmSource matches their code
+  // - Company: only sees sales where companyId matches their owned companies or planId matches their plans or companyOwnerId matches
+  // - Admin (Rick): sees all sales if in admin role mode
+  const userVisibleTransactions = useMemo(() => {
+    if (!effectiveUserId) return [];
+    if (roleMode === 'admin' && isSuperAdmin) return transactions;
+
+    if (roleMode === 'afiliado') {
+      return transactions.filter(s => {
+        const affId = s.affiliateId || s.sellerId;
+        const affCode = s.affiliateCode || s.affiliate_code;
+        const isMyId = affId === effectiveUserId;
+        const isMyCode = Boolean(affCode && userAffiliationCodes.includes(affCode));
+        const isMyUtm = Boolean(userAffiliationCodes.length > 0 && userAffiliationCodes.some(code => s.utmSource && s.utmSource.includes(code)));
+        return isMyId || isMyCode || isMyUtm;
+      });
+    }
+
+    if (roleMode === 'empresa') {
+      return transactions.filter(s => {
+        const isMyCompany = Boolean(s.companyId && myCompanyIds.includes(s.companyId));
+        const isMyPlan = Boolean((s.platformId && myCompanyPlanIds.includes(s.platformId)) || (s.plan_id && myCompanyPlanIds.includes(s.plan_id)));
+        const isMyOwner = s.companyOwnerId === effectiveUserId;
+        return isMyCompany || isMyPlan || isMyOwner;
+      });
+    }
+
+    return [];
+  }, [transactions, effectiveUserId, roleMode, isSuperAdmin, userAffiliationCodes, myCompanyIds, myCompanyPlanIds]);
+
+  // Dynamic payment stats derived strictly from userVisibleTransactions
+  const userPaymentStats = useMemo(() => {
+    let pixVal = 0, pixCount = 0;
+    let cardVal = 0, cardCount = 0;
+    let picpayVal = 0, picpayCount = 0;
+    let cryptoVal = 0, cryptoCount = 0;
+
+    userVisibleTransactions.forEach((s) => {
+      const amount = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
+      if (s.method === 'PIX') { pixVal += amount; pixCount++; }
+      else if (s.method === 'Cartão de Crédito') { cardVal += amount; cardCount++; }
+      else if (s.method === 'PicPay') { picpayVal += amount; picpayCount++; }
+      else if (s.method === 'Crypto USDT') { cryptoVal += amount; cryptoCount++; }
+    });
+
+    const totalCount = pixCount + cardCount + picpayCount + cryptoCount;
+    const totalVol = pixVal + cardVal + picpayVal + cryptoVal || (totalCount > 0 ? 1 : 0);
+
+    return [
+      {
+        method: 'PIX Instantâneo',
+        count: pixCount,
+        totalValue: pixVal,
+        percentage: totalVol > 0 ? Number(((pixVal / totalVol) * 100).toFixed(1)) : 0,
+        conversionRate: totalCount > 0 ? `${((pixCount / totalCount) * 100).toFixed(1)}%` : '0%',
+        badge: 'D+0 Direto',
+        iconType: 'pix' as const
+      },
+      {
+        method: 'Cartão de Crédito',
+        count: cardCount,
+        totalValue: cardVal,
+        percentage: totalVol > 0 ? Number(((cardVal / totalVol) * 100).toFixed(1)) : 0,
+        conversionRate: totalCount > 0 ? `${((cardCount / totalCount) * 100).toFixed(1)}%` : '0%',
+        badge: '12x Sem Juros',
+        iconType: 'credit-card' as const
+      },
+      {
+        method: 'PicPay Carteira',
+        count: picpayCount,
+        totalValue: picpayVal,
+        percentage: totalVol > 0 ? Number(((picpayVal / totalVol) * 100).toFixed(1)) : 0,
+        conversionRate: totalCount > 0 ? `${((picpayCount / totalCount) * 100).toFixed(1)}%` : '0%',
+        badge: 'QR Code',
+        iconType: 'picpay' as const
+      },
+      {
+        method: 'Crypto USDT (TRC-20)',
+        count: cryptoCount,
+        totalValue: cryptoVal,
+        percentage: totalVol > 0 ? Number(((cryptoVal / totalVol) * 100).toFixed(1)) : 0,
+        conversionRate: totalCount > 0 ? `${((cryptoCount / totalCount) * 100).toFixed(1)}%` : '0%',
+        badge: 'Global Web3',
+        iconType: 'crypto' as const
+      }
+    ];
+  }, [userVisibleTransactions, roleMode]);
+
   // Handle Join Affiliate (1 Click)
   const handleJoinAffiliate = async (plan: CompanyPlan) => {
+    const isVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
+    if (!isVerified) {
+      setLiveToast({
+        message: 'Afiliação Bloqueada',
+        sub: 'Você só pode se afiliar a produtos após ter o perfil verificado pela administração.',
+        amount: 'Requer Verificação'
+      });
+      setActiveTab('meu_perfil');
+      return;
+    }
+
     try {
       const aff = await createAffiliationInFirebase(plan, userProfile);
       setLiveToast({
@@ -368,7 +460,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setTimeout(() => setLiveToast(null), 5000);
     } catch (err: any) {
       console.error('Error joining affiliate:', err);
-      alert(`Erro ao se afiliar: ${err.message}`);
+      setLiveToast({
+        message: 'Erro na Afiliação',
+        sub: err.message || 'Verifique seus requisitos de verificação',
+        amount: 'Erro'
+      });
+      setTimeout(() => setLiveToast(null), 5000);
     }
   };
 
@@ -410,6 +507,17 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Handle create plan
   const handleCreatePlan = async (planData: Omit<CompanyPlan, 'id' | 'createdAt'>) => {
+    const isCompanyVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
+    if (!isCompanyVerified) {
+      setLiveToast({
+        message: 'Criação Bloqueada',
+        sub: 'Sua startup precisa estar verificada pela administração antes de cadastrar planos.',
+        amount: 'Requer Verificação'
+      });
+      setActiveTab('meu_perfil');
+      return;
+    }
+
     try {
       const created = await createCompanyPlanInFirebase(planData);
       setLiveToast({
@@ -420,7 +528,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setTimeout(() => setLiveToast(null), 4000);
     } catch (err: any) {
       console.error('Error creating plan:', err);
-      alert(`Erro ao cadastrar plano: ${err.message}`);
+      setLiveToast({
+        message: 'Erro ao cadastrar plano',
+        sub: err.message || 'Verifique o status da empresa',
+        amount: 'Erro'
+      });
+      setTimeout(() => setLiveToast(null), 5000);
     }
   };
 
@@ -535,6 +648,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Handle new sale registered
   const handleSaleCreated = async (newSale: SaleTransaction) => {
     try {
+      const isAffiliate = roleMode === 'afiliado';
       const saved = await createSaleTransactionInFirebase({
         companyId: newSale.companyId,
         companyName: newSale.companyName,
@@ -547,18 +661,23 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         commissionEarned: newSale.commissionEarned,
         method: newSale.method,
         status: newSale.status,
-        utmSource: newSale.utmSource || 'direto',
+        utmSource: newSale.utmSource || (isAffiliate ? 'link_afiliado' : 'direto_empresa'),
         date: newSale.date,
         time: newSale.time,
-        sellerId: 'usr_techify_main',
-        affiliateId: 'usr_techify_main'
+        sellerId: newSale.sellerId || effectiveUserId,
+        affiliateId: newSale.affiliateId || (isAffiliate ? effectiveUserId : undefined),
+        affiliateName: newSale.affiliateName || (isAffiliate ? (userProfile.name || 'Afiliado') : undefined),
+        affiliateCode: newSale.affiliateCode || (isAffiliate ? userAffiliationCodes[0] : undefined),
+        companyOwnerId: newSale.companyOwnerId || (!isAffiliate ? effectiveUserId : undefined)
       });
 
       // Trigger toast
       setLiveToast({
         message: `Venda aprovada com sucesso (${saved.method})!`,
-        sub: `${saved.platformName} - Comissão creditada`,
-        amount: `+ R$ ${saved.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        sub: `${saved.platformName} - Registrada na sua conta`,
+        amount: isAffiliate 
+          ? `+ R$ ${saved.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          : `+ R$ ${saved.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
 
       setTimeout(() => {
@@ -624,7 +743,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações (Sair)', icon: Link2, badge: `${affiliations.length}` },
-    { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${transactions.length}` },
+    { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${userVisibleTransactions.length}` },
     { id: 'financeiro' as PlatformTab, label: 'Saldo & Saque PIX', icon: Wallet },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
@@ -633,10 +752,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const companyNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
-    { id: 'minha_empresa' as PlatformTab, label: 'Minha Startup & Planos', icon: Building2, badge: `${companies.length}` },
+    { id: 'minha_empresa' as PlatformTab, label: 'Minha Startup & Planos', icon: Building2, badge: `${myCompanies.length}` },
     { id: 'carteira' as PlatformTab, label: 'Carteira & Saques PIX', icon: Wallet },
-    { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${transactions.length}` },
-    { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${allAffiliations.length}` },
+    { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${userVisibleTransactions.length}` },
+    { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
@@ -1025,9 +1144,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 <DashboardView
                   roleMode={roleMode}
                   userProfile={userProfile}
-                  transactions={transactions}
-                  paymentStats={paymentStats}
-                  platforms={plans}
+                  transactions={userVisibleTransactions}
+                  paymentStats={userPaymentStats}
+                  platforms={roleMode === 'empresa' && !isSuperAdmin ? myCompanyPlans : plans}
                   setActiveTab={setActiveTab}
                   onOpenSimulateSale={() => {
                     setSelectedPlanForSale(undefined);
@@ -1051,16 +1170,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onSubmitForVerification={handleSubmitForVerification}
               onNavigateToTab={setActiveTab}
               roleMode={roleMode}
-              company={companies[0]}
+              company={myCompanies[0] || companies[0]}
             />
           )}
 
           {activeTab === 'minha_empresa' && (
             <MinhaEmpresaView
-              companies={companies}
-              plans={plans}
-              affiliations={allAffiliations}
-              sales={transactions}
+              companies={myCompanies}
+              plans={myCompanyPlans}
+              affiliations={myCompanyAffiliations}
+              sales={userVisibleTransactions}
               userProfile={userProfile}
               isCompanyVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
@@ -1097,8 +1216,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setDetailedEditingPlan(plan);
               }}
               onDuplicatePlan={handleDuplicatePlan}
-              onOpenCheckout={(plan) => {
-                setLiveCheckoutPlan(plan);
+              onOpenCheckout={(planToTest) => {
+                setLiveCheckoutPlan(planToTest);
               }}
               onAddReview={(planId, review) => {
                 const target = plans.find(p => p.id === planId);
@@ -1170,11 +1289,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <MinhasAfiliacoesView
               affiliations={affiliations}
               plans={plans}
+              isVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
+              verificationStatus={userProfile.verificationStatus}
               onOpenRegisterSale={(planId) => {
                 setSelectedPlanForSale(planId);
                 setIsRegisterSaleModalOpen(true);
               }}
               onNavigateToVitrine={() => setActiveTab('vitrine')}
+              onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onDeleteAffiliation={handleDeleteAffiliation}
             />
           )}
@@ -1193,7 +1315,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'vendas' && (
             <VendasView
               roleMode={roleMode}
-              transactions={transactions}
+              transactions={userVisibleTransactions}
               onOpenSimulateSale={() => {
                 setSelectedPlanForSale(undefined);
                 setIsRegisterSaleModalOpen(true);
@@ -1212,14 +1334,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {activeTab === 'equipe' && (
             <EquipeView
-              companies={companies}
-              plans={plans}
-              affiliations={allAffiliations}
-              currentUserId={currentUser?.uid}
+              companies={myCompanies}
+              plans={myCompanyPlans}
+              affiliations={myCompanyAffiliations}
+              currentUserId={effectiveUserId}
               onRemoveAffiliate={handleCompanyRemoveAffiliate}
             />
           )}
-          {activeTab === 'relatorios' && <RelatoriosView transactions={transactions} />}
+          {activeTab === 'relatorios' && <RelatoriosView transactions={userVisibleTransactions} />}
           {activeTab === 'integracoes' && <IntegracoesView />}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
             </>
@@ -1302,6 +1424,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         platforms={plans}
         defaultPlanId={selectedPlanForSale}
         onSaleCreated={handleSaleCreated}
+        currentUserId={effectiveUserId}
+        currentUserName={userProfile?.name}
+        roleMode={roleMode}
+        affiliateCode={userAffiliationCodes[0]}
       />
 
       <WithdrawModal

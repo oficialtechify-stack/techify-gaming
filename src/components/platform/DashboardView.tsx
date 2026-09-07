@@ -5,7 +5,8 @@ import {
   SaleTransaction, 
   PaymentMethodStat, 
   CompanyPlan, 
-  PlatformTab 
+  PlatformTab,
+  UserRoleMode 
 } from '../../types/platform';
 import { 
   TrendingUp, 
@@ -24,7 +25,7 @@ import {
 } from 'lucide-react';
 
 interface DashboardViewProps {
-  roleMode?: 'afiliado' | 'empresa';
+  roleMode?: UserRoleMode;
   userProfile: UserSellerProfile;
   transactions: SaleTransaction[];
   paymentStats: PaymentMethodStat[];

@@ -16,22 +16,30 @@ import {
   Sparkles,
   Sliders,
   UserMinus,
-  AlertTriangle
+  AlertTriangle,
+  Lock,
+  ShieldAlert
 } from 'lucide-react';
 
 interface MinhasAfiliacoesViewProps {
   affiliations: UserAffiliation[];
   plans: CompanyPlan[];
+  isVerified?: boolean;
+  verificationStatus?: string;
   onOpenRegisterSale: (planId?: string) => void;
   onNavigateToVitrine: () => void;
+  onNavigateToProfile?: () => void;
   onDeleteAffiliation: (affiliationId: string, planId?: string, companyId?: string) => void;
 }
 
 export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   affiliations = [],
   plans = [],
+  isVerified = false,
+  verificationStatus = 'unsubmitted',
   onOpenRegisterSale,
   onNavigateToVitrine,
+  onNavigateToProfile,
   onDeleteAffiliation
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -140,7 +148,32 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
       </div>
 
       {/* Affiliations List */}
-      {affiliations.length === 0 ? (
+      {!isVerified ? (
+        <div className="bg-[#080d1a] border-2 border-amber-500/30 rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 shadow-xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <div className="max-w-md">
+            <h3 className="text-lg font-bold text-white font-['Syne'] mb-1">
+              Verificação Obrigatória para Afiliações
+            </h3>
+            <p className="text-xs text-white/70 mb-5 leading-relaxed">
+              {verificationStatus === 'pending'
+                ? 'Sua conta está em análise pela administração. Assim que aprovada, você poderá se afiliar aos produtos e gerar links comissionados.'
+                : 'Nenhum usuário pode se afiliar a planos sem verificação prévia. Complete seus dados cadastrais, CPF/CNPJ e chave PIX no seu perfil para liberar a afiliação.'}
+            </p>
+            {onNavigateToProfile && (
+              <button
+                onClick={onNavigateToProfile}
+                className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2 shadow-[0_0_20px_rgba(217,242,42,0.3)]"
+              >
+                <Lock className="w-4 h-4" />
+                <span>{verificationStatus === 'pending' ? 'Ver Status no Perfil' : 'Completar Verificação do Perfil'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : affiliations.length === 0 ? (
         <div className="bg-[#080d1a] border-2 border-dashed border-[#D9F22A]/30 rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4">
           <ShoppingBag className="w-12 h-12 text-[#D9F22A]/50" />
           <div className="max-w-md">

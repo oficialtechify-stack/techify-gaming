@@ -1,4 +1,4 @@
-export type UserRoleMode = 'afiliado' | 'empresa';
+export type UserRoleMode = 'afiliado' | 'empresa' | 'admin';
 
 export interface CompanyStartup {
   id: string;
@@ -193,6 +193,10 @@ export interface SaleTransaction {
   releasedAt?: string;
   affiliateId?: string;
   affiliateName?: string;
+  affiliateCode?: string;
+  affiliate_code?: string;
+  companyOwnerId?: string;
+  plan_id?: string;
   method: 'PIX' | 'Cartão de Crédito' | 'PicPay' | 'Crypto USDT' | string;
   status: 'Aprovado' | 'Pendente' | 'Cancelado' | string;
   sellerId?: string;

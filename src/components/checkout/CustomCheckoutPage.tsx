@@ -20,7 +20,7 @@ import {
   RefreshCw,
   ExternalLink
 } from 'lucide-react';
-import { createSaleTransactionInFirebase } from '../../services/firestoreService';
+import { createSaleTransactionInFirebase, fetchSellerSubaccountId } from '../../services/firestoreService';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
 
 interface CustomCheckoutPageProps {
@@ -78,6 +78,24 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [pixCopied, setPixCopied] = useState<boolean>(false);
   const [pixSecondsLeft, setPixSecondsLeft] = useState<number>(900); // 15:00 min real timer
   const [pixError, setPixError] = useState<string | null>(null);
+  const [subaccountId, setSubaccountId] = useState<string | null>(
+    (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null
+  );
+
+  // Busca ID da subconta Asaas do vendedor/empresa no Firestore (users/{sellerId}.asaasSubaccountId)
+  useEffect(() => {
+    let isMounted = true;
+    fetchSellerSubaccountId(plan).then((foundId) => {
+      if (isMounted && foundId) {
+        setSubaccountId(foundId);
+      }
+    }).catch((err) => {
+      console.warn('Aviso ao consultar subaccountId no Firestore:', err);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [plan]);
 
   // Processing & completion states
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -191,6 +209,19 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         return;
       }
 
+      // Garante resolução do ID da subconta Asaas do vendedor/empresa antes da chamada
+      let activeSubaccountId = subaccountId || (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null;
+      if (!activeSubaccountId) {
+        try {
+          activeSubaccountId = await fetchSellerSubaccountId(plan);
+          if (activeSubaccountId) {
+            setSubaccountId(activeSubaccountId);
+          }
+        } catch (e) {
+          console.warn('Erro ao resolver subaccountId no momento do Pix:', e);
+        }
+      }
+
       // Requisição POST direta para o endpoint oficial do Asaas /api/payments
       const response = await fetch('/api/payments', {
         method: 'POST',
@@ -202,6 +233,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           amount: cleanTotal,
           valorTotal: cleanTotal,
           total_amount: cleanTotal,
+          subaccountId: activeSubaccountId || undefined,
           description: `Plano ${plan.name}`,
           customer: {
             name: cleanName || 'Cliente LeadsPay',
@@ -223,6 +255,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           plan_id: plan.id,
           companyId: plan.companyId,
           company_id: plan.companyId,
+          sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
           refCode: activeAffiliate,
           affiliateRef: activeAffiliate,
           affiliate_code: activeAffiliate
@@ -488,12 +521,22 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
         const [expMonth, expYear] = cardExpiry.split('/');
 
+        let activeSubaccountId = subaccountId || (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null;
+        if (!activeSubaccountId) {
+          try {
+            activeSubaccountId = await fetchSellerSubaccountId(plan);
+          } catch (e) {
+            // ignore
+          }
+        }
+
         const res = await fetch('/api/payments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             paymentMethod: 'CREDIT_CARD',
             amount: cleanTotal,
+            subaccountId: activeSubaccountId || undefined,
             description: `Plano ${plan.name}`,
             user: {
               name: cleanName,
@@ -518,6 +561,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             },
             planId: plan.id,
             companyId: plan.companyId,
+            sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
             refCode: activeAffiliate
           })
         });

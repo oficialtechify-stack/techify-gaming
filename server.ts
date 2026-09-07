@@ -449,6 +449,7 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
  */
 app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], async (req, res) => {
   try {
+    const body = req.body || {};
     const {
       paymentMethod,
       amount,
@@ -462,10 +463,84 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       plan_id,
       companyId,
       company_id,
+      sellerId,
       refCode,
       affiliate_code,
       affiliateRef
-    } = req.body || {};
+    } = body;
+
+    let subaccountId = body.subaccountId;
+
+    // Se o subaccountId não veio no payload, busca no Firestore:
+    // 1) users/{sellerId}.asaasSubaccountId
+    // 2) user_profiles/{sellerId}.asaasSubaccountId
+    // 3) companies/{companyId}.asaasSubaccountId
+    // 4) plans/{planId}.asaasSubaccountId
+    if (!subaccountId) {
+      const candidateSellerId = sellerId || body.ownerId || body.userId || companyId || company_id || (planId || plan_id);
+      if (candidateSellerId) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', String(candidateSellerId)));
+          if (userDoc.exists()) {
+            const uData = userDoc.data();
+            subaccountId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
+          }
+          if (!subaccountId) {
+            const profDoc = await getDoc(doc(db, 'user_profiles', String(candidateSellerId)));
+            if (profDoc.exists()) {
+              const pData = profDoc.data();
+              subaccountId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
+            }
+          }
+        } catch (dbErr) {
+          console.warn('[Server Asaas] Erro ao consultar subaccountId no Firestore:', dbErr);
+        }
+      }
+
+      // Se ainda não encontrou e temos companyId
+      const targetCompId = companyId || company_id;
+      if (!subaccountId && targetCompId) {
+        try {
+          const compDoc = await getDoc(doc(db, 'companies', String(targetCompId)));
+          if (compDoc.exists()) {
+            const cData = compDoc.data();
+            subaccountId = cData?.asaasSubaccountId || cData?.subaccountId;
+            if (!subaccountId && cData?.ownerId) {
+              const ownerDoc = await getDoc(doc(db, 'users', String(cData.ownerId)));
+              if (ownerDoc.exists()) {
+                subaccountId = ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
+              }
+            }
+          }
+        } catch (cErr) {
+          console.warn('[Server Asaas] Erro ao consultar empresa no Firestore:', cErr);
+        }
+      }
+
+      // Se ainda não encontrou e temos planId
+      const targetPlId = planId || plan_id;
+      if (!subaccountId && targetPlId) {
+        try {
+          const planDoc = await getDoc(doc(db, 'plans', String(targetPlId)));
+          if (planDoc.exists()) {
+            const plData = planDoc.data();
+            subaccountId = plData?.asaasSubaccountId || plData?.subaccountId;
+            if (!subaccountId && plData?.companyId) {
+              const compDoc = await getDoc(doc(db, 'companies', String(plData.companyId)));
+              if (compDoc.exists()) {
+                subaccountId = compDoc.data()?.asaasSubaccountId || compDoc.data()?.subaccountId;
+              }
+            }
+          }
+        } catch (pErr) {
+          console.warn('[Server Asaas] Erro ao consultar plano no Firestore:', pErr);
+        }
+      }
+
+      if (subaccountId) {
+        body.subaccountId = subaccountId;
+      }
+    }
 
     const normalizedMethod = String(paymentMethod || 'PIX').toUpperCase().trim();
     if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD') {
@@ -521,7 +596,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
         postalCode: customerData.postalCode,
         address: customerData.address,
         addressNumber: customerData.addressNumber
-      });
+      }, body.subaccountId);
     } catch (custError: any) {
       console.error('[Server Asaas Customer Error] Falha detalhada ao obter/criar cliente:', custError);
       const status = custError.status || custError.statusCode || 400;
@@ -542,7 +617,14 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     // 2. Cobrança PIX via Asaas
     if (normalizedMethod === 'PIX') {
       try {
-        const pixResult = await createPixPayment(customerId, finalAmount, finalDescription);
+        console.log("GERANDO PIX NA SUBCONTA:", body.subaccountId);
+
+        const pixResult = await createPixPayment(
+          customerId, 
+          finalAmount, 
+          finalDescription,
+          body.subaccountId
+        );
 
         // Persiste registro na coleção 'sales' do Firestore
         try {
@@ -553,6 +635,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             gateway: 'Asaas v3',
             method: 'PIX',
             billingType: 'PIX',
+            subaccountId: body.subaccountId || null,
             plan_id: finalPlanId,
             platformId: finalPlanId || '',
             platformName: finalDescription,
@@ -572,7 +655,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             buyerCpf: cleanCpf,
             commissionCredited: false
           }, { merge: true });
-          console.log(`✅ [Firestore Asaas Sales] Venda PIX registrada: ${pixResult.paymentId}`);
+          console.log(`✅ [Firestore Asaas Sales] Venda PIX registrada: ${pixResult.paymentId} (Subconta: ${body.subaccountId || 'Master'})`);
         } catch (dbErr) {
           console.warn('Aviso ao salvar venda Asaas PIX no Firestore:', dbErr);
         }
@@ -581,6 +664,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           success: true,
           gateway: 'Asaas v3',
           billingType: 'PIX',
+          subaccountId: body.subaccountId || null,
           paymentId: pixResult.paymentId,
           payment_id: pixResult.paymentId,
           id: pixResult.paymentId,
@@ -599,7 +683,8 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             planId: finalPlanId,
             companyId: finalCompanyId,
             affiliateRef: finalRefCode,
-            customerId
+            customerId,
+            subaccountId: body.subaccountId || null
           }
         });
       } catch (pixErr: any) {
@@ -643,7 +728,8 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           finalAmount,
           finalDescription,
           creditCard,
-          cardHolderInfo
+          cardHolderInfo,
+          body.subaccountId
         );
 
         const isApproved = cardResult.status === 'CONFIRMED' || cardResult.status === 'RECEIVED';
@@ -657,6 +743,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             gateway: 'Asaas v3',
             method: 'CREDIT_CARD',
             billingType: 'CREDIT_CARD',
+            subaccountId: body.subaccountId || null,
             plan_id: finalPlanId,
             platformId: finalPlanId || '',
             platformName: finalDescription,
@@ -691,6 +778,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           success: true,
           gateway: 'Asaas v3',
           billingType: 'CREDIT_CARD',
+          subaccountId: body.subaccountId || null,
           paymentId: cardResult.paymentId,
           payment_id: cardResult.paymentId,
           id: cardResult.paymentId,
@@ -702,7 +790,8 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             planId: finalPlanId,
             companyId: finalCompanyId,
             affiliateRef: finalRefCode,
-            customerId
+            customerId,
+            subaccountId: body.subaccountId || null
           }
         });
       } catch (cardErr: any) {
@@ -744,11 +833,28 @@ app.get(['/api/payments/asaas/:id', '/api/payments/pix/:id', '/api/pix/:id'], as
       apiUrl = apiUrl.slice(0, -1);
     }
 
-    const response = await fetch(`${apiUrl}/payments/${paymentId}`, {
-      headers: {
-        'access_token': apiKey,
-        'Content-Type': 'application/json'
+    let subaccountId: string | undefined = (req.query.subaccountId || req.query.account) as string;
+    if (!subaccountId) {
+      try {
+        const saleDoc = await getDoc(doc(db, 'sales', String(paymentId)));
+        if (saleDoc.exists() && saleDoc.data()?.subaccountId) {
+          subaccountId = saleDoc.data()?.subaccountId;
+        }
+      } catch (dbErr) {
+        console.warn('Aviso ao consultar subaccountId da venda:', dbErr);
       }
+    }
+
+    const headers: Record<string, string> = {
+      'access_token': apiKey,
+      'Content-Type': 'application/json'
+    };
+    if (subaccountId) {
+      headers['account'] = subaccountId;
+    }
+
+    const response = await fetch(`${apiUrl}/payments/${paymentId}`, {
+      headers
     });
 
     if (!response.ok) {
@@ -863,21 +969,30 @@ app.post('/api/affiliates/join', async (req, res) => {
     }
     const planData = planSnap.data();
 
-    // 2. Busca informações do usuário se não enviadas
+    // 2. Busca informações do perfil do usuário e valida status de verificação
     let finalUserName = userName;
     let finalUserEmail = userEmail;
-    if (!finalUserName || !finalUserEmail) {
-      try {
-        const userRef = doc(db, 'user_profiles', cleanUserId);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const uData = userSnap.data();
-          finalUserName = finalUserName || uData.name || 'Afiliado LeadsPay';
-          finalUserEmail = finalUserEmail || uData.email || '';
-        }
-      } catch (uErr) {
-        console.warn('Erro ao buscar perfil do usuário para afiliação:', uErr);
+    let isUserVerified = false;
+
+    try {
+      const userRef = doc(db, 'user_profiles', cleanUserId);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const uData = userSnap.data();
+        finalUserName = finalUserName || uData.name || 'Afiliado LeadsPay';
+        finalUserEmail = finalUserEmail || uData.email || '';
+        isUserVerified = uData.verified === true || uData.verificationStatus === 'approved';
       }
+    } catch (uErr) {
+      console.warn('Erro ao buscar perfil do usuário para afiliação:', uErr);
+    }
+
+    // Regra estrita: Somente usuários verificados podem se afiliar
+    if (!isUserVerified) {
+      return res.status(403).json({
+        error: 'Afiliação bloqueada: Você precisa estar verificado e homologado pela administração para se afiliar a produtos.',
+        requiresVerification: true
+      });
     }
 
     // 3. Verifica se o usuário já possui afiliação registrada para este plano

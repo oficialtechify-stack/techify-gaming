@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserSellerProfile, CompanyStartup } from '../../types/platform';
+import { UserSellerProfile, CompanyStartup, UserRoleMode } from '../../types/platform';
 import { 
   User, 
   Mail, 
@@ -33,7 +33,7 @@ interface MeuPerfilViewProps {
   onSaveProfile: (updates: Partial<UserSellerProfile>) => Promise<void>;
   onSubmitForVerification?: (updates: Partial<UserSellerProfile>) => Promise<void>;
   onNavigateToTab?: (tab: any) => void;
-  roleMode: 'afiliado' | 'empresa';
+  roleMode?: UserRoleMode;
   company?: CompanyStartup;
 }
 

@@ -618,6 +618,10 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
     const compSnap = await getDoc(compRef);
     if (compSnap.exists()) {
       const compData = compSnap.data() as CompanyStartup;
+      const isVerified = compData.verified === true || compData.status === 'approved';
+      if (!isVerified) {
+        throw new Error('Empresa não verificada. Apenas empresas aprovadas pela administração podem cadastrar planos.');
+      }
       await updateDoc(compRef, sanitizeForFirestore({
         totalPlansCount: (compData.totalPlansCount || 0) + 1
       }));
@@ -638,7 +642,8 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
         totalPlansCount: 1,
         totalAffiliatesCount: 0,
         totalSalesVolume: 0,
-        verified: true,
+        verified: false,
+        status: 'pending',
         ownerId: DEFAULT_USER_ID,
         createdAt: now
       };
@@ -691,12 +696,16 @@ export const updatePlatformInFirebase = updateCompanyPlanInFirebase;
  * Realtime User Affiliations Listener
  */
 export function subscribeUserAffiliations(callback: (affiliations: UserAffiliation[]) => void, userId?: string) {
+  if (!userId || userId.trim() === '') {
+    callback([]);
+    return () => {};
+  }
   const q = collection(db, COLLECTIONS.AFFILIATIONS);
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
       const data = d.data() as UserAffiliation;
-      if (!userId || data.userId === userId || data.user_id === userId) {
+      if (data.userId === userId || data.user_id === userId) {
         list.push({ id: d.id, ...data });
       }
     });
@@ -731,6 +740,11 @@ export function subscribeAllAffiliations(callback: (affiliations: UserAffiliatio
  * Create a new Affiliation in Firebase (User joins a Plan)
  */
 export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile: UserSellerProfile) {
+  const isVerified = userProfile.verified === true || userProfile.verificationStatus === 'approved';
+  if (!isVerified) {
+    throw new Error('Usuário não verificado. Você só pode se afiliar a produtos após ter o perfil aprovado pela administração.');
+  }
+
   const userId = userProfile.userId || DEFAULT_USER_ID;
   const id = `aff_${userId}_${plan.id}`;
   const now = new Date().toISOString();
@@ -938,31 +952,67 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
   // 2. Credit platform fee in global revenue account
   await creditPlatformFinances('checkout', checkoutFee);
 
-  // 3. Update Profile Balances (Credit the affiliate/seller into PENDING balance for 9 days)
-  const targetUserId = saleData.affiliateId || saleData.sellerId || DEFAULT_USER_ID;
-  const profileRef = doc(db, COLLECTIONS.PROFILES, targetUserId);
-  const profileSnap = await getDoc(profileRef);
-  if (profileSnap.exists()) {
-    const current = profileSnap.data() as UserSellerProfile;
-    const newTotalEarned = (current.totalEarned || 0) + fullSale.commissionEarned;
-    const newPending = (current.pendingBalance || 0) + fullSale.commissionEarned;
-    const newCount = (current.totalSalesCount || 0) + 1;
-    const target = current.targetGoal || 100000;
-    const progress = Math.min(100, (newTotalEarned / target) * 100);
+  // 3. Update Profile Balances
+  // Credit the affiliate if this sale was made by an affiliate
+  const targetAffiliateId = saleData.affiliateId || saleData.sellerId || null;
+  if (targetAffiliateId) {
+    try {
+      const profileRef = doc(db, COLLECTIONS.PROFILES, targetAffiliateId);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        const current = profileSnap.data() as UserSellerProfile;
+        const newTotalEarned = (current.totalEarned || 0) + fullSale.commissionEarned;
+        const newPending = (current.pendingBalance || 0) + fullSale.commissionEarned;
+        const newCount = (current.totalSalesCount || 0) + 1;
+        const target = current.targetGoal || 100000;
+        const progress = Math.min(100, (newTotalEarned / target) * 100);
 
-    let level = current.partnerLevel || 'Afiliado Starter';
-    if (newTotalEarned >= 100000) level = 'Master Elite Black';
-    else if (newTotalEarned >= 50000) level = 'Parceiro Gold';
-    else if (newTotalEarned >= 20000) level = 'Parceiro Silver';
+        let level = current.partnerLevel || 'Afiliado Starter';
+        if (newTotalEarned >= 100000) level = 'Master Elite Black';
+        else if (newTotalEarned >= 50000) level = 'Parceiro Gold';
+        else if (newTotalEarned >= 20000) level = 'Parceiro Silver';
 
-    await updateDoc(profileRef, sanitizeForFirestore({
-      totalEarned: newTotalEarned,
-      pendingBalance: newPending, // Entra como pendente durante os 9 dias de garantia
-      totalSalesCount: newCount,
-      partnerLevel: level,
-      currentSalesProgress: Number(progress.toFixed(1)),
-      updatedAt: now.toISOString()
-    }));
+        await updateDoc(profileRef, sanitizeForFirestore({
+          totalEarned: newTotalEarned,
+          pendingBalance: newPending, // Entra como pendente durante os 9 dias de garantia
+          totalSalesCount: newCount,
+          partnerLevel: level,
+          currentSalesProgress: Number(progress.toFixed(1)),
+          updatedAt: now.toISOString()
+        }));
+      }
+    } catch (profErr) {
+      console.warn('Aviso ao creditar perfil do afiliado:', profErr);
+    }
+  }
+
+  // Credit company owner with net amount
+  let companyOwnerId = saleData.companyOwnerId || null;
+  if (!companyOwnerId && fullSale.companyId) {
+    try {
+      const compSnap = await getDoc(doc(db, COLLECTIONS.COMPANIES, fullSale.companyId));
+      if (compSnap.exists()) {
+        companyOwnerId = compSnap.data().ownerId || compSnap.data().submittedBy || null;
+      }
+    } catch (e) {}
+  }
+
+  if (companyOwnerId) {
+    try {
+      const compProfileRef = doc(db, COLLECTIONS.PROFILES, companyOwnerId);
+      const compProfileSnap = await getDoc(compProfileRef);
+      if (compProfileSnap.exists()) {
+        const compCurrent = compProfileSnap.data() as UserSellerProfile;
+        await updateDoc(compProfileRef, sanitizeForFirestore({
+          totalEarned: Number(((compCurrent.totalEarned || 0) + netCompanyAmount).toFixed(2)),
+          pendingBalance: Number(((compCurrent.pendingBalance || 0) + netCompanyAmount).toFixed(2)),
+          totalSalesCount: (compCurrent.totalSalesCount || 0) + 1,
+          updatedAt: now.toISOString()
+        }));
+      }
+    } catch (compErr) {
+      console.warn('Aviso ao creditar carteira da empresa:', compErr);
+    }
   }
 
   // 4. Update Plan total sales
@@ -989,16 +1039,20 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     }
   }
 
-  // 6. Update Affiliation salesCount and totalEarned if exists
-  const affId = `aff_${targetUserId}_${fullSale.platformId}`;
-  const affRef = doc(db, COLLECTIONS.AFFILIATIONS, affId);
-  const affSnap = await getDoc(affRef);
-  if (affSnap.exists()) {
-    const affData = affSnap.data() as UserAffiliation;
-    await updateDoc(affRef, sanitizeForFirestore({
-      salesCount: (affData.salesCount || 0) + 1,
-      totalEarned: (affData.totalEarned || 0) + fullSale.commissionEarned
-    }));
+  // 6. Update Affiliation salesCount and totalEarned if this affiliate is affiliated
+  if (targetAffiliateId && fullSale.platformId) {
+    try {
+      const affId = `aff_${targetAffiliateId}_${fullSale.platformId}`;
+      const affRef = doc(db, COLLECTIONS.AFFILIATIONS, affId);
+      const affSnap = await getDoc(affRef);
+      if (affSnap.exists()) {
+        const affData = affSnap.data() as UserAffiliation;
+        await updateDoc(affRef, sanitizeForFirestore({
+          salesCount: (affData.salesCount || 0) + 1,
+          totalEarned: Number(((affData.totalEarned || 0) + fullSale.commissionEarned).toFixed(2))
+        }));
+      }
+    } catch (e) {}
   }
 
   return fullSale;
@@ -1009,14 +1063,17 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
 // ==========================================
 
 /**
- * Realtime Withdrawals Listener
+ * Realtime Withdrawals Listener (Filtered strictly by user unless superadmin)
  */
-export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void) {
+export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void, userId?: string) {
   const q = collection(db, COLLECTIONS.WITHDRAWALS);
   return onSnapshot(q, (snap) => {
     const list: WithdrawalRequest[] = [];
     snap.forEach((d) => {
-      list.push({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, 'id'>) });
+      const data = d.data() as Omit<WithdrawalRequest, 'id'>;
+      if (!userId || data.userId === userId || (data as any).user_id === userId) {
+        list.push({ id: d.id, ...data });
+      }
     });
     list.sort((a, b) => (b.completedAt || b.requestedAt || '').localeCompare(a.completedAt || a.requestedAt || ''));
     callback(list);
@@ -1264,3 +1321,148 @@ export function subscribeGlobalPlatformMetrics(
     unsubProfiles();
   };
 }
+
+/**
+ * Busca o ID da subconta Asaas do vendedor/empresa/plano (ex: "acc_...")
+ * Prioriza users/{sellerId}.asaasSubaccountId, user_profiles e companies
+ */
+export async function fetchSellerSubaccountId(param: string | CompanyPlan | any): Promise<string | null> {
+  if (!param) return null;
+
+  try {
+    // Se for objeto do plano
+    if (typeof param === 'object') {
+      const plan = param as any;
+      if (plan.asaasSubaccountId) return String(plan.asaasSubaccountId).trim();
+      if (plan.subaccountId) return String(plan.subaccountId).trim();
+
+      const candidateIds: string[] = [
+        plan.sellerId,
+        plan.ownerId,
+        plan.userId,
+        plan.companyId
+      ].filter((v): v is string => Boolean(v));
+
+      for (const sellerId of candidateIds) {
+        // 1. users/{sellerId} (conforme requisito específico users/{sellerId}.asaasSubaccountId)
+        try {
+          const userDoc = await getDoc(doc(db, 'users', String(sellerId)));
+          if (userDoc.exists()) {
+            const uData = userDoc.data();
+            const subId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
+            if (subId) return String(subId).trim();
+          }
+        } catch (e) {
+          console.warn('Erro ao consultar users/{sellerId} no Firestore:', e);
+        }
+
+        // 2. user_profiles/{sellerId}
+        try {
+          const profDoc = await getDoc(doc(db, COLLECTIONS.PROFILES, String(sellerId)));
+          if (profDoc.exists()) {
+            const pData = profDoc.data();
+            const subId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
+            if (subId) return String(subId).trim();
+          }
+        } catch (e) {
+          console.warn('Erro ao consultar user_profiles/{sellerId} no Firestore:', e);
+        }
+      }
+
+      // 3. companies/{companyId}
+      if (plan.companyId) {
+        try {
+          const compDoc = await getDoc(doc(db, COLLECTIONS.COMPANIES, String(plan.companyId)));
+          if (compDoc.exists()) {
+            const cData = compDoc.data();
+            const subId = cData?.asaasSubaccountId || cData?.subaccountId;
+            if (subId) return String(subId).trim();
+            if (cData?.ownerId) {
+              const ownerUserDoc = await getDoc(doc(db, 'users', String(cData.ownerId)));
+              if (ownerUserDoc.exists()) {
+                const oData = ownerUserDoc.data();
+                const ownerSubId = oData?.asaasSubaccountId || oData?.subaccountId;
+                if (ownerSubId) return String(ownerSubId).trim();
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Erro ao consultar companies/{companyId} no Firestore:', e);
+        }
+      }
+
+      // 4. plans/{plan.id}
+      if (plan.id) {
+        try {
+          const planDoc = await getDoc(doc(db, COLLECTIONS.PLANS, String(plan.id)));
+          if (planDoc.exists()) {
+            const plData = planDoc.data();
+            const subId = plData?.asaasSubaccountId || plData?.subaccountId;
+            if (subId) return String(subId).trim();
+          }
+        } catch (e) {
+          console.warn('Erro ao consultar plans/{plan.id} no Firestore:', e);
+        }
+      }
+
+      return null;
+    }
+
+    // Se for string com sellerId / companyId / planId
+    const sellerId = String(param).trim();
+    if (!sellerId) return null;
+
+    // 1. users/{sellerId}
+    try {
+      const uDoc = await getDoc(doc(db, 'users', sellerId));
+      if (uDoc.exists()) {
+        const uData = uDoc.data();
+        const subId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
+        if (subId) return String(subId).trim();
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar users no Firestore:', e);
+    }
+
+    // 2. user_profiles/{sellerId}
+    try {
+      const pDoc = await getDoc(doc(db, COLLECTIONS.PROFILES, sellerId));
+      if (pDoc.exists()) {
+        const pData = pDoc.data();
+        const subId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
+        if (subId) return String(subId).trim();
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar user_profiles no Firestore:', e);
+    }
+
+    // 3. companies/{sellerId}
+    try {
+      const cDoc = await getDoc(doc(db, COLLECTIONS.COMPANIES, sellerId));
+      if (cDoc.exists()) {
+        const cData = cDoc.data();
+        const subId = cData?.asaasSubaccountId || cData?.subaccountId;
+        if (subId) return String(subId).trim();
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar companies no Firestore:', e);
+    }
+
+    // 4. plans/{sellerId}
+    try {
+      const plDoc = await getDoc(doc(db, COLLECTIONS.PLANS, sellerId));
+      if (plDoc.exists()) {
+        const plData = plDoc.data();
+        const subId = plData?.asaasSubaccountId || plData?.subaccountId;
+        if (subId) return String(subId).trim();
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar plans no Firestore:', e);
+    }
+  } catch (err) {
+    console.warn('Erro geral ao buscar subaccountId no Firestore:', err);
+  }
+
+  return null;
+}
+

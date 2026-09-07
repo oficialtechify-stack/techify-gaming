@@ -94,16 +94,22 @@ function getAsaasConfig() {
   return { apiKey, apiUrl, isSandbox };
 }
 
-function getHeaders() {
+function getHeaders(subaccountId?: string) {
   const { apiKey } = getAsaasConfig();
   const token = process.env.ASAAS_API_KEY || apiKey;
   if (!token) {
     console.error('[Asaas Service] ERRO CRÍTICO: process.env.ASAAS_API_KEY está undefined ao montar headers!');
   }
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'access_token': token || ''
+    'access_token': (process.env.ASAAS_API_KEY || token || '') as string
   };
+
+  if (subaccountId) {
+    headers['account'] = subaccountId;
+  }
+
+  return headers;
 }
 
 /**
@@ -115,19 +121,26 @@ export function cleanDocument(docStr?: string | number | null): string {
 }
 
 /**
- * getOrCreateCustomer(userData)
+ * getOrCreateCustomer(userData, subaccountId?)
  * 1. Limpa o CPF/CNPJ removendo qualquer pontuação (apenas dígitos).
- * 2. Faz GET para ${ASAAS_API_URL}/customers?cpfCnpj=${cpfCnpj} com o header 'access_token'.
+ * 2. Faz GET para ${ASAAS_API_URL}/customers?cpfCnpj=${cpfCnpj} com o header 'access_token' (e 'account' se subconta).
  * 3. Se o cliente já existir no Asaas, retorna o id encontrado.
  * 4. Se não existir, faz POST para ${ASAAS_API_URL}/customers para cadastrar e retorna o novo id.
  */
-export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<string> {
+export async function getOrCreateCustomer(userData: AsaasCustomerData, subaccountId?: string): Promise<string> {
   const { apiUrl, apiKey } = getAsaasConfig();
   if (!apiKey) {
     throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
   }
 
-  const headers = getHeaders();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'access_token': (process.env.ASAAS_API_KEY || apiKey) as string
+  };
+
+  if (subaccountId) {
+    headers['account'] = subaccountId;
+  }
   const cpfCnpj = cleanDocument(userData?.cpfCnpj);
 
   if (!cpfCnpj) {
@@ -214,22 +227,31 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData): Promise<
 }
 
 /**
- * createPixPayment(customerId, amount, description)
+ * createPixPayment(customerId, amount, description, subaccountId?)
  * 1. Faz POST para ${ASAAS_API_URL}/payments com billingType: 'PIX', valor numérico e vencimento YYYY-MM-DD.
  * 2. Faz GET para ${ASAAS_API_URL}/payments/${paymentId}/pixQrCode para obter Copia e Cola e QR Code em Base64.
- * 3. Retorna os dados completos do PIX com logs de erro detalhados.
+ * 3. Injeta o header 'account' quando subaccountId for fornecido.
+ * 4. Retorna os dados completos do PIX com logs de erro detalhados.
  */
 export async function createPixPayment(
   customerId: string, 
   amount: number, 
-  description?: string
+  description?: string,
+  subaccountId?: string
 ): Promise<AsaasPixResponse> {
   const { apiUrl, apiKey } = getAsaasConfig();
   if (!apiKey) {
     throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
   }
 
-  const headers = getHeaders();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'access_token': (process.env.ASAAS_API_KEY || apiKey) as string
+  };
+
+  if (subaccountId) {
+    headers['account'] = subaccountId;
+  }
 
   if (!customerId) {
     throw new Error('ID do cliente Asaas é obrigatório para gerar PIX.');
@@ -252,7 +274,7 @@ export async function createPixPayment(
     description: description || 'Pagamento LeadsPay'
   };
 
-  console.log('[Asaas] Solicitando criação de cobrança PIX:', paymentPayload);
+  console.log('[Asaas] Solicitando criação de cobrança PIX:', paymentPayload, subaccountId ? `(Subconta: ${subaccountId})` : '(Conta Master)');
 
   let paymentRes: Response;
   try {
@@ -347,13 +369,21 @@ export async function createCreditCardPayment(
   amount: number,
   description: string,
   creditCard: AsaasCreditCard,
-  holderInfo: AsaasCreditCardHolderInfo
+  holderInfo: AsaasCreditCardHolderInfo,
+  subaccountId?: string
 ): Promise<AsaasCreditCardResponse> {
   const { apiUrl, apiKey } = getAsaasConfig();
   if (!apiKey) {
     throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
   }
-  const headers = getHeaders();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'access_token': (process.env.ASAAS_API_KEY || apiKey) as string
+  };
+
+  if (subaccountId) {
+    headers['account'] = subaccountId;
+  }
 
   if (!customerId) {
     throw new Error('ID do cliente Asaas é obrigatório para pagamento via Cartão de Crédito.');

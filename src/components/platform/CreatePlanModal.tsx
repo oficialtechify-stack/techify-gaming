@@ -172,6 +172,16 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       return;
     }
 
+    if (!isEditMode && currentCompany && currentCompany.verified === false && currentCompany.status !== 'approved') {
+      alert('Atenção: Esta empresa/startup ainda não foi aprovada pela administração. Apenas empresas verificadas podem colocar planos no marketplace.');
+      return;
+    }
+
+    if (!isEditMode && (!companies || companies.length === 0)) {
+      alert('Atenção: Você precisa cadastrar sua empresa e aguardar a aprovação da administração antes de cadastrar planos.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {

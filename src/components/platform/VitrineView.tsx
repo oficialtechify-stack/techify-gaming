@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CompanyPlan, CompanyStartup, UserAffiliation } from '../../types/platform';
+import { CompanyPlan, CompanyStartup, UserAffiliation, UserRoleMode } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
 import { formatAffiliatePlanUrl, getAppBaseUrl } from '../../utils/affiliateTracking';
 import { 
@@ -31,11 +31,13 @@ import {
   CreditCard,
   Sliders,
   X,
-  Loader2
+  Loader2,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 
 interface VitrineViewProps {
-  roleMode?: 'afiliado' | 'empresa';
+  roleMode?: UserRoleMode;
   platforms: CompanyPlan[];
   companies?: CompanyStartup[];
   affiliations?: UserAffiliation[];
@@ -58,8 +60,8 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   platforms = [],
   companies = [],
   affiliations = [],
-  isVerified = true,
-  verificationStatus = 'approved',
+  isVerified = false,
+  verificationStatus = 'unsubmitted',
   onNavigateToProfile,
   onSelectProductDetail,
   onSimulateSale,
@@ -76,14 +78,20 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   const [minCommission, setMinCommission] = useState<number>(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedAffModal, setSelectedAffModal] = useState<{ plan: CompanyPlan; aff: UserAffiliation } | null>(null);
-  const [localAffiliations, setLocalAffiliations] = useState<UserAffiliation[]>(affiliations);
+  const [localAffiliations, setLocalAffiliations] = useState<UserAffiliation[]>([]);
   const [joiningPlanId, setJoiningPlanId] = useState<string | null>(null);
+  const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
+  const [showCompanyVerificationModal, setShowCompanyVerificationModal] = useState<boolean>(false);
 
   const { currentUser, userProfile } = useAuth();
 
   useEffect(() => {
+    if (!isVerified) {
+      setLocalAffiliations([]);
+      return;
+    }
     setLocalAffiliations(affiliations);
-  }, [affiliations]);
+  }, [affiliations, isVerified]);
 
   const categories = [
     'all', 
@@ -107,17 +115,30 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     return true;
   });
 
-  const effectiveUserId = userProfile?.id || currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('leadspay_user_id') : null) || 'usr_afiliado_leadspay';
+  const effectiveUserId = userProfile?.id || userProfile?.userId || currentUser?.uid || '';
 
-  // Load permanent local affiliations on mount
+  // Load permanent local affiliations on mount (strictly isolated to current verified user)
   useEffect(() => {
+    if (!effectiveUserId || !isVerified) {
+      setLocalAffiliations([]);
+      return;
+    }
     try {
-      const storedKeys = Object.keys(localStorage).filter(k => k.startsWith('leadspay_aff_'));
+      // Limpeza de chaves não isoladas para evitar pré-afiliação acidental
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('leadspay_aff_') && !k.endsWith(`_${effectiveUserId}`)) {
+          localStorage.removeItem(k);
+        }
+      });
+
+      const userPrefix = `leadspay_aff_`;
+      const userSuffix = `_${effectiveUserId}`;
+      const storedKeys = Object.keys(localStorage).filter(k => k.startsWith(userPrefix) && k.endsWith(userSuffix));
       const storedAffs: UserAffiliation[] = [];
       storedKeys.forEach(k => {
         try {
           const item = JSON.parse(localStorage.getItem(k) || '');
-          if (item && (item.planId || item.plan_id)) {
+          if (item && (item.planId || item.plan_id) && (item.userId === effectiveUserId || item.user_id === effectiveUserId)) {
             storedAffs.push(item);
           }
         } catch (e) {}
@@ -138,17 +159,20 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     } catch (err) {
       console.warn('Erro ao carregar afiliações persistentes do localStorage:', err);
     }
-  }, []);
+  }, [effectiveUserId, isVerified]);
 
   const isAffiliated = (planId: string) => {
+    // Usuários não verificados NUNCA estão afiliados
+    if (!isVerified) return false;
+
     // 1. Checa estado reativo
-    const inState = localAffiliations.some(a => (a.planId || a.plan_id) === planId);
+    const inState = localAffiliations.some(a => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId));
     if (inState) return true;
 
-    // 2. Checa persistência permanente local
+    // 2. Checa persistência permanente local exclusiva do usuário
     try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`) || localStorage.getItem(`leadspay_aff_${planId}`);
+      if (typeof window !== 'undefined' && effectiveUserId) {
+        const stored = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`);
         if (stored) return true;
       }
     } catch (e) {}
@@ -156,12 +180,14 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   };
 
   const getAffiliation = (planId: string): UserAffiliation | undefined => {
-    const inState = localAffiliations.find(a => (a.planId || a.plan_id) === planId);
+    if (!isVerified) return undefined;
+
+    const inState = localAffiliations.find(a => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId));
     if (inState) return inState;
 
     try {
-      if (typeof window !== 'undefined') {
-        const storedStr = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`) || localStorage.getItem(`leadspay_aff_${planId}`);
+      if (typeof window !== 'undefined' && effectiveUserId) {
+        const storedStr = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`);
         if (storedStr) {
           return JSON.parse(storedStr) as UserAffiliation;
         }
@@ -178,6 +204,13 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
   const handleAffiliateClick = async (product: CompanyPlan) => {
     if (joiningPlanId) return;
+
+    // BLOQUEIO ESTRITO: Apenas usuários verificados podem se afiliar
+    if (!isVerified) {
+      setShowVerificationModal(true);
+      return;
+    }
+
     try {
       setJoiningPlanId(product.id);
 
@@ -314,11 +347,21 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
             )}
             {roleMode === 'empresa' && onOpenCreatePlan && (
               <button
-                onClick={onOpenCreatePlan}
-                className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-3 rounded-2xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] transition-all cursor-pointer flex items-center gap-2"
+                onClick={() => {
+                  if (!isVerified) {
+                    setShowCompanyVerificationModal(true);
+                    return;
+                  }
+                  onOpenCreatePlan();
+                }}
+                className={`px-5 py-3 rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
+                  isVerified
+                    ? 'bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black shadow-[0_0_25px_rgba(217,242,42,0.35)]'
+                    : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold'
+                }`}
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                Criar Novo Plano
+                {isVerified ? <Plus className="w-4 h-4 stroke-[3]" /> : <Lock className="w-4 h-4 text-amber-400" />}
+                <span>{isVerified ? 'Criar Novo Plano' : 'Criar Novo Plano (Requer Verificação)'}</span>
               </button>
             )}
             {roleMode === 'afiliado' && onSwitchToCompanyMode && (
@@ -338,6 +381,39 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Banner de Alerta de Verificação para Afiliados */}
+      {roleMode === 'afiliado' && !isVerified && (
+        <div className="bg-gradient-to-r from-amber-500/15 via-[#080d1a] to-amber-500/10 border border-amber-500/30 rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center flex-shrink-0 text-amber-400">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Verificação de Perfil Necessária</h3>
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  {verificationStatus === 'pending' ? 'Em Análise' : 'Não Verificado'}
+                </span>
+              </div>
+              <p className="text-xs text-white/70 mt-0.5 max-w-2xl">
+                {verificationStatus === 'pending'
+                  ? 'Seus dados e documentos estão em análise pela administração. Assim que aprovados, você poderá se afiliar com 1 clique.'
+                  : 'Para se afiliar a qualquer produto da vitrine, gerar links comissionados e receber vendas, seu perfil precisa ser verificado.'}
+              </p>
+            </div>
+          </div>
+          {onNavigateToProfile && (
+            <button
+              onClick={onNavigateToProfile}
+              className="bg-amber-400 hover:bg-amber-300 text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-2 shadow-lg flex-shrink-0"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>{verificationStatus === 'pending' ? 'Ver Status no Perfil' : 'Verificar Perfil Agora'}</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#080d1a] border border-white/10 p-4 rounded-2xl shadow-lg">
@@ -577,6 +653,14 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                             </button>
                           </div>
                         </div>
+                      ) : !isVerified ? (
+                        <button
+                          onClick={() => handleAffiliateClick(product)}
+                          className="w-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <Lock className="w-4 h-4 text-amber-400" />
+                          <span>Afiliar-se (Requer Verificação)</span>
+                        </button>
                       ) : (
                         <button
                           onClick={() => handleAffiliateClick(product)}
@@ -759,6 +843,112 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Verificação Necessária para Afiliados */}
+      {showVerificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#080d1a] border border-amber-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto mb-4 text-amber-400">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <h3 className="text-lg font-black text-white text-center">
+              Afiliação Restrita a Contas Verificadas
+            </h3>
+
+            <p className="text-xs text-white/70 text-center mt-2 leading-relaxed">
+              Para garantir a segurança financeira do ecossistema LeadsPay e a autenticidade de comissões PIX, nenhum usuário pode se afiliar a produtos sem antes ter seu perfil verificado pela administração.
+            </p>
+
+            <div className="mt-4 p-3.5 bg-[#050811] border border-white/10 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white/60">Status da sua conta:</span>
+                <span className="font-bold text-amber-400 uppercase text-[11px] font-mono">
+                  {verificationStatus === 'pending' ? 'Documentos em Análise' : 'Verificação Pendente'}
+                </span>
+              </div>
+              <p className="text-[11px] text-white/50">
+                {verificationStatus === 'pending'
+                  ? 'Sua solicitação está em análise pela equipe administrativa. A aprovação ocorre em até poucas horas úteis.'
+                  : 'Acesse Meu Perfil para informar seus dados, chave PIX e foto do documento para liberação.'}
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2.5">
+              {onNavigateToProfile && (
+                <button
+                  onClick={() => {
+                    setShowVerificationModal(false);
+                    onNavigateToProfile();
+                  }}
+                  className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(217,242,42,0.3)]"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Ir para Meu Perfil e Verificar</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowVerificationModal(false)}
+                className="w-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Voltar para a Vitrine
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Verificação Necessária para Empresas/Startups */}
+      {showCompanyVerificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#080d1a] border border-amber-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto mb-4 text-amber-400">
+              <Building2 className="w-8 h-8" />
+            </div>
+
+            <h3 className="text-lg font-black text-white text-center">
+              Startup Não Homologada
+            </h3>
+
+            <p className="text-xs text-white/70 text-center mt-2 leading-relaxed">
+              Sua empresa/startup precisa estar verificada e aprovada pela administração do LeadsPay para publicar novos planos e produtos no catálogo.
+            </p>
+
+            <div className="mt-4 p-3.5 bg-[#050811] border border-white/10 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white/60">Status da verificação:</span>
+                <span className="font-bold text-amber-400 uppercase text-[11px] font-mono">
+                  {verificationStatus === 'pending' ? 'Em Análise pelo Admin' : 'Não Verificada'}
+                </span>
+              </div>
+              <p className="text-[11px] text-white/50">
+                Cadastre os dados cadastrais (CNPJ ou CPF do fundador) e envie a solicitação para análise da moderação.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2.5">
+              {onNavigateToProfile && (
+                <button
+                  onClick={() => {
+                    setShowCompanyVerificationModal(false);
+                    onNavigateToProfile();
+                  }}
+                  className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(217,242,42,0.3)]"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Verificar Dados da Empresa</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowCompanyVerificationModal(false)}
+                className="w-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

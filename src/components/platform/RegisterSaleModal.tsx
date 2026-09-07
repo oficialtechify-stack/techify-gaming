@@ -7,6 +7,10 @@ interface RegisterSaleModalProps {
   onClose: () => void;
   platforms?: CompanyPlan[];
   defaultPlanId?: string;
+  currentUserId?: string;
+  currentUserName?: string;
+  roleMode?: 'afiliado' | 'empresa' | 'admin';
+  affiliateCode?: string;
   onSaleCreated: (newSale: SaleTransaction) => void;
 }
 
@@ -15,6 +19,10 @@ export const RegisterSaleModal: React.FC<RegisterSaleModalProps> = ({
   onClose,
   platforms = [],
   defaultPlanId,
+  currentUserId,
+  currentUserName,
+  roleMode = 'afiliado',
+  affiliateCode,
   onSaleCreated
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>(
@@ -46,6 +54,7 @@ export const RegisterSaleModal: React.FC<RegisterSaleModalProps> = ({
       return;
     }
 
+    const isAffiliateMode = roleMode === 'afiliado';
     const newTx: SaleTransaction = {
       id: `TX-${Math.floor(100000 + Math.random() * 900000)}`,
       companyId: currentPlatform?.companyId || 'comp_general',
@@ -57,14 +66,16 @@ export const RegisterSaleModal: React.FC<RegisterSaleModalProps> = ({
       buyerEmail: buyerEmail.trim(),
       method,
       amount: priceSetup,
-      commissionEarned: commissionValue,
+      commissionEarned: isAffiliateMode ? commissionValue : 0,
       date: new Date().toLocaleDateString('pt-BR'),
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       status: 'Aprovado',
-      utmSource: utmSource.trim() || 'direto',
-      sellerId: 'usr_techify_main',
-      affiliateId: 'usr_techify_main',
-      affiliateName: 'Afiliado Oficial'
+      utmSource: utmSource.trim() || (isAffiliateMode ? 'link_afiliado' : 'direto_empresa'),
+      sellerId: currentUserId,
+      affiliateId: isAffiliateMode ? currentUserId : undefined,
+      affiliateName: isAffiliateMode ? (currentUserName || 'Afiliado') : undefined,
+      affiliateCode: isAffiliateMode ? affiliateCode : undefined,
+      companyOwnerId: !isAffiliateMode ? currentUserId : undefined
     };
 
     onSaleCreated(newTx);
