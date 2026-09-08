@@ -113,7 +113,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculation values
-  const basePrice = plan.priceSetup || 197.00;
+  const basePrice = plan.priceSetup || plan.priceMonthly || (plan as any).price || (plan as any).amount || (plan as any).valor || 197.00;
   const bumpPrice = plan.orderBumps?.[0]?.active ? plan.orderBumps[0].price : 29.90;
   
   let discountAmount = 0;
@@ -230,6 +230,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         }
       }
 
+      const cleanDescription = plan.name || 'Cobrança LeadsPay';
+      const effectivePlanId = (plan.id && plan.id !== 'checkout-dinamico' && plan.id !== 'checkout-direto') ? plan.id : undefined;
+
       // Requisição POST direta para o endpoint oficial do Asaas /api/payments
       const response = await fetch('/api/payments', {
         method: 'POST',
@@ -244,7 +247,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           valorTotal: cleanTotal,
           total_amount: cleanTotal,
           subaccountId: activeSubaccountId || undefined,
-          description: `Plano ${plan.name}`,
+          description: cleanDescription,
           customer: {
             name: cleanName || 'Cliente LeadsPay',
             email: cleanEmail || 'cliente@leadspay.com',
@@ -261,8 +264,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           emailDoCliente: cleanEmail || 'cliente@leadspay.com',
           nomeDoCliente: cleanName || 'Cliente LeadsPay',
           cpfLimpo: cleanDoc,
-          planId: plan.id,
-          plan_id: plan.id,
+          planId: effectivePlanId,
+          plan_id: effectivePlanId,
           companyId: plan.companyId,
           company_id: plan.companyId,
           sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
@@ -551,7 +554,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             apiKey: effectiveApiKey,
             amount: cleanTotal,
             subaccountId: activeSubaccountId || undefined,
-            description: `Plano ${plan.name}`,
+            description: plan.name || 'Cobrança LeadsPay',
+            planId: (plan.id && plan.id !== 'checkout-dinamico' && plan.id !== 'checkout-direto') ? plan.id : undefined,
             user: {
               name: cleanName,
               email: cleanEmail,
@@ -573,7 +577,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               postalCode: '01310100',
               addressNumber: '100'
             },
-            planId: plan.id,
             companyId: plan.companyId,
             sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
             refCode: activeAffiliate

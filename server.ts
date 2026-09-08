@@ -687,7 +687,11 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 
     // Se amount não foi informado diretamente, mas planId foi passado, busca preço do plano
     let rawAmount = amount ?? valorTotal ?? total_amount;
-    const targetPlanId = planId || plan_id;
+    const rawTargetPlanId = planId || plan_id;
+    const targetPlanId = (rawTargetPlanId && String(rawTargetPlanId) !== 'checkout-dinamico' && String(rawTargetPlanId) !== 'checkout-direto')
+      ? String(rawTargetPlanId)
+      : null;
+
     if ((rawAmount === undefined || rawAmount === null || rawAmount <= 0) && targetPlanId) {
       try {
         const planDoc = await getDoc(doc(db, 'plans', String(targetPlanId)));
@@ -836,11 +840,11 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 
     const cookieRef = getAffiliateRefFromReq(req);
     const finalRefCode = refCode || affiliate_code || affiliateRef || cookieRef || null;
-    const finalPlanId = (planId || plan_id || null)?.toString() || null;
+    const finalPlanId = targetPlanId || null;
     const finalCompanyId = (companyId || company_id || partnerInfo?.companyId || null)?.toString() || null;
     const finalSellerId = (sellerId || body.ownerId || body.userId || partnerInfo?.userId || null)?.toString() || null;
     const finalWebhookUrl = partnerInfo?.webhookUrl || body.webhookUrl || null;
-    const finalDescription = description || `Assinatura Plano ${finalPlanId || 'LeadsPay'}`;
+    const finalDescription = (description || body.description || (targetPlanId ? `Assinatura Plano ${targetPlanId}` : 'Cobrança LeadsPay')).trim();
 
     // 1. Obter ou Criar Cliente no Asaas
     let customerId: string;
@@ -1017,6 +1021,9 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             platformId: finalPlanId || '',
             platformName: finalDescription,
             companyId: finalCompanyId,
+            sellerId: finalSellerId,
+            apiKey: partnerApiKey || null,
+            webhookUrl: finalWebhookUrl,
             affiliate_code: finalRefCode,
             affiliateCode: finalRefCode,
             total_amount: finalAmount,

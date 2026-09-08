@@ -54,17 +54,65 @@ function MainApp() {
         else if (params.get('plan')) targetPlanId = params.get('plan');
         else if (params.get('plano')) targetPlanId = params.get('plano');
 
-        if (!targetPlanId && (window.location.pathname.startsWith('/plan') || window.location.pathname.startsWith('/checkout'))) {
+        const isCheckoutPath = window.location.pathname.startsWith('/plan') || window.location.pathname.startsWith('/checkout');
+        if (!targetPlanId && isCheckoutPath) {
           const pathSegments = window.location.pathname.split('/').filter(Boolean);
-          if (pathSegments[1]) targetPlanId = pathSegments[1];
+          // Se tiver /checkout/plan-xyz, pega o segundo segmento. Se for apenas /checkout, não é id de plano
+          if (pathSegments[1] && pathSegments[1] !== 'checkout') {
+            targetPlanId = pathSegments[1];
+          }
         }
 
         if (!targetPlanId && (window.location.hash.includes('checkout') || window.location.hash.includes('plan'))) {
           const hashMatch = window.location.hash.match(/(?:checkout|plan)[=/]([a-zA-Z0-9_-]+)/);
-          if (hashMatch && hashMatch[1]) targetPlanId = hashMatch[1];
+          if (hashMatch && hashMatch[1] && hashMatch[1] !== 'checkout') {
+            targetPlanId = hashMatch[1];
+          }
         }
 
-        // 3. Se houver link de plano/checkout, carrega a oferta do Firestore
+        // 3. Suporte a Valor Livre / Cobrança Dinâmica (sem precisar cadastrar plano no Firestore)
+        const rawAmountParam = params.get('amount') || params.get('valor') || params.get('price');
+        const rawDescParam = params.get('description') || params.get('descricao') || params.get('nome') || params.get('name') || params.get('produto');
+
+        if (rawAmountParam) {
+          const parsedAmount = parseFloat(rawAmountParam.replace(',', '.'));
+          if (!isNaN(parsedAmount) && parsedAmount > 0) {
+            let cleanDesc = 'Pagamento Seguro';
+            if (rawDescParam) {
+              try {
+                cleanDesc = decodeURIComponent(rawDescParam.replace(/\+/g, ' ')).trim();
+              } catch (_) {
+                cleanDesc = rawDescParam.replace(/\+/g, ' ').trim();
+              }
+            }
+
+            const dynamicPlan: CompanyPlan = {
+              id: targetPlanId || 'checkout-dinamico',
+              name: cleanDesc,
+              description: cleanDesc,
+              priceSetup: parsedAmount,
+              priceMonthly: parsedAmount,
+              commissionPercentage: 0,
+              commissionValue: 0,
+              features: ['Acesso Imediato', 'Pagamento PIX Seguro', 'Emissão D+0'],
+              companyId: 'leadspay',
+              companyName: 'LeadsPay',
+              companyLogo: '',
+              bannerImage: '',
+              category: 'Cobrança Dinâmica',
+              paymentType: 'Único',
+              totalSales: 0,
+              status: 'Ativo'
+            };
+
+            setCheckoutPlan(dynamicPlan);
+            setIsLoadingCheckout(false);
+            setCheckoutError(null);
+            return;
+          }
+        }
+
+        // 4. Se houver link de plano/checkout pré-cadastrado, carrega a oferta do Firestore
         if (targetPlanId) {
           setIsLoadingCheckout(true);
           setCheckoutError(null);
@@ -80,6 +128,9 @@ function MainApp() {
             setIsLoadingCheckout(false);
             setCheckoutError('Erro ao carregar o checkout seguro. Tente novamente.');
           });
+        } else if (isCheckoutPath) {
+          setIsLoadingCheckout(false);
+          setCheckoutError('Por favor, informe um plano cadastrado ou os parâmetros de valor e descrição (ex: ?amount=197.00&description=NomeDoProduto).');
         }
       } catch (e) {
         console.warn('Erro ao processar parâmetros da URL:', e);

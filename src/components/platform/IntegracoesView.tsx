@@ -9,13 +9,15 @@ import {
   Terminal, 
   ExternalLink, 
   CheckCircle2, 
-  AlertCircle,
-  Zap,
-  Globe,
-  Layers,
-  ArrowRight,
-  ShieldCheck,
-  RefreshCw
+  AlertCircle, 
+  Zap, 
+  Globe, 
+  Layers, 
+  ArrowRight, 
+  ShieldCheck, 
+  RefreshCw,
+  Tag,
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { updateUserProfileInFirebase, subscribePlans } from '../../services/firestoreService';
@@ -61,6 +63,12 @@ export const IntegracoesView: React.FC<IntegracoesViewProps> = ({
   const [selectedPlanId, setSelectedPlanId] = useState<string>(() => {
     return initialPlans[0]?.id || 'pln_principal_exemplo';
   });
+
+  // Modalidades da Aba C (Modo Sem Código)
+  const [noCodeSubTab, setNoCodeSubTab] = useState<'plan' | 'dynamic'>('plan');
+  const [dynamicAmount, setDynamicAmount] = useState<string>('197.00');
+  const [dynamicDescription, setDynamicDescription] = useState<string>('Mentoria VIP');
+  const [copiedDynamicLink, setCopiedDynamicLink] = useState(false);
 
   // Se o usuário ainda não tiver apiKey, gera ou sincroniza uma
   useEffect(() => {
@@ -233,13 +241,26 @@ async function gerarPixLeadsPay() {
   }
 }`;
 
-  // Link direto de checkout (Aba C)
+  // Links diretos de checkout (Aba C - Modo Sem Código)
+  // Opção A: Por Plano Cadastrado (Preço Fixo)
   const directCheckoutUrl = `https://techify-gaming.vercel.app/checkout/${selectedPlanId}?apiKey=${apiKey}`;
+
+  // Opção B: Valor Livre / Cobrança Dinâmica
+  const cleanDynamicAmount = dynamicAmount.trim().replace(',', '.') || '197.00';
+  const cleanDynamicDesc = dynamicDescription.trim() || 'Mentoria VIP';
+  const encodedDesc = encodeURIComponent(cleanDynamicDesc).replace(/%20/g, '+');
+  const dynamicCheckoutUrl = `https://techify-gaming.vercel.app/checkout?apiKey=${apiKey}&amount=${cleanDynamicAmount}&description=${encodedDesc}`;
 
   const handleCopyDirectLink = () => {
     navigator.clipboard.writeText(directCheckoutUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleCopyDynamicLink = () => {
+    navigator.clipboard.writeText(dynamicCheckoutUrl);
+    setCopiedDynamicLink(true);
+    setTimeout(() => setCopiedDynamicLink(false), 2000);
   };
 
   const hasSubaccount = !!(userProfile?.asaasSubaccountId || company?.asaasSubaccountId);
@@ -603,69 +624,272 @@ async function gerarPixLeadsPay() {
         {/* ================= ABA C: MODO SEM CÓDIGO (LINK / EMBED) ================= */}
         {activeDocTab === 'nocode' && (
           <div className="flex flex-col gap-6 animate-in fade-in duration-200" id="doc-tab-content-nocode">
-            <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Globe className="w-4 h-4 text-[#D9F22A]" />
-                Link de Checkout Transparente para WordPress & Elementor
-              </h4>
-              <p className="text-xs text-white/70 mt-1 leading-relaxed">
-                Você não precisa programar nada. Crie botões de compra no seu site (Elementor, WordPress, Wix, Webflow ou Bio do Instagram) e aponte para o link direto abaixo. O LeadsPay gerará o PIX na sua subconta Asaas e notificará o seu webhook automaticamente.
-              </p>
+            <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <Globe className="w-4 h-4 text-[#D9F22A]" />
+                  Links de Checkout Direto (Sem Código)
+                </h4>
+                <p className="text-xs text-white/70 mt-1 leading-relaxed">
+                  Crie botões de compra ou links de pagamento prontos para Elementor, WordPress, WhatsApp, Instagram ou páginas estáticas sem programar.
+                </p>
+              </div>
+              <span className="shrink-0 px-3 py-1 rounded-lg bg-[#D9F22A]/10 border border-[#D9F22A]/20 text-[#D9F22A] text-[11px] font-mono font-bold self-start sm:self-auto">
+                PIX D+0 Asaas
+              </span>
             </div>
 
-            {/* Seletor de Plano */}
-            {plans.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-white/80">
-                  Selecione o Plano / Oferta para Gerar o Link:
-                </label>
-                <select
-                  value={selectedPlanId}
-                  onChange={(e) => setSelectedPlanId(e.target.value)}
-                  className="bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
-                >
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — R$ {(p.priceSetup || p.priceMonthly || 0).toFixed(2)} (ID: {p.id})
-                    </option>
-                  ))}
-                </select>
+            {/* SELETOR DE MODALIDADE (DUAS OPÇÕES) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" id="nocode-modalities-selector">
+              {/* Opção A: Por Plano / Oferta Cadastrada */}
+              <button
+                type="button"
+                id="btn-option-fixed-plan"
+                onClick={() => setNoCodeSubTab('plan')}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-2 ${
+                  noCodeSubTab === 'plan'
+                    ? 'bg-[#D9F22A]/10 border-[#D9F22A] shadow-md shadow-[#D9F22A]/5'
+                    : 'bg-[#050811] border-white/10 hover:border-white/20 hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-lg ${noCodeSubTab === 'plan' ? 'bg-[#D9F22A] text-[#060A15]' : 'bg-white/10 text-white'}`}>
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Opção A
+                    </span>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    noCodeSubTab === 'plan' ? 'bg-[#D9F22A] text-[#060A15]' : 'bg-white/10 text-white/60'
+                  }`}>
+                    Preço Fixo
+                  </span>
+                </div>
+                <div>
+                  <h5 className="text-sm font-bold text-white">Por Plano / Oferta Cadastrada</h5>
+                  <p className="text-xs text-white/60 mt-0.5">
+                    Escolha um plano pré-configurado no LeadsPay com valor e detalhes definidos.
+                  </p>
+                </div>
+              </button>
+
+              {/* Opção B: Valor Livre / Cobrança Dinâmica */}
+              <button
+                type="button"
+                id="btn-option-dynamic-amount"
+                onClick={() => setNoCodeSubTab('dynamic')}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-2 ${
+                  noCodeSubTab === 'dynamic'
+                    ? 'bg-[#D9F22A]/10 border-[#D9F22A] shadow-md shadow-[#D9F22A]/5'
+                    : 'bg-[#050811] border-white/10 hover:border-white/20 hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-lg ${noCodeSubTab === 'dynamic' ? 'bg-[#D9F22A] text-[#060A15]' : 'bg-white/10 text-white'}`}>
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Opção B
+                    </span>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    noCodeSubTab === 'dynamic' ? 'bg-[#D9F22A] text-[#060A15]' : 'bg-white/10 text-white/60'
+                  }`}>
+                    Dinâmico / Avulso
+                  </span>
+                </div>
+                <div>
+                  <h5 className="text-sm font-bold text-white">Valor Livre / Cobrança Dinâmica</h5>
+                  <p className="text-xs text-white/60 mt-0.5">
+                    Crie links instantâneos definindo o Valor (R$) e a Descrição sem precisar cadastrar plano.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* CONTEÚDO DA OPÇÃO A: POR PLANO CADASTRADO */}
+            {noCodeSubTab === 'plan' && (
+              <div className="flex flex-col gap-4 p-5 bg-[#050811] border border-white/10 rounded-xl animate-in fade-in duration-200" id="tab-content-option-a">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-[#D9F22A]" />
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Configuração: Plano Pré-cadastrado
+                  </h4>
+                </div>
+
+                {/* Seletor de Plano */}
+                {plans.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-white/80">
+                      Selecione o Plano / Oferta Cadastrada:
+                    </label>
+                    <select
+                      id="select-nocode-plan"
+                      value={selectedPlanId}
+                      onChange={(e) => setSelectedPlanId(e.target.value)}
+                      className="bg-[#080d1a] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
+                    >
+                      {plans.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} — R$ {(p.priceSetup || p.priceMonthly || 0).toFixed(2)} (ID: {p.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                    Nenhum plano cadastrado na sua conta ainda. Você pode usar a <strong>Opção B (Valor Livre)</strong> acima ou criar um plano na aba Planos.
+                  </div>
+                )}
+
+                {/* Campo do Link Gerado (Opção A) */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-white/80 flex items-center justify-between">
+                    <span>URL Gerada para o Checkout:</span>
+                    <span className="text-[10px] font-mono text-[#D9F22A]">Formato: /checkout/[planId]?apiKey=...</span>
+                  </label>
+
+                  <div className="p-3 bg-[#080d1a] border border-white/10 rounded-xl flex items-center justify-between gap-3">
+                    <code className="text-xs font-mono text-white/90 truncate select-all">
+                      {directCheckoutUrl}
+                    </code>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        id="btn-copy-plan-checkout"
+                        onClick={handleCopyDirectLink}
+                        className="px-3 py-1.5 bg-[#D9F22A] text-[#060A15] font-bold text-xs rounded-lg cursor-pointer hover:bg-[#c8e217] transition-all whitespace-nowrap flex items-center gap-1.5 shadow-sm active:scale-95"
+                      >
+                        {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedLink ? 'Copiado!' : 'Copiar Link'}</span>
+                      </button>
+
+                      <a
+                        href={directCheckoutUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1"
+                        title="Abrir Checkout em Nova Aba"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Testar</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Campo do Link Gerado */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-white/80 flex items-center justify-between">
-                <span>Link Direto de Pagamento (Com sua API Key vinculada):</span>
-                <span className="text-[10px] font-mono text-[#D9F22A]">PIX D+0 Asaas</span>
-              </label>
+            {/* CONTEÚDO DA OPÇÃO B: VALOR LIVRE / COBRANÇA DINÂMICA */}
+            {noCodeSubTab === 'dynamic' && (
+              <div className="flex flex-col gap-4 p-5 bg-[#050811] border border-white/10 rounded-xl animate-in fade-in duration-200" id="tab-content-option-b">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-[#D9F22A]" />
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Configuração: Valor Livre & Descrição Dinâmica
+                  </h4>
+                </div>
 
-              <div className="p-3 bg-[#050811] border border-white/10 rounded-xl flex items-center justify-between gap-3">
-                <code className="text-xs font-mono text-white/90 truncate select-all">
-                  {directCheckoutUrl}
-                </code>
-                <button
-                  id="btn-copy-direct-checkout"
-                  onClick={handleCopyDirectLink}
-                  className="px-3.5 py-1.5 bg-[#D9F22A] text-[#060A15] font-bold text-xs rounded-lg cursor-pointer hover:bg-[#c8e217] transition-colors whitespace-nowrap flex items-center gap-1.5 shadow-sm active:scale-95"
-                >
-                  {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link'}</span>
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Campo Valor */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-white/80 flex items-center gap-1">
+                      <DollarSign className="w-3.5 h-3.5 text-[#D9F22A]" />
+                      Valor da Cobrança (R$):
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs text-white/40 font-bold font-mono">
+                        R$
+                      </span>
+                      <input
+                        type="text"
+                        id="input-dynamic-amount"
+                        value={dynamicAmount}
+                        onChange={(e) => setDynamicAmount(e.target.value)}
+                        placeholder="197.00"
+                        className="w-full bg-[#080d1a] border border-white/15 rounded-xl pl-9 pr-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#D9F22A]"
+                      />
+                    </div>
+                    <span className="text-[10px] text-white/50">Ex: 197.00, 49.90 ou 997.00</span>
+                  </div>
+
+                  {/* Campo Descrição */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-white/80">
+                      Descrição / Nome do Produto:
+                    </label>
+                    <input
+                      type="text"
+                      id="input-dynamic-description"
+                      value={dynamicDescription}
+                      onChange={(e) => setDynamicDescription(e.target.value)}
+                      placeholder="Mentoria VIP"
+                      className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
+                    />
+                    <span className="text-[10px] text-white/50">Ex: Mentoria VIP, Consultoria, E-book</span>
+                  </div>
+                </div>
+
+                {/* Banner de Funcionamento Dinâmico */}
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>
+                    Ao acessar este link, a tela de checkout preencherá automaticamente o valor de <strong>R$ {cleanDynamicAmount}</strong> e o título <strong>"{cleanDynamicDesc}"</strong> sem precisar buscar dados no Firestore!
+                  </span>
+                </div>
+
+                {/* Campo do Link Gerado (Opção B) */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-white/80 flex items-center justify-between">
+                    <span>URL Gerada Dinamicamente:</span>
+                    <span className="text-[10px] font-mono text-[#D9F22A]">Formato: /checkout?apiKey=...&amount=...&description=...</span>
+                  </label>
+
+                  <div className="p-3 bg-[#080d1a] border border-white/10 rounded-xl flex items-center justify-between gap-3">
+                    <code className="text-xs font-mono text-white/90 truncate select-all">
+                      {dynamicCheckoutUrl}
+                    </code>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        id="btn-copy-dynamic-checkout"
+                        onClick={handleCopyDynamicLink}
+                        className="px-3 py-1.5 bg-[#D9F22A] text-[#060A15] font-bold text-xs rounded-lg cursor-pointer hover:bg-[#c8e217] transition-all whitespace-nowrap flex items-center gap-1.5 shadow-sm active:scale-95"
+                      >
+                        {copiedDynamicLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedDynamicLink ? 'Copiado!' : 'Copiar Link'}</span>
+                      </button>
+
+                      <a
+                        href={dynamicCheckoutUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1"
+                        title="Testar Link em Nova Aba"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Testar</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Instruções para Elementor */}
+            {/* Instruções para Elementor e Plataformas */}
             <div className="p-4 bg-[#050811] border border-white/10 rounded-xl flex flex-col gap-3">
               <h5 className="text-xs font-bold text-white uppercase tracking-wider font-mono text-[#D9F22A]">
-                Como Configurar no Elementor (Passo a Passo)
+                Como Configurar no Elementor, WordPress ou WhatsApp
               </h5>
               <ol className="text-xs text-white/70 space-y-2 list-decimal list-inside leading-relaxed">
-                <li>Abra a sua página no editor do <strong>Elementor</strong> no WordPress.</li>
-                <li>Clique no botão de compra ou chamada para ação (ex: <em>"Comprar Agora com PIX"</em>).</li>
-                <li>No painel lateral, localize o campo <strong>Link / URL</strong>.</li>
-                <li>Cole o link copiado acima e marque a opção <em>"Abrir em nova janela"</em> se desejar.</li>
-                <li>Publique a página! O comprador abrirá o checkout com QR Code instantâneo.</li>
+                <li>Escolha acima a modalidade desejada (<strong>Opção A</strong> para planos fixos ou <strong>Opção B</strong> para valores dinâmicos).</li>
+                <li>Clique no botão <strong>"Copiar Link"</strong> para obter a URL completa com sua chave vinculada.</li>
+                <li>No <strong>Elementor</strong> ou <strong>WordPress</strong>: selecione o botão de compra e cole a URL no campo <em>Link / URL</em>.</li>
+                <li>No <strong>WhatsApp</strong>, <strong>Instagram Bio</strong> ou <strong>E-mail</strong>: envie o link diretamente para o cliente finalizar o pagamento com QR Code PIX instantâneo.</li>
+                <li>Após a confirmação do pagamento, seu Webhook receberá o postback automático informando os dados do comprador.</li>
               </ol>
             </div>
           </div>
