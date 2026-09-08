@@ -25,6 +25,7 @@ import {
   cleanDocument,
   createAsaasSubaccount
 } from './lib/asaas';
+import { validateApiKey } from './lib/auth-partner';
 
 const app = express();
 const PORT = 3000;
@@ -648,13 +649,74 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 
     let sellerSubaccountId = body.subaccountId;
 
+    // 🔑 ETAPA 1: Autenticação via API Key do Parceiro (x-api-key ou Authorization: Bearer lp_live_...)
+    const rawApiKey = 
+      req.headers['x-api-key'] || 
+      req.headers['X-API-KEY'] || 
+      req.headers['x-partner-key'] ||
+      (typeof req.query?.apiKey === 'string' ? req.query.apiKey : undefined) ||
+      (typeof req.body?.apiKey === 'string' ? req.body.apiKey : undefined);
+
+    let partnerApiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : undefined;
+    const authHeader = req.headers.authorization;
+    if (!partnerApiKey && authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (token.startsWith('lp_live_') || token.startsWith('lp_')) {
+        partnerApiKey = token;
+      }
+    }
+
+    let partnerInfo: any = null;
+    if (partnerApiKey) {
+      const partner = await validateApiKey(partnerApiKey, db);
+      if (!partner.isValid) {
+        return res.status(401).json({
+          error: true,
+          message: "API Key de parceiro inválida ou não encontrada."
+        });
+      }
+      partnerInfo = partner;
+
+      // Injete automaticamente o subaccountId resolvido da empresa vinculada àquela API Key
+      if (partner.asaasSubaccountId) {
+        sellerSubaccountId = partner.asaasSubaccountId;
+        body.subaccountId = partner.asaasSubaccountId;
+        console.log(`🔑 [API Partner] Autenticado com sucesso para ${partner.companyName || partner.userId} (Subconta Asaas: ${partner.asaasSubaccountId})`);
+      }
+    }
+
+    // Se amount não foi informado diretamente, mas planId foi passado, busca preço do plano
+    let rawAmount = amount ?? valorTotal ?? total_amount;
+    const targetPlanId = planId || plan_id;
+    if ((rawAmount === undefined || rawAmount === null || rawAmount <= 0) && targetPlanId) {
+      try {
+        const planDoc = await getDoc(doc(db, 'plans', String(targetPlanId)));
+        if (planDoc.exists()) {
+          const pl = planDoc.data();
+          rawAmount = pl.priceSetup || pl.priceMonthly || pl.price || pl.total_amount;
+          if (!body.description) {
+            body.description = pl.name || `Assinatura Plano ${targetPlanId}`;
+          }
+          if (!companyId && !company_id && pl.companyId) {
+            body.companyId = pl.companyId;
+          }
+          if (!sellerSubaccountId && pl.asaasSubaccountId) {
+            sellerSubaccountId = pl.asaasSubaccountId;
+            body.subaccountId = pl.asaasSubaccountId;
+          }
+        }
+      } catch (pErr) {
+        console.warn('Aviso ao consultar plano no Firestore:', pErr);
+      }
+    }
+
     // Se o subaccountId não veio no payload, resolve no Firestore:
     // 1) users/{sellerId}.asaasSubaccountId
     // 2) user_profiles/{sellerId}.asaasSubaccountId
     // 3) companies/{companyId}.asaasSubaccountId
     // 4) plans/{planId}.asaasSubaccountId
     if (!sellerSubaccountId) {
-      const candidateSellerId = sellerId || body.ownerId || body.userId || companyId || company_id || (planId || plan_id);
+      const candidateSellerId = sellerId || body.ownerId || body.userId || companyId || company_id || (planId || plan_id) || partnerInfo?.userId || partnerInfo?.companyId;
       if (candidateSellerId) {
         try {
           const userDoc = await getDoc(doc(db, 'users', String(candidateSellerId)));
@@ -675,7 +737,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
 
       // Se ainda não encontrou e temos companyId
-      const targetCompId = companyId || company_id;
+      const targetCompId = companyId || company_id || partnerInfo?.companyId;
       if (!sellerSubaccountId && targetCompId) {
         try {
           const compDoc = await getDoc(doc(db, 'companies', String(targetCompId)));
@@ -723,7 +785,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 
     // BLOQUEIO DINÂMICO NO CHECKOUT (PROIBIDO FALLBACK PARA CONTA MASTER)
     if (!sellerSubaccountId) {
-      console.warn(`[Checkout Asaas] Tentativa de pagamento bloqueada: Empresa/vendedor sem subconta Asaas. PlanId: ${planId || plan_id}, CompanyId: ${companyId || company_id}, SellerId: ${sellerId || body.ownerId}`);
+      console.warn(`[Checkout Asaas] Tentativa de pagamento bloqueada: Empresa/vendedor sem subconta Asaas. PlanId: ${planId || plan_id}, CompanyId: ${companyId || company_id}, SellerId: ${sellerId || body.ownerId || partnerInfo?.userId}`);
       return res.status(400).json({
         error: true,
         message: "Esta empresa ainda não possui uma subconta ativa no Asaas para receber pagamentos."
@@ -743,19 +805,21 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       });
     }
 
-    const rawAmount = amount ?? valorTotal ?? total_amount;
     const finalAmount = Number(parseFloat(String(rawAmount)).toFixed(2));
     if (isNaN(finalAmount) || finalAmount <= 0) {
       return res.status(400).json({ error: true, message: 'Valor da cobrança inválido ou não informado.' });
     }
 
-    const rawCustomer = (user && typeof user === 'object') ? user : (req.body?.customer && typeof req.body.customer === 'object' ? req.body.customer : {});
+    const rawCustomer = (req.body?.customer && typeof req.body.customer === 'object')
+      ? req.body.customer 
+      : ((user && typeof user === 'object') ? user : {});
+
     const customerData = {
-      name: rawCustomer.name || req.body?.nomeDoCliente || req.body?.name || 'Cliente LeadsPay',
-      email: rawCustomer.email || req.body?.emailDoCliente || req.body?.email,
+      name: (rawCustomer.name || req.body?.nomeDoCliente || req.body?.name || 'Cliente LeadsPay').trim(),
+      email: (rawCustomer.email || req.body?.emailDoCliente || req.body?.email || '').trim(),
       cpfCnpj: rawCustomer.cpfCnpj || rawCustomer.cpf || req.body?.cpfLimpo || req.body?.cpf || req.body?.documentNumber,
-      phone: rawCustomer.phone || req.body?.telefone || req.body?.phone,
-      mobilePhone: rawCustomer.mobilePhone || req.body?.celular || req.body?.mobilePhone,
+      phone: (rawCustomer.phone || rawCustomer.mobilePhone || req.body?.telefone || req.body?.celular || '').trim(),
+      mobilePhone: (rawCustomer.mobilePhone || rawCustomer.phone || req.body?.celular || req.body?.telefone || '').trim(),
       postalCode: rawCustomer.postalCode || req.body?.postalCode || req.body?.cep,
       address: rawCustomer.address || req.body?.address,
       addressNumber: rawCustomer.addressNumber || req.body?.addressNumber
@@ -773,7 +837,9 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     const cookieRef = getAffiliateRefFromReq(req);
     const finalRefCode = refCode || affiliate_code || affiliateRef || cookieRef || null;
     const finalPlanId = (planId || plan_id || null)?.toString() || null;
-    const finalCompanyId = (companyId || company_id || null)?.toString() || null;
+    const finalCompanyId = (companyId || company_id || partnerInfo?.companyId || null)?.toString() || null;
+    const finalSellerId = (sellerId || body.ownerId || body.userId || partnerInfo?.userId || null)?.toString() || null;
+    const finalWebhookUrl = partnerInfo?.webhookUrl || body.webhookUrl || null;
     const finalDescription = description || `Assinatura Plano ${finalPlanId || 'LeadsPay'}`;
 
     // 1. Obter ou Criar Cliente no Asaas
@@ -832,6 +898,9 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             platformId: finalPlanId || '',
             platformName: finalDescription,
             companyId: finalCompanyId,
+            sellerId: finalSellerId,
+            apiKey: partnerApiKey || null,
+            webhookUrl: finalWebhookUrl,
             affiliate_code: finalRefCode,
             affiliateCode: finalRefCode,
             total_amount: finalAmount,
@@ -845,6 +914,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             buyerName: customerData.name || 'Cliente LeadsPay',
             buyerEmail: customerData.email,
             buyerCpf: cleanCpf,
+            buyerPhone: customerData.phone || customerData.mobilePhone || null,
             commissionCredited: false
           }, { merge: true });
           console.log(`✅ [Firestore Asaas Sales] Venda PIX registrada: ${pixResult.paymentId} (Subconta: ${body.subaccountId || 'Master'})`);
@@ -854,10 +924,16 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 
         return res.status(200).json({
           success: true,
+          paymentId: pixResult.paymentId,
+          value: pixResult.value,
+          pix: {
+            copiaECola: pixResult.payload,
+            qrCodeBase64: pixResult.encodedImage,
+            expirationDate: pixResult.expirationDate
+          },
           gateway: 'Asaas v3',
           billingType: 'PIX',
           subaccountId: body.subaccountId || null,
-          paymentId: pixResult.paymentId,
           payment_id: pixResult.paymentId,
           id: pixResult.paymentId,
           status: pixResult.status,
@@ -874,6 +950,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           metadata: {
             planId: finalPlanId,
             companyId: finalCompanyId,
+            sellerId: finalSellerId,
             affiliateRef: finalRefCode,
             customerId,
             subaccountId: body.subaccountId || null
@@ -1129,6 +1206,84 @@ app.post('/api/webhooks/asaas', async (req, res) => {
           });
 
           console.log(`[Webhook Asaas Server] Assinatura e comissões liberadas no Firestore para a venda ${paymentId}.`);
+
+          // 🚀 ETAPA 3: Disparo de Webhook / Postback para o Parceiro
+          const saleData = saleSnap.data() || {};
+          let targetWebhookUrl = saleData.webhookUrl || null;
+          const sellerId = saleData.sellerId || saleData.ownerId;
+          const companyId = saleData.companyId;
+
+          // Se não estiver salvo diretamente na venda, busca no Firestore:
+          // 1. users/{sellerId}.webhookUrl
+          // 2. user_profiles/{sellerId}.webhookUrl
+          // 3. companies/{companyId}.webhookUrl
+          if (!targetWebhookUrl && sellerId) {
+            try {
+              const uDoc = await getDoc(doc(db, 'users', String(sellerId)));
+              if (uDoc.exists()) {
+                targetWebhookUrl = uDoc.data()?.webhookUrl || uDoc.data()?.postbackUrl || null;
+              }
+              if (!targetWebhookUrl) {
+                const pDoc = await getDoc(doc(db, 'user_profiles', String(sellerId)));
+                if (pDoc.exists()) {
+                  targetWebhookUrl = pDoc.data()?.webhookUrl || pDoc.data()?.postbackUrl || null;
+                }
+              }
+            } catch (errU) {
+              console.warn('[Webhook Postback] Aviso ao buscar webhookUrl do usuário:', errU);
+            }
+          }
+
+          if (!targetWebhookUrl && companyId) {
+            try {
+              const cDoc = await getDoc(doc(db, 'companies', String(companyId)));
+              if (cDoc.exists()) {
+                targetWebhookUrl = cDoc.data()?.webhookUrl || cDoc.data()?.postbackUrl || null;
+              }
+            } catch (errC) {
+              console.warn('[Webhook Postback] Aviso ao buscar webhookUrl da empresa:', errC);
+            }
+          }
+
+          if (targetWebhookUrl && typeof targetWebhookUrl === 'string' && targetWebhookUrl.startsWith('http')) {
+            const postbackPayload = {
+              event: "PAYMENT_RECEIVED",
+              paymentId: String(paymentId),
+              status: "APPROVED",
+              amount: Number(amountPaid || saleData.amount || saleData.total_amount || 0),
+              customer: {
+                name: saleData.buyerName || "Nome do Comprador",
+                email: saleData.buyerEmail || "",
+                cpfCnpj: saleData.buyerCpf || ""
+              },
+              paidAt: nowIso
+            };
+
+            console.log(`📤 [Webhook Postback] Disparando postback para o parceiro em: ${targetWebhookUrl}`, postbackPayload);
+
+            // Disparo assíncrono protegido que nunca bloqueia o retorno 200 do Asaas
+            fetch(targetWebhookUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'LeadsPay-Webhook-Engine/1.0'
+              },
+              body: JSON.stringify(postbackPayload),
+              signal: AbortSignal.timeout(10000)
+            }).then(async (pbRes) => {
+              console.log(`✅ [Webhook Postback] Parceiro respondeu com status: ${pbRes.status}`);
+              try {
+                await updateDoc(saleRef, {
+                  postbackSent: true,
+                  postbackSentAt: nowIso,
+                  postbackStatus: pbRes.status,
+                  postbackUrl: targetWebhookUrl
+                });
+              } catch (_) {}
+            }).catch((pbErr: any) => {
+              console.error(`❌ [Webhook Postback Error] Falha ao enviar postback para ${targetWebhookUrl}:`, pbErr?.message || pbErr);
+            });
+          }
         }
       }
     }
@@ -1138,6 +1293,47 @@ app.post('/api/webhooks/asaas', async (req, res) => {
   } catch (err: any) {
     console.error('[Webhook Asaas Server Error]:', err);
     return res.status(200).json({ received: true, error: err.message });
+  }
+});
+
+/**
+ * POST /api/partner/settings
+ * Permite salvar URL de postback / webhook e configurações do parceiro no Firestore
+ */
+app.post('/api/partner/settings', async (req, res) => {
+  try {
+    const { userId, companyId, webhookUrl, apiKey } = req.body || {};
+    if (!userId && !companyId) {
+      return res.status(400).json({ error: true, message: 'userId ou companyId é obrigatório.' });
+    }
+
+    const updates: Record<string, any> = { updatedAt: new Date().toISOString() };
+    if (webhookUrl !== undefined) updates.webhookUrl = String(webhookUrl).trim();
+    if (apiKey !== undefined) updates.apiKey = String(apiKey).trim();
+
+    if (userId) {
+      try {
+        await setDoc(doc(db, 'user_profiles', String(userId)), updates, { merge: true });
+        await setDoc(doc(db, 'users', String(userId)), updates, { merge: true });
+      } catch (uErr) {
+        console.warn('[Partner Settings] Erro ao atualizar perfil:', uErr);
+      }
+    }
+
+    if (companyId) {
+      try {
+        await setDoc(doc(db, 'companies', String(companyId)), updates, { merge: true });
+      } catch (cErr) {
+        console.warn('[Partner Settings] Erro ao atualizar empresa:', cErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Configurações do parceiro salvas com sucesso no Firestore.'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: true, message: err.message || 'Erro interno ao salvar configurações.' });
   }
 });
 

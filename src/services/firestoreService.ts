@@ -90,17 +90,6 @@ export function sanitizeForFirestore<T>(obj: T): T {
  */
 export async function seedFirestoreIfEmpty() {
   try {
-    const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
-    const profileSnap = await getDoc(profileRef);
-    if (!profileSnap.exists()) {
-      await setDoc(profileRef, {
-        ...INITIAL_USER_PROFILE,
-        userId: DEFAULT_USER_ID,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-    }
-
     return { success: true, message: 'Banco Firebase sincronizado com sucesso!' };
   } catch (error: any) {
     console.error('Erro ao inicializar Firebase Firestore:', error);
@@ -130,15 +119,6 @@ export async function clearAllFirestoreData() {
         await deleteDoc(d.ref);
       }
     }
-
-    // Reset profile to 0 balance
-    const profileRef = doc(db, COLLECTIONS.PROFILES, DEFAULT_USER_ID);
-    await setDoc(profileRef, {
-      ...INITIAL_USER_PROFILE,
-      userId: DEFAULT_USER_ID,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
 
     return { success: true, message: 'Todas as coleções e dados foram zerados com sucesso!' };
   } catch (error: any) {

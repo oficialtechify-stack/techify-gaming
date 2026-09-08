@@ -27,7 +27,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
   userProfile
 }) => {
   const [name, setName] = useState('');
-  const [docType, setDocType] = useState<'CNPJ' | 'CPF' | 'SEM_CNPJ'>('CNPJ');
+  const [docType, setDocType] = useState<'CNPJ' | 'CPF'>('CNPJ');
   const [cnpj, setCnpj] = useState('');
   const [cpf, setCpf] = useState('');
   const [tagline, setTagline] = useState('');
@@ -82,7 +82,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       email: email.trim() || userProfile?.email || 'contato@empresa.com',
       whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : (userProfile?.phone ? formatPhone(userProfile.phone) : '+55 11 99999-9999'),
       docType: docType,
-      hasNoCnpj: docType === 'SEM_CNPJ',
+      hasNoCnpj: false,
       totalPlansCount: 0,
       totalAffiliatesCount: 0,
       totalSalesVolume: 0,
@@ -218,7 +218,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             </label>
 
             {/* Seleção de Tipo de Documento */}
-            <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 mb-3">
               <button
                 type="button"
                 onClick={() => setDocType('CNPJ')}
@@ -242,20 +242,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
                 }`}
               >
                 <User className="w-3.5 h-3.5" />
-                <span>Usar CPF</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDocType('SEM_CNPJ')}
-                className={`text-xs py-2 px-2 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  docType === 'SEM_CNPJ'
-                    ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
-                    : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
-                }`}
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Sem CNPJ</span>
+                <span>CPF / MEI</span>
               </button>
             </div>
 
@@ -285,13 +272,6 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
                   onChange={(e) => setCpf(formatCPF(e.target.value))}
                   className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
                 />
-              </div>
-            )}
-
-            {docType === 'SEM_CNPJ' && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs flex items-center gap-2 animate-in fade-in duration-200">
-                <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                <span>Sua startup poderá operar normalmente como pessoa física enquanto providencia o CNPJ.</span>
               </div>
             )}
           </div>

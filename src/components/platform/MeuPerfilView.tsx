@@ -326,8 +326,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: userProfile.id || userProfile.uid,
-            ownerId: userProfile.id || userProfile.uid,
+            userId: userProfile.userId || (userProfile as any).id || (userProfile as any).uid || '',
+            ownerId: userProfile.userId || (userProfile as any).id || (userProfile as any).uid || '',
             companyId: company?.id,
             companyName: companyName.trim(),
             companyLegalName: companyName.trim(),
@@ -877,8 +877,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         Tipo de Documento Fiscal <span className="text-rose-400">*</span>
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['CNPJ', 'CPF', 'SEM_CNPJ'] as const).map((type) => (
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['CNPJ', 'CPF'] as const).map((type) => (
                           <button
                             key={type}
                             type="button"
@@ -895,7 +895,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                                   : 'bg-[#060a15] text-white/70 hover:text-white border-white/10 hover:border-white/20'
                             }`}
                           >
-                            {type === 'CNPJ' ? 'CNPJ' : type === 'CPF' ? 'CPF / MEI' : 'Sem CNPJ'}
+                            {type === 'CNPJ' ? 'CNPJ' : 'CPF / MEI'}
                           </button>
                         ))}
                       </div>
@@ -905,37 +905,29 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         {companyDocType === 'CNPJ' 
                           ? 'CNPJ da Empresa' 
-                          : companyDocType === 'CPF' 
-                            ? 'CPF do Titular' 
-                            : 'Status do Documento'}{' '}
+                          : 'CPF / MEI do Titular'}{' '}
                         <span className="text-rose-400">*</span>
                       </label>
-                      {companyDocType === 'SEM_CNPJ' ? (
-                        <div className="w-full bg-[#060a15] border border-white/10 rounded-xl px-4 py-3 text-xs text-amber-300">
-                          Empresa em fase de abertura / Cadastro via CPF do Fundador
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          required
-                          disabled={isLocked}
-                          maxLength={companyDocType === 'CNPJ' ? 18 : 14}
-                          value={companyCnpj}
-                          onChange={(e) => {
-                            if (companyDocType === 'CNPJ') {
-                              setCompanyCnpj(formatCNPJ(e.target.value));
-                            } else {
-                              setCompanyCnpj(formatCPF(e.target.value));
-                            }
-                          }}
-                          placeholder={companyDocType === 'CNPJ' ? '00.000.000/0000-00' : '000.000.000-00'}
-                          className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
-                            isLocked 
-                              ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
-                              : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
-                          }`}
-                        />
-                      )}
+                      <input
+                        type="text"
+                        required
+                        disabled={isLocked}
+                        maxLength={companyDocType === 'CNPJ' ? 18 : 14}
+                        value={companyCnpj}
+                        onChange={(e) => {
+                          if (companyDocType === 'CNPJ') {
+                            setCompanyCnpj(formatCNPJ(e.target.value));
+                          } else {
+                            setCompanyCnpj(formatCPF(e.target.value));
+                          }
+                        }}
+                        placeholder={companyDocType === 'CNPJ' ? '00.000.000/0000-00' : '000.000.000-00'}
+                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                          isLocked 
+                            ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
+                            : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
+                        }`}
+                      />
                     </div>
                   </div>
 

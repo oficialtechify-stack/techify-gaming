@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { TECH_ECOSYSTEM_PARTNERS } from '../data/stellarData';
 import { Layers, Laptop, Gamepad2, CreditCard, Bot, Megaphone, ShoppingCart, Building2, ExternalLink, CheckCircle, Sparkles, PlusCircle } from 'lucide-react';
 import { subscribeCompanies, subscribePlans, CompanyStartup, CompanyPlan } from '../services/firestoreService';
 
@@ -84,11 +83,6 @@ export const SponsorshipsSection: React.FC<SponsorshipsSectionProps> = ({
           className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12"
         >
           <div className="max-w-2xl flex flex-col items-start gap-4">
-            <div className="inline-flex items-center gap-2 bg-[#0c1322] border border-[#D9F22A]/30 rounded-full px-4 py-1.5 text-xs font-semibold text-[#D9F22A]">
-              <Layers className="w-3.5 h-3.5" />
-              <span>CATÁLOGO ATIVO • SINCRONIZADO COM BANCO DE DADOS</span>
-            </div>
-
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase tracking-tight font-['Syne'] text-white">
               STARTUPS & EMPRESAS CADASTRADAS
             </h2>
@@ -213,40 +207,6 @@ export const SponsorshipsSection: React.FC<SponsorshipsSectionProps> = ({
             )}
           </div>
         )}
-
-        {/* Tech Ecosystem & Cloud Partners Grid (Replaces old football logos) */}
-        <div className="pt-10 border-t border-white/10">
-          <div className="text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-2 text-center">
-            INFRAESTRUTURA & PARCEIROS TECNOLÓGICOS CONECTADOS
-          </div>
-          <p className="text-xs text-white/50 text-center max-w-xl mx-auto mb-8">
-            Gateways de pagamento instantâneo, provedores de computação em nuvem e inteligência artificial que alimentam a infraestrutura do LeadsPay.
-          </p>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-            {TECH_ECOSYSTEM_PARTNERS.map((partner) => (
-              <div
-                key={partner.id}
-                className="bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 rounded-2xl p-4 flex flex-col items-center text-center justify-center group transition-all duration-300 shadow-md"
-              >
-                <div className="w-12 h-12 rounded-xl overflow-hidden mb-3 border border-white/10 group-hover:border-[#D9F22A]/50 transition-colors">
-                  <img
-                    src={partner.logo}
-                    alt={partner.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="text-xs font-bold text-white group-hover:text-[#D9F22A] transition-colors leading-tight">
-                  {partner.name}
-                </div>
-                <span className="text-[10px] text-white/50 mt-1">
-                  {partner.category}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );

@@ -88,7 +88,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
   const [compPassword, setCompPassword] = useState<string>('');
   const [compConfirmPassword, setCompConfirmPassword] = useState<string>('');
   const [compWhatsapp, setCompWhatsapp] = useState<string>('');
-  const [compDocType, setCompDocType] = useState<'CNPJ' | 'CPF' | 'SEM_CNPJ'>('CNPJ');
+  const [compDocType, setCompDocType] = useState<'CNPJ' | 'CPF'>('CNPJ');
   const [compCnpj, setCompCnpj] = useState<string>('');
   const [compCpf, setCompCpf] = useState<string>('');
   const [compCategory, setCompCategory] = useState<string>('SaaS / B2B');
@@ -243,7 +243,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
         documentType: compDocType,
         cnpj: compDocType === 'CNPJ' ? compCnpj : undefined,
         cpf: compDocType === 'CPF' ? compCpf : undefined,
-        hasNoCnpj: compDocType === 'SEM_CNPJ',
+        hasNoCnpj: false,
         category: compCategory,
         website: compWebsite,
         tagline: compTagline,
@@ -1023,7 +1023,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                     </label>
 
                     {/* Seleção de Tipo de Documento */}
-                    <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="grid grid-cols-2 gap-2 mb-3">
                       <button
                         type="button"
                         onClick={() => setCompDocType('CNPJ')}
@@ -1047,20 +1047,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                         }`}
                       >
                         <User className="w-3.5 h-3.5" />
-                        <span>Usar meu CPF</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCompDocType('SEM_CNPJ')}
-                        className={`text-xs py-2 px-2.5 rounded-xl border font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          compDocType === 'SEM_CNPJ'
-                            ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
-                            : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
-                        }`}
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Ainda sem CNPJ</span>
+                        <span>CPF / MEI</span>
                       </button>
                     </div>
 
@@ -1090,13 +1077,6 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                           maxLength={14}
                           className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
                         />
-                      </div>
-                    )}
-
-                    {compDocType === 'SEM_CNPJ' && (
-                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs flex items-center gap-2 animate-in fade-in duration-200">
-                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                        <span>Sua startup poderá operar normalmente como pessoa física enquanto providencia o CNPJ.</span>
                       </div>
                     )}
                   </div>

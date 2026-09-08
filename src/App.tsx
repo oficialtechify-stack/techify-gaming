@@ -11,7 +11,7 @@ import { ResponsibleGamingSection } from './components/ResponsibleGamingSection'
 import { FooterMarquee } from './components/FooterMarquee';
 import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
-import { LayoutDashboard } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
 import { getCompanyPlanByIdOrSlug } from './services/firestoreService';
@@ -29,11 +29,15 @@ function MainApp() {
   const [isLoadingCheckout, setIsLoadingCheckout] = useState<boolean>(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [affiliateRef, setAffiliateRef] = useState<string>('');
+  const [checkoutApiKey, setCheckoutApiKey] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const params = new URLSearchParams(window.location.search);
+
+        const rawKey = params.get('apiKey') || params.get('x-api-key') || params.get('key');
+        if (rawKey) setCheckoutApiKey(rawKey);
         
         // 1. Capturar código do afiliado via Cookie de 15 dias e localStorage
         const capturedRef = handleAffiliateTracking();
@@ -113,6 +117,7 @@ function MainApp() {
         <CustomCheckoutPage
           plan={checkoutPlan}
           affiliateRef={affiliateRef}
+          apiKey={checkoutApiKey}
           onBack={() => {
             setCheckoutPlan(null);
             if (typeof window !== 'undefined' && window.history) {
@@ -130,7 +135,7 @@ function MainApp() {
       <div className="min-h-screen bg-[#060A15] flex flex-col items-center justify-center p-6 text-white text-center">
         <div className="p-6 rounded-2xl bg-[#080d1a] border border-red-500/30 max-w-md shadow-2xl">
           <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-3">
-            <LayoutDashboard className="w-6 h-6" />
+            <AlertCircle className="w-6 h-6" />
           </div>
           <h2 className="text-lg font-bold text-white font-['Syne']">Checkout Indisponível</h2>
           <p className="text-xs text-white/70 mt-2 leading-relaxed">{checkoutError}</p>
@@ -165,20 +170,6 @@ function MainApp() {
       <div className="fixed top-0 left-1/4 w-[700px] h-[700px] bg-[#D9F22A]/[0.07] rounded-full blur-[160px] pointer-events-none -z-20" />
       <div className="fixed bottom-1/3 right-10 w-[600px] h-[600px] bg-[#D9F22A]/[0.05] rounded-full blur-[180px] pointer-events-none -z-20" />
       <div className="fixed top-2/3 left-10 w-[500px] h-[500px] bg-[#1e3a8a]/[0.08] rounded-full blur-[180px] pointer-events-none -z-20" />
-
-      {/* Floating Quick Access to Platform Pill */}
-      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40">
-        <button
-          onClick={() => setViewPlatform(true)}
-          className="group flex items-center gap-2 bg-[#080d1a]/95 hover:bg-[#0c1427] border border-[#D9F22A]/60 hover:border-[#D9F22A] text-white rounded-full py-2 px-3.5 sm:px-4 shadow-[0_0_20px_rgba(217,242,42,0.25)] backdrop-blur-md transition-all duration-300 hover:scale-105 cursor-pointer"
-        >
-          <span className="w-2 h-2 rounded-full bg-[#D9F22A] animate-pulse" />
-          <LayoutDashboard className="w-3.5 h-3.5 text-[#D9F22A]" />
-          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-white">
-            {isAuthenticated ? 'Meu Painel' : 'Marketplace & Painel'}
-          </span>
-        </button>
-      </div>
 
       {/* Main Header / Navigation */}
       <Header 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Building2, Users, CheckCircle2, ArrowRight, Layers, Sparkles } from 'lucide-react';
+import { Building2, Users, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 import { ActiveModal } from '../types';
 
 interface HowItWorksSectionProps {
@@ -71,10 +71,6 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 text-[11px] font-bold text-[#D9F22A] uppercase tracking-wider mb-3">
-            <Layers className="w-3.5 h-3.5" />
-            FLUXO OPERACIONAL COMPLETO
-          </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-['Syne']">
             Como Funciona a Plataforma LeadsPay
           </h2>

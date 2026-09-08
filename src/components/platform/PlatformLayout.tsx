@@ -1342,7 +1342,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
           {activeTab === 'relatorios' && <RelatoriosView transactions={userVisibleTransactions} />}
-          {activeTab === 'integracoes' && <IntegracoesView />}
+          {activeTab === 'integracoes' && (
+            <IntegracoesView 
+              plans={myCompanyPlans} 
+              company={myCompanies[0] || null} 
+            />
+          )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
             </>
           )}

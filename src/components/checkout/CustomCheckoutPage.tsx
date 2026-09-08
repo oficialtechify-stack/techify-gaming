@@ -27,6 +27,7 @@ interface CustomCheckoutPageProps {
   plan: CompanyPlan;
   checkoutSlug?: string;
   affiliateRef?: string;
+  apiKey?: string;
   onBack?: () => void;
   onPaymentSuccess?: (transaction: SaleTransaction) => void;
 }
@@ -37,9 +38,16 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   plan,
   checkoutSlug,
   affiliateRef,
+  apiKey,
   onBack,
   onPaymentSuccess
 }) => {
+  // Query param apiKey fallback (?apiKey=lp_live_...)
+  const queryApiKey = typeof window !== 'undefined' 
+    ? (new URLSearchParams(window.location.search).get('apiKey') || new URLSearchParams(window.location.search).get('x-api-key') || new URLSearchParams(window.location.search).get('key'))
+    : null;
+  const effectiveApiKey = apiKey || queryApiKey || undefined;
+
   // Form customer state
   const [fullName, setFullName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
@@ -226,10 +234,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       const response = await fetch('/api/payments', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
         },
         body: JSON.stringify({
           paymentMethod: 'PIX',
+          apiKey: effectiveApiKey,
           amount: cleanTotal,
           valorTotal: cleanTotal,
           total_amount: cleanTotal,
@@ -532,9 +542,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
         const res = await fetch('/api/payments', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
+          },
           body: JSON.stringify({
             paymentMethod: 'CREDIT_CARD',
+            apiKey: effectiveApiKey,
             amount: cleanTotal,
             subaccountId: activeSubaccountId || undefined,
             description: `Plano ${plan.name}`,

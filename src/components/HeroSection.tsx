@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActiveModal } from '../types';
-import { Sparkles, ArrowRight, Building2, Users, Zap, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Building2, Users, Zap, ShieldCheck } from 'lucide-react';
 
 interface HeroSectionProps {
   onOpenModal: (modal: ActiveModal) => void;
@@ -15,14 +15,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
       <div className="blur blur-2" />
 
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Top Tagline Pill */}
-        <div className="flex justify-center mb-5 sm:mb-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-[#0d1527]/90 border border-[#D9F22A]/40 text-[#D9F22A] text-[11px] sm:text-xs font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.18)]">
-            <Sparkles className="w-3.5 h-3.5 text-[#D9F22A] animate-pulse" />
-            <span>Marketplace de Startups & Rede de Afiliados B2B</span>
-          </div>
-        </div>
-
         {/* Main Hero Headline - Centered, Balanced, Clear */}
         <div className="text-center max-w-4xl mx-auto mb-6 sm:mb-8">
           <h1 className="elementor-heading-title text-2xl sm:text-4xl md:text-5xl lg:text-[48px] font-extrabold tracking-tight uppercase leading-[1.12] sm:leading-[1.16] [text-wrap:balance]">
