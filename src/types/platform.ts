@@ -26,6 +26,12 @@ export interface CompanyStartup {
   totalPlansCount: number;
   totalAffiliatesCount: number;
   totalSalesVolume: number;
+  // Métricas financeiras e acumuladores LeadsPay
+  grossRevenue?: number;
+  totalCheckoutFees?: number;
+  totalAffiliateCommissions?: number;
+  netRevenue?: number;
+  totalSalesCount?: number;
   commissionRange: string;
   verified: boolean;
   status?: 'pending' | 'approved' | 'rejected';
@@ -210,6 +216,13 @@ export interface SaleTransaction {
   time: string;
   createdAt?: string;
   timestamp?: string;
+  paidAt?: string;
+  financialBreakdown?: {
+    grossAmount: number;
+    platformFee: number;
+    affiliateCommission: number;
+    netCompanyAmount: number;
+  };
 }
 
 export interface WithdrawalRequest {
@@ -217,15 +230,19 @@ export interface WithdrawalRequest {
   userId?: string;
   userName?: string;
   amount: number; // Valor total solicitado
+  requestedAmount?: number; // Valor solicitado
+  fee?: number; // Taxa de saque
   feeAmount?: number; // R$ 2.50 taxa fixa de saque Pix
   netAmount?: number; // Valor transferido = amount - feeAmount
   pixKey: string;
   pixKeyType: string;
-  status: 'pendente_processamento' | 'concluido' | 'recusado' | 'Concluído' | 'Em Análise' | 'Recusado' | string;
+  status: 'pendente_processamento' | 'concluido' | 'recusado' | 'Concluído' | 'Em Análise' | 'Recusado' | 'COMPLETED' | string;
   requestedAt: string;
   completedAt?: string;
+  createdAt?: string;
   endToEndId?: string; // ID E2E do PIX Mercado Pago / Bacen
   mpTransferId?: string;
+  asaasTransferId?: string; // ID da transferência Asaas
   failureReason?: string;
 }
 
@@ -254,6 +271,11 @@ export interface UserSellerProfile {
   pendingBalance: number;
   totalEarned: number;
   totalSalesCount: number;
+  affiliateSalesCount?: number;
+  grossRevenue?: number;
+  totalCheckoutFees?: number;
+  totalAffiliateCommissions?: number;
+  netRevenue?: number;
   partnerLevel: 'Afiliado Starter' | 'Parceiro Silver' | 'Parceiro Gold' | 'Master Elite Black' | 'Elite Partner' | string;
   targetGoal: number;
   currentSalesProgress: number;

@@ -1055,7 +1055,7 @@ export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]
         list.push({ id: d.id, ...data });
       }
     });
-    list.sort((a, b) => (b.completedAt || b.requestedAt || '').localeCompare(a.completedAt || a.requestedAt || ''));
+    list.sort((a, b) => (b.createdAt || b.completedAt || b.requestedAt || '').localeCompare(a.createdAt || a.completedAt || a.requestedAt || ''));
     callback(list);
   }, (err) => {
     console.error('Firestore withdrawals listener error:', err);
@@ -1080,6 +1080,7 @@ export async function requestWithdrawalViaBackend(
     },
     body: JSON.stringify({
       amount,
+      requestedAmount: amount,
       pixKey,
       pixKeyType,
       userId,
@@ -1089,8 +1090,9 @@ export async function requestWithdrawalViaBackend(
 
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(data.error || 'Erro ao processar solicitação de saque no backend');
+  if (!response.ok || data.error === true) {
+    const errorMsg = data.message || (typeof data.error === 'string' ? data.error : 'Erro ao processar solicitação de saque');
+    throw new Error(errorMsg);
   }
 
   return data;

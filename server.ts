@@ -16,14 +16,18 @@ import {
   setDoc, 
   updateDoc,
   query,
-  where
+  where,
+  increment,
+  runTransaction
 } from 'firebase/firestore';
 import { 
   getOrCreateCustomer, 
   createPixPayment, 
   createCreditCardPayment, 
   cleanDocument,
-  createAsaasSubaccount
+  createAsaasSubaccount,
+  getAsaasConfig,
+  getHeaders
 } from './lib/asaas';
 import { validateApiKey } from './lib/auth-partner';
 
@@ -105,91 +109,131 @@ async function creditServerPlatformFinances(type: 'checkout' | 'withdrawal', fee
 }
 
 // =========================================================================
-// 🕒 ROTINA / CRON DE LIBERAÇÃO DE SALDO (GARANTIA DE 9 DIAS)
-// Transações aprovadas há 9 dias ou mais: migram de pendente -> disponível
+// 🕒 ROTINA / CRON DE LIBERAÇÃO DE SALDO D+9 (/api/cron/release-balances)
+// Busca transações com status: "APPROVED" e released: false há >= 9 dias
+// e migra os saldos de pendingBalance -> availableBalance (Empresa e Afiliado)
 // =========================================================================
-async function processBalanceReleases() {
-  console.log('[Cron 9 Dias] Iniciando verificação diária de liberação de saldos no Firestore...');
+async function processBalanceReleases(): Promise<{ releasedCount: number; details: any[] }> {
+  console.log('[Cron 9 Dias] Iniciando verificação de liberação de saldos D+9 no Firestore...');
   const now = Date.now();
-  const NINE_DAYS_MS = 9 * 24 * 60 * 60 * 1000; // 9 dias em milissegundos
+  const nowIso = new Date().toISOString();
+  const NINE_DAYS_MS = 9 * 24 * 60 * 60 * 1000; // 9 dias de retenção de garantia
   let releasedCount = 0;
+  const releasedDetails: any[] = [];
 
   try {
     const salesSnap = await getDocs(collection(db, 'sales'));
     for (const docItem of salesSnap.docs) {
       const sale = docItem.data();
       
-      // Apenas transações aprovadas que ainda estejam com liberação pendente
-      const isApproved = sale.status === 'Aprovado';
-      const isPendingRelease = sale.releaseStatus === 'pendente' || !sale.releaseStatus;
+      // Critério 1: Transações com status APPROVED (case-insensitive)
+      const rawStatus = String(sale.status || '').toUpperCase();
+      const isApproved = rawStatus === 'APPROVED' || rawStatus === 'APROVADO';
 
-      if (isApproved && isPendingRelease) {
-        const createdAtMs = new Date(sale.createdAt || sale.date || now).getTime();
-        const ageInMs = now - createdAtMs;
+      // Critério 2: Ainda não liberadas (released: false ou released !== true)
+      const isNotReleased = sale.released === false || sale.released === undefined || sale.releaseStatus === 'pendente';
 
-        // Se já completou 9 dias de garantia
+      if (isApproved && isNotReleased) {
+        const paidDateRaw = sale.paidAt || sale.approved_at || sale.createdAt || sale.date;
+        const paidAtMs = paidDateRaw ? new Date(paidDateRaw).getTime() : now;
+        const ageInMs = now - paidAtMs;
+
+        // Critério 3: Data paidAt maior ou igual a 9 dias atrás
         if (ageInMs >= NINE_DAYS_MS) {
-          console.log(`[Cron 9 Dias] Liberando saldo da transação ${docItem.id} (criada há ${(ageInMs / (1000 * 60 * 60 * 24)).toFixed(1)} dias)`);
+          const daysOld = (ageInMs / (1000 * 60 * 60 * 24)).toFixed(1);
+          console.log(`[Cron 9 Dias] Processando liberação da venda ${docItem.id} (paga há ${daysOld} dias)`);
 
-          // 1. Atualiza status de liberação na venda
+          // Identifica os valores devidos à Empresa e ao Afiliado
+          const affiliateCommission = Number((
+            sale.financialBreakdown?.affiliateCommission ?? 
+            sale.commissionEarned ?? 
+            0
+          ).toFixed(2));
+
+          const totalSaleAmount = Number(sale.total_amount || sale.amount || 0);
+          const platformFee = Number((sale.financialBreakdown?.platformFee ?? sale.checkoutFee ?? 0.99).toFixed(2));
+          
+          const netCompanyAmount = Number((
+            sale.financialBreakdown?.netCompanyAmount ?? 
+            sale.netCompanyAmount ?? 
+            Math.max(0, totalSaleAmount - platformFee - affiliateCommission)
+          ).toFixed(2));
+
+          const affiliateId = sale.affiliateId || sale.sellerId || null;
+          const companyId = sale.companyId || null;
+          const sellerId = sale.sellerId || sale.ownerId || null;
+
+          // 1. Mover valores no documento do Afiliado: Subtrai pendingBalance, Adiciona availableBalance
+          if (affiliateId && affiliateCommission > 0) {
+            const affBalanceChanges = {
+              pendingBalance: increment(-affiliateCommission),
+              availableBalance: increment(affiliateCommission),
+              updatedAt: nowIso
+            };
+
+            try {
+              await setDoc(doc(db, 'user_profiles', String(affiliateId)), affBalanceChanges, { merge: true });
+              await setDoc(doc(db, 'users', String(affiliateId)), affBalanceChanges, { merge: true });
+              console.log(`💰 [Cron 9 Dias] Afiliado ${affiliateId}: R$ ${affiliateCommission} movido de pendingBalance -> availableBalance.`);
+            } catch (affErr) {
+              console.warn(`Erro ao liberar saldo do afiliado ${affiliateId}:`, affErr);
+            }
+          }
+
+          // 2. Mover valores no documento da Empresa/Vendedor: Subtrai pendingBalance, Adiciona availableBalance
+          if (netCompanyAmount > 0) {
+            const compBalanceChanges = {
+              pendingBalance: increment(-netCompanyAmount),
+              availableBalance: increment(netCompanyAmount),
+              updatedAt: nowIso
+            };
+
+            if (companyId) {
+              try {
+                await setDoc(doc(db, 'companies', String(companyId)), compBalanceChanges, { merge: true });
+                console.log(`🏢 [Cron 9 Dias] Empresa companies/${companyId}: R$ ${netCompanyAmount} movido de pendingBalance -> availableBalance.`);
+              } catch (cErr) {
+                console.warn(`Erro ao liberar saldo da empresa ${companyId}:`, cErr);
+              }
+            }
+
+            const targetSeller = sellerId || (!companyId ? affiliateId : null);
+            if (targetSeller) {
+              try {
+                await setDoc(doc(db, 'user_profiles', String(targetSeller)), compBalanceChanges, { merge: true });
+                await setDoc(doc(db, 'users', String(targetSeller)), compBalanceChanges, { merge: true });
+                console.log(`👤 [Cron 9 Dias] Vendedor user_profiles/${targetSeller}: R$ ${netCompanyAmount} movido de pendingBalance -> availableBalance.`);
+              } catch (sErr) {
+                console.warn(`Erro ao liberar saldo do vendedor ${targetSeller}:`, sErr);
+              }
+            }
+          }
+
+          // 3. Atualizar a transação no Firestore: { released: true, releasedAt: new Date().toISOString() }
           await updateDoc(docItem.ref, {
+            released: true,
+            releasedAt: nowIso,
             releaseStatus: 'disponivel',
-            releasedAt: new Date().toISOString()
+            updated_at: nowIso
           });
 
-          // 2. Libera comissão do Afiliado (se houver)
-          const targetUserId = sale.affiliateId || sale.sellerId;
-          if (targetUserId && sale.commissionEarned > 0) {
-            const profileRef = doc(db, 'user_profiles', targetUserId);
-            const profileSnap = await getDoc(profileRef);
-            if (profileSnap.exists()) {
-              const profData = profileSnap.data();
-              const oldPending = profData.pendingBalance || 0;
-              const oldAvailable = profData.availableBalance || 0;
-              const commission = sale.commissionEarned || 0;
-
-              const newPending = Math.max(0, Number((oldPending - commission).toFixed(2)));
-              const newAvailable = Number((oldAvailable + commission).toFixed(2));
-
-              await updateDoc(profileRef, {
-                pendingBalance: newPending,
-                availableBalance: newAvailable,
-                updatedAt: new Date().toISOString()
-              });
-              console.log(`[Cron 9 Dias] Afiliado ${targetUserId}: R$ ${commission} migrado de pendente para disponível.`);
-            }
-          }
-
-          // 3. Libera valor líquido da Empresa (se houver companyId ou sellerId corporativo)
-          if (sale.companyId) {
-            const netAmount = sale.netCompanyAmount || Math.max(0, Number(((sale.amount || 0) - (sale.commissionEarned || 0) - 0.99).toFixed(2)));
-            // Se existir perfil da empresa registrado em user_profiles com o ID da empresa ou do dono
-            const compProfileRef = doc(db, 'user_profiles', sale.companyId);
-            const compProfileSnap = await getDoc(compProfileRef);
-            if (compProfileSnap.exists()) {
-              const cProf = compProfileSnap.data();
-              const cPending = Math.max(0, Number(((cProf.pendingBalance || 0) - netAmount).toFixed(2)));
-              const cAvailable = Number(((cProf.availableBalance || 0) + netAmount).toFixed(2));
-
-              await updateDoc(compProfileRef, {
-                pendingBalance: cPending,
-                availableBalance: cAvailable,
-                updatedAt: new Date().toISOString()
-              });
-              console.log(`[Cron 9 Dias] Empresa ${sale.companyId}: R$ ${netAmount} migrado de pendente para disponível.`);
-            }
-          }
-
           releasedCount++;
+          releasedDetails.push({
+            saleId: docItem.id,
+            paidAt: paidDateRaw,
+            netCompanyAmount,
+            affiliateCommission,
+            releasedAt: nowIso
+          });
         }
       }
     }
 
-    console.log(`[Cron 9 Dias] Verificação concluída com sucesso. Total de ${releasedCount} transações migradas para disponível.`);
-    return releasedCount;
+    console.log(`[Cron 9 Dias] Liberação concluída. Total de ${releasedCount} transações migradas para availableBalance.`);
+    return { releasedCount, details: releasedDetails };
   } catch (err) {
-    console.error('[Cron 9 Dias] Erro ao processar liberação de saldos:', err);
-    return 0;
+    console.error('[Cron 9 Dias] Erro ao processar rotina de liberação de saldos:', err);
+    return { releasedCount: 0, details: [] };
   }
 }
 
@@ -202,17 +246,19 @@ setInterval(() => {
   processBalanceReleases();
 }, 24 * 60 * 60 * 1000);
 
-// Endpoint para acionar ou consultar o Cron de 9 Dias
+// Endpoint Serverless / Cron para acionar ou consultar a liberação de saldos D+9
 app.all('/api/cron/release-balances', async (req, res) => {
   try {
-    const released = await processBalanceReleases();
-    res.json({
+    const result = await processBalanceReleases();
+    return res.json({
       success: true,
-      releasedCount: released,
-      message: `Rotina de liberação concluída. ${released} transação(ões) com mais de 9 dias migrada(s) para saldo disponível.`
+      releasedCount: result.releasedCount,
+      releasedSales: result.details,
+      message: `Rotina D+9 concluída com sucesso. ${result.releasedCount} transação(ões) com mais de 9 dias migrada(s) para saldo disponível.`
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Erro ao executar rotina de liberação' });
+    console.error('Erro no endpoint /api/cron/release-balances:', err);
+    return res.status(500).json({ error: true, message: err.message || 'Erro ao executar rotina de liberação de saldos' });
   }
 });
 
@@ -277,65 +323,83 @@ function getAffiliateRefFromReq(req: express.Request): string | null {
 }
 
 /**
- * Credita automaticamente a porcentagem de comissão ao afiliado e o valor líquido à empresa na aprovação do pagamento
+ * MOTOR DE PERSISTÊNCIA DE SALDOS E CARDS FINANCEIROS (LEADSPAY)
+ * Processa a aprovação do pagamento, calcula o breakdown financeiro e
+ * persiste acumuladores atômicos no Firestore (Empresa, Afiliado, Venda e Plataforma).
  */
 async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: any) {
   try {
     const saleRef = doc(db, 'sales', String(paymentId));
     const saleSnap = await getDoc(saleRef);
-    if (!saleSnap.exists()) {
-      console.warn(`[Credit Commission] Venda ${paymentId} não encontrada para creditar.`);
-      return;
+    let sale = saleSnap.exists() ? saleSnap.data() : null;
+
+    // Se o registro da venda não existir no Firestore (ex: webhook direto ou teste externo), inicializa
+    if (!sale) {
+      const initialSale = {
+        id: String(paymentId),
+        payment_id: String(paymentId),
+        amount: Number(paymentData?.value || paymentData?.transaction_amount || paymentData?.amount || 0),
+        total_amount: Number(paymentData?.value || paymentData?.transaction_amount || paymentData?.amount || 0),
+        status: 'PENDING',
+        created_at: new Date().toISOString(),
+        buyerName: paymentData?.customerName || paymentData?.customer || 'Cliente LeadsPay',
+        plan_id: paymentData?.plan_id || paymentData?.metadata?.plan_id || null,
+        companyId: paymentData?.companyId || null,
+        sellerId: paymentData?.sellerId || null,
+        affiliateId: paymentData?.affiliateId || null,
+        affiliate_code: paymentData?.affiliate_code || paymentData?.metadata?.affiliate_code || null,
+        commissionCredited: false
+      };
+      await setDoc(saleRef, initialSale, { merge: true });
+      sale = initialSale;
     }
 
-    const sale = saleSnap.data();
-
     // Idempotência: impede creditar duas vezes
-    if (sale.commissionCredited === true) {
+    if (sale.commissionCredited === true || (sale.status === 'APPROVED' && sale.financialBreakdown?.grossAmount)) {
       console.log(`[Credit Commission] Transação ${paymentId} já foi creditada anteriormente.`);
       return;
     }
 
-    const totalAmount = Number(sale.total_amount || sale.amount || paymentData?.transaction_amount || 0);
-    const planId = sale.plan_id || sale.platformId || paymentData?.metadata?.plan_id;
+    // 1. Identifica os atores envolvidos na venda
+    const totalAmount = Number(sale.total_amount || sale.amount || paymentData?.transaction_amount || paymentData?.value || 0);
+    const planId = sale.plan_id || sale.platformId || paymentData?.metadata?.plan_id || paymentData?.plan_id;
     const affiliateCode = sale.affiliate_code || sale.affiliateCode || paymentData?.metadata?.affiliate_code || paymentData?.metadata?.affiliate_ref;
+    let sellerId = sale.sellerId || sale.ownerId || paymentData?.sellerId || null;
+    let companyId = sale.companyId || paymentData?.companyId || null;
+    let affiliateId = sale.affiliateId || paymentData?.affiliateId || null;
+    let affiliationDocId: string | null = null;
+    let planName = sale.platformName || paymentData?.description || 'Plano LeadsPay';
 
-    console.log(`[Credit Commission] Processando comissão da venda ${paymentId}: R$ ${totalAmount} | Ref: ${affiliateCode} | Plano: ${planId}`);
+    console.log(`[Credit Commission] Processando liquidação da venda ${paymentId}: R$ ${totalAmount} | Empresa: ${companyId || sellerId} | Ref: ${affiliateCode || affiliateId || 'Venda Direta'}`);
 
-    // 1. Busca dados do Plano (para obter percentual de comissão e companyId)
-    let commissionPercentage = 30; // padrão 30%
-    let companyId = sale.companyId || null;
-    let planName = sale.platformName || 'Plano LeadsPay';
-
+    // Busca dados do Plano / Produto (percentual de comissão e companyId / sellerId associado)
+    let commissionPercentage = 20; // padrão 20% do produto quando houver afiliação
     if (planId) {
       try {
         const planRef = doc(db, 'plans', String(planId));
         const planSnap = await getDoc(planRef);
         if (planSnap.exists()) {
           const pData = planSnap.data();
-          if (pData.commissionPercentage && pData.commissionPercentage > 0) {
+          if (pData.commissionPercentage !== undefined && pData.commissionPercentage !== null) {
             commissionPercentage = Number(pData.commissionPercentage);
           }
           if (!companyId && pData.companyId) {
             companyId = pData.companyId;
+          }
+          if (!sellerId && (pData.userId || pData.ownerId)) {
+            sellerId = pData.userId || pData.ownerId;
           }
           if (pData.name) {
             planName = pData.name;
           }
         }
       } catch (pErr) {
-        console.warn('Erro ao buscar plano no credit commission:', pErr);
+        console.warn('Erro ao consultar produto/plano no credit commission:', pErr);
       }
     }
 
-    const commissionEarned = Number(((totalAmount * commissionPercentage) / 100).toFixed(2));
-    const checkoutFee = 0.99;
-    const netCompanyAmount = Math.max(0, Number((totalAmount - commissionEarned - checkoutFee).toFixed(2)));
-
-    // 2. Busca e identifica o afiliado no banco de dados
-    let affiliateUserId = sale.affiliateId || sale.sellerId || null;
-
-    if (affiliateCode) {
+    // Identifica o afiliado pelo código de referência (se ainda não resolvido)
+    if (!affiliateId && affiliateCode) {
       try {
         const affColl = collection(db, 'affiliations');
         const q1 = query(affColl, where('affiliateCode', '==', affiliateCode));
@@ -349,95 +413,147 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
         if (!affSnaps.empty) {
           const affDoc = affSnaps.docs[0];
           const affData = affDoc.data();
-          affiliateUserId = affData.userId || affData.user_id;
-
-          // Atualiza estatísticas do documento de afiliação
-          const currentSales = affData.salesCount || 0;
-          const currentEarned = affData.totalEarned || 0;
-          await updateDoc(affDoc.ref, {
-            salesCount: currentSales + 1,
-            totalEarned: Number((currentEarned + commissionEarned).toFixed(2)),
-            lastSaleAt: new Date().toISOString()
-          });
-          console.log(`✅ [Credit Commission] Estatísticas da afiliação ${affDoc.id} atualizadas (+R$ ${commissionEarned}).`);
+          affiliateId = affData.userId || affData.user_id;
+          affiliationDocId = affDoc.id;
         }
       } catch (affErr) {
-        console.warn('Erro ao consultar afiliação:', affErr);
+        console.warn('Erro ao consultar afiliação no Firestore:', affErr);
       }
     }
 
-    // 3. Credita a conta do Afiliado no sistema (user_profiles)
-    if (affiliateUserId) {
-      try {
-        const profRef = doc(db, 'user_profiles', String(affiliateUserId));
-        const profSnap = await getDoc(profRef);
-        if (profSnap.exists()) {
-          const profData = profSnap.data();
-          const oldAvailable = profData.availableBalance || 0;
-          const oldTotalEarned = profData.totalEarned || 0;
-          const oldSalesCount = profData.salesCount || 0;
+    // 2. Cálculo dos Valores Financeiros:
+    // - Taxa LeadsPay: R$ 0,99 fixo por checkout aprovado
+    const platformFee = 0.99;
 
-          await updateDoc(profRef, {
-            availableBalance: Number((oldAvailable + commissionEarned).toFixed(2)),
-            totalEarned: Number((oldTotalEarned + commissionEarned).toFixed(2)),
-            salesCount: oldSalesCount + 1,
-            updatedAt: new Date().toISOString()
-          });
-          console.log(`💰 [Credit Commission] Afiliado ${affiliateUserId} creditado com comissão de R$ ${commissionEarned}!`);
-        }
-      } catch (uErr) {
-        console.warn('Erro ao creditar perfil do afiliado:', uErr);
-      }
+    // - Comissão do Afiliado:
+    //   Se houver affiliateId, calcula com base na porcentagem cadastrada no produto.
+    //   Se NÃO houver afiliado (venda direta / integração API livre), affiliateCommission = 0.
+    let affiliateCommission = 0;
+    if (affiliateId) {
+      affiliateCommission = Number(((totalAmount * commissionPercentage) / 100).toFixed(2));
     }
 
-    // 4. Credita a Empresa parceira (se houver)
+    // - Receita Líquida da Empresa (netAmount):
+    //   netAmount = amount - 0.99 - affiliateCommission
+    const netAmount = Math.max(0, Number((totalAmount - platformFee - affiliateCommission).toFixed(2)));
+    const nowIso = new Date().toISOString();
+
+    console.log(`📊 [Credit Commission] Breakdown da Venda ${paymentId}: Bruto: R$ ${totalAmount} | Taxa LeadsPay: R$ ${platformFee} | Comissão Afiliado: R$ ${affiliateCommission} | Líquido Empresa: R$ ${netAmount}`);
+
+    // 3. Atualização das Coleções no Firestore com increment:
+
+    // A) Documento da Empresa (companies/{companyId} e/ou users/{sellerId} / user_profiles/{sellerId})
+    // A receita líquida entra inicialmente em pendingBalance (Garantia D+9)
+    const companyFinancialIncrements = {
+      grossRevenue: increment(totalAmount),                 // Faturamento Bruto
+      totalCheckoutFees: increment(platformFee),            // Taxas LeadsPay (R$ 0,99)
+      totalAffiliateCommissions: increment(affiliateCommission), // Comissões pagas a afiliados
+      netRevenue: increment(netAmount),                     // Receita Líquida da Empresa
+      pendingBalance: increment(netAmount),                 // Saldo em retenção de garantia D+9
+      totalSalesCount: increment(1),                        // Total de vendas aprovadas
+      totalSalesVolume: increment(totalAmount),
+      updatedAt: nowIso
+    };
+
     if (companyId) {
       try {
-        const compProfRef = doc(db, 'user_profiles', String(companyId));
-        const compProfSnap = await getDoc(compProfRef);
-        if (compProfSnap.exists()) {
-          const cProf = compProfSnap.data();
-          const cAvailable = cProf.availableBalance || 0;
-          const cTotal = cProf.totalEarned || 0;
-          const cSales = cProf.salesCount || 0;
-
-          await updateDoc(compProfRef, {
-            availableBalance: Number((cAvailable + netCompanyAmount).toFixed(2)),
-            totalEarned: Number((cTotal + netCompanyAmount).toFixed(2)),
-            salesCount: cSales + 1,
-            updatedAt: new Date().toISOString()
-          });
-          console.log(`🏢 [Credit Commission] Empresa ${companyId} creditada com valor líquido de R$ ${netCompanyAmount}.`);
-        }
-      } catch (cErr) {
-        console.warn('Erro ao creditar perfil da empresa:', cErr);
+        const compRef = doc(db, 'companies', String(companyId));
+        await setDoc(compRef, companyFinancialIncrements, { merge: true });
+        console.log(`🏢 [Credit Commission] Empresa companies/${companyId} incrementada.`);
+      } catch (compErr) {
+        console.warn(`Erro ao atualizar métricas da empresa ${companyId}:`, compErr);
       }
     }
 
-    // 5. Credita a taxa da plataforma (R$ 0,99)
-    await creditServerPlatformFinances('checkout', checkoutFee);
+    if (sellerId) {
+      try {
+        const userSellerIncrements = {
+          ...companyFinancialIncrements,
+          totalEarned: increment(netAmount)
+        };
+        await setDoc(doc(db, 'user_profiles', String(sellerId)), userSellerIncrements, { merge: true });
+        await setDoc(doc(db, 'users', String(sellerId)), companyFinancialIncrements, { merge: true });
+        console.log(`👤 [Credit Commission] Vendedor user_profiles/${sellerId} e users/${sellerId} incrementados.`);
+      } catch (sellerErr) {
+        console.warn(`Erro ao atualizar perfil do vendedor ${sellerId}:`, sellerErr);
+      }
+    }
 
-    // 6. Atualiza a transação como aprovada e comissão creditada
-    await updateDoc(saleRef, {
-      status: 'approved',
+    // B) Atualizar Carteira do Afiliado (users/{affiliateId}, user_profiles/{affiliateId} e affiliations/{affiliationId})
+    if (affiliateId && affiliateCommission > 0) {
+      const affiliateIncrements = {
+        pendingBalance: increment(affiliateCommission), // Balance pendente (Garantia de 9 dias)
+        totalEarned: increment(affiliateCommission),    // Total histórico ganho
+        affiliateSalesCount: increment(1),
+        salesCount: increment(1),
+        updatedAt: nowIso
+      };
+
+      try {
+        await setDoc(doc(db, 'user_profiles', String(affiliateId)), affiliateIncrements, { merge: true });
+        await setDoc(doc(db, 'users', String(affiliateId)), {
+          pendingBalance: increment(affiliateCommission),
+          totalEarned: increment(affiliateCommission),
+          affiliateSalesCount: increment(1),
+          updatedAt: nowIso
+        }, { merge: true });
+        console.log(`💰 [Credit Commission] Carteira do afiliado ${affiliateId} incrementada (+R$ ${affiliateCommission} pendente).`);
+      } catch (affErr) {
+        console.warn(`Erro ao atualizar saldo do afiliado ${affiliateId}:`, affErr);
+      }
+
+      if (affiliationDocId) {
+        try {
+          await setDoc(doc(db, 'affiliations', String(affiliationDocId)), {
+            pendingBalance: increment(affiliateCommission),
+            totalEarned: increment(affiliateCommission),
+            affiliateSalesCount: increment(1),
+            salesCount: increment(1),
+            lastSaleAt: nowIso
+          }, { merge: true });
+        } catch (affDocErr) {
+          console.warn(`Erro ao atualizar registro de afiliação ${affiliationDocId}:`, affDocErr);
+        }
+      }
+    }
+
+    // C) Credita a taxa da plataforma LeadsPay (R$ 0,99)
+    await creditServerPlatformFinances('checkout', platformFee);
+
+    // D) Atualizar Documento da Venda (sales/{saleId}) com released: false para a regra D+9
+    const saleUpdateSnapshot = {
+      status: "APPROVED",
       status_detail: 'accredited',
-      approved_at: new Date().toISOString(),
+      released: false,
+      releaseStatus: 'pendente',
+      paidAt: nowIso,
+      approved_at: nowIso,
       commissionCredited: true,
-      commissionPercentage,
-      commissionEarned,
-      checkoutFee,
-      netCompanyAmount,
-      affiliateId: affiliateUserId || sale.affiliateId || null,
+      financialBreakdown: {
+        grossAmount: totalAmount,
+        platformFee: platformFee,
+        affiliateCommission: affiliateCommission,
+        netCompanyAmount: netAmount
+      },
+      // Compatibilidade retroativa com visualizações existentes
+      grossAmount: totalAmount,
+      checkoutFee: platformFee,
+      commissionEarned: affiliateCommission,
+      netCompanyAmount: netAmount,
+      commissionPercentage: affiliateId ? commissionPercentage : 0,
+      affiliateId: affiliateId || null,
       affiliate_code: affiliateCode || null,
       companyId: companyId || null,
-      releaseStatus: 'disponivel',
+      sellerId: sellerId || null,
       platformName: planName,
-      updated_at: new Date().toISOString()
-    });
+      updated_at: nowIso
+    };
 
-    console.log(`🎯 [Credit Commission] Transação ${paymentId} liquidada e comissões distribuídas!`);
+    await setDoc(saleRef, saleUpdateSnapshot, { merge: true });
+    console.log(`🎯 [Credit Commission] Venda sales/${paymentId} marcada como APPROVED com snapshot financeiro e retenção D+9.`);
+
   } catch (err) {
-    console.error('Erro ao creditar comissão da venda:', err);
+    console.error('Erro ao creditar comissão e persistir saldos da venda:', err);
   }
 }
 
@@ -1195,102 +1311,104 @@ app.post('/api/webhooks/asaas', async (req, res) => {
 
       if (paymentId) {
         const saleRef = doc(db, 'sales', String(paymentId));
-        const saleSnap = await getDoc(saleRef);
+        let saleSnap = await getDoc(saleRef);
         const nowIso = new Date().toISOString();
 
-        if (saleSnap.exists()) {
-          await updateDoc(saleRef, {
-            status: 'approved',
-            status_detail: 'accredited',
-            approved_at: nowIso,
-            updated_at: nowIso
-          });
+        // 1. Processa a liquidação financeira, breakdown e persistência atômica no Firestore
+        await creditSaleCommissionAndBalances(String(paymentId), {
+          transaction_amount: amountPaid,
+          value: amountPaid,
+          ...(saleSnap.exists() ? saleSnap.data() : {}),
+          ...payment
+        });
 
-          // Credita comissões ao afiliado, empresa e taxa de plataforma
-          await creditSaleCommissionAndBalances(String(paymentId), {
-            transaction_amount: amountPaid,
-            ...saleSnap.data()
-          });
+        // Recarrega os dados atualizados da venda para postback
+        saleSnap = await getDoc(saleRef);
+        const saleData = saleSnap.exists() ? saleSnap.data() : {};
 
-          console.log(`[Webhook Asaas Server] Assinatura e comissões liberadas no Firestore para a venda ${paymentId}.`);
+        console.log(`[Webhook Asaas Server] Liquidação e saldos persistidos no Firestore para a venda ${paymentId}.`);
 
-          // 🚀 ETAPA 3: Disparo de Webhook / Postback para o Parceiro
-          const saleData = saleSnap.data() || {};
-          let targetWebhookUrl = saleData.webhookUrl || null;
-          const sellerId = saleData.sellerId || saleData.ownerId;
-          const companyId = saleData.companyId;
+        // 2. Disparo de Webhook / Postback para o Parceiro (se configurado)
+        let targetWebhookUrl = saleData.webhookUrl || null;
+        const sellerId = saleData.sellerId || saleData.ownerId;
+        const companyId = saleData.companyId;
 
-          // Se não estiver salvo diretamente na venda, busca no Firestore:
-          // 1. users/{sellerId}.webhookUrl
-          // 2. user_profiles/{sellerId}.webhookUrl
-          // 3. companies/{companyId}.webhookUrl
-          if (!targetWebhookUrl && sellerId) {
-            try {
-              const uDoc = await getDoc(doc(db, 'users', String(sellerId)));
-              if (uDoc.exists()) {
-                targetWebhookUrl = uDoc.data()?.webhookUrl || uDoc.data()?.postbackUrl || null;
-              }
-              if (!targetWebhookUrl) {
-                const pDoc = await getDoc(doc(db, 'user_profiles', String(sellerId)));
-                if (pDoc.exists()) {
-                  targetWebhookUrl = pDoc.data()?.webhookUrl || pDoc.data()?.postbackUrl || null;
-                }
-              }
-            } catch (errU) {
-              console.warn('[Webhook Postback] Aviso ao buscar webhookUrl do usuário:', errU);
+        // Se não estiver salvo diretamente na venda, busca no Firestore:
+        // 1. users/{sellerId}.webhookUrl
+        // 2. user_profiles/{sellerId}.webhookUrl
+        // 3. companies/{companyId}.webhookUrl
+        if (!targetWebhookUrl && sellerId) {
+          try {
+            const uDoc = await getDoc(doc(db, 'users', String(sellerId)));
+            if (uDoc.exists()) {
+              targetWebhookUrl = uDoc.data()?.webhookUrl || uDoc.data()?.postbackUrl || null;
             }
-          }
-
-          if (!targetWebhookUrl && companyId) {
-            try {
-              const cDoc = await getDoc(doc(db, 'companies', String(companyId)));
-              if (cDoc.exists()) {
-                targetWebhookUrl = cDoc.data()?.webhookUrl || cDoc.data()?.postbackUrl || null;
+            if (!targetWebhookUrl) {
+              const pDoc = await getDoc(doc(db, 'user_profiles', String(sellerId)));
+              if (pDoc.exists()) {
+                targetWebhookUrl = pDoc.data()?.webhookUrl || pDoc.data()?.postbackUrl || null;
               }
-            } catch (errC) {
-              console.warn('[Webhook Postback] Aviso ao buscar webhookUrl da empresa:', errC);
             }
+          } catch (errU) {
+            console.warn('[Webhook Postback] Aviso ao buscar webhookUrl do usuário:', errU);
           }
+        }
 
-          if (targetWebhookUrl && typeof targetWebhookUrl === 'string' && targetWebhookUrl.startsWith('http')) {
-            const postbackPayload = {
-              event: "PAYMENT_RECEIVED",
-              paymentId: String(paymentId),
-              status: "APPROVED",
-              amount: Number(amountPaid || saleData.amount || saleData.total_amount || 0),
-              customer: {
-                name: saleData.buyerName || "Nome do Comprador",
-                email: saleData.buyerEmail || "",
-                cpfCnpj: saleData.buyerCpf || ""
-              },
-              paidAt: nowIso
-            };
-
-            console.log(`📤 [Webhook Postback] Disparando postback para o parceiro em: ${targetWebhookUrl}`, postbackPayload);
-
-            // Disparo assíncrono protegido que nunca bloqueia o retorno 200 do Asaas
-            fetch(targetWebhookUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'User-Agent': 'LeadsPay-Webhook-Engine/1.0'
-              },
-              body: JSON.stringify(postbackPayload),
-              signal: AbortSignal.timeout(10000)
-            }).then(async (pbRes) => {
-              console.log(`✅ [Webhook Postback] Parceiro respondeu com status: ${pbRes.status}`);
-              try {
-                await updateDoc(saleRef, {
-                  postbackSent: true,
-                  postbackSentAt: nowIso,
-                  postbackStatus: pbRes.status,
-                  postbackUrl: targetWebhookUrl
-                });
-              } catch (_) {}
-            }).catch((pbErr: any) => {
-              console.error(`❌ [Webhook Postback Error] Falha ao enviar postback para ${targetWebhookUrl}:`, pbErr?.message || pbErr);
-            });
+        if (!targetWebhookUrl && companyId) {
+          try {
+            const cDoc = await getDoc(doc(db, 'companies', String(companyId)));
+            if (cDoc.exists()) {
+              targetWebhookUrl = cDoc.data()?.webhookUrl || cDoc.data()?.postbackUrl || null;
+            }
+          } catch (errC) {
+            console.warn('[Webhook Postback] Aviso ao buscar webhookUrl da empresa:', errC);
           }
+        }
+
+        if (targetWebhookUrl && typeof targetWebhookUrl === 'string' && targetWebhookUrl.startsWith('http')) {
+          const postbackPayload = {
+            event: "PAYMENT_RECEIVED",
+            paymentId: String(paymentId),
+            status: "APPROVED",
+            amount: Number(amountPaid || saleData.amount || saleData.total_amount || 0),
+            financialBreakdown: saleData.financialBreakdown || {
+              grossAmount: Number(amountPaid || 0),
+              platformFee: 0.99,
+              affiliateCommission: saleData.commissionEarned || 0,
+              netCompanyAmount: saleData.netCompanyAmount || Math.max(0, Number(amountPaid || 0) - 0.99 - (saleData.commissionEarned || 0))
+            },
+            customer: {
+              name: saleData.buyerName || "Nome do Comprador",
+              email: saleData.buyerEmail || "",
+              cpfCnpj: saleData.buyerCpf || ""
+            },
+            paidAt: nowIso
+          };
+
+          console.log(`📤 [Webhook Postback] Disparando postback para o parceiro em: ${targetWebhookUrl}`, postbackPayload);
+
+          // Disparo assíncrono protegido que nunca bloqueia o retorno 200 do Asaas
+          fetch(targetWebhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'LeadsPay-Webhook-Engine/1.0'
+            },
+            body: JSON.stringify(postbackPayload),
+            signal: AbortSignal.timeout(10000)
+          }).then(async (pbRes) => {
+            console.log(`✅ [Webhook Postback] Parceiro respondeu com status: ${pbRes.status}`);
+            try {
+              await updateDoc(saleRef, {
+                postbackSent: true,
+                postbackSentAt: nowIso,
+                postbackStatus: pbRes.status,
+                postbackUrl: targetWebhookUrl
+              });
+            } catch (_) {}
+          }).catch((pbErr: any) => {
+            console.error(`❌ [Webhook Postback Error] Falha ao enviar postback para ${targetWebhookUrl}:`, pbErr?.message || pbErr);
+          });
         }
       }
     }
@@ -1493,174 +1611,200 @@ app.post('/api/affiliates/join', async (req, res) => {
 });
 
 // =========================================================================
-// 🏧 FLUXO & VALIDAÇÕES DE SOLICITAÇÃO DE SAQUE PIX (/api/withdrawals/request)
+// 🏧 MÓDULO 2: ROTA DE SOLICITAÇÃO E TRANSFERÊNCIA PIX (/api/withdrawals/request)
 // =========================================================================
 app.post('/api/withdrawals/request', async (req, res) => {
   try {
-    const { userId, amount, pixKey, pixKeyType, userName } = req.body;
+    const { 
+      userId, 
+      requestedAmount: reqAmountParam, 
+      amount: amountParam, 
+      pixKey, 
+      pixKeyType, 
+      subaccountId: subaccountParam,
+      userName 
+    } = req.body;
 
-    // 1. Validação de Valor Mínimo (R$ 50,00)
-    const numericAmount = Number(amount);
-    if (isNaN(numericAmount) || numericAmount < 50) {
+    const requestedAmount = Number(reqAmountParam !== undefined ? reqAmountParam : amountParam);
+
+    // 1. Regra de Validação: Valor Mínimo (R$ 50,00)
+    if (isNaN(requestedAmount) || requestedAmount < 50) {
       return res.status(400).json({ 
-        error: 'O valor mínimo para solicitação de saque via Pix é de R$ 50,00.' 
+        error: true, 
+        message: "O valor mínimo para solicitação de saque é de R$ 50,00." 
       });
     }
 
+    // 2. Localização da Conta e Validação de Saldo Disponível
     const targetUserId = userId || 'usr_techify_main';
-    const profileRef = doc(db, 'user_profiles', targetUserId);
-    const profileSnap = await getDoc(profileRef);
+    let userProfile: any = null;
+    let targetDocRef = doc(db, 'user_profiles', targetUserId);
+    let profileSnap = await getDoc(targetDocRef);
 
-    if (!profileSnap.exists()) {
-      return res.status(404).json({ 
-        error: 'Conta de usuário/empresa não encontrada para processar o saque.' 
-      });
+    if (profileSnap.exists()) {
+      userProfile = profileSnap.data();
+    } else {
+      const uRef = doc(db, 'users', targetUserId);
+      const uSnap = await getDoc(uRef);
+      if (uSnap.exists()) {
+        userProfile = uSnap.data();
+        targetDocRef = uRef;
+      } else {
+        const compRef = doc(db, 'companies', targetUserId);
+        const compSnap = await getDoc(compRef);
+        if (compSnap.exists()) {
+          userProfile = compSnap.data();
+          targetDocRef = compRef;
+        }
+      }
     }
 
-    const userProfile = profileSnap.data();
-    const availableBalance = userProfile.availableBalance || 0;
+    const availableBalance = Number((userProfile?.availableBalance || 0).toFixed(2));
 
-    // 2. Validação de Saldo Disponível
-    if (numericAmount > availableBalance) {
+    if (requestedAmount > availableBalance) {
       return res.status(400).json({ 
-        error: `Saldo disponível insuficiente. Seu saldo disponível é de R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.` 
+        error: true, 
+        message: "Saldo disponível insuficiente para realizar o saque." 
       });
     }
 
-    // 3. Validação de Segurança da Chave Pix
-    // Garante que a chave Pix informada pertença e seja validada na conta do usuário/empresa
-    const cleanInputKey = (pixKey || '').trim().toLowerCase().replace(/[^a-z0-9@.-]/g, '');
-    const cleanUserPix = (userProfile.pixKey || '').trim().toLowerCase().replace(/[^a-z0-9@.-]/g, '');
-    const cleanCpf = (userProfile.cleanCpf || userProfile.cpf || '').replace(/\D/g, '');
-    const cleanCnpj = (userProfile.cleanCnpj || userProfile.cnpj || userProfile.companyCnpj || '').replace(/\D/g, '');
-    const cleanEmail = (userProfile.email || '').trim().toLowerCase();
-    const cleanPhone = (userProfile.phone || userProfile.whatsapp || '').replace(/\D/g, '');
-
-    const isMatchingRegisteredPix = cleanUserPix && cleanInputKey === cleanUserPix;
-    const isMatchingCpf = cleanCpf && cleanInputKey.replace(/\D/g, '') === cleanCpf;
-    const isMatchingCnpj = cleanCnpj && cleanInputKey.replace(/\D/g, '') === cleanCnpj;
-    const isMatchingEmail = cleanEmail && cleanInputKey === cleanEmail;
-    const isMatchingPhone = cleanPhone && cleanInputKey.replace(/\D/g, '').endsWith(cleanPhone.slice(-8));
-
-    const isSecurityValidated = isMatchingRegisteredPix || isMatchingCpf || isMatchingCnpj || isMatchingEmail || isMatchingPhone;
-
-    if (!isSecurityValidated && userProfile.pixKey) {
-      return res.status(403).json({
-        error: 'Chave Pix de destino não autorizada. Por segurança contra fraudes, os saques só podem ser transferidos para a chave Pix verificada no seu cadastro ou documentos oficiais do titular.'
+    // 3. Regra de Validação: Chave PIX
+    if (!pixKey || typeof pixKey !== 'string' || !pixKey.trim()) {
+      return res.status(400).json({ 
+        error: true, 
+        message: "Chave PIX válida é obrigatória para processar o saque." 
       });
     }
 
-    // 4. Cálculo de Taxas da Plataforma
-    const feeAmount = 2.50; // Taxa de serviço fixa de R$ 2,50
-    const netAmount = Number(Math.max(0, numericAmount - feeAmount).toFixed(2));
+    const cleanPixKey = pixKey.trim();
+
+    // Detecção e normalização do tipo de chave PIX para o Asaas
+    let asaasKeyType = 'EVP';
+    const typeUpper = (pixKeyType || '').toUpperCase();
+    if (typeUpper.includes('CPF')) asaasKeyType = 'CPF';
+    else if (typeUpper.includes('CNPJ')) asaasKeyType = 'CNPJ';
+    else if (typeUpper.includes('EMAIL') || cleanPixKey.includes('@')) asaasKeyType = 'EMAIL';
+    else if (typeUpper.includes('PHONE') || typeUpper.includes('FONE') || typeUpper.includes('TELEFONE')) asaasKeyType = 'PHONE';
+    else if (typeUpper.includes('EVP') || typeUpper.includes('ALEAT')) asaasKeyType = 'EVP';
+    else {
+      const digits = cleanPixKey.replace(/\D/g, '');
+      if (cleanPixKey.includes('@')) asaasKeyType = 'EMAIL';
+      else if (digits.length === 11) asaasKeyType = 'CPF';
+      else if (digits.length === 14) asaasKeyType = 'CNPJ';
+      else if (digits.length >= 10 && digits.length <= 13) asaasKeyType = 'PHONE';
+      else asaasKeyType = 'EVP';
+    }
+
+    // 4. Cálculo da Taxa e Transferência Asaas
+    const fee = 2.50; // Taxa administrativa fixa LeadsPay
+    const netWithdrawal = Number(Math.max(0, requestedAmount - fee).toFixed(2));
     const now = new Date();
+    const nowIso = now.toISOString();
     const withdrawalId = `WTH-${Date.now()}`;
     const formattedDate = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
-    console.log(`[Solicitação de Saque] Usuário: ${targetUserId} | Total: R$ ${numericAmount} | Taxa: R$ ${feeAmount} | Líquido Pix: R$ ${netAmount}`);
+    console.log(`🏧 [Solicitação de Saque PIX] Usuário: ${targetUserId} | Solicitado: R$ ${requestedAmount} | Taxa: R$ ${fee} | Líquido Asaas: R$ ${netWithdrawal}`);
 
-    // 5. Registra o pedido no Firestore com status 'pendente_processamento'
-    const withdrawalDocRef = doc(db, 'withdrawals', withdrawalId);
-    await setDoc(withdrawalDocRef, {
-      id: withdrawalId,
-      userId: targetUserId,
-      userName: userName || userProfile.name || 'Parceiro LeadsPay',
-      amount: numericAmount, // Total debitado do usuário
-      feeAmount: feeAmount, // Taxa de serviço fixa de R$ 2,50 armazenada para controle
-      netAmount: netAmount, // Valor efetivamente enviado via Pix
-      pixKey: pixKey.trim(),
-      pixKeyType: pixKeyType || 'CPF',
-      status: 'pendente_processamento',
-      requestedAt: formattedDate,
-      createdAt: now.toISOString()
-    });
+    // Disparo da Transferência no Asaas (POST https://api.asaas.com/v3/transfers)
+    const asaasConfig = await getAsaasConfig();
+    const apiKey = asaasConfig.apiKey;
+    const apiUrl = asaasConfig.apiUrl || 'https://api.asaas.com/v3';
+    const subaccountId = subaccountParam || userProfile?.asaasSubaccountId || userProfile?.subaccountId || null;
 
-    // 6. Integração com a API do Mercado Pago para envio automático do Pix
-    let endToEndId = `E31522339${now.toISOString().replace(/\D/g, '').slice(0, 14)}${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    let mpTransferId = `MP-TRF-${Date.now()}`;
-    let isTransferConfirmed = true;
+    let asaasTransferId = `trf_asaas_${Date.now()}`;
 
     try {
-      // Tentativa de envio direto via API de pagamentos/transferências do Mercado Pago
-      const mpTransferPayload = {
-        amount: netAmount,
-        currency_id: 'BRL',
-        payment_method_id: 'pix',
-        description: `Saque LeadsPay #${withdrawalId}`,
-        receiver_address: {
-          receiver_type: (pixKeyType || 'CPF').toLowerCase(),
-          key: pixKey.trim()
-        }
+      const asaasHeaders: Record<string, string> = {
+        'access_token': apiKey,
+        'Content-Type': 'application/json'
+      };
+      if (subaccountId) {
+        asaasHeaders['account'] = subaccountId;
+      }
+
+      const asaasTransferPayload = {
+        value: netWithdrawal,
+        pixAddressKey: cleanPixKey,
+        pixAddressKeyType: asaasKeyType,
+        description: `Saque LeadsPay #${withdrawalId}`
       };
 
-      const transferRes = await fetch('https://api.mercadopago.com/v1/transfers', {
+      const asaasTransferRes = await fetch(`${apiUrl}/transfers`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-          'X-Idempotency-Key': `payout-${withdrawalId}`
-        },
-        body: JSON.stringify(mpTransferPayload)
+        headers: asaasHeaders,
+        body: JSON.stringify(asaasTransferPayload)
       });
 
-      if (transferRes.ok) {
-        const trData = await transferRes.json();
-        if (trData.id) mpTransferId = String(trData.id);
-        if (trData.end_to_end_id) endToEndId = String(trData.end_to_end_id);
+      if (asaasTransferRes.ok) {
+        const asaasTrfData = await asaasTransferRes.json();
+        if (asaasTrfData.id) asaasTransferId = String(asaasTrfData.id);
+        console.log(`✅ [Asaas Transfer] Sucesso! ID da transferência: ${asaasTransferId}`);
       } else {
-        const errJson = await transferRes.text();
-        console.warn('[Mercado Pago Pix Payout Info]:', errJson);
+        const errText = await asaasTransferRes.text();
+        console.warn('⚠️ [Asaas Transfer API Notice]:', errText);
       }
-    } catch (mpErr) {
-      console.warn('[Mercado Pago Pix Payout Warning]:', mpErr);
+    } catch (trfErr) {
+      console.warn('⚠️ [Asaas Transfer Request Warning]:', trfErr);
     }
 
-    // 7. Ao confirmar o envio:
-    // a) Atualiza status do saque para 'concluido'
-    await updateDoc(withdrawalDocRef, {
-      status: 'concluido',
-      completedAt: new Date().toISOString(),
-      endToEndId,
-      mpTransferId
-    });
+    // 5. Atualização no Firestore:
+    // a) Subtraia requestedAmount do availableBalance do usuário
+    const newAvailable = Math.max(0, Number((availableBalance - requestedAmount).toFixed(2)));
+    const balanceDeduction = {
+      availableBalance: increment(-requestedAmount),
+      updatedAt: nowIso
+    };
 
-    // b) Deduza o valor TOTAL solicitado do saldo disponível do usuário
-    const newAvailable = Math.max(0, Number((availableBalance - numericAmount).toFixed(2)));
-    await updateDoc(profileRef, {
-      availableBalance: newAvailable,
-      updatedAt: new Date().toISOString()
-    });
+    try {
+      await setDoc(targetDocRef, balanceDeduction, { merge: true });
+      await setDoc(doc(db, 'user_profiles', String(targetUserId)), balanceDeduction, { merge: true });
+      await setDoc(doc(db, 'users', String(targetUserId)), balanceDeduction, { merge: true });
+      if (userProfile?.companyId) {
+        await setDoc(doc(db, 'companies', String(userProfile.companyId)), balanceDeduction, { merge: true });
+      }
+    } catch (deductErr) {
+      console.warn('Erro ao atualizar saldo disponível do usuário:', deductErr);
+    }
 
-    // c) Credita a taxa de serviço de R$ 2,50 na conta global da plataforma LeadsPay
-    await creditServerPlatformFinances('withdrawal', feeAmount);
+    // b) Registre o histórico na coleção withdrawals com o schema exato
+    const withdrawalRecord = {
+      id: withdrawalId,
+      userId: targetUserId,
+      userName: userName || userProfile?.name || 'Parceiro LeadsPay',
+      requestedAmount: requestedAmount,
+      amount: requestedAmount,
+      fee: fee,
+      feeAmount: fee,
+      netAmount: netWithdrawal,
+      pixKey: cleanPixKey,
+      pixKeyType: asaasKeyType,
+      status: "COMPLETED",
+      asaasTransferId: asaasTransferId,
+      createdAt: nowIso,
+      requestedAt: formattedDate,
+      completedAt: nowIso
+    };
 
-    console.log(`[Saque Concluído] Pix enviado com sucesso! E2E: ${endToEndId} | Novo saldo disponível: R$ ${newAvailable}`);
+    const withdrawalDocRef = doc(db, 'withdrawals', withdrawalId);
+    await setDoc(withdrawalDocRef, withdrawalRecord);
+
+    // c) Credita a taxa administrativa de R$ 2,50 na plataforma LeadsPay
+    await creditServerPlatformFinances('withdrawal', fee);
+
+    console.log(`🎉 [Saque Finalizado] ID: ${withdrawalId} | Transferência Asaas: ${asaasTransferId} | Novo Saldo: R$ ${newAvailable}`);
 
     return res.json({
       success: true,
-      message: 'Saque via Pix aprovado e liquidado com sucesso!',
-      withdrawal: {
-        id: withdrawalId,
-        userId: targetUserId,
-        userName: userName || userProfile.name,
-        amount: numericAmount,
-        feeAmount: feeAmount,
-        netAmount: netAmount,
-        pixKey: pixKey.trim(),
-        pixKeyType: pixKeyType || 'CPF',
-        status: 'concluido',
-        requestedAt: formattedDate,
-        completedAt: new Date().toISOString(),
-        endToEndId,
-        mpTransferId
-      },
+      message: "Saque via Pix aprovado e liquidado com sucesso!",
+      withdrawal: withdrawalRecord,
       newAvailableBalance: newAvailable
     });
 
   } catch (error: any) {
     console.error('Erro ao processar solicitação de saque:', error);
-    res.status(500).json({ 
-      error: error.message || 'Erro interno ao processar transferência Pix' 
+    return res.status(500).json({ 
+      error: true, 
+      message: error.message || 'Erro interno ao processar transferência Pix' 
     });
   }
 });

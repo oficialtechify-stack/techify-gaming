@@ -1327,6 +1327,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <FinanceiroView
               roleMode={roleMode}
               userProfile={userProfile}
+              company={myCompanies[0] || companies[0] || null}
+              transactions={userVisibleTransactions}
               withdrawals={withdrawals}
               onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
             />

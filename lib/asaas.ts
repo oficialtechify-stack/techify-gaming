@@ -64,7 +64,7 @@ export interface AsaasCreditCardResponse {
   bankSlipUrl?: string;
 }
 
-function getAsaasConfig() {
+export function getAsaasConfig() {
   const apiKey = (process.env.ASAAS_API_KEY || '').trim();
   let apiUrl = (process.env.ASAAS_API_URL || '').trim();
 
@@ -94,7 +94,7 @@ function getAsaasConfig() {
   return { apiKey, apiUrl, isSandbox };
 }
 
-function getHeaders(subaccountId?: string) {
+export function getHeaders(subaccountId?: string) {
   const { apiKey } = getAsaasConfig();
   const token = process.env.ASAAS_API_KEY || apiKey;
   if (!token) {
