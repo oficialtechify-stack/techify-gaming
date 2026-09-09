@@ -636,83 +636,55 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         updatedAt: new Date().toISOString()
       };
 
-      // Se entrou com preferência 'empresa' e não tem companyId, vincular ou criar
+      // Se entrou com preferência 'empresa', verificar se já possui empresa cadastrada no Firestore
       if (preferredRole === 'empresa') {
-        const companyId = existing.companyId || `comp-${user.uid.slice(0, 10)}`;
-        const companyRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-        const companySnap = await getDoc(companyRef);
+        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
+        const compSnap = await getDocs(compQ);
         
-        if (!companySnap.exists()) {
-          const compName = existing.companyName || (user.displayName ? `${user.displayName} Tech` : 'Minha Startup');
-          const slug = compName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
-          const logo = user.photoURL || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(compName)}`;
-          
-          const newCompany: CompanyStartup = {
-            id: companyId,
-            name: compName,
-            slug: slug || companyId,
-            tagline: 'Solução inovadora escalável integrada ao ecossistema LeadsPay',
-            logo,
-            bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
-            category: 'SaaS / B2B',
-            description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} no LeadsPay.`,
-            website: 'https://leadspay.com',
-            email: normalizedEmail,
-            whatsapp: '',
-            totalPlansCount: 0,
-            totalAffiliatesCount: 0,
-            totalSalesVolume: 0,
-            commissionRange: '30% - 50%',
-            verified: false,
-            status: 'pending',
-            ownerId: user.uid,
-            docType: 'SEM_CNPJ',
-            hasNoCnpj: true,
-            createdAt: new Date().toISOString()
-          };
-          await setDoc(companyRef, sanitizeForFirestore(newCompany), { merge: true });
+        if (!compSnap.empty) {
+          const userComp = compSnap.docs[0];
+          const compData = userComp.data();
+          profile.companyId = userComp.id;
+          profile.companyName = compData.name || compData.companyName;
+          profile.hasCompanyProfile = true;
+        } else if (existing.companyId) {
+          const companyRef = doc(db, COLLECTIONS.COMPANIES, existing.companyId);
+          const companySnap = await getDoc(companyRef);
+          if (companySnap.exists()) {
+            profile.companyId = existing.companyId;
+            profile.companyName = companySnap.data()?.name || existing.companyName;
+            profile.hasCompanyProfile = true;
+          } else {
+            profile.companyId = undefined;
+            profile.companyName = undefined;
+            profile.hasCompanyProfile = false;
+          }
+        } else {
+          // Não cria empresa fictícia; permite que o usuário cadastre a sua empresa real
+          profile.companyId = undefined;
+          profile.companyName = undefined;
+          profile.hasCompanyProfile = false;
         }
-
-        profile.companyId = companyId;
-        profile.companyName = existing.companyName || (user.displayName ? `${user.displayName} Tech` : 'Minha Startup');
-        profile.hasCompanyProfile = true;
       }
 
       await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
     } else {
       const avatar = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
-      const compName = user.displayName ? `${user.displayName} Tech` : 'Minha Startup';
-      const companyId = `comp-${user.uid.slice(0, 10)}`;
+      
+      // Verificar se já possui alguma empresa existente
+      let existingUserCompanyId: string | undefined = undefined;
+      let existingUserCompanyName: string | undefined = undefined;
+      let hasCompany = false;
 
       if (preferredRole === 'empresa') {
-        const companyRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-        const slug = compName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
-        const logo = user.photoURL || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(compName)}`;
-        
-        const newCompany: CompanyStartup = {
-          id: companyId,
-          name: compName,
-          slug: slug || companyId,
-          tagline: 'Solução inovadora escalável integrada ao ecossistema LeadsPay',
-          logo,
-          bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
-          category: 'SaaS / B2B',
-          description: `Empresa parceira fundada por ${user.displayName || 'Fundador'} no LeadsPay.`,
-          website: 'https://leadspay.com',
-          email: normalizedEmail,
-          whatsapp: '',
-          totalPlansCount: 0,
-          totalAffiliatesCount: 0,
-          totalSalesVolume: 0,
-          commissionRange: '30% - 50%',
-          verified: false,
-          status: 'pending',
-          ownerId: user.uid,
-          docType: 'SEM_CNPJ',
-          hasNoCnpj: true,
-          createdAt: new Date().toISOString()
-        };
-        await setDoc(companyRef, sanitizeForFirestore(newCompany), { merge: true });
+        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
+        const compSnap = await getDocs(compQ);
+        if (!compSnap.empty) {
+          const userComp = compSnap.docs[0];
+          existingUserCompanyId = userComp.id;
+          existingUserCompanyName = userComp.data()?.name || userComp.data()?.companyName;
+          hasCompany = true;
+        }
       }
 
       profile = {
@@ -731,10 +703,10 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         targetGoal: preferredRole === 'empresa' ? 500000 : 100000,
         currentSalesProgress: 0,
         hasAffiliateProfile: preferredRole === 'afiliado',
-        hasCompanyProfile: preferredRole === 'empresa',
+        hasCompanyProfile: hasCompany,
         activeRoleMode: preferredRole,
-        companyId: preferredRole === 'empresa' ? companyId : undefined,
-        companyName: preferredRole === 'empresa' ? compName : undefined,
+        companyId: existingUserCompanyId,
+        companyName: existingUserCompanyName,
         verified: false,
         verificationStatus: 'unsubmitted',
         updatedAt: new Date().toISOString()

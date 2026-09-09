@@ -82,7 +82,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       setFeatures(initialData.features ? [...initialData.features] : []);
     } else {
       // Create mode - start clean and empty
-      const targetComp = defaultCompanyId || (companies.length > 0 ? companies[0].id : 'comp_default');
+      const targetComp = (defaultCompanyId && companies.find(c => c.id === defaultCompanyId)?.id) || (companies.length > 0 ? companies[0].id : '');
       setCompanyId(targetComp);
       setCustomCompanyName('');
       setName('');
@@ -172,23 +172,31 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       return;
     }
 
-    if (!isEditMode && currentCompany && currentCompany.verified === false && currentCompany.status !== 'approved') {
-      alert('Atenção: Esta empresa/startup ainda não foi aprovada pela administração. Apenas empresas verificadas podem colocar planos no marketplace.');
+    if (!isEditMode && (!companies || companies.length === 0)) {
+      alert('Atenção: Você precisa cadastrar sua empresa e aguardar a aprovação da administração antes de cadastrar planos.');
       return;
     }
 
-    if (!isEditMode && (!companies || companies.length === 0)) {
-      alert('Atenção: Você precisa cadastrar sua empresa e aguardar a aprovação da administração antes de cadastrar planos.');
+    const targetComp = currentCompany || (defaultCompanyId ? companies.find(c => c.id === defaultCompanyId) : null) || companies[0];
+
+    if (!isEditMode && targetComp && targetComp.verified === false && targetComp.status !== 'approved') {
+      alert('Atenção: Esta empresa ainda não foi aprovada pela administração. Apenas empresas com cadastro fiscal aprovado podem publicar planos.');
+      return;
+    }
+
+    const compId = isEditMode ? (currentCompany?.id || initialData?.companyId || targetComp?.id) : targetComp?.id;
+
+    if (!compId || compId === 'comp-default' || compId === 'comp_default') {
+      alert('Erro: Não foi possível identificar a empresa vinculada. Certifique-se de selecionar sua empresa.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const compId = currentCompany?.id || (isEditMode ? initialData?.companyId : `comp-${Date.now()}`) || 'comp-default';
-      const compName = currentCompany?.name || customCompanyName.trim() || initialData?.companyName || 'Empresa Parceira';
-      const compLogo = currentCompany?.logo || initialData?.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80';
-      const compCategory = category || currentCompany?.category || initialData?.category || 'SaaS / B2B';
+      const compName = targetComp?.companyName || targetComp?.name || initialData?.companyName || 'Empresa Parceira';
+      const compLogo = targetComp?.logo || initialData?.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80';
+      const compCategory = category || targetComp?.category || initialData?.category || 'SaaS / B2B';
       const finalImage = bannerImage.trim() || PRESET_BANNERS[0].url;
 
       const planPayload: Omit<CompanyPlan, 'id' | 'createdAt'> = {
@@ -255,12 +263,33 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Select Company or Company Name */}
+          {/* Select Company or Single Company Badge */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-              Empresa / Startup Responsável *
+              Empresa / Produtor Responsável *
             </label>
-            {companies.length > 0 ? (
+            {companies.length === 1 ? (
+              <div className="bg-[#050811] border border-[#D9F22A]/40 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center">
+                    {companies[0].logo ? (
+                      <img src={companies[0].logo} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Building2 className="w-4 h-4 text-[#D9F22A]" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">{companies[0].name}</span>
+                    <span className="text-[10px] text-[#D9F22A] font-mono">
+                      {companies[0].cpfCnpj ? `Doc: ${companies[0].cpfCnpj}` : 'Subconta Homologada'}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-[#D9F22A]/10 text-[#D9F22A] border border-[#D9F22A]/20 px-2 py-0.5 rounded-full font-bold">
+                  Plano Individual & Exclusivo
+                </span>
+              </div>
+            ) : companies.length > 1 ? (
               <select
                 value={companyId}
                 onChange={(e) => {
@@ -277,21 +306,8 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                 ))}
               </select>
             ) : (
-              <div className="space-y-1.5">
-                <div className="relative">
-                  <Building2 className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#D9F22A]" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nome da sua Empresa / Startup (ex: Minha Empresa Digital)"
-                    value={customCompanyName}
-                    onChange={(e) => setCustomCompanyName(e.target.value)}
-                    className="w-full bg-[#050811] border border-[#D9F22A]/40 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A]"
-                  />
-                </div>
-                <span className="text-[11px] text-[#D9F22A] block font-medium">
-                  ✓ Será vinculada automaticamente ao plano no catálogo.
-                </span>
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300">
+                Você precisa ter uma empresa aprovada cadastrada para publicar planos.
               </div>
             )}
           </div>

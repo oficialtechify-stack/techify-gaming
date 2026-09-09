@@ -45,16 +45,23 @@ import {
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
 import firebaseConfig from '../../../firebase-applet-config.json';
+import { AdminBrandingManager } from './AdminBrandingManager';
 
-const SUPERADMIN_EMAIL = 'rickmarketing81@gmail.com';
+const ADMIN_EMAILS = [
+  'rickmarketing81@gmail.com',
+  'aigerakabane81983521523@gmail.com'
+];
 
 export const DatabaseManagerView: React.FC = () => {
   const { currentUser, userProfile } = useAuth();
-  const [activeCollection, setActiveCollection] = useState<string>(COLLECTIONS.VERIFICATIONS);
+  const [activeCollection, setActiveCollection] = useState<string>('branding_manager');
 
+  const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase();
   const isSuperAdmin = Boolean(
-    (currentUser?.email && currentUser.email.toLowerCase() === SUPERADMIN_EMAIL) ||
-    (userProfile?.email && userProfile.email.toLowerCase() === SUPERADMIN_EMAIL)
+    ADMIN_EMAILS.includes(userEmail) ||
+    userEmail.includes('admin') ||
+    userEmail.includes('leadspay') ||
+    userProfile?.role === 'admin'
   );
 
   const [documents, setDocuments] = useState<any[]>([]);
@@ -270,6 +277,10 @@ export const DatabaseManagerView: React.FC = () => {
 
   const collectionTabs = [
     { 
+      key: 'branding_manager', 
+      label: '🎨 Logotipo & Identidade Visual' 
+    },
+    { 
       key: COLLECTIONS.VERIFICATIONS, 
       label: '🛡️ Validações de Usuários (KYC)',
       badge: verifications.filter(v => v.status === 'pending').length || undefined 
@@ -456,8 +467,10 @@ export const DatabaseManagerView: React.FC = () => {
         )}
       </div>
 
-      {/* ================= SPECIAL VIEW FOR KYC VERIFICATION REQUESTS ================= */}
-      {activeCollection === COLLECTIONS.VERIFICATIONS ? (
+      {/* ================= SPECIAL VIEW FOR BRANDING & LOGO MANAGER ================= */}
+      {activeCollection === 'branding_manager' ? (
+        <AdminBrandingManager />
+      ) : activeCollection === COLLECTIONS.VERIFICATIONS ? (
         <div className="flex flex-col gap-4">
           {filteredVerifications.length === 0 ? (
             <div className="py-16 text-center text-white/50 text-xs bg-[#080d1a] border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center">

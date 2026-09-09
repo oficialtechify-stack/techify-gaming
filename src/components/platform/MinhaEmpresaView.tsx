@@ -98,7 +98,14 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   const currentCompany = companies.find(c => c.id === selectedCompanyId) || companies[0];
 
   const companyPlans = plans.filter(p => !currentCompany || p.companyId === currentCompany.id);
-  const companyAffiliations = affiliations.filter(a => !currentCompany || a.companyId === currentCompany.id);
+  const companyPlanIds = companyPlans.map(p => p.id);
+  const companyAffiliations = affiliations.filter(a => {
+    if (!currentCompany && companyPlans.length === 0) return true;
+    const matchCompany = currentCompany && a.companyId === currentCompany.id;
+    const matchPlan = (a.planId && companyPlanIds.includes(a.planId)) || 
+                      (a.plan_id && companyPlanIds.includes(a.plan_id));
+    return matchCompany || matchPlan;
+  });
   const companySales = sales.filter(s => !currentCompany || s.companyId === currentCompany.id || companyPlans.some(p => p.id === s.platformId));
 
   const filteredCompanyPlans = companyPlans.filter(p => {

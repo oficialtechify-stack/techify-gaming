@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { CompanyStartup, UserSellerProfile } from '../../types/platform';
-import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon, AlertCircle, Upload, Check, User, FileText, CheckCircle, ShieldAlert, Send } from 'lucide-react';
-import { formatCNPJ, formatCPF, formatPhone, isValidCNPJ, isValidCPF, getAuthErrorMessage } from '../../services/authService';
+import { Building2, Globe, Mail, Phone, Tag, Sparkles, X, Image as ImageIcon, AlertCircle, Upload, Check, User, FileText, CheckCircle, ShieldAlert, Send, MapPin } from 'lucide-react';
+import { formatCNPJ, formatCPF, formatPhone, isValidCNPJ, isValidCPF } from '../../services/authService';
+
+const formatCEP = (value: string) => {
+  const clean = value.replace(/\D/g, '').slice(0, 8);
+  if (clean.length <= 5) return clean;
+  return `${clean.slice(0, 5)}-${clean.slice(5)}`;
+};
 
 interface CreateCompanyModalProps {
   isOpen: boolean;
@@ -30,12 +36,15 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
   const [docType, setDocType] = useState<'CNPJ' | 'CPF'>('CNPJ');
   const [cnpj, setCnpj] = useState('');
   const [cpf, setCpf] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [addressNumber, setAddressNumber] = useState('');
+  const [address, setAddress] = useState('');
   const [tagline, setTagline] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
-  const [email, setEmail] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState(userProfile?.email || '');
+  const [whatsapp, setWhatsapp] = useState(userProfile?.phone ? formatPhone(userProfile.phone) : '');
   const [logo, setLogo] = useState('');
   const [commissionRange, setCommissionRange] = useState('30% a 50%');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -54,24 +63,61 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
     const cleanCnpj = cnpj.replace(/\D/g, '');
     const cleanCpf = cpf.replace(/\D/g, '');
 
-    if (docType === 'CNPJ' && cleanCnpj) {
-      if (cleanCnpj.length === 14 && !isValidCNPJ(cleanCnpj)) {
-        setErrorMsg('O CNPJ informado é inválido. Verifique os números digitados.');
+    // Validação estrita de Documento Fiscal (CNPJ ou CPF) - Obrigatório!
+    if (docType === 'CNPJ') {
+      if (!cleanCnpj) {
+        setErrorMsg('O CNPJ da empresa é estritamente obrigatório para emissão de notas e recebimento no Asaas.');
+        return;
+      }
+      if (cleanCnpj.length !== 14 || !isValidCNPJ(cleanCnpj) || /^0+$/.test(cleanCnpj)) {
+        setErrorMsg('O CNPJ informado é inválido. Digite os 14 dígitos válidos da sua empresa.');
+        return;
+      }
+    } else {
+      if (!cleanCpf) {
+        setErrorMsg('O CPF ou MEI é estritamente obrigatório para emissão de notas e recebimento no Asaas.');
+        return;
+      }
+      if (cleanCpf.length !== 11 || !isValidCPF(cleanCpf) || /^0+$/.test(cleanCpf)) {
+        setErrorMsg('O CPF informado é inválido. Digite os 11 dígitos válidos.');
         return;
       }
     }
 
-    if (docType === 'CPF' && cleanCpf) {
-      if (cleanCpf.length === 11 && !isValidCPF(cleanCpf)) {
-        setErrorMsg('O CPF informado é inválido. Verifique os números digitados.');
-        return;
-      }
+    const cleanDoc = docType === 'CNPJ' ? cleanCnpj : cleanCpf;
+    if (cleanDoc === 'SEM_CNPJ' || cleanDoc.length < 11) {
+      setErrorMsg('Não é permitido cadastrar empresa sem CPF ou CNPJ válido.');
+      return;
+    }
+
+    if (!email.trim() || !email.includes('@')) {
+      setErrorMsg('Informe um e-mail corporativo ou de contato válido.');
+      return;
+    }
+
+    const cleanPhone = whatsapp.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setErrorMsg('Informe um número de WhatsApp/Telefone com DDD válido (pelo menos 10 dígitos).');
+      return;
+    }
+
+    const cleanPostal = postalCode.replace(/\D/g, '');
+    if (!cleanPostal || cleanPostal.length !== 8) {
+      setErrorMsg('O CEP fiscal é obrigatório com 8 dígitos para criação da subconta no Asaas.');
+      return;
+    }
+
+    if (!addressNumber.trim()) {
+      setErrorMsg('Informe o número do endereço fiscal da empresa.');
+      return;
     }
 
     const defaultLogo = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name.trim())}`;
+    const targetUserId = userProfile?.userId || userProfile?.id || `usr_${Date.now()}`;
 
     const payload: Partial<CompanyStartup> = {
       name: name.trim(),
+      companyName: name.trim(),
       slug: name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'),
       tagline: tagline.trim() || `${category} inovador e escalável`,
       logo: logo.trim() || defaultLogo,
@@ -79,10 +125,20 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       category: category as any,
       description: description.trim() || `Empresa ${name.trim()} integrada ao ecossistema LeadsPay.`,
       website: website.trim() || 'https://suaempresa.com',
-      email: email.trim() || userProfile?.email || 'contato@empresa.com',
-      whatsapp: whatsapp.trim() ? formatPhone(whatsapp) : (userProfile?.phone ? formatPhone(userProfile.phone) : '+55 11 99999-9999'),
+      email: email.trim(),
+      whatsapp: formatPhone(whatsapp),
+      phone: cleanPhone,
+      mobilePhone: cleanPhone,
+      postalCode: cleanPostal,
+      addressNumber: addressNumber.trim(),
+      address: address.trim() || 'Sede Comercial',
       docType: docType,
       hasNoCnpj: false,
+      cpfCnpj: cleanDoc,
+      cnpj: docType === 'CNPJ' ? formatCNPJ(cleanCnpj) : undefined,
+      cleanCnpj: docType === 'CNPJ' ? cleanCnpj : undefined,
+      cpf: docType === 'CPF' ? formatCPF(cleanCpf) : undefined,
+      cleanCpf: docType === 'CPF' ? cleanCpf : undefined,
       totalPlansCount: 0,
       totalAffiliatesCount: 0,
       totalSalesVolume: 0,
@@ -90,21 +146,13 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       verified: false,
       status: 'pending',
       submittedAt: new Date().toISOString(),
-      submittedBy: userProfile?.userId || 'usr_techify_main',
-      submittedByName: userProfile?.name || 'Produtor Solicitante',
-      submittedByEmail: userProfile?.email || 'contato@empresa.com'
+      ownerId: targetUserId,
+      submittedBy: targetUserId,
+      submittedByName: userProfile?.name || name.trim(),
+      submittedByEmail: email.trim() || userProfile?.email || 'contato@empresa.com'
     };
 
-    if (docType === 'CNPJ' && cleanCnpj) {
-      payload.cnpj = formatCNPJ(cleanCnpj);
-      payload.cleanCnpj = cleanCnpj;
-    } else if (docType === 'CPF' && cleanCpf) {
-      payload.cpf = formatCPF(cleanCpf);
-      payload.cleanCpf = cleanCpf;
-    }
-
     onCompanyCreated(payload as any);
-
     onClose();
   };
 
@@ -252,8 +300,9 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
                 <FileText className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="text"
+                  required
                   maxLength={18}
-                  placeholder="00.000.000/0000-00"
+                  placeholder="00.000.000/0000-00 (Obrigatório)"
                   value={cnpj}
                   onChange={(e) => setCnpj(formatCNPJ(e.target.value))}
                   className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
@@ -266,14 +315,96 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
                 <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="text"
+                  required
                   maxLength={14}
-                  placeholder="000.000.000-00"
+                  placeholder="000.000.000-00 (Obrigatório)"
                   value={cpf}
                   onChange={(e) => setCpf(formatCPF(e.target.value))}
                   className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-3 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
                 />
               </div>
             )}
+            <p className="text-[10px] text-white/40 mt-1.5 flex items-center gap-1">
+              <ShieldAlert className="w-3 h-3 text-[#D9F22A]" />
+              O documento fiscal é exigido para criação automática da subconta homologada no Asaas.
+            </p>
+          </div>
+
+          {/* Dados de Contato e Fiscais Obrigatórios */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
+                E-mail Financeiro / Contato *
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="financeiro@empresa.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
+                WhatsApp / Celular *
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={15}
+                placeholder="(11) 99999-9999"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(formatPhone(e.target.value))}
+                className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+              />
+            </div>
+          </div>
+
+          {/* Endereço Fiscal Asaas (CEP e Número Obrigatórios) */}
+          <div className="bg-[#050811]/80 border border-white/10 rounded-2xl p-3.5">
+            <div className="flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider text-white/80">
+              <MapPin className="w-3.5 h-3.5 text-[#D9F22A]" />
+              <span>Endereço Fiscal (Subconta Asaas) *</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="col-span-1">
+                <label className="block text-[10px] text-white/50 mb-1">CEP Fiscal *</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={9}
+                  placeholder="00000-000"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(formatCEP(e.target.value))}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+
+              <div className="col-span-1">
+                <label className="block text-[10px] text-white/50 mb-1">Número *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: 100"
+                  value={addressNumber}
+                  onChange={(e) => setAddressNumber(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+
+              <div className="col-span-1">
+                <label className="block text-[10px] text-white/50 mb-1">Logradouro / Bairro</label>
+                <input
+                  type="text"
+                  placeholder="Av. Paulista"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -296,15 +427,14 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-                WhatsApp de Suporte
+                Faixa de Comissão Afiliados
               </label>
               <input
                 type="text"
-                maxLength={15}
-                placeholder="(11) 99999-9999"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(formatPhone(e.target.value))}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                placeholder="Ex: 30% a 50%"
+                value={commissionRange}
+                onChange={(e) => setCommissionRange(e.target.value)}
+                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-[#D9F22A] font-bold placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
               />
             </div>
           </div>
@@ -336,32 +466,17 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-white/70 mb-1">
-                Website Oficial
-              </label>
-              <input
-                type="text"
-                placeholder="https://empresa.com"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-white/70 mb-1">
-                Faixa de Comissão Afiliados
-              </label>
-              <input
-                type="text"
-                placeholder="Ex: 30% a 50%"
-                value={commissionRange}
-                onChange={(e) => setCommissionRange(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-[#D9F22A] font-bold placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
-            </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-white/70 mb-1">
+              Website Oficial
+            </label>
+            <input
+              type="text"
+              placeholder="https://empresa.com"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+            />
           </div>
 
           <button

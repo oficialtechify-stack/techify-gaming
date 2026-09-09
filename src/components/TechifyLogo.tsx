@@ -1,114 +1,205 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { subscribePlatformBranding, PlatformBranding, getLocalBranding } from '../services/firestoreService';
 
 interface TechifyLogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showIcon?: boolean;
+  overrideLogoUrl?: string;
+  showText?: boolean;
 }
 
 export const TechifyLogo: React.FC<TechifyLogoProps> = ({ 
   className = '', 
   size = 'md',
-  showIcon = true
+  showIcon = true,
+  overrideLogoUrl,
+  showText = true
 }) => {
-  // Scale for responsiveness
+  const [branding, setBranding] = useState<PlatformBranding>(() => {
+    return getLocalBranding() || {
+      logoType: 'default_vector',
+      logoText: 'LEADSPAY',
+      logoSubtext: 'PAYMENTS & SPLIT',
+      accentColor: '#D9F22A'
+    };
+  });
+
+  useEffect(() => {
+    const unsub = subscribePlatformBranding((updated) => {
+      if (updated) {
+        setBranding(prev => ({ ...prev, ...updated }));
+      }
+    });
+
+    const handleCustomEvent = (e: any) => {
+      if (e.detail) {
+        setBranding(prev => ({ ...prev, ...e.detail }));
+      }
+    };
+
+    window.addEventListener('leadspay_branding_updated', handleCustomEvent);
+
+    return () => {
+      unsub();
+      window.removeEventListener('leadspay_branding_updated', handleCustomEvent);
+    };
+  }, []);
+
+  // Dimensões responsivas proporcionais
   const dimensions = {
-    sm: { height: 36, emblemSize: 32, fontSize: 'text-lg', subSize: 'text-[8px]', gap: 'gap-2.5' },
-    md: { height: 46, emblemSize: 40, fontSize: 'text-2xl', subSize: 'text-[9px]', gap: 'gap-3' },
-    lg: { height: 60, emblemSize: 52, fontSize: 'text-3xl', subSize: 'text-[10px]', gap: 'gap-3.5' },
-    xl: { height: 78, emblemSize: 68, fontSize: 'text-4xl', subSize: 'text-xs', gap: 'gap-4' },
+    sm: { height: 32, emblemSize: 28, fontSize: 'text-base', subSize: 'text-[7.5px]', gap: 'gap-2' },
+    md: { height: 42, emblemSize: 36, fontSize: 'text-xl', subSize: 'text-[8.5px]', gap: 'gap-2.5' },
+    lg: { height: 56, emblemSize: 48, fontSize: 'text-2xl sm:text-3xl', subSize: 'text-[9.5px]', gap: 'gap-3' },
+    xl: { height: 72, emblemSize: 64, fontSize: 'text-3xl sm:text-4xl', subSize: 'text-xs', gap: 'gap-3.5' },
   };
 
   const currentDim = dimensions[size];
+  const activeLogoUrl = overrideLogoUrl || branding.logoUrl;
+  const isCustomImage = Boolean(activeLogoUrl && (branding.logoType === 'custom_image' || overrideLogoUrl));
+
+  const logoText = branding.logoText || 'LEADSPAY';
+  const logoSubtext = branding.logoSubtext || 'PAYMENTS & SPLIT';
+  const accentColor = branding.accentColor || '#D9F22A';
 
   return (
     <div 
       className={`inline-flex items-center select-none ${currentDim.gap} ${className}`} 
       id="leadspay-brand-logo"
     >
-      {/* 3D Precision Vector Emblem */}
+      {/* Ícone ou Imagem da Logo */}
       {showIcon && (
         <div 
           className="relative flex-shrink-0 flex items-center justify-center"
           style={{ width: `${currentDim.emblemSize}px`, height: `${currentDim.emblemSize}px` }}
         >
-          {/* Subtle Backlight */}
-          <div className="absolute inset-0 bg-[#D4F01A]/30 rounded-full blur-md" />
+          {/* Subtle Backlight Glow */}
+          <div 
+            className="absolute inset-0 rounded-full blur-md opacity-70 pointer-events-none transition-all duration-300" 
+            style={{ backgroundColor: accentColor }}
+          />
 
-          {/* Precision 3D Vector Emblem */}
-          <svg 
-            viewBox="0 0 100 100" 
-            fill="none" 
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-full h-full relative z-10 drop-shadow-[0_2px_8px_rgba(212,240,26,0.5)]"
-          >
-            <defs>
-              <linearGradient id="emblemGradMain" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#F5FF7A" />
-                <stop offset="30%" stopColor="#D8F420" />
-                <stop offset="70%" stopColor="#A8CE08" />
-                <stop offset="100%" stopColor="#6C8C00" />
-              </linearGradient>
-              <linearGradient id="emblemLightningGrad" x1="10%" y1="90%" x2="90%" y2="10%">
-                <stop offset="0%" stopColor="#D8F420" />
-                <stop offset="45%" stopColor="#FFFFFF" />
-                <stop offset="65%" stopColor="#E5FF52" />
-                <stop offset="100%" stopColor="#A5CE00" />
-              </linearGradient>
-              <linearGradient id="emblemRim" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
-                <stop offset="50%" stopColor="#D8F420" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#4A6000" stopOpacity="0.8" />
-              </linearGradient>
-            </defs>
+          {/* 1. Imagem Personalizada (Carregada manualmente pelo Admin via URL ou Upload Base64) */}
+          {isCustomImage && activeLogoUrl ? (
+            <img 
+              src={activeLogoUrl} 
+              alt={logoText} 
+              className="w-full h-full object-contain relative z-10 drop-shadow-[0_2px_10px_rgba(217,242,42,0.4)] rounded-md"
+              onError={(e) => {
+                // Fallback gracioso se a imagem quebrar
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : branding.logoType === 'preset_3d_star' ? (
+            /* 2. Preset: Emblema 3D com Estrela de 4 Pontas (Imagem 3 do usuário) */
+            <svg 
+              viewBox="0 0 100 100" 
+              fill="none" 
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-full h-full relative z-10 drop-shadow-[0_4px_14px_rgba(217,242,42,0.5)]"
+            >
+              <defs>
+                <linearGradient id="starLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#FAFF6B" />
+                  <stop offset="35%" stopColor="#D9F22A" />
+                  <stop offset="75%" stopColor="#9BC504" />
+                  <stop offset="100%" stopColor="#557500" />
+                </linearGradient>
+                <filter id="neonGlowStar" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#D9F22A" floodOpacity="0.6"/>
+                </filter>
+              </defs>
+              {/* Moldura 3D estilizada em S */}
+              <path 
+                d="M32 18 C52 14, 76 18, 78 36 C80 50, 68 56, 56 60 C74 62, 84 74, 78 88 C70 98, 42 96, 26 88 L34 76 C46 82, 62 82, 66 74 C70 66, 60 62, 46 58 C32 54, 22 46, 22 34 C22 20, 36 14, 52 14"
+                fill="none"
+                stroke="url(#starLogoGrad)"
+                strokeWidth="11"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                filter="url(#neonGlowStar)"
+              />
+              {/* Estrela de 4 pontas no centro */}
+              <path 
+                d="M50 32 Q50 48, 66 48 Q50 48, 50 64 Q50 48, 34 48 Q50 48, 50 32 Z" 
+                fill="#FAFF85" 
+                stroke="#FFFFFF" 
+                strokeWidth="1.5"
+                className="drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]"
+              />
+            </svg>
+          ) : (
+            /* 3. Preset Padrão & Neon Circle: O Raio Circular Oficial LeadsPay (Imagens 1 e 2 do usuário) */
+            <svg 
+              viewBox="0 0 100 100" 
+              fill="none" 
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-full h-full relative z-10 drop-shadow-[0_2px_12px_rgba(217,242,42,0.6)]"
+            >
+              <defs>
+                <linearGradient id="neonCircleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#F9FF75" />
+                  <stop offset="40%" stopColor="#D9F22A" />
+                  <stop offset="85%" stopColor="#A4D104" />
+                  <stop offset="100%" stopColor="#6C9300" />
+                </linearGradient>
+                <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#FFFFFF" />
+                  <stop offset="40%" stopColor="#F5FF7A" />
+                  <stop offset="100%" stopColor="#D9F22A" />
+                </linearGradient>
+              </defs>
 
-            {/* Dark bevel background for 3D depth */}
-            <path 
-              d="M 22 48 C 18 32, 28 16, 48 12 C 64 8, 76 18, 80 32 L 68 40 C 66 32, 56 24, 44 26 C 34 28, 30 36, 32 46 Z" 
-              fill="#2E3C00" 
-            />
-            <path 
-              d="M 78 52 C 82 68, 72 84, 52 88 C 36 92, 24 82, 20 68 L 32 60 C 34 68, 44 76, 56 74 C 66 72, 70 64, 68 54 Z" 
-              fill="#2E3C00" 
-            />
+              {/* Arco Circular Superior com chanfro */}
+              <path 
+                d="M 28 50 C 28 34, 40 22, 56 22 C 70 22, 80 30, 84 42" 
+                fill="none" 
+                stroke="url(#neonCircleGrad)" 
+                strokeWidth="11" 
+                strokeLinecap="round" 
+              />
 
-            {/* Top Wing */}
-            <path 
-              d="M 20 46 C 16 30, 26 14, 46 10 C 62 6, 76 16, 80 30 L 70 38 C 66 28, 56 20, 44 22 C 32 24, 28 34, 30 44 Z" 
-              fill="url(#emblemGradMain)" 
-              stroke="url(#emblemRim)" 
-              strokeWidth="0.75" 
-            />
+              {/* Arco Circular Inferior com chanfro */}
+              <path 
+                d="M 72 50 C 72 66, 60 78, 44 78 C 30 78, 20 70, 16 58" 
+                fill="none" 
+                stroke="url(#neonCircleGrad)" 
+                strokeWidth="11" 
+                strokeLinecap="round" 
+              />
 
-            {/* Bottom Wing */}
-            <path 
-              d="M 80 54 C 84 70, 74 86, 54 90 C 38 94, 24 84, 20 70 L 30 62 C 34 72, 44 80, 56 78 C 68 76, 72 66, 70 56 Z" 
-              fill="url(#emblemGradMain)" 
-              stroke="url(#emblemRim)" 
-              strokeWidth="0.75" 
-            />
-
-            {/* Central Lightning Diagonal */}
-            <path 
-              d="M 6 88 L 24 70 L 38 70 L 50 54 L 42 54 L 54 36 L 68 36 L 94 6 L 78 32 L 64 32 L 52 48 L 60 48 L 48 66 L 34 66 Z" 
-              fill="url(#emblemLightningGrad)" 
-              stroke="#FFFFFF" 
-              strokeWidth="0.6" 
-            />
-          </svg>
+              {/* Raio Diagonal Neon Cruzando o Centro */}
+              <path 
+                d="M 12 88 L 36 64 L 52 64 L 46 52 L 62 52 L 56 40 L 70 40 L 92 12 L 66 38 L 52 38 L 58 48 L 42 48 L 48 60 L 32 60 Z" 
+                fill="url(#boltGrad)" 
+                stroke="#FFFFFF" 
+                strokeWidth="0.8" 
+                className="drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]"
+              />
+            </svg>
+          )}
         </div>
       )}
 
-      {/* Brand Wordmark: LeadsPay */}
-      <div className="flex flex-col justify-center leading-none">
-        <div className={`font-['Syne'] font-black tracking-tight uppercase ${currentDim.fontSize}`}>
-          <span className="text-[#D4F01A] drop-shadow-[0_0_12px_rgba(212,240,26,0.35)]">LEADS</span>
-          <span className="text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">PAY</span>
+      {/* Tipografia Oficial LeadsPay */}
+      {showText && (
+        <div className="flex flex-col justify-center leading-none">
+          <div className={`font-['Syne'] font-black tracking-tight uppercase ${currentDim.fontSize}`}>
+            <span 
+              className="drop-shadow-[0_0_14px_rgba(217,242,42,0.4)] transition-colors"
+              style={{ color: accentColor }}
+            >
+              {logoText}
+            </span>
+          </div>
+          <span 
+            className={`font-extrabold tracking-[0.22em] uppercase mt-0.5 opacity-80 ${currentDim.subSize}`}
+            style={{ color: accentColor }}
+          >
+            {logoSubtext}
+          </span>
         </div>
-        <span className={`font-bold tracking-[0.25em] text-[#D4F01A]/70 uppercase mt-0.5 ${currentDim.subSize}`}>
-          PAYMENTS & SPLIT
-        </span>
-      </div>
+      )}
     </div>
   );
 };

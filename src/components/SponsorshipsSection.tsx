@@ -192,17 +192,21 @@ export const SponsorshipsSection: React.FC<SponsorshipsSectionProps> = ({
           </div>
         ) : (
           <div className="p-12 text-center bg-[#080d1a] border border-white/10 rounded-2xl mb-16">
-            <Building2 className="w-12 h-12 text-white/30 mx-auto mb-3" />
-            <h4 className="text-lg font-bold text-white mb-2">Nenhuma empresa encontrada nesta categoria</h4>
+            <Building2 className="w-12 h-12 text-[#D9F22A]/60 mx-auto mb-3" />
+            <h4 className="text-lg font-bold text-white mb-2">
+              {companies.length === 0 ? 'Nenhuma empresa cadastrada no momento' : 'Nenhuma empresa encontrada nesta categoria'}
+            </h4>
             <p className="text-xs text-white/60 max-w-md mx-auto mb-6">
-              Novas startups e plataformas estão sendo auditadas e integradas diariamente no banco de dados.
+              {companies.length === 0 
+                ? 'O ecossistema está pronto e limpo para novos parceiros. Cadastre sua empresa ou startup para cadastrar seus planos e recrutar afiliados.'
+                : 'Tente selecionar outra categoria ou cadastre sua própria empresa parceira.'}
             </p>
             {onOpenRegisterCompany && (
               <button
                 onClick={onOpenRegisterCompany}
-                className="bg-[#D9F22A] text-[#060A15] font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider hover:bg-[#e4fa3b] transition-all cursor-pointer"
+                className="bg-[#D9F22A] text-[#060A15] font-black px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider hover:bg-[#e4fa3b] transition-all cursor-pointer shadow-lg shadow-[#D9F22A]/10"
               >
-                Cadastrar Minha Startup
+                Cadastrar Minha Empresa / Startup
               </button>
             )}
           </div>

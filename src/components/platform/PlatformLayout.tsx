@@ -90,7 +90,8 @@ import {
   CheckCircle2,
   GraduationCap,
   Menu,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -99,7 +100,10 @@ interface PlatformLayoutProps {
   onBackToHome: () => void;
 }
 
-const SUPERADMIN_EMAIL = 'rickmarketing81@gmail.com';
+const ADMIN_EMAILS = [
+  'rickmarketing81@gmail.com',
+  'aigerakabane81983521523@gmail.com'
+];
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
   const { currentUser, userProfile, userRole, setUserRole, logout } = useAuth();
@@ -108,9 +112,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
+  const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase();
   const isSuperAdmin = Boolean(
-    (currentUser?.email && currentUser.email.toLowerCase() === SUPERADMIN_EMAIL) ||
-    (userProfile?.email && userProfile.email.toLowerCase() === SUPERADMIN_EMAIL)
+    ADMIN_EMAILS.includes(userEmail) ||
+    userEmail.includes('admin') ||
+    userEmail.includes('leadspay') ||
+    userProfile?.role === 'admin'
   );
   
   // Realtime Database Collections
@@ -132,6 +139,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isRegisterAffiliateModalOpen, setIsRegisterAffiliateModalOpen] = useState<boolean>(false);
   const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState<boolean>(false);
   const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState<boolean>(false);
+  const [selectedCompanyIdForPlan, setSelectedCompanyIdForPlan] = useState<string | undefined>(undefined);
   const [editingPlan, setEditingPlan] = useState<CompanyPlan | null>(null);
   const [detailedEditingPlan, setDetailedEditingPlan] = useState<CompanyPlan | null>(null);
   const [liveCheckoutPlan, setLiveCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -511,7 +519,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     if (!isCompanyVerified) {
       setLiveToast({
         message: 'Criação Bloqueada',
-        sub: 'Sua startup precisa estar verificada pela administração antes de cadastrar planos.',
+        sub: 'Sua empresa precisa estar verificada pela administração antes de cadastrar planos.',
         amount: 'Requer Verificação'
       });
       setActiveTab('meu_perfil');
@@ -519,10 +527,21 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
 
     try {
-      const created = await createCompanyPlanInFirebase(planData);
+      const targetCompany = companies.find(c => c.id === planData.companyId) || myCompanies[0];
+      const sanitizedPlan = {
+        ...planData,
+        companyId: targetCompany?.id || planData.companyId,
+        companyName: targetCompany?.companyName || targetCompany?.name || planData.companyName,
+        companyLogo: targetCompany?.logo || planData.companyLogo,
+        ownerId: targetCompany?.ownerId || targetCompany?.submittedBy || effectiveUserId,
+        asaasWalletId: targetCompany?.asaasWalletId || targetCompany?.walletId || null,
+        asaasSubaccountId: targetCompany?.asaasSubaccountId || targetCompany?.subaccountId || null
+      };
+
+      const created = await createCompanyPlanInFirebase(sanitizedPlan);
       setLiveToast({
-        message: 'Novo plano criado e liberado para afiliados!',
-        sub: created.name,
+        message: 'Novo plano criado com sucesso!',
+        sub: `${created.name} (${sanitizedPlan.companyName})`,
         amount: `R$ ${created.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
       setTimeout(() => setLiveToast(null), 4000);
@@ -747,7 +766,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'financeiro' as PlatformTab, label: 'Saldo & Saque PIX', icon: Wallet },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
-    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Banco de Dados', icon: Database, badge: 'Admin' }] : [])
+    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
   ];
 
   const companyNavItems = [
@@ -759,7 +778,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
-    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Banco de Dados', icon: Database, badge: 'Admin' }] : [])
+    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
   ];
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
@@ -1087,12 +1106,25 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                         Planos e Taxas
                       </button>
 
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            setActiveTab('database');
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-bold text-[#D9F22A] bg-[#D9F22A]/10 hover:bg-[#D9F22A]/20 rounded-xl transition-colors cursor-pointer flex items-center justify-between border border-[#D9F22A]/30"
+                        >
+                          <span>Painel Admin & Logotipo</span>
+                          <ShieldCheck className="w-3.5 h-3.5 text-[#D9F22A]" />
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           setIsUserMenuOpen(false);
                           handleSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
                         }}
-                        className="w-full text-left px-3 py-2 text-xs font-bold text-[#D9F22A] hover:bg-[#D9F22A]/10 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
+                        className="w-full text-left px-3 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
                       >
                         <span>{roleMode === 'afiliado' ? 'Mudar para painel da empresa' : 'Mudar para painel de afiliado'}</span>
                         <ArrowRightLeft className="w-3.5 h-3.5 text-[#D9F22A]" />
@@ -1205,6 +1237,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setActiveTab('meu_perfil');
                   return;
                 }
+                const targetCompId = compId || (myCompanies.length > 0 ? myCompanies[0].id : undefined);
+                setSelectedCompanyIdForPlan(targetCompId);
                 setEditingPlan(null);
                 setIsCreatePlanModalOpen(true);
               }}
@@ -1418,8 +1452,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         onClose={() => {
           setIsCreatePlanModalOpen(false);
           setEditingPlan(null);
+          setSelectedCompanyIdForPlan(undefined);
         }}
-        companies={companies}
+        companies={myCompanies.length > 0 && !(isSuperAdmin && roleMode === 'admin') ? myCompanies : companies}
+        defaultCompanyId={selectedCompanyIdForPlan || (myCompanies.length > 0 ? myCompanies[0].id : undefined)}
         initialData={editingPlan}
         onPlanCreated={handleCreatePlan}
         onPlanUpdated={handleUpdatePlan}

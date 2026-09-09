@@ -58,7 +58,8 @@ export const COLLECTIONS = {
   AFFILIATE_LINKS: 'affiliate_links',
   TEAM: 'team_members',
   VERIFICATIONS: 'verification_requests',
-  PLATFORM_FINANCES: 'platform_finances'
+  PLATFORM_FINANCES: 'platform_finances',
+  SETTINGS: 'platform_settings'
 };
 
 export const DEFAULT_USER_ID = 'usr_techify_main';
@@ -452,22 +453,59 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
 
   const docRef = doc(db, COLLECTIONS.COMPANIES, id);
   await setDoc(docRef, sanitizeForFirestore(newCompany));
+
+  if (newCompany.ownerId && newCompany.ownerId !== DEFAULT_USER_ID) {
+    try {
+      await updateDoc(doc(db, COLLECTIONS.PROFILES, newCompany.ownerId), {
+        companyId: id,
+        companyName: newCompany.name,
+        hasCompanyProfile: true
+      });
+    } catch (e) {
+      console.warn('Could not update user profile on company creation:', e);
+    }
+  }
+
   return newCompany;
 }
 
 /**
- * Approve a Company in Firestore (Admin Action)
+ * Approve a Company in Firestore & Provision Asaas Subaccount (Admin Action)
  */
 export async function approveCompanyInFirebase(companyId: string) {
-  const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-  const now = new Date().toISOString();
-  await setDoc(docRef, sanitizeForFirestore({
-    status: 'approved',
-    verified: true,
-    reviewedAt: now,
-    rejectionReason: null
-  }), { merge: true });
-  return { success: true };
+  try {
+    // 1. Aciona a rota oficial do backend para criar/homologar a subconta no Asaas v3
+    const res = await fetch('/api/admin/approve-company', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return { success: true, data };
+    } else {
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error || 'Falha ao aprovar empresa e gerar subconta Asaas.');
+    }
+  } catch (apiErr: any) {
+    console.error('Erro na chamada de aprovação via API:', apiErr);
+    // Se o erro for de validação fiscal ou do Asaas, repassa o erro para que a UI alerte o administrador
+    if (apiErr.message && (apiErr.message.includes('CPF/CNPJ') || apiErr.message.includes('fiscal') || apiErr.message.includes('Asaas') || apiErr.message.includes('obrigatório'))) {
+      throw apiErr;
+    }
+
+    // Fallback de contingência direta no Firestore
+    const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+    const now = new Date().toISOString();
+    await setDoc(docRef, sanitizeForFirestore({
+      status: 'approved',
+      verified: true,
+      reviewedAt: now,
+      rejectionReason: null
+    }), { merge: true });
+    return { success: true };
+  }
 }
 
 /**
@@ -498,6 +536,8 @@ export async function updateCompanyInFirebase(companyId: string, updates: Partia
  */
 export async function deleteCompanyInFirebase(companyId: string) {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+  const snap = await getDoc(docRef);
+  const ownerId = snap.exists() ? snap.data()?.ownerId : null;
   await deleteDoc(docRef);
 
   // Also delete company plans
@@ -505,6 +545,19 @@ export async function deleteCompanyInFirebase(companyId: string) {
   for (const p of plansSnap.docs) {
     if (p.data().companyId === companyId) {
       await deleteDoc(p.ref);
+    }
+  }
+
+  // If owner exists, clear company link from user profile
+  if (ownerId) {
+    try {
+      await updateDoc(doc(db, COLLECTIONS.PROFILES, ownerId), {
+        companyId: null,
+        companyName: null,
+        hasCompanyProfile: false
+      });
+    } catch (e) {
+      console.warn('Profile cleanup error:', e);
     }
   }
 }
@@ -571,17 +624,54 @@ export async function getCompanyPlanByIdOrSlug(idOrSlug: string): Promise<Compan
 }
 
 /**
- * Create a new Plan / Product in Firestore
+ * Create a new Plan / Product in Firestore (Multi-tenant Isolated)
  */
 export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'id' | 'createdAt'>) {
+  if (!planData.companyId || planData.companyId === 'comp-default' || planData.companyId === 'comp_default') {
+    throw new Error('companyId é obrigatório para cadastrar um plano. O plano deve pertencer exclusivamente à sua empresa.');
+  }
+
+  // 1. Tenta salvar via endpoint com validação estrita de tenant
+  try {
+    const res = await fetch('/api/plans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(planData)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.plan;
+    }
+  } catch (apiErr) {
+    console.warn('Fallback para Firestore local após erro na API /api/plans:', apiErr);
+  }
+
+  // 2. Gravação direta no Firestore garantindo vínculo estrito à empresa
+  const compRef = doc(db, COLLECTIONS.COMPANIES, planData.companyId);
+  const compSnap = await getDoc(compRef);
+  if (!compSnap.exists()) {
+    throw new Error(`Empresa com ID "${planData.companyId}" não encontrada no sistema. Cadastre sua empresa primeiro.`);
+  }
+
+  const compData = compSnap.data() as CompanyStartup;
+  const isVerified = compData.verified === true || compData.status === 'approved';
+  if (!isVerified) {
+    throw new Error('Empresa não verificada. Apenas empresas aprovadas pela administração podem cadastrar planos.');
+  }
+
   const id = `plan-${Date.now()}`;
   const now = new Date().toISOString();
-
   const commissionVal = Number(((planData.priceSetup * planData.commissionPercentage) / 100).toFixed(2));
 
   const newPlan: CompanyPlan = {
     ...planData,
     id,
+    companyId: compData.id,
+    companyName: compData.companyName || compData.name || planData.companyName,
+    companyLogo: compData.logo || planData.companyLogo,
+    ownerId: compData.ownerId || compData.submittedBy,
+    asaasSubaccountId: compData.asaasSubaccountId || compData.subaccountId || compData.asaasWalletId || null,
+    asaasWalletId: compData.asaasWalletId || compData.walletId || null,
     commissionValue: commissionVal,
     affiliatesCount: 0,
     totalSales: 0,
@@ -592,44 +682,9 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
   const docRef = doc(db, COLLECTIONS.PLANS, id);
   await setDoc(docRef, sanitizeForFirestore(newPlan));
 
-  // Update Company totalPlansCount or auto-create company if not present
-  if (planData.companyId) {
-    const compRef = doc(db, COLLECTIONS.COMPANIES, planData.companyId);
-    const compSnap = await getDoc(compRef);
-    if (compSnap.exists()) {
-      const compData = compSnap.data() as CompanyStartup;
-      const isVerified = compData.verified === true || compData.status === 'approved';
-      if (!isVerified) {
-        throw new Error('Empresa não verificada. Apenas empresas aprovadas pela administração podem cadastrar planos.');
-      }
-      await updateDoc(compRef, sanitizeForFirestore({
-        totalPlansCount: (compData.totalPlansCount || 0) + 1
-      }));
-    } else {
-      const newComp: CompanyStartup = {
-        id: planData.companyId,
-        name: planData.companyName || 'LeadsPay Solutions',
-        slug: (planData.companyName || 'leadspay-solutions').toLowerCase().replace(/\s+/g, '-'),
-        tagline: `${planData.category || 'SaaS / B2B'} de alta performance`,
-        logo: planData.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80',
-        bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
-        category: (planData.category as any) || 'SaaS / B2B',
-        description: `Empresa responsável pela distribuição do plano ${planData.name}.`,
-        website: 'https://leadspay.com',
-        email: 'contato@leadspay.com',
-        whatsapp: '+55 11 99999-9999',
-        commissionRange: `${planData.commissionPercentage}%`,
-        totalPlansCount: 1,
-        totalAffiliatesCount: 0,
-        totalSalesVolume: 0,
-        verified: false,
-        status: 'pending',
-        ownerId: DEFAULT_USER_ID,
-        createdAt: now
-      };
-      await setDoc(compRef, sanitizeForFirestore(newComp));
-    }
-  }
+  await updateDoc(compRef, sanitizeForFirestore({
+    totalPlansCount: (compData.totalPlansCount || 0) + 1
+  }));
 
   return newPlan;
 }
@@ -1446,5 +1501,89 @@ export async function fetchSellerSubaccountId(param: string | CompanyPlan | any)
   }
 
   return null;
+}
+
+// ==========================================
+// 🎨 PLATFORM BRANDING & LOGO SETTINGS
+// ==========================================
+
+export interface PlatformBranding {
+  logoUrl?: string;
+  logoType?: 'default_vector' | 'custom_image' | 'preset_neon_circle' | 'preset_3d_star';
+  logoText?: string;
+  logoSubtext?: string;
+  accentColor?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+const BRANDING_DOC_ID = 'branding';
+const LOCAL_BRANDING_KEY = 'leadspay_platform_branding';
+
+export function getLocalBranding(): PlatformBranding | null {
+  try {
+    const saved = localStorage.getItem(LOCAL_BRANDING_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
+
+export function subscribePlatformBranding(callback: (branding: PlatformBranding) => void) {
+  // Chamada inicial imediata com cache local se existir
+  const local = getLocalBranding();
+  if (local) callback(local);
+
+  const docRef = doc(db, COLLECTIONS.SETTINGS, BRANDING_DOC_ID);
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data() as PlatformBranding;
+      try {
+        localStorage.setItem(LOCAL_BRANDING_KEY, JSON.stringify(data));
+      } catch (_) {}
+      callback(data);
+    } else {
+      const defaultBranding: PlatformBranding = {
+        logoType: 'default_vector',
+        logoText: 'LEADSPAY',
+        logoSubtext: 'PAYMENTS & SPLIT',
+        accentColor: '#D9F22A'
+      };
+      callback(defaultBranding);
+    }
+  }, (err) => {
+    console.warn('Erro ao escutar platform_settings/branding:', err);
+    if (local) callback(local);
+  });
+}
+
+export async function savePlatformBranding(
+  branding: Partial<PlatformBranding>, 
+  updatedBy?: string
+): Promise<PlatformBranding> {
+  const docRef = doc(db, COLLECTIONS.SETTINGS, BRANDING_DOC_ID);
+  const now = new Date().toISOString();
+  
+  const payload: PlatformBranding = {
+    ...branding,
+    updatedAt: now,
+    updatedBy: updatedBy || 'admin'
+  };
+
+  const cleanPayload = sanitizeForFirestore(payload);
+  await setDoc(docRef, cleanPayload, { merge: true });
+
+  try {
+    const current = getLocalBranding() || {};
+    localStorage.setItem(LOCAL_BRANDING_KEY, JSON.stringify({ ...current, ...cleanPayload }));
+  } catch (_) {}
+
+  // Dispara evento global para que todos os componentes atualizem imediatamente
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('leadspay_branding_updated', { detail: cleanPayload }));
+  }
+
+  return payload;
 }
 

@@ -848,7 +848,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             const profDoc = await getDoc(doc(db, 'user_profiles', String(candidateSellerId)));
             if (profDoc.exists()) {
               const pData = profDoc.data();
-              sellerSubaccountId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
+              sellerSubaccountId = pData?.asaasWalletId || pData?.walletId || pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id;
             }
           }
         } catch (dbErr) {
@@ -863,11 +863,11 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           const compDoc = await getDoc(doc(db, 'companies', String(targetCompId)));
           if (compDoc.exists()) {
             const cData = compDoc.data();
-            sellerSubaccountId = cData?.asaasSubaccountId || cData?.subaccountId;
+            sellerSubaccountId = cData?.asaasWalletId || cData?.walletId || cData?.asaasSubaccountId || cData?.subaccountId;
             if (!sellerSubaccountId && cData?.ownerId) {
               const ownerDoc = await getDoc(doc(db, 'users', String(cData.ownerId)));
               if (ownerDoc.exists()) {
-                sellerSubaccountId = ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
+                sellerSubaccountId = ownerDoc.data()?.asaasWalletId || ownerDoc.data()?.walletId || ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
               }
             }
           }
@@ -883,15 +883,15 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           const planDoc = await getDoc(doc(db, 'plans', String(targetPlId)));
           if (planDoc.exists()) {
             const plData = planDoc.data();
-            sellerSubaccountId = plData?.asaasSubaccountId || plData?.subaccountId;
+            sellerSubaccountId = plData?.asaasWalletId || plData?.walletId || plData?.asaasSubaccountId || plData?.subaccountId;
             if (!sellerSubaccountId && plData?.companyId) {
               const compDoc = await getDoc(doc(db, 'companies', String(plData.companyId)));
               if (compDoc.exists()) {
-                sellerSubaccountId = compDoc.data()?.asaasSubaccountId || compDoc.data()?.subaccountId;
+                sellerSubaccountId = compDoc.data()?.asaasWalletId || compDoc.data()?.walletId || compDoc.data()?.asaasSubaccountId || compDoc.data()?.subaccountId;
                 if (!sellerSubaccountId && compDoc.data()?.ownerId) {
                   const ownerDoc = await getDoc(doc(db, 'users', String(compDoc.data()?.ownerId)));
                   if (ownerDoc.exists()) {
-                    sellerSubaccountId = ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
+                    sellerSubaccountId = ownerDoc.data()?.asaasWalletId || ownerDoc.data()?.walletId || ownerDoc.data()?.asaasSubaccountId || ownerDoc.data()?.subaccountId;
                   }
                 }
               }
@@ -1559,6 +1559,7 @@ app.post('/api/affiliates/join', async (req, res) => {
 
     const affiliationPayload = {
       id: affId,
+      affiliateId: cleanUserId,
       userId: cleanUserId,
       user_id: cleanUserId,
       planId: cleanPlanId,
@@ -1607,6 +1608,255 @@ app.post('/api/affiliates/join', async (req, res) => {
   } catch (error: any) {
     console.error('Erro ao processar /api/affiliates/join:', error);
     return res.status(500).json({ error: error.message || 'Erro ao processar afiliação' });
+  }
+});
+
+// =========================================================================
+// 🏢 MÓDULO 2: APROVAÇÃO DE EMPRESA & CRIAÇÃO DE SUBCONTA FISCAL ASAAS
+// =========================================================================
+app.post('/api/admin/approve-company', async (req, res) => {
+  try {
+    const { companyId } = req.body;
+    if (!companyId) {
+      return res.status(400).json({ error: 'companyId é obrigatório para aprovação.' });
+    }
+
+    const cleanCompanyId = String(companyId).trim();
+    const compRef = doc(db, 'companies', cleanCompanyId);
+    const compSnap = await getDoc(compRef);
+
+    if (!compSnap.exists()) {
+      return res.status(404).json({ error: 'Empresa não encontrada no Firestore.' });
+    }
+
+    const companyData = compSnap.data() as any;
+
+    // 1. Valida campos fiscais obrigatórios
+    const rawDoc = companyData.cpfCnpj || companyData.cleanCnpj || companyData.cleanCpf || companyData.cnpj || companyData.cpf;
+    const cleanDoc = cleanDocument(rawDoc);
+
+    if (!cleanDoc || (cleanDoc.length !== 11 && cleanDoc.length !== 14)) {
+      return res.status(400).json({
+        error: `A empresa "${companyData.name || companyData.companyName}" não possui um CPF/CNPJ fiscal válido (${cleanDoc || 'vazio'}). O cadastro fiscal é obrigatório para aprovação e criação de subconta Asaas.`
+      });
+    }
+
+    const compName = companyData.companyName || companyData.name || 'Empresa Parceira';
+    const compEmail = companyData.email || 'financeiro@leadspay.com';
+    const rawPhone = companyData.phone || companyData.mobilePhone || companyData.whatsapp || '';
+    const cleanPhone = cleanDocument(rawPhone);
+    const rawPostal = companyData.postalCode || companyData.cep || '';
+    const cleanPostal = cleanDocument(rawPostal);
+    const addressNumber = companyData.addressNumber || '1';
+
+    let asaasWalletId = companyData.asaasWalletId || companyData.walletId;
+    let asaasSubaccountId = companyData.asaasSubaccountId || companyData.subaccountId;
+    let apiKey = companyData.asaasApiKey || companyData.apiKey;
+
+    // 2. Criação da Subconta no Asaas v3 (POST /v3/accounts)
+    if (!asaasWalletId || !asaasSubaccountId) {
+      try {
+        console.log(`[Approve Company] Criando subconta no Asaas para ${compName} (${cleanDoc})...`);
+        const subacc = await createAsaasSubaccount({
+          name: compName,
+          email: compEmail,
+          cpfCnpj: cleanDoc,
+          mobilePhone: cleanPhone || undefined,
+          phone: cleanPhone || undefined,
+          postalCode: cleanPostal || undefined,
+          addressNumber: addressNumber,
+          address: companyData.address || 'Sede Comercial'
+        });
+
+        asaasSubaccountId = subacc.id;
+        asaasWalletId = subacc.walletId || subacc.id;
+        apiKey = subacc.apiKey || apiKey;
+        console.log(`✅ [Approve Company] Subconta Asaas homologada com sucesso: ID ${asaasSubaccountId} / Wallet ${asaasWalletId}`);
+      } catch (asaasErr: any) {
+        console.error('[Approve Company] Erro ao criar subconta no Asaas:', asaasErr);
+        return res.status(500).json({
+          error: `Erro ao criar subconta fiscal no Asaas: ${asaasErr.message || asaasErr}`
+        });
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // 3. Salva a asaasWalletId diretamente no documento da empresa no Firestore
+    const updatePayload: Record<string, any> = {
+      status: 'approved',
+      verified: true,
+      asaasWalletId: asaasWalletId,
+      asaasSubaccountId: asaasSubaccountId,
+      walletId: asaasWalletId,
+      subaccountId: asaasSubaccountId,
+      reviewedAt: nowIso,
+      rejectionReason: null
+    };
+    if (apiKey) updatePayload.asaasApiKey = apiKey;
+
+    await setDoc(compRef, updatePayload, { merge: true });
+
+    // 4. Atualiza também o perfil do dono
+    const targetUserId = companyData.ownerId || companyData.submittedBy;
+    if (targetUserId) {
+      try {
+        const userProfRef = doc(db, 'user_profiles', String(targetUserId));
+        await setDoc(userProfRef, {
+          verified: true,
+          verificationStatus: 'approved',
+          companyId: cleanCompanyId,
+          companyName: compName,
+          asaasWalletId: asaasWalletId,
+          asaasSubaccountId: asaasSubaccountId,
+          updatedAt: nowIso
+        }, { merge: true });
+
+        const userRef = doc(db, 'users', String(targetUserId));
+        await setDoc(userRef, {
+          verified: true,
+          verificationStatus: 'approved',
+          companyId: cleanCompanyId,
+          asaasWalletId: asaasWalletId,
+          asaasSubaccountId: asaasSubaccountId
+        }, { merge: true });
+      } catch (uErr) {
+        console.warn('[Approve Company] Aviso ao sincronizar perfil do usuário dono:', uErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Empresa "${compName}" aprovada com sucesso e subconta fiscal Asaas homologada!`,
+      companyId: cleanCompanyId,
+      asaasWalletId,
+      asaasSubaccountId
+    });
+
+  } catch (err: any) {
+    console.error('Erro na rota /api/admin/approve-company:', err);
+    return res.status(500).json({ error: err.message || 'Erro interno ao aprovar empresa.' });
+  }
+});
+
+// =========================================================================
+// 📦 MÓDULO 3: CRIAÇÃO & EDIÇÃO DE PLANOS COM ISOLAMENTO TOTAL DE TENANT
+// =========================================================================
+app.post('/api/plans', async (req, res) => {
+  try {
+    const { 
+      companyId,
+      name,
+      description,
+      priceSetup,
+      priceMonthly,
+      commissionPercentage,
+      recurrentCommissionPercent,
+      features,
+      bannerImage,
+      badge,
+      checkoutUrl,
+      category,
+      id: existingPlanId
+    } = req.body;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'companyId é obrigatório. O plano deve pertencer exclusivamente à sua empresa.' });
+    }
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'O nome do plano é obrigatório.' });
+    }
+
+    const cleanCompanyId = String(companyId).trim();
+    const compRef = doc(db, 'companies', cleanCompanyId);
+    const compSnap = await getDoc(compRef);
+
+    if (!compSnap.exists()) {
+      return res.status(404).json({ error: `Empresa com ID "${cleanCompanyId}" não encontrada.` });
+    }
+
+    const companyData = compSnap.data() as any;
+    const isVerified = companyData.verified === true || companyData.status === 'approved';
+    if (!isVerified) {
+      return res.status(403).json({ error: 'Apenas empresas aprovadas pela administração podem cadastrar ou publicar planos.' });
+    }
+
+    const planId = existingPlanId ? String(existingPlanId).trim() : `plan-${Date.now()}`;
+    const nowIso = new Date().toISOString();
+
+    const numSetup = Number(priceSetup || 0);
+    const numCommission = Number(commissionPercentage || 30);
+    const commissionVal = Number(((numSetup * numCommission) / 100).toFixed(2));
+
+    const planPayload = {
+      id: planId,
+      companyId: cleanCompanyId,
+      companyName: companyData.companyName || companyData.name || 'Empresa Parceira',
+      companyLogo: companyData.logo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80',
+      ownerId: companyData.ownerId || companyData.submittedBy,
+      asaasSubaccountId: companyData.asaasSubaccountId || companyData.subaccountId || companyData.asaasWalletId || null,
+      asaasWalletId: companyData.asaasWalletId || companyData.walletId || null,
+      name: name.trim(),
+      description: (description || '').trim(),
+      category: category || companyData.category || 'SaaS / B2B',
+      priceSetup: numSetup,
+      priceMonthly: Number(priceMonthly || 0),
+      commissionPercentage: numCommission,
+      commissionValue: commissionVal,
+      recurrentCommissionPercent: Number(recurrentCommissionPercent || 0),
+      features: Array.isArray(features) && features.length > 0 ? features : ['Ativação e setup imediato', 'Suporte dedicado'],
+      bannerImage: bannerImage || 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=80',
+      badge: badge || 'Destaque',
+      checkoutUrl: checkoutUrl || 'https://pay.leadspay.com/checkout',
+      status: 'Ativo',
+      updatedAt: nowIso,
+      ...(!existingPlanId ? { createdAt: nowIso, totalSales: 0, affiliatesCount: 0 } : {})
+    };
+
+    const planRef = doc(db, 'plans', planId);
+    await setDoc(planRef, planPayload, { merge: true });
+
+    if (!existingPlanId) {
+      try {
+        await updateDoc(compRef, {
+          totalPlansCount: increment(1)
+        });
+      } catch (cntErr) {
+        console.warn('Aviso ao atualizar contagem de planos da empresa:', cntErr);
+      }
+    }
+
+    console.log(`✅ [POST /api/plans] Plano "${planPayload.name}" (${planId}) vinculado exclusivamente à empresa ${cleanCompanyId} (${planPayload.companyName})`);
+
+    return res.json({
+      success: true,
+      plan: planPayload,
+      message: 'Plano cadastrado com sucesso e vinculado à sua empresa!'
+    });
+
+  } catch (err: any) {
+    console.error('Erro na rota /api/plans:', err);
+    return res.status(500).json({ error: err.message || 'Erro interno ao salvar plano.' });
+  }
+});
+
+// GET /api/plans - Lista de planos com suporte a filtro estrito por companyId
+app.get('/api/plans', async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    const plansColl = collection(db, 'plans');
+    let q;
+    if (companyId) {
+      q = query(plansColl, where('companyId', '==', String(companyId)));
+    } else {
+      q = plansColl;
+    }
+    const snap = await getDocs(q);
+    const plans = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+    return res.json({ success: true, plans });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Erro ao buscar planos.' });
   }
 });
 

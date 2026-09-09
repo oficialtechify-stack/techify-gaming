@@ -16,10 +16,19 @@ export interface CompanyStartup {
   cleanCnpj?: string;
   cpf?: string;
   cleanCpf?: string;
+  cpfCnpj?: string;
+  companyName?: string;
+  phone?: string;
+  mobilePhone?: string;
+  postalCode?: string;
+  addressNumber?: string;
+  address?: string;
   hasNoCnpj?: boolean;
   docType?: 'CNPJ' | 'CPF' | 'MEI' | 'SEM_CNPJ';
   asaasSubaccountId?: string;
   asaasWalletId?: string;
+  subaccountId?: string;
+  walletId?: string;
   apiKey?: string;
   webhookUrl?: string;
   documentType?: 'CNPJ' | 'MEI' | 'CPF';
@@ -100,6 +109,9 @@ export interface CompanyPlan {
   companyName: string;
   companyLogo: string;
   category: string;
+  ownerId?: string;
+  asaasSubaccountId?: string | null;
+  asaasWalletId?: string | null;
   name: string;
   tagline?: string;
   description: string;
@@ -148,6 +160,7 @@ export interface UserAffiliation {
   id: string;
   userId: string;
   user_id?: string;
+  affiliateId?: string;
   userName: string;
   affiliateName?: string;
   userEmail: string;
