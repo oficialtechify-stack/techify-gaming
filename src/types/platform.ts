@@ -43,7 +43,10 @@ export interface CompanyStartup {
   totalSalesCount?: number;
   commissionRange: string;
   verified: boolean;
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'banned';
+  banned?: boolean;
+  banReason?: string | null;
+  bannedAt?: string | null;
   submittedBy?: string;
   submittedByName?: string;
   submittedByEmail?: string;
@@ -328,7 +331,11 @@ export interface UserSellerProfile {
   city?: string;
   address?: string;
   verified?: boolean;
-  verificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected';
+  banned?: boolean;
+  banReason?: string | null;
+  bannedAt?: string | null;
+  status?: string;
+  verificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected' | 'banned';
   verificationSubmittedAt?: string;
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
@@ -365,7 +372,12 @@ export interface VerificationRequest {
   state?: string;
   city?: string;
   address?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  pixKey?: string;
+  pixKeyType?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'banned';
+  banned?: boolean;
+  banReason?: string | null;
+  bannedAt?: string | null;
   rejectionReason?: string;
   submittedAt: string;
   reviewedAt?: string;

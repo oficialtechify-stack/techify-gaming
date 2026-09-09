@@ -61,6 +61,7 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
   const logoText = branding.logoText || 'LEADSPAY';
   const logoSubtext = branding.logoSubtext || 'PAYMENTS & SPLIT';
   const accentColor = branding.accentColor || '#D9F22A';
+  const shouldShowText = showText && !(isCustomImage && branding.hideTextWithCustomLogo);
 
   return (
     <div 
@@ -70,8 +71,14 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
       {/* Ícone ou Imagem da Logo */}
       {showIcon && (
         <div 
-          className="relative flex-shrink-0 flex items-center justify-center"
-          style={{ width: `${currentDim.emblemSize}px`, height: `${currentDim.emblemSize}px` }}
+          className={`relative flex-shrink-0 flex items-center justify-center ${
+            isCustomImage ? 'max-h-full' : ''
+          }`}
+          style={
+            isCustomImage
+              ? { height: `${currentDim.height}px`, minWidth: `${currentDim.emblemSize}px` }
+              : { width: `${currentDim.emblemSize}px`, height: `${currentDim.emblemSize}px` }
+          }
         >
           {/* Subtle Backlight Glow */}
           <div 
@@ -84,7 +91,7 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
             <img 
               src={activeLogoUrl} 
               alt={logoText} 
-              className="w-full h-full object-contain relative z-10 drop-shadow-[0_2px_10px_rgba(217,242,42,0.4)] rounded-md"
+              className="h-full w-auto max-w-[200px] object-contain relative z-10 drop-shadow-[0_2px_10px_rgba(217,242,42,0.4)] rounded-md transition-all"
               onError={(e) => {
                 // Fallback gracioso se a imagem quebrar
                 (e.target as HTMLImageElement).style.display = 'none';
@@ -182,7 +189,7 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
       )}
 
       {/* Tipografia Oficial LeadsPay */}
-      {showText && (
+      {shouldShowText && (
         <div className="flex flex-col justify-center leading-none">
           <div className={`font-['Syne'] font-black tracking-tight uppercase ${currentDim.fontSize}`}>
             <span 

@@ -15,6 +15,7 @@ import {
   getDocs, 
   setDoc, 
   updateDoc,
+  deleteDoc,
   query,
   where,
   increment,
@@ -1736,6 +1737,300 @@ app.post('/api/admin/approve-company', async (req, res) => {
   } catch (err: any) {
     console.error('Erro na rota /api/admin/approve-company:', err);
     return res.status(500).json({ error: err.message || 'Erro interno ao aprovar empresa.' });
+  }
+});
+
+// =========================================================================
+// 🚫 MÓDULO 2.1: BANIR / SUSPENDER ENTIDADE (USUÁRIO OU EMPRESA)
+// =========================================================================
+app.post('/api/admin/ban-entity', async (req, res) => {
+  try {
+    const { id, type, reason } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'ID da entidade é obrigatório.' });
+    }
+
+    const cleanId = String(id).trim();
+    const banReason = String(reason || 'Suspensão aplicada pela administração por descumprimento de termos de uso.').trim();
+    const nowIso = new Date().toISOString();
+
+    if (type === 'company' || cleanId.startsWith('comp-')) {
+      // Banir Empresa e desativar planos
+      const compRef = doc(db, 'companies', cleanId);
+      await setDoc(compRef, {
+        status: 'banned',
+        verified: false,
+        banReason,
+        bannedAt: nowIso
+      }, { merge: true });
+
+      // Desativar planos vinculados a esta empresa
+      const plansSnap = await getDocs(collection(db, 'plans'));
+      for (const p of plansSnap.docs) {
+        if (p.data().companyId === cleanId) {
+          await updateDoc(p.ref, { active: false, status: 'banned', banReason });
+        }
+      }
+
+      // Atualizar solicitação de verificação vinculada
+      const verifSnap = await getDocs(collection(db, 'verification_requests'));
+      for (const v of verifSnap.docs) {
+        const vData = v.data();
+        if (vData.companyId === cleanId || v.id === cleanId) {
+          await updateDoc(v.ref, { status: 'banned', banReason, reviewedAt: nowIso });
+        }
+      }
+    } else {
+      // Banir Usuário / Perfil
+      const profRef = doc(db, 'user_profiles', cleanId);
+      const profSnap = await getDoc(profRef);
+      const profData = profSnap.exists() ? profSnap.data() : null;
+
+      await setDoc(profRef, {
+        status: 'banned',
+        banned: true,
+        banReason,
+        bannedAt: nowIso
+      }, { merge: true });
+
+      // Atualizar na coleção de verificação
+      const verifRef = doc(db, 'verification_requests', cleanId);
+      const verifSnap = await getDoc(verifRef);
+      if (verifSnap.exists()) {
+        await setDoc(verifRef, {
+          status: 'banned',
+          banReason,
+          reviewedAt: nowIso
+        }, { merge: true });
+      }
+
+      // Se o usuário possui empresa vinculada, suspender também
+      const userCompanyId = profData?.companyId;
+      if (userCompanyId) {
+        const compRef = doc(db, 'companies', userCompanyId);
+        await setDoc(compRef, {
+          status: 'banned',
+          verified: false,
+          banReason,
+          bannedAt: nowIso
+        }, { merge: true });
+
+        // Desativar planos da empresa
+        const plansSnap = await getDocs(collection(db, 'plans'));
+        for (const p of plansSnap.docs) {
+          if (p.data().companyId === userCompanyId) {
+            await updateDoc(p.ref, { active: false, status: 'banned', banReason });
+          }
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Conta/Empresa suspensa e banida com sucesso.'
+    });
+  } catch (err: any) {
+    console.error('Erro na rota /api/admin/ban-entity:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao banir entidade.' });
+  }
+});
+
+// =========================================================================
+// 🔓 MÓDULO 2.2: DESBANIR / REATIVAR ENTIDADE
+// =========================================================================
+app.post('/api/admin/unban-entity', async (req, res) => {
+  try {
+    const { id, type } = req.body;
+    if (!id) return res.status(400).json({ error: 'ID da entidade é obrigatório.' });
+
+    const cleanId = String(id).trim();
+    const nowIso = new Date().toISOString();
+
+    if (type === 'company' || cleanId.startsWith('comp-')) {
+      const compRef = doc(db, 'companies', cleanId);
+      await setDoc(compRef, {
+        status: 'approved',
+        verified: true,
+        banReason: null,
+        unbannedAt: nowIso
+      }, { merge: true });
+
+      // Reativar planos
+      const plansSnap = await getDocs(collection(db, 'plans'));
+      for (const p of plansSnap.docs) {
+        if (p.data().companyId === cleanId) {
+          await updateDoc(p.ref, { active: true, status: 'active', banReason: null });
+        }
+      }
+    } else {
+      const profRef = doc(db, 'user_profiles', cleanId);
+      await setDoc(profRef, {
+        status: 'approved',
+        banned: false,
+        banReason: null,
+        unbannedAt: nowIso
+      }, { merge: true });
+
+      const verifRef = doc(db, 'verification_requests', cleanId);
+      const verifSnap = await getDoc(verifRef);
+      if (verifSnap.exists()) {
+        await setDoc(verifRef, {
+          status: 'approved',
+          banReason: null,
+          reviewedAt: nowIso
+        }, { merge: true });
+      }
+    }
+
+    return res.json({ success: true, message: 'Entidade reativada com sucesso.' });
+  } catch (err: any) {
+    console.error('Erro na rota /api/admin/unban-entity:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao desbanir entidade.' });
+  }
+});
+
+// =========================================================================
+// 💣 MÓDULO 2.3: EXCLUSÃO TOTAL & PURGE DO BANCO DE DADOS (USUÁRIO / EMPRESA)
+// =========================================================================
+app.post('/api/admin/purge-entity', async (req, res) => {
+  try {
+    const { id, type, confirmation } = req.body;
+    if (!id) return res.status(400).json({ error: 'ID da entidade é obrigatório.' });
+    if (!confirmation || String(confirmation).trim().toUpperCase() !== 'EXCLUIR') {
+      return res.status(400).json({ error: 'Palavra de confirmação inválida. Digite EXCLUIR para confirmar.' });
+    }
+
+    const cleanId = String(id).trim();
+    console.log(`[Purge Entity] Iniciando exclusão definitiva de ${type} ID ${cleanId}...`);
+
+    let deletedDetails = {
+      profileDeleted: false,
+      companiesDeleted: 0,
+      plansDeleted: 0,
+      verificationsDeleted: 0,
+      affiliationsDeleted: 0
+    };
+
+    if (type === 'company' || cleanId.startsWith('comp-')) {
+      // 1. Deletar empresa
+      const compRef = doc(db, 'companies', cleanId);
+      const compSnap = await getDoc(compRef);
+      const ownerId = compSnap.exists() ? compSnap.data()?.ownerId : null;
+      await deleteDoc(compRef);
+      deletedDetails.companiesDeleted++;
+
+      // 2. Deletar planos da empresa
+      const plansSnap = await getDocs(collection(db, 'plans'));
+      for (const p of plansSnap.docs) {
+        if (p.data().companyId === cleanId) {
+          await deleteDoc(p.ref);
+          deletedDetails.plansDeleted++;
+        }
+      }
+
+      // 3. Deletar solicitações de verificação ligadas à empresa
+      const verifSnap = await getDocs(collection(db, 'verification_requests'));
+      for (const v of verifSnap.docs) {
+        if (v.data().companyId === cleanId || v.id === cleanId) {
+          await deleteDoc(v.ref);
+          deletedDetails.verificationsDeleted++;
+        }
+      }
+
+      // 4. Se encontrou dono, limpar vínculo de empresa no perfil
+      if (ownerId) {
+        try {
+          const profRef = doc(db, 'user_profiles', ownerId);
+          await updateDoc(profRef, {
+            companyId: null,
+            companyName: null,
+            hasCompanyProfile: false
+          });
+        } catch (e) {
+          console.warn('Erro não bloqueante ao limpar perfil do dono:', e);
+        }
+      }
+    } else {
+      // 1. Buscar perfil para encontrar eventuais vínculos
+      const profRef = doc(db, 'user_profiles', cleanId);
+      const profSnap = await getDoc(profRef);
+      const profData = profSnap.exists() ? profSnap.data() : null;
+      const linkedCompanyId = profData?.companyId;
+
+      // 2. Deletar perfil
+      await deleteDoc(profRef);
+      deletedDetails.profileDeleted = true;
+
+      // 3. Deletar da coleção 'users' se existir
+      try {
+        await deleteDoc(doc(db, 'users', cleanId));
+      } catch (uErr) {
+        // Silencioso se não existir
+      }
+
+      // 4. Deletar solicitações de verificação do usuário
+      const verifRef = doc(db, 'verification_requests', cleanId);
+      await deleteDoc(verifRef);
+      deletedDetails.verificationsDeleted++;
+
+      const verifSnap = await getDocs(collection(db, 'verification_requests'));
+      for (const v of verifSnap.docs) {
+        if (v.data().userId === cleanId) {
+          await deleteDoc(v.ref);
+          deletedDetails.verificationsDeleted++;
+        }
+      }
+
+      // 5. Se o usuário tinha empresa vinculada, deletar a empresa e planos
+      if (linkedCompanyId) {
+        await deleteDoc(doc(db, 'companies', linkedCompanyId));
+        deletedDetails.companiesDeleted++;
+
+        const plansSnap = await getDocs(collection(db, 'plans'));
+        for (const p of plansSnap.docs) {
+          if (p.data().companyId === linkedCompanyId) {
+            await deleteDoc(p.ref);
+            deletedDetails.plansDeleted++;
+          }
+        }
+      }
+
+      // Também buscar qualquer empresa onde ownerId seja este usuário
+      const compQ = query(collection(db, 'companies'), where('ownerId', '==', cleanId));
+      const compSnap = await getDocs(compQ);
+      for (const c of compSnap.docs) {
+        const cId = c.id;
+        await deleteDoc(c.ref);
+        deletedDetails.companiesDeleted++;
+
+        const plansSnap = await getDocs(collection(db, 'plans'));
+        for (const p of plansSnap.docs) {
+          if (p.data().companyId === cId) {
+            await deleteDoc(p.ref);
+            deletedDetails.plansDeleted++;
+          }
+        }
+      }
+
+      // 6. Deletar afiliações do usuário
+      const affSnap = await getDocs(collection(db, 'affiliations'));
+      for (const a of affSnap.docs) {
+        if (a.data().userId === cleanId || a.data().affiliateId === cleanId) {
+          await deleteDoc(a.ref);
+          deletedDetails.affiliationsDeleted++;
+        }
+      }
+    }
+
+    console.log(`✅ [Purge Entity] Concluído com sucesso:`, deletedDetails);
+    return res.json({
+      success: true,
+      message: 'Entidade e todos os dados associados foram completamente excluídos do banco de dados.',
+      details: deletedDetails
+    });
+  } catch (err: any) {
+    console.error('Erro na rota /api/admin/purge-entity:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao excluir entidade do banco de dados.' });
   }
 });
 

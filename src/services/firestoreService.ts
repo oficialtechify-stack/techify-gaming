@@ -400,6 +400,143 @@ export async function rejectVerificationInFirebase(userId: string, reason: strin
   return { success: true };
 }
 
+/**
+ * Ban / Suspend a User or Company in Firebase
+ */
+export async function banEntityInFirebase(id: string, type: 'user' | 'company', reason: string) {
+  try {
+    const res = await fetch('/api/admin/ban-entity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, type, reason })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (apiErr) {
+    console.warn('Backend ban API fallback to direct Firestore:', apiErr);
+  }
+
+  // Fallback direto
+  const now = new Date().toISOString();
+  if (type === 'company' || id.startsWith('comp-')) {
+    await setDoc(doc(db, COLLECTIONS.COMPANIES, id), {
+      status: 'banned',
+      verified: false,
+      banReason: reason,
+      bannedAt: now
+    }, { merge: true });
+  } else {
+    await setDoc(doc(db, COLLECTIONS.PROFILES, id), {
+      status: 'banned',
+      banned: true,
+      banReason: reason,
+      bannedAt: now
+    }, { merge: true });
+
+    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, id), {
+      status: 'banned',
+      banReason: reason,
+      reviewedAt: now
+    }, { merge: true });
+  }
+  return { success: true };
+}
+
+/**
+ * Unban / Reactivate a User or Company in Firebase
+ */
+export async function unbanEntityInFirebase(id: string, type: 'user' | 'company') {
+  try {
+    const res = await fetch('/api/admin/unban-entity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, type })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (apiErr) {
+    console.warn('Backend unban API fallback to direct Firestore:', apiErr);
+  }
+
+  const now = new Date().toISOString();
+  if (type === 'company' || id.startsWith('comp-')) {
+    await setDoc(doc(db, COLLECTIONS.COMPANIES, id), {
+      status: 'approved',
+      verified: true,
+      banReason: null,
+      unbannedAt: now
+    }, { merge: true });
+  } else {
+    await setDoc(doc(db, COLLECTIONS.PROFILES, id), {
+      status: 'approved',
+      banned: false,
+      banReason: null,
+      unbannedAt: now
+    }, { merge: true });
+
+    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, id), {
+      status: 'approved',
+      banReason: null,
+      reviewedAt: now
+    }, { merge: true });
+  }
+  return { success: true };
+}
+
+/**
+ * Permanently Purge / Delete User or Company from Database
+ */
+export async function purgeEntityInFirebase(id: string, type: 'user' | 'company', confirmation: string = 'EXCLUIR') {
+  try {
+    const res = await fetch('/api/admin/purge-entity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, type, confirmation })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    const err = await res.json();
+    throw new Error(err.error || 'Falha ao excluir entidade do banco.');
+  } catch (apiErr: any) {
+    console.warn('Backend purge API fallback, proceeding with direct Firestore:', apiErr);
+    
+    // Direct Firestore cascading purge fallback
+    if (type === 'company' || id.startsWith('comp-')) {
+      await deleteDoc(doc(db, COLLECTIONS.COMPANIES, id));
+      const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
+      for (const p of plansSnap.docs) {
+        if (p.data().companyId === id) await deleteDoc(p.ref);
+      }
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.VERIFICATIONS, id));
+      } catch (e) {}
+    } else {
+      await deleteDoc(doc(db, COLLECTIONS.PROFILES, id));
+      try {
+        await deleteDoc(doc(db, 'users', id));
+      } catch (e) {}
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.VERIFICATIONS, id));
+      } catch (e) {}
+
+      // Clean any owned company
+      const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', id));
+      const compSnap = await getDocs(compQ);
+      for (const c of compSnap.docs) {
+        await deleteDoc(c.ref);
+        const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
+        for (const p of plansSnap.docs) {
+          if (p.data().companyId === c.id) await deleteDoc(p.ref);
+        }
+      }
+    }
+    return { success: true };
+  }
+}
+
 // ==========================================
 // 🏢 EMPRESAS & STARTUPS (COMPANIES)
 // ==========================================
@@ -1513,6 +1650,8 @@ export interface PlatformBranding {
   logoText?: string;
   logoSubtext?: string;
   accentColor?: string;
+  hideTextWithCustomLogo?: boolean;
+  logoImageWidth?: number;
   updatedAt?: string;
   updatedBy?: string;
 }

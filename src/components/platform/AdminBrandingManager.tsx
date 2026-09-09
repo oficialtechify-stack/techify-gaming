@@ -35,6 +35,7 @@ export const AdminBrandingManager: React.FC = () => {
   const [logoText, setLogoText] = useState<string>('LEADSPAY');
   const [logoSubtext, setLogoSubtext] = useState<string>('PAYMENTS & SPLIT');
   const [accentColor, setAccentColor] = useState<string>('#D9F22A');
+  const [hideTextWithCustomLogo, setHideTextWithCustomLogo] = useState<boolean>(false);
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -49,6 +50,7 @@ export const AdminBrandingManager: React.FC = () => {
         setLogoText(data.logoText || 'LEADSPAY');
         setLogoSubtext(data.logoSubtext || 'PAYMENTS & SPLIT');
         setAccentColor(data.accentColor || '#D9F22A');
+        setHideTextWithCustomLogo(Boolean(data.hideTextWithCustomLogo));
       }
     });
 
@@ -102,7 +104,8 @@ export const AdminBrandingManager: React.FC = () => {
         logoUrl: selectedType === 'custom_image' ? inputUrl.trim() : '',
         logoText: logoText.trim() || 'LEADSPAY',
         logoSubtext: logoSubtext.trim() || 'PAYMENTS & SPLIT',
-        accentColor: accentColor || '#D9F22A'
+        accentColor: accentColor || '#D9F22A',
+        hideTextWithCustomLogo: hideTextWithCustomLogo
       };
 
       await savePlatformBranding(payload, currentUser?.email || 'admin');
@@ -205,27 +208,54 @@ export const AdminBrandingManager: React.FC = () => {
         <div className="lg:col-span-7 space-y-6">
           {/* 1. Escolha do Modo da Logo */}
           <div className="space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-white/80 flex items-center gap-2">
-              <Sliders className="w-3.5 h-3.5 text-[#D9F22A]" />
-              Origem da Logo
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-white/80 flex items-center gap-2">
+                <Sliders className="w-3.5 h-3.5 text-[#D9F22A]" />
+                Como deseja definir sua Logo?
+              </label>
+              {selectedType === 'custom_image' && (
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Modo Personalizado Ativo
+                </span>
+              )}
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Opção C: Imagem Personalizada (Upload / URL) - EM DESTAQUE */}
+              <button
+                type="button"
+                onClick={() => setSelectedType('custom_image')}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                  selectedType === 'custom_image'
+                    ? 'bg-[#D9F22A]/15 border-[#D9F22A] text-white shadow-[0_0_20px_rgba(217,242,42,0.15)]'
+                    : 'bg-[#050811] border-white/10 text-white/70 hover:border-white/30'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5 text-[#D9F22A]" />
+                    Upload Manual
+                  </span>
+                  {selectedType === 'custom_image' && <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />}
+                </div>
+                <p className="text-[11px] text-white/50">Envie o arquivo do seu computador ou link</p>
+              </button>
+
               {/* Opção A: Presets Oficiais */}
               <button
                 type="button"
                 onClick={() => setSelectedType('default_vector')}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                   selectedType === 'default_vector'
-                    ? 'bg-[#D9F22A]/10 border-[#D9F22A] text-white'
+                    ? 'bg-[#D9F22A]/15 border-[#D9F22A] text-white shadow-[0_0_20px_rgba(217,242,42,0.15)]'
                     : 'bg-[#050811] border-white/10 text-white/70 hover:border-white/20'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-white">Raio Neon LeadsPay</span>
+                  <span className="text-xs font-bold text-white">Raio Neon</span>
                   {selectedType === 'default_vector' && <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />}
                 </div>
-                <p className="text-[11px] text-white/50">Vetor oficial de alta resolução com acabamento neon</p>
+                <p className="text-[11px] text-white/50">Vetor padrão LeadsPay</p>
               </button>
 
               {/* Opção B: Emblema 3D Estrela */}
@@ -234,94 +264,123 @@ export const AdminBrandingManager: React.FC = () => {
                 onClick={() => setSelectedType('preset_3d_star')}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                   selectedType === 'preset_3d_star'
-                    ? 'bg-[#D9F22A]/10 border-[#D9F22A] text-white'
+                    ? 'bg-[#D9F22A]/15 border-[#D9F22A] text-white shadow-[0_0_20px_rgba(217,242,42,0.15)]'
                     : 'bg-[#050811] border-white/10 text-white/70 hover:border-white/20'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-white">Emblema 3D Estrela</span>
+                  <span className="text-xs font-bold text-white">Estrela 3D</span>
                   {selectedType === 'preset_3d_star' && <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />}
                 </div>
-                <p className="text-[11px] text-white/50">Símbolo 3D com estrela e contorno verde-limão</p>
-              </button>
-
-              {/* Opção C: Imagem Personalizada (Upload / URL) */}
-              <button
-                type="button"
-                onClick={() => setSelectedType('custom_image')}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer sm:col-span-2 ${
-                  selectedType === 'custom_image'
-                    ? 'bg-[#D9F22A]/10 border-[#D9F22A] text-white'
-                    : 'bg-[#050811] border-white/10 text-white/70 hover:border-white/20'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-white">Upload Manual / URL de Imagem</span>
-                  {selectedType === 'custom_image' && <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />}
-                </div>
-                <p className="text-[11px] text-white/50">Carregue um arquivo PNG/SVG do seu computador ou cole o link direto</p>
+                <p className="text-[11px] text-white/50">Emblema com estrela neon</p>
               </button>
             </div>
           </div>
 
-          {/* 2. Área de Upload / URL quando 'custom_image' está selecionado */}
-          {selectedType === 'custom_image' && (
-            <div className="space-y-4 p-4 rounded-xl bg-[#050811] border border-white/10 animate-in fade-in duration-200">
-              {/* Upload de Arquivo Local */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-white/80 flex items-center gap-2">
-                  <Upload className="w-3.5 h-3.5 text-[#D9F22A]" />
-                  Enviar Imagem do Seu Computador
-                </label>
-                <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-white/20 hover:border-[#D9F22A] rounded-xl cursor-pointer bg-white/[0.02] hover:bg-white/[0.04] transition-all">
-                  <ImageIcon className="w-8 h-8 text-[#D9F22A] mb-2" />
-                  <span className="text-xs font-bold text-white">Clique para selecionar imagem</span>
-                  <span className="text-[10px] text-white/40 mt-1">PNG, SVG, JPG ou WebP (Máx. 2MB)</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-                {uploadError && (
-                  <p className="text-xs text-rose-400 mt-1">{uploadError}</p>
-                )}
-              </div>
-
-              {/* Divisor "OU" */}
-              <div className="flex items-center gap-3 text-white/20 text-xs font-bold uppercase">
-                <div className="flex-1 h-[1px] bg-white/10" />
-                <span>OU COLE O LINK</span>
-                <div className="flex-1 h-[1px] bg-white/10" />
-              </div>
-
-              {/* Input de URL externa */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-white/80 flex items-center gap-2">
-                  <LinkIcon className="w-3.5 h-3.5 text-[#D9F22A]" />
-                  URL Direta da Imagem
-                </label>
-                <input
-                  type="url"
-                  value={inputUrl.startsWith('data:') ? '(Imagem carregada via upload local)' : inputUrl}
-                  disabled={inputUrl.startsWith('data:')}
-                  onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="https://sua-empresa.com/logo.png"
-                  className="w-full px-4 py-3 bg-[#080d1a] border border-white/10 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-[#D9F22A] transition-colors disabled:opacity-50"
-                />
-                {inputUrl.startsWith('data:') && (
-                  <button
-                    type="button"
-                    onClick={() => setInputUrl('')}
-                    className="text-[10px] text-rose-400 hover:underline cursor-pointer"
-                  >
-                    Remover imagem local e usar URL
-                  </button>
-                )}
-              </div>
+          {/* 2. Área de Upload / Imagem Manual - Sempre acessível e clara */}
+          <div className="space-y-4 p-5 rounded-2xl bg-[#080d1a] border border-white/15 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <label className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#D9F22A]" />
+                Carregar Arquivo de Imagem da Sua Marca
+              </label>
+              <span className="text-[10px] text-white/40 font-mono">PNG, SVG, JPG, WebP</span>
             </div>
-          )}
+
+            {/* Se já tiver imagem carregada, exibir miniatura e opções */}
+            {inputUrl && (
+              <div className="p-4 rounded-xl bg-[#050811] border border-[#D9F22A]/30 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-14 h-14 rounded-lg bg-[#060A15] border border-white/10 p-1 flex items-center justify-center flex-shrink-0">
+                    <img
+                      src={inputUrl}
+                      alt="Logo carregada"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-white block truncate">
+                      {inputUrl.startsWith('data:') ? 'Imagem carregada do seu computador' : inputUrl}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 flex items-center gap-1 mt-0.5">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Pronta para salvar e aplicar no site
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInputUrl('');
+                    setSelectedType('default_vector');
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 text-xs font-bold border border-rose-500/30 transition-all cursor-pointer flex-shrink-0"
+                >
+                  Remover
+                </button>
+              </div>
+            )}
+
+            {/* Dropzone de Upload de Arquivo Local */}
+            <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/20 hover:border-[#D9F22A] rounded-xl cursor-pointer bg-white/[0.02] hover:bg-white/[0.05] transition-all group">
+              <Upload className="w-8 h-8 text-[#D9F22A] mb-2 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-bold text-white text-center">
+                {inputUrl ? 'Clique para substituir por outra imagem' : 'Clique aqui para selecionar a imagem do seu computador'}
+              </span>
+              <span className="text-[10px] text-white/40 mt-1 text-center">
+                Recomendado: imagem com fundo transparente (PNG ou SVG) até 2MB
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+
+            {uploadError && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/20">{uploadError}</p>
+            )}
+
+            {/* Opção Alternativa de URL */}
+            <div className="space-y-1.5 pt-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 flex items-center gap-1.5">
+                <LinkIcon className="w-3 h-3" />
+                Ou cole o link direto da imagem na internet:
+              </span>
+              <input
+                type="url"
+                value={inputUrl.startsWith('data:') ? '' : inputUrl}
+                onChange={(e) => {
+                  setInputUrl(e.target.value);
+                  if (e.target.value) setSelectedType('custom_image');
+                }}
+                placeholder="https://exemplo.com/minha-logo.png"
+                className="w-full px-4 py-2.5 bg-[#050811] border border-white/10 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-[#D9F22A] transition-colors"
+              />
+            </div>
+
+            {/* Opção para ocultar texto padrão */}
+            {selectedType === 'custom_image' && (
+              <div className="pt-2 border-t border-white/10">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hideTextWithCustomLogo}
+                    onChange={(e) => setHideTextWithCustomLogo(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/20 text-[#D9F22A] focus:ring-0 cursor-pointer accent-[#D9F22A]"
+                  />
+                  <span className="text-xs font-bold text-white/90">
+                    Ocultar texto padrão ("LEADSPAY") ao lado da logo
+                  </span>
+                </label>
+                <p className="text-[10px] text-white/40 ml-6.5 mt-0.5">
+                  Marque esta opção se sua imagem já contém o nome da sua empresa/marca desenhado nela.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* 3. Textos da Marca e Cores */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
