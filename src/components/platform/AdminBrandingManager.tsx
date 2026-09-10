@@ -23,7 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 export const AdminBrandingManager: React.FC = () => {
   const { currentUser } = useAuth();
   const [branding, setBranding] = useState<PlatformBranding>({
-    logoType: 'default_vector',
+    logoType: 'preset_3d_star',
     logoText: 'LEADSPAY',
     logoSubtext: 'PAYMENTS & SPLIT',
     accentColor: '#D9F22A',
@@ -31,7 +31,7 @@ export const AdminBrandingManager: React.FC = () => {
   });
 
   const [inputUrl, setInputUrl] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<'default_vector' | 'custom_image' | 'preset_neon_circle' | 'preset_3d_star'>('default_vector');
+  const [selectedType, setSelectedType] = useState<'default_vector' | 'custom_image' | 'preset_neon_circle' | 'preset_3d_star'>('preset_3d_star');
   const [logoText, setLogoText] = useState<string>('LEADSPAY');
   const [logoSubtext, setLogoSubtext] = useState<string>('PAYMENTS & SPLIT');
   const [accentColor, setAccentColor] = useState<string>('#D9F22A');
@@ -269,10 +269,13 @@ export const AdminBrandingManager: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-white">Estrela 3D</span>
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <img src="/logo_3d.jpg" alt="Logo 3D" className="w-4 h-4 rounded object-cover" />
+                    Logo 3D Oficial
+                  </span>
                   {selectedType === 'preset_3d_star' && <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />}
                 </div>
-                <p className="text-[11px] text-white/50">Emblema com estrela neon</p>
+                <p className="text-[11px] text-white/50">Emblema 3D cristal & estrela neon</p>
               </button>
             </div>
           </div>

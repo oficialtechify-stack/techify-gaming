@@ -94,7 +94,7 @@ function MainApp() {
               priceMonthly: parsedAmount,
               commissionPercentage: 0,
               commissionValue: 0,
-              features: ['Acesso Imediato', 'Pagamento PIX Seguro', 'Emissão D+0'],
+              features: ['Acesso Imediato', 'Pagamento PIX Seguro', 'Emissão D+9'],
               companyId: 'leadspay',
               companyName: 'LeadsPay',
               companyLogo: '',

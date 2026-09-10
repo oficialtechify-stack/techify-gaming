@@ -44,7 +44,7 @@ export const CultureBanner: React.FC = () => {
           className="text-center max-w-3xl mx-auto mb-12 sm:mb-16"
         >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase tracking-tight font-['Syne'] leading-tight text-white">
-            Construído para <span className="text-[#D9F22A] drop-shadow-[0_0_20px_rgba(217,242,42,0.3)]">escalar contratos</span> e liquidar comissões no PIX D+0.
+            Construído para <span className="text-[#D9F22A] drop-shadow-[0_0_20px_rgba(217,242,42,0.3)]">escalar contratos</span> e liquidar comissões no PIX D+9.
           </h2>
           <p className="mt-4 text-sm sm:text-base text-white/70">
             Nossa plataforma combina processamento financeiro em tempo real, links de alta conversão e inteligência antifraude para que nenhuma venda fique sem rastreamento.
@@ -111,8 +111,8 @@ export const CultureBanner: React.FC = () => {
 
             <div className="flex flex-col gap-2">
               <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Tempo de Repasse</div>
-              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">&lt; 3 Segundos</div>
-              <p className="text-xs text-white/60">Liquidação imediata D+0 sem carência de 30 dias.</p>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">D+9 Garantido</div>
+              <p className="text-xs text-white/60">Liquidação segura D+9 sem burocracia ou retenções ocultas.</p>
             </div>
           </div>
 

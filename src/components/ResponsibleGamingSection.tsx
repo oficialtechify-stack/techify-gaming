@@ -38,7 +38,7 @@ export const ResponsibleGamingSection: React.FC<ResponsibleGamingSectionProps> =
                   </div>
                 </div>
                 <span className="text-[11px] font-mono bg-white/5 text-white/60 px-2.5 py-1 rounded-md border border-white/5">
-                  PIX D+0
+                  PIX D+9
                 </span>
               </div>
 
@@ -117,9 +117,9 @@ export const ResponsibleGamingSection: React.FC<ResponsibleGamingSectionProps> =
                 <div className="p-3.5 rounded-xl bg-[#080d1a] border border-white/5 flex flex-col gap-1">
                   <div className="flex items-center gap-2 text-white font-bold text-xs">
                     <Landmark className="w-4 h-4 text-[#D9F22A]" />
-                    <span>Liquidação PIX D+0</span>
+                    <span>Liquidação PIX D+9</span>
                   </div>
-                  <p className="text-xs text-white/60">Integração bancária direta para transferências instantâneas e sem atrito.</p>
+                  <p className="text-xs text-white/60">Integração bancária direta para transferências seguras e transparentes em D+9.</p>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-[#080d1a] border border-white/5 flex flex-col gap-1">

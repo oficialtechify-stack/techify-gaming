@@ -1684,7 +1684,7 @@ export function subscribePlatformBranding(callback: (branding: PlatformBranding)
       callback(data);
     } else {
       const defaultBranding: PlatformBranding = {
-        logoType: 'default_vector',
+        logoType: 'preset_3d_star',
         logoText: 'LEADSPAY',
         logoSubtext: 'PAYMENTS & SPLIT',
         accentColor: '#D9F22A'

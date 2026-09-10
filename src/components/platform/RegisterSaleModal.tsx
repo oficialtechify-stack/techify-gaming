@@ -102,7 +102,7 @@ export const RegisterSaleModal: React.FC<RegisterSaleModalProps> = ({
           Registrar Nova Venda
         </h3>
         <p className="text-xs text-white/70 mb-6">
-          Ao registrar a venda do plano, o contrato é confirmado no sistema e a comissão de <strong>R$ {commissionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> é creditada diretamente na carteira para saque via PIX D+0.
+          Ao registrar a venda do plano, o contrato é confirmado no sistema e a comissão de <strong>R$ {commissionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> é creditada diretamente na carteira para saque via PIX D+9.
         </p>
 
         <form onSubmit={handleRegister} className="flex flex-col gap-4">
@@ -239,7 +239,7 @@ export const RegisterSaleModal: React.FC<RegisterSaleModalProps> = ({
                 onChange={(e) => setMethod(e.target.value as any)}
                 className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
               >
-                <option value="PIX">PIX Instantâneo (D+0)</option>
+                <option value="PIX">PIX Instantâneo (D+9)</option>
                 <option value="Cartão de Crédito">Cartão de Crédito (12x)</option>
                 <option value="PicPay">PicPay Carteira</option>
                 <option value="Crypto USDT">Crypto USDT (TRC-20)</option>

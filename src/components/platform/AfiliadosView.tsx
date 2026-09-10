@@ -217,7 +217,7 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
               <div className="text-2xl font-black text-[#D9F22A] font-['Syne'] mt-1">
                 R$ {calculatedCommissionTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
-              <span className="text-[10px] text-white/50 block mt-1">Pago no ato da contratação D+0</span>
+              <span className="text-[10px] text-white/50 block mt-1">Pago com liquidação D+9</span>
             </div>
 
             <div className="p-4 rounded-xl bg-white/5 border border-white/10">

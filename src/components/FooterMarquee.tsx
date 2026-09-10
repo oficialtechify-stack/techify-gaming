@@ -32,10 +32,10 @@ export const FooterMarquee: React.FC<FooterMarqueeProps> = ({ onOpenModal }) => 
           <div className="lg:col-span-4 flex flex-col items-start gap-4">
             <TechifyLogo size="sm" />
             <p className="text-xs text-white/70 leading-relaxed max-w-sm mt-1">
-              O LeadsPay é a infraestrutura comercial e marketplace de startups que conecta produtos de tecnologia e SaaS a afiliados de alta performance com repasses instantâneos via PIX D+0.
+              O LeadsPay é a infraestrutura comercial e marketplace de startups que conecta produtos de tecnologia e SaaS a afiliados de alta performance com repasses automáticos via PIX D+9.
             </p>
             <div className="flex items-center gap-2 text-[11px] text-[#D9F22A] font-bold uppercase tracking-wider bg-[#D9F22A]/10 px-3 py-1.5 rounded-lg border border-[#D9F22A]/20">
-              <span>✦ Split em Tempo Real & PIX D+0</span>
+              <span>✦ Split em Tempo Real & PIX D+9</span>
             </div>
           </div>
 

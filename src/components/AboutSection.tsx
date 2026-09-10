@@ -41,7 +41,7 @@ export const AboutSection: React.FC = () => {
               Ao mesmo tempo, milhares de afiliados profissionais, gestores de tráfego e consultores de vendas buscam soluções tecnológicas robustas e de alto ticket para monetizar sua base de contatos.
             </p>
             <p className="text-white font-medium">
-              O <strong>LeadsPay</strong> nasceu para unificar essas duas frentes: uma plataforma marketplace onde empresas publicam seus planos e um exército de afiliados capacitados gera vendas contínuas com comissões justas e liquidadas no mesmo dia.
+              O <strong>LeadsPay</strong> nasceu para unificar essas duas frentes: uma plataforma marketplace onde empresas publicam seus planos e um exército de afiliados capacitados gera vendas contínuas com comissões justas e liquidadas com total transparência em D+9.
             </p>
           </motion.div>
         </div>
@@ -114,7 +114,7 @@ export const AboutSection: React.FC = () => {
                 Monetize com Produtos Validados & Comissões de até 50%
               </h3>
               <p className="text-xs sm:text-sm text-white/70 leading-relaxed mb-6">
-                Acesse uma vitrine com as melhores soluções de software, SaaS e tecnologia do mercado. Afilie-se com 1 clique e receba seus repasses via PIX no mesmo dia.
+                Acesse uma vitrine com as melhores soluções de software, SaaS e tecnologia do mercado. Afilie-se com 1 clique e receba seus repasses via PIX no ciclo D+9.
               </p>
 
               <ul className="flex flex-col gap-3 text-xs sm:text-sm text-white/80">
@@ -132,15 +132,15 @@ export const AboutSection: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-[#D9F22A] flex-shrink-0 mt-0.5" />
-                  <span>Saques liberados via PIX instantâneo com liquidação D+0.</span>
+                  <span>Saques liberados via PIX instantâneo com liquidação D+9.</span>
                 </li>
               </ul>
             </div>
 
             <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between">
-              <span className="text-xs font-bold text-white/60 uppercase tracking-wider">Liquidez Imediata</span>
+              <span className="text-xs font-bold text-white/60 uppercase tracking-wider">Liquidez Transparente</span>
               <div className="flex items-center gap-1 text-xs font-bold text-[#D9F22A]">
-                <span>Repasse via PIX D+0</span>
+                <span>Repasse via PIX D+9</span>
                 <Zap className="w-4 h-4" />
               </div>
             </div>

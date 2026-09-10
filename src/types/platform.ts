@@ -128,6 +128,7 @@ export interface CompanyPlan {
   features: string[];
   bannerImage: string;
   paymentType?: 'Único' | 'Recorrente' | 'Assinatura';
+  billingType?: 'recorrente' | 'unico' | string;
   supportEmail?: string;
   warrantyDays?: number;
   thankYouPageUrl?: string;
@@ -158,6 +159,9 @@ export interface CompanyPlan {
 
 // Retaining PlatformProduct as an alias or extension for compatibility
 export type PlatformProduct = CompanyPlan;
+export type PlatformPlan = CompanyPlan;
+export type SaleRecord = SaleTransaction;
+export type UserProfile = UserSellerProfile;
 
 export interface UserAffiliation {
   id: string;
@@ -286,6 +290,7 @@ export interface UserSellerProfile {
   availableBalance: number;
   pendingBalance: number;
   totalEarned: number;
+  totalSalesVolume?: number;
   totalSalesCount: number;
   affiliateSalesCount?: number;
   grossRevenue?: number;
@@ -422,4 +427,7 @@ export type PlatformTab =
   | 'equipe' 
   | 'relatorios' 
   | 'integracoes'
+  | 'premiacoes'
+  | 'assinaturas'
+  | 'cupons'
   | 'database';

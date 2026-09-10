@@ -27,8 +27,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
           </h1>
 
           {/* Subheading Narrative */}
-          <p className="mt-5 sm:mt-6 text-sm sm:text-base md:text-lg text-white/80 max-w-2xl mx-auto font-normal leading-relaxed text-center">
-            A infraestrutura comercial definitiva: startups e empresas escalam distribuição sem custo fixo, enquanto afiliados e vendedores profissionais monetizam comissões de <span className="text-[#D9F22A] font-bold">30% a 50%</span> e repasses automáticos via <span className="text-[#D9F22A] font-bold">PIX D+0</span>.
+          <p className="mt-5 sm:mt-6 text-sm sm:text-base md:text-lg text-white/85 max-w-2xl mx-auto font-normal leading-relaxed text-center">
+            A infraestrutura comercial definitiva: startups e empresas escalam distribuição sem custo fixo, enquanto afiliados e vendedores profissionais monetizam comissões de <span className="text-[#D9F22A] font-bold">30% a 50%</span> e repasses automáticos via <span className="text-[#D9F22A] font-bold">PIX D+9</span>.
           </p>
         </div>
 
@@ -65,21 +65,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
           </a>
         </div>
 
-        {/* Central 3D Glowing Emblem */}
+        {/* Central 3D Glowing Emblem (Official LeadsPay Glass/Neon Star from Image 1) */}
         <div className="relative flex justify-center items-center my-6 sm:my-8">
           <div className="relative w-full max-w-[280px] sm:max-w-[360px] md:max-w-[420px] aspect-square flex items-center justify-center group">
             {/* Ambient Volumetric Backlight Glow */}
-            <div className="absolute inset-0 bg-[#D9F22A]/20 rounded-full blur-[80px] sm:blur-[100px] pointer-events-none group-hover:scale-105 transition-transform duration-700" />
+            <div className="absolute inset-0 bg-[#D9F22A]/25 rounded-full blur-[80px] sm:blur-[110px] pointer-events-none group-hover:scale-110 transition-transform duration-700" />
             
-            {/* 3D High-Res Emblem Image */}
+            {/* 3D High-Res Emblem Image from User Image 1 */}
             <img
               width="575"
               height="575"
-              src="https://stellargaming.com/wp-content/uploads/2025/08/frame_1321318091.webp"
-              alt="LeadsPay 3D Emblem"
-              referrerPolicy="no-referrer"
-              className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_20px_40px_rgba(217,242,42,0.3)] transition-transform duration-500 hover:scale-[1.02]"
+              src="/logo_3d.jpg"
+              alt="LeadsPay 3D Glass Star Emblem"
+              className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_20px_45px_rgba(217,242,42,0.4)] rounded-3xl transition-transform duration-500 hover:scale-[1.04]"
               loading="eager"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/leadspay_3d_logo.jpg';
+              }}
             />
           </div>
         </div>
@@ -124,10 +126,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
               Tecnologia & Pagamentos
             </div>
             <h3 className="text-lg font-black text-white font-['Syne']">
-              Split Automático & PIX D+0
+              Split Automático & PIX D+9
             </h3>
             <p className="text-xs text-white/70 leading-relaxed">
-              Divisão instantânea de receitas a cada venda confirmada. Sem burocracia ou retenções abusivas: solicite seu saque e receba via PIX no mesmo dia.
+              Divisão instantânea de receitas a cada venda confirmada. Sem burocracia ou retenções abusivas: solicite seu saque e receba via PIX com liquidação transparente D+9.
             </p>
           </div>
         </div>

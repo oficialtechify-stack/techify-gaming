@@ -87,7 +87,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </span>
             ) : (
               <span className="text-xs text-white/70 mt-1">
-                Comissão creditada imediatamente no fechamento da venda via PIX D+0.
+                Comissão creditada no fechamento da venda via PIX D+9.
               </span>
             )}
           </div>

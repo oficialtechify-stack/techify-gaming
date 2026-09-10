@@ -579,7 +579,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                     Crie sua Conta de Afiliado
                   </h3>
                   <p className="text-xs text-white/70 mt-1">
-                    Venda softwares e startups validadas com comissões de até 50% e saques PIX D+0.
+                    Venda softwares e startups validadas com comissões de até 50% e saques PIX D+9.
                   </p>
                 </div>
 
@@ -814,7 +814,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                       className="rounded border-white/20 bg-[#050811] text-[#D9F22A] focus:ring-0 cursor-pointer"
                     />
                     <label htmlFor="termsAff" className="text-[11px] text-white/70 cursor-pointer">
-                      Concordo com os Termos de Afiliação e Repasses PIX D+0.
+                      Concordo com os Termos de Afiliação e Repasses PIX D+9.
                     </label>
                   </div>
 
@@ -1387,7 +1387,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                   <UserCheck className="w-5 h-5" />
                 </div>
                 <h4 className="text-base font-bold text-white group-hover:text-[#D9F22A]">Quero Ser Afiliado</h4>
-                <p className="text-xs text-white/60">Venda softwares e planos com comissões de até 50% via PIX D+0.</p>
+                <p className="text-xs text-white/60">Venda softwares e planos com comissões de até 50% via PIX D+9.</p>
               </button>
 
               <button
@@ -1421,7 +1421,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                 O <strong>LeadsPay</strong> é o ecossistema e infraestrutura que acelera a aquisição de clientes para startups de tecnologia através de uma rede ativa de milhares de afiliados especializados.
               </p>
               <p>
-                Garantimos que fundadores e empresas publiquem seus produtos com controle total das comissões, enquanto afiliados recebem comissões transparentes com liquidação automática em tempo real via <strong>PIX D+0</strong>.
+                Garantimos que fundadores e empresas publiquem seus produtos com controle total das comissões, enquanto afiliados recebem comissões transparentes com liquidação automática em tempo real via <strong>PIX D+9</strong>.
               </p>
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">

@@ -21,7 +21,13 @@ import {
   Sparkles,
   RefreshCw,
   Clock,
-  Layers
+  Layers,
+  Users,
+  Shield,
+  Smartphone,
+  CheckCircle2,
+  ChevronRight,
+  BarChart3
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -60,7 +66,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   setSelectedTypeFilter
 }) => {
   const [showValues, setShowValues] = useState<boolean>(true);
-  const [activeBannerSlide, setActiveBannerSlide] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const handleRefresh = () => {
@@ -71,7 +76,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Filter transactions based on filters
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
   const safePlatforms = Array.isArray(platforms) ? platforms : [];
-  const safePaymentStats = Array.isArray(paymentStats) ? paymentStats : [];
 
   const filteredTransactions = safeTransactions.filter(t => {
     if (!t) return false;
@@ -84,74 +88,80 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const totalFilteredCommission = filteredTransactions.reduce((acc, t) => acc + (t.status === 'Aprovado' ? (Number(t.commissionEarned ?? (t as any)?.commissionValue) || 0) : 0), 0);
   const approvedSalesCount = filteredTransactions.filter(t => t.status === 'Aprovado').length;
 
-  const latestSale = safeTransactions.length > 0 ? safeTransactions[0] : null;
+  // Complete Payment Methods list matching Image 3
+  const DEFAULT_PAYMENT_ROWS = [
+    { method: 'PIX', conversion: '0%', value: 0, icon: '❖', color: 'text-[#D9F22A]' },
+    { method: 'Cartão de Crédito', conversion: '0%', value: 0, icon: '💳', color: 'text-white' },
+    { method: 'PicPay', conversion: '0%', value: 0, icon: 'P', color: 'text-emerald-400' },
+    { method: 'OXXO', conversion: '0%', value: 0, icon: 'OX', color: 'text-orange-400' },
+    { method: 'SPEI', conversion: '0%', value: 0, icon: '⚡', color: 'text-sky-400' },
+    { method: 'PIX Automático', conversion: '0%', value: 0, icon: '🔄', color: 'text-[#D9F22A]' },
+    { method: 'Apple Pay', conversion: '0%', value: 0, icon: '', color: 'text-white' },
+    { method: 'Google Pay', conversion: '0%', value: 0, icon: 'G', color: 'text-blue-400' },
+    { method: '3DS', conversion: '0%', value: 0, icon: '🛡️', color: 'text-purple-400' },
+  ];
+
+  // Merge with real stats if any sales exist
+  const paymentRows = DEFAULT_PAYMENT_ROWS.map(row => {
+    const found = paymentStats.find(p => p.method.toLowerCase().includes(row.method.toLowerCase()));
+    if (found && (Number(found.totalValue) > 0 || Number(found.count) > 0)) {
+      return {
+        ...row,
+        conversion: found.conversionRate || `${found.percentage}%`,
+        value: Number(found.totalValue) || 0
+      };
+    }
+    return row;
+  });
+
+  // Hourly slots for the 24h timeline chart (00:00 to 23:00) from Image 3
+  const hourlySlots = [
+    '00:00', '02:00', '04:00', '06:00', '08:00', '10:00',
+    '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'
+  ];
 
   return (
     <div className="flex flex-col gap-6" id="leadspay-dashboard-view">
-      {/* 1. TOP CAROUSEL & REAL-TIME SALE NOTIFICATION TICKER */}
-      <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#070c18] via-[#0b1424] to-[#070c18] p-4 sm:p-6 shadow-2xl">
-        {/* Subtle Neon Backlight */}
-        <div className="absolute -top-10 -right-10 w-72 h-72 bg-[#D9F22A]/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
-          {/* Live Notification Pill */}
-          <div className="w-full lg:max-w-md bg-[#050811]/90 border border-white/10 rounded-2xl p-4 flex items-center gap-4 shadow-xl backdrop-blur-md">
-            <div className="w-12 h-12 rounded-xl bg-[#D9F22A]/20 border border-[#D9F22A]/40 flex items-center justify-center flex-shrink-0">
-              <Zap className="w-6 h-6 text-[#D9F22A]" />
+      {/* 1. TOP BANNER: VOCÊ NO CONTROLE (Exact copy and layout from Image 3) */}
+      <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#070c18] via-[#0d1728] to-[#070c18] p-4 sm:p-5 shadow-xl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/15 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] flex-shrink-0">
+              <Users className="w-5 h-5" />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-white tracking-wide truncate">
-                  {latestSale ? `Última Venda: ${latestSale.method || 'PIX'}` : 'Sistema de Afiliados Conectado'}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-white">VOCÊ NO CONTROLE.</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#D9F22A]/20 text-[#D9F22A] border border-[#D9F22A]/30">
+                  Equipe
                 </span>
-                <span className="text-[10px] text-white/50 uppercase">{latestSale ? (latestSale.time || 'Recente') : 'Online'}</span>
               </div>
-              <p className="text-xs text-white/70 truncate">
-                {latestSale ? `${latestSale.platformName || 'Plataforma'} (${latestSale.buyerCompany || 'Empresa'})` : (safePlatforms.length > 0 ? `${safePlatforms.length} plataformas ativas no catálogo` : 'Cadastre sua primeira plataforma para começar')}
+              <p className="text-xs text-white/70 mt-0.5">
+                Gerencie quem acessa sua dashboard. Sem senha. Sem risco.
               </p>
-              <div className="text-sm font-black text-[#D9F22A] mt-0.5">
-                {latestSale ? `Comissão creditada: R$ ${(Number(latestSale.commissionEarned ?? (latestSale as any)?.commissionValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Comissões de 30% a 50% via PIX D+0'}
-              </div>
             </div>
           </div>
 
-          {/* Center Promo Headline & Action */}
-          <div className="text-center lg:text-left flex flex-col items-center lg:items-start gap-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 text-[11px] font-bold text-[#D9F22A] uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5" />
-              {roleMode === 'empresa' ? 'PAINEL DE VENDAS & CARTEIRA DA EMPRESA' : 'PAINEL REAL DE VENDAS & AFILIADOS'}
-            </div>
-            <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne']">
-              {roleMode === 'empresa' ? 'Dashboard & Faturamento da Startup' : 'Gestão de Vendas & Comissões B2B'}
-            </h3>
-            <p className="text-xs text-white/70 max-w-lg">
-              {roleMode === 'afiliado'
-                ? 'Afilie-se a startups parceiras, compartilhe seus links exclusivos e receba comissões automáticas via PIX instantâneo D+0.'
-                : 'Acompanhe o faturamento de suas soluções, controle os repasses a afiliados, gerencie o saldo retido e solicite saques via PIX.'}
-            </p>
-          </div>
-
-          {/* Action Button: Registrar / Vender */}
-          <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 w-full sm:w-auto">
+          <div className="flex items-center gap-2 self-stretch sm:self-auto">
             <button
-              onClick={onOpenSimulateSale}
-              className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
+              onClick={() => setActiveTab('equipe')}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
             >
-              <Zap className="w-4 h-4 fill-current" />
-              Registrar Nova Venda
+              <span>Gerenciar Equipe</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => setActiveTab('vitrine')}
-              className="bg-white/5 hover:bg-white/10 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider border border-white/10 transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
+              onClick={onOpenSimulateSale}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(217,242,42,0.3)]"
             >
-              <Layers className="w-4 h-4 text-[#D9F22A]" />
-              {roleMode === 'afiliado' ? 'Marketplace de Startups' : 'Ver Catálogo Completo'}
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>Nova Venda</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 2. FILTER BAR (Dashboard Title + Selectors like Cakto) */}
+      {/* 2. FILTER BAR (Dashboard Title + Selectors from Image 3) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#080d1a] border border-white/10 p-4 sm:p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-3">
@@ -160,32 +170,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </h1>
             <button
               onClick={() => setShowValues(!showValues)}
-              className="text-white/50 hover:text-[#D9F22A] transition-colors p-1"
+              className="text-white/50 hover:text-[#D9F22A] transition-colors p-1 cursor-pointer"
               title={showValues ? "Ocultar valores" : "Mostrar valores"}
             >
               {showValues ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
             </button>
           </div>
           <p className="text-[11px] text-white/50 mt-1 flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5" />
-            Última atualização: {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            <Clock className="w-3.5 h-3.5 text-[#D9F22A]" />
+            Liquidação D+9 • Atualizado em tempo real
           </p>
         </div>
 
-        {/* Filter Controls */}
+        {/* Filter Controls from Image 3 */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-2.5 w-full md:w-auto">
           {/* Tipo Filter */}
           <div className="relative w-full sm:w-auto">
             <select
               value={selectedTypeFilter}
               onChange={(e) => setSelectedTypeFilter(e.target.value)}
-              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8"
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8 font-medium"
             >
-              <option value="all">Tipo: Todos os Status</option>
-              <option value="Aprovado">Aprovados</option>
-              <option value="Pendente">Pendentes</option>
+              <option value="all">Tipo: Todos</option>
+              <option value="Aprovado">Aprovado</option>
+              <option value="Pendente">Pendente</option>
             </select>
-            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 text-xs">▼</div>
+            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">▼</div>
           </div>
 
           {/* Produtos Filter */}
@@ -193,14 +203,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <select
               value={selectedProductFilter}
               onChange={(e) => setSelectedProductFilter(e.target.value)}
-              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8 md:max-w-[200px] truncate"
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8 md:max-w-[200px] truncate font-medium"
             >
-              <option value="all">Produtos: Todas as Plataformas</option>
+              <option value="all">Produtos: Todos</option>
               {safePlatforms.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 text-xs">▼</div>
+            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">▼</div>
           </div>
 
           {/* Período Filter */}
@@ -208,7 +218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8"
+              className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer appearance-none pr-8 font-medium"
             >
               <option value="Hoje">Período: Hoje</option>
               <option value="Ontem">Ontem</option>
@@ -217,33 +227,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <option value="Este Mês">Este Mês</option>
               <option value="Todo o Período">Todo o Período</option>
             </select>
-            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 text-xs">▼</div>
+            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">▼</div>
           </div>
 
-          {/* Refresh Button */}
+          {/* Refresh Button from Image 3 */}
           <button
             onClick={handleRefresh}
-            className="w-full sm:w-auto justify-center bg-[#12241b] hover:bg-[#183124] text-[#D9F22A] border border-[#D9F22A]/40 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+            className="w-full sm:w-auto justify-center bg-[#12241b] hover:bg-[#183124] text-[#D9F22A] border border-[#D9F22A]/40 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Atualizar
+            <span>Atualizar</span>
           </button>
         </div>
       </div>
 
-      {/* 3. BIG PRIMARY CARDS (Vendas Realizadas & Quantidade de Vendas) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Vendas Realizadas (Gross Sales) */}
+      {/* 3. PRIMARY CARDS: Vendas Realizadas & Quantidade de Vendas (Matching Image 3) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Card 1: Vendas Realizadas (Image 3) */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-[#080d1a] border-l-4 border-l-[#D9F22A] border-y border-r border-white/10 rounded-xl p-5 shadow-lg relative overflow-hidden group hover:border-white/20 transition-all"
+          className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-white/20 transition-all"
         >
           <div className="flex items-center justify-between text-white/60 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">
-              {roleMode === 'empresa' ? 'Faturamento Bruto' : 'Volume de Vendas'}
-            </span>
-            <button onClick={() => setShowValues(!showValues)} className="text-white/40 hover:text-white">
+            <span className="text-xs font-bold uppercase tracking-wider">Vendas Realizadas</span>
+            <button onClick={() => setShowValues(!showValues)} className="text-white/40 hover:text-white cursor-pointer">
               {showValues ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
             </button>
           </div>
@@ -252,20 +260,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-[#D9F22A] font-bold mt-2">
             <TrendingUp className="w-3.5 h-3.5" />
-            {approvedSalesCount > 0 ? `${approvedSalesCount} vendas liquidadas` : 'Aguardando primeiras vendas'}
+            {approvedSalesCount > 0 ? `${approvedSalesCount} vendas liquidadas` : 'Nenhuma venda no período selecionado'}
           </div>
         </motion.div>
 
-        {/* Card 2: Quantidade de Vendas */}
+        {/* Card 2: Quantidade de Vendas (Image 3) */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="bg-[#080d1a] border-l-4 border-l-[#D9F22A] border-y border-r border-white/10 rounded-xl p-5 shadow-lg relative overflow-hidden group hover:border-white/20 transition-all"
+          className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-white/20 transition-all"
         >
           <div className="flex items-center justify-between text-white/60 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">Quantidade de Vendas</span>
-            <button onClick={() => setShowValues(!showValues)} className="text-white/40 hover:text-white">
+            <button onClick={() => setShowValues(!showValues)} className="text-white/40 hover:text-white cursor-pointer">
               {showValues ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
             </button>
           </div>
@@ -277,110 +285,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </motion.div>
 
-        {/* Card 3: Suas Comissões Totais ou Receita Líquida Empresa */}
+        {/* Card 3: Saldo Disponível & Saque Rápido */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-[#080d1a] border-l-4 border-l-[#D9F22A] border-y border-r border-white/10 rounded-xl p-5 shadow-lg relative overflow-hidden group hover:border-white/20 transition-all"
-        >
-          <div className="flex items-center justify-between text-white/60 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#D9F22A]">
-              {roleMode === 'empresa' ? 'Receita Líquida Empresa' : 'Suas Comissões'}
-            </span>
-            <span className="px-2 py-0.5 rounded text-[10px] bg-[#D9F22A]/10 text-[#D9F22A] font-bold">
-              {roleMode === 'empresa'
-                ? (totalFilteredSalesAmount > 0 ? `${Math.round((Math.max(0, totalFilteredSalesAmount - totalFilteredCommission - (approvedSalesCount * 0.99)) / totalFilteredSalesAmount) * 100)}% líq.` : '0%')
-                : (totalFilteredSalesAmount > 0 ? `${Math.round((totalFilteredCommission / totalFilteredSalesAmount) * 100)}% méd.` : '0%')}
-            </span>
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-            {showValues ? (
-              roleMode === 'empresa'
-                ? `R$ ${(Math.max(0, (totalFilteredSalesAmount || 0) - (totalFilteredCommission || 0) - (approvedSalesCount * 0.99))).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                : `R$ ${(Number(totalFilteredCommission) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-            ) : '•••••••'}
-          </div>
-          <div className="text-[11px] text-white/60 mt-2">
-            {roleMode === 'empresa' ? 'Receita líquida após comissões e taxas LeadsPay' : 'Saldo acumulado de vendas'}
-          </div>
-        </motion.div>
-
-        {/* Card 4: Saldo Disponível & Saque Rápido / Carteira */}
-        <motion.div 
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="bg-gradient-to-br from-[#0c1a14] to-[#080d1a] border border-[#D9F22A]/30 rounded-xl p-5 shadow-lg flex flex-col justify-between"
+          className="bg-gradient-to-br from-[#0c1a14] to-[#080d1a] border border-[#D9F22A]/30 rounded-2xl p-5 shadow-lg flex flex-col justify-between"
         >
           <div>
             <div className="flex items-center justify-between text-white/70 mb-1">
               <span className="text-xs font-bold uppercase tracking-wider">
-                {roleMode === 'empresa' ? 'Carteira / Saldo PIX' : 'Disponível p/ Saque'}
+                {roleMode === 'empresa' ? 'Saldo Empresa (PIX D+9)' : 'Disponível p/ Saque (PIX D+9)'}
               </span>
               <DollarSign className="w-4 h-4 text-[#D9F22A]" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-white">
+            <div className="text-xl sm:text-2xl font-black text-[#D9F22A]">
               {showValues ? `R$ ${(Number(userProfile?.availableBalance) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
             </div>
           </div>
           <button
             onClick={onOpenWithdraw}
-            className="mt-3 w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-2 px-3 rounded-lg text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(217,242,42,0.3)]"
+            className="mt-3 w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-2 px-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(217,242,42,0.3)]"
           >
             <ArrowUpRight className="w-4 h-4" />
-            Sacar via PIX
+            Sacar via PIX D+9
           </button>
         </motion.div>
       </div>
 
-      {/* 4. MAIN DATA GRID: MEIOS DE PAGAMENTO & TAXAS DE CONVERSÃO / RISCO */}
+      {/* 4. MAIN TWO-COLUMN SECTION FROM IMAGE 3: MEIOS DE PAGAMENTO & METRIC BOXES */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column (8 cols): Meios de Pagamento Table (Matches Cakto layout) */}
+        {/* Left Column (8 cols): Meios de Pagamento Table (Exact layout from Image 3) */}
         <div className="lg:col-span-8 bg-[#080d1a] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl">
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-base sm:text-lg font-bold text-white font-['Syne'] flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-[#D9F22A]" />
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+            <h3 className="text-base font-bold text-white font-['Syne'] flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-[#D9F22A]" />
               Meios de Pagamento
             </h3>
-            <span className="text-xs text-white/50">Taxa de Conversão em Tempo Real</span>
+            <span className="text-xs text-white/50">Taxas e Conversão em Tempo Real</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="text-white/40 border-b border-white/10 uppercase tracking-wider">
+                <tr className="text-white/40 border-b border-white/10 uppercase tracking-wider text-[11px]">
                   <th className="pb-3 font-bold">Meios de Pagamento</th>
                   <th className="pb-3 font-bold text-center">Conversão</th>
                   <th className="pb-3 font-bold text-right">
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 justify-end">
                       Valor
-                      <Eye className="w-3.5 h-3.5" />
+                      <Eye className="w-3.5 h-3.5 text-white/30" />
                     </span>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {safePaymentStats.map((item, idx) => (
+                {paymentRows.map((item, idx) => (
                   <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3.5 flex items-center gap-3 font-bold text-white">
-                      {/* Icon */}
-                      <div className="w-7 h-7 rounded-lg bg-[#050811] border border-white/10 flex items-center justify-center flex-shrink-0">
-                        {item.iconType === 'pix' && <span className="text-[#D9F22A] font-black text-xs">❖</span>}
-                        {item.iconType === 'credit-card' && <CreditCard className="w-3.5 h-3.5 text-white/80" />}
-                        {item.iconType === 'picpay' && <span className="text-emerald-400 font-black text-xs">P</span>}
-                        {item.iconType === 'crypto' && <span className="text-yellow-400 font-black text-xs">₮</span>}
-                        {item.iconType === 'oxxo' && <span className="text-orange-400 font-bold text-[10px]">OX</span>}
+                    <td className="py-2.5 flex items-center gap-2.5 font-bold text-white">
+                      <div className="w-6 h-6 rounded-lg bg-[#050811] border border-white/10 flex items-center justify-center flex-shrink-0 text-xs">
+                        <span className={item.color}>{item.icon}</span>
                       </div>
-                      <span>{item.method}</span>
+                      <span className="text-xs">{item.method}</span>
                     </td>
-                    <td className="py-3.5 text-center">
-                      <span className="px-2.5 py-1 rounded-full bg-white/5 text-white font-bold">
-                        {item.conversionRate}%
+                    <td className="py-2.5 text-center">
+                      <span className="px-2.5 py-0.5 rounded-full bg-white/5 text-white/80 font-bold text-[11px]">
+                        {item.conversion}
                       </span>
                     </td>
-                    <td className="py-3.5 text-right font-bold text-white">
-                      {showValues ? `R$ ${(Number(item.totalValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
+                    <td className="py-2.5 text-right font-bold text-white">
+                      {showValues ? `R$ ${item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
                     </td>
                   </tr>
                 ))}
@@ -389,69 +363,145 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Right Column (4 cols): Risk & Security KPIs (Matches Cakto layout) */}
-        <div className="lg:col-span-4 bg-[#080d1a] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col justify-between gap-4">
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h3 className="text-base font-bold text-white font-['Syne'] flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-[#D9F22A]" />
-              Métricas de Segurança
-            </h3>
-            <span className="text-[10px] text-[#D9F22A] font-bold bg-[#D9F22A]/10 px-2 py-0.5 rounded">Risco Zero</span>
+        {/* Right Column (4 cols): The 4 Metric Squares from Image 3 */}
+        <div className="lg:col-span-4 flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3.5">
+            {/* Box 1: Abandono C. */}
+            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+              <div className="flex items-center justify-between text-white/50 mb-1">
+                <span className="text-xs font-bold">Abandono C.</span>
+                <Eye className="w-3.5 h-3.5 text-white/30" />
+              </div>
+              <div className="text-2xl font-black text-white font-['Syne']">
+                0
+              </div>
+              <span className="text-[10px] text-white/40 mt-1">Checkouts abandonados</span>
+            </div>
+
+            {/* Box 2: Reembolso */}
+            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+              <div className="flex items-center justify-between text-white/50 mb-1">
+                <span className="text-xs font-bold">Reembolso</span>
+                <Eye className="w-3.5 h-3.5 text-white/30" />
+              </div>
+              <div className="text-2xl font-black text-emerald-400 font-['Syne']">
+                0%
+              </div>
+              <span className="text-[10px] text-emerald-400/70 mt-1">Taxa de estornos</span>
+            </div>
+
+            {/* Box 3: Charge Back */}
+            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+              <div className="flex items-center justify-between text-white/50 mb-1">
+                <span className="text-xs font-bold">Charge Back</span>
+                <Eye className="w-3.5 h-3.5 text-white/30" />
+              </div>
+              <div className="text-2xl font-black text-emerald-400 font-['Syne']">
+                0%
+              </div>
+              <span className="text-[10px] text-emerald-400/70 mt-1">Contestações bancárias</span>
+            </div>
+
+            {/* Box 4: MED */}
+            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+              <div className="flex items-center justify-between text-white/50 mb-1">
+                <span className="text-xs font-bold">MED</span>
+                <Eye className="w-3.5 h-3.5 text-white/30" />
+              </div>
+              <div className="text-2xl font-black text-emerald-400 font-['Syne']">
+                0%
+              </div>
+              <span className="text-[10px] text-emerald-400/70 mt-1">Mecanismo BACEN</span>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-4">
-            {/* Abandono de Checkout */}
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <div>
-                <span className="text-xs text-white/60 block">Abandono C.</span>
-                <span className="text-xl font-bold text-white">0%</span>
+          {/* Premiações Quick Callout Card matching Image 4 */}
+          <div 
+            onClick={() => setActiveTab('premiacoes')}
+            className="p-4 rounded-2xl bg-gradient-to-r from-[#101c0c] to-[#080d1a] border border-[#D9F22A]/30 cursor-pointer hover:border-[#D9F22A] transition-all group shadow-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#D9F22A]/15 text-[#D9F22A] flex items-center justify-center font-bold">
+                  🏆
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#D9F22A] block">Programa de Premiações</span>
+                  <span className="text-xs font-bold text-white group-hover:text-[#D9F22A] transition-colors">
+                    Ver Marcos & Placas Oficiais
+                  </span>
+                </div>
               </div>
-              <Eye className="w-4 h-4 text-white/30" />
+              <ChevronRight className="w-4 h-4 text-[#D9F22A] group-hover:translate-x-1 transition-transform" />
             </div>
-
-            {/* Reembolso */}
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <div>
-                <span className="text-xs text-white/60 block">Reembolso</span>
-                <span className="text-xl font-bold text-emerald-400">0%</span>
-              </div>
-              <Eye className="w-4 h-4 text-white/30" />
-            </div>
-
-            {/* Charge Back */}
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <div>
-                <span className="text-xs text-white/60 block">Charge Back</span>
-                <span className="text-xl font-bold text-emerald-400">0%</span>
-              </div>
-              <Eye className="w-4 h-4 text-white/30" />
-            </div>
-
-            {/* MED (Mecanismo Especial de Devolução) */}
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <span className="text-xs text-white/60 block">MED (Mecanismo BACEN)</span>
-                <span className="text-xl font-bold text-emerald-400">0%</span>
-              </div>
-              <Eye className="w-4 h-4 text-white/30" />
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-[#050811] border border-white/5 text-[11px] text-white/60 leading-relaxed">
-            🛡️ <strong className="text-white">Garantia LeadsPay:</strong> Todas as plataformas possuem compliance estrito, proteção antifraude e liquidação garantida ao vendedor parceiro.
           </div>
         </div>
       </div>
 
-      {/* 5. VITRINE PREVIEW & TOP SELLING PLATFORMS */}
+      {/* 5. HOURLY TIMELINE GRAPH (From Image 3 bottom: 00:00 to 23:00) */}
+      <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-[#D9F22A]" />
+            <h3 className="text-sm font-bold text-white font-['Syne']">
+              Volume de Vendas por Hora ({selectedPeriod})
+            </h3>
+          </div>
+          <span className="text-[11px] text-white/50">Curva de conversão horária</span>
+        </div>
+
+        {/* Timeline SVG Chart */}
+        <div className="relative h-44 w-full pt-4">
+          <svg className="w-full h-32 overflow-visible" preserveAspectRatio="none" viewBox="0 0 1000 120">
+            <defs>
+              <linearGradient id="chartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#D9F22A" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="#D9F22A" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+
+            {/* Background Grid Lines */}
+            <line x1="0" y1="20" x2="1000" y2="20" stroke="rgba(255,255,255,0.05)" strokeDasharray="4 4" />
+            <line x1="0" y1="60" x2="1000" y2="60" stroke="rgba(255,255,255,0.05)" strokeDasharray="4 4" />
+            <line x1="0" y1="100" x2="1000" y2="100" stroke="rgba(255,255,255,0.05)" strokeDasharray="4 4" />
+
+            {/* Gradient Area under curve */}
+            <path
+              d="M 0,110 Q 150,105 300,90 T 600,45 T 850,25 T 1000,110 Z"
+              fill="url(#chartGrad)"
+            />
+
+            {/* Glowing Sales Curve */}
+            <path
+              d="M 0,110 Q 150,105 300,90 T 600,45 T 850,25 T 1000,15"
+              fill="none"
+              stroke="#D9F22A"
+              strokeWidth="2.5"
+              className="drop-shadow-[0_0_8px_rgba(217,242,42,0.6)]"
+            />
+
+            {/* Sample Peak Point */}
+            <circle cx="850" cy="25" r="4" fill="#060A15" stroke="#D9F22A" strokeWidth="2.5" />
+          </svg>
+
+          {/* Time Labels on X axis */}
+          <div className="flex items-center justify-between text-[10px] text-white/40 pt-2 border-t border-white/5">
+            {hourlySlots.map((time, idx) => (
+              <span key={idx}>{time}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 6. VITRINE PREVIEW & TOP SELLING PLATFORMS */}
       <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h3 className="text-lg sm:text-xl font-black text-white font-['Syne']">
-              Plataformas em Alta para Revenda & Afiliação
+              Startups em Alta no Marketplace LeadsPay
             </h3>
             <p className="text-xs text-white/60 mt-0.5">
-              Copie seu link de afiliado ou apresente a proposta para operadores de iGaming e receba comissões imediatas.
+              Copie seus links de afiliado parametrizados e receba comissões automáticas com liquidação D+9.
             </p>
           </div>
           <button

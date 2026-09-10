@@ -48,6 +48,9 @@ import { RelatoriosView } from './RelatoriosView';
 import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
 import { MeuPerfilView } from './MeuPerfilView';
+import { PremiacoesView } from './PremiacoesView';
+import { AssinaturasView } from './AssinaturasView';
+import { CuponsView } from './CuponsView';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
@@ -91,7 +94,10 @@ import {
   GraduationCap,
   Menu,
   X,
-  ShieldCheck
+  ShieldCheck,
+  Trophy,
+  Repeat,
+  Tag
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -256,7 +262,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     setActiveTab('dashboard');
     setLiveToast({
       message: 'Cadastro de Afiliado Concluído!',
-      sub: 'Conta ativada com repasse PIX D+0',
+      sub: 'Conta ativada com repasse PIX D+9',
       amount: 'Sucesso'
     });
     setTimeout(() => setLiveToast(null), 4500);
@@ -412,7 +418,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         totalValue: pixVal,
         percentage: totalVol > 0 ? Number(((pixVal / totalVol) * 100).toFixed(1)) : 0,
         conversionRate: totalCount > 0 ? `${((pixCount / totalCount) * 100).toFixed(1)}%` : '0%',
-        badge: 'D+0 Direto',
+        badge: 'D+9 Direto',
         iconType: 'pix' as const
       },
       {
@@ -713,7 +719,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     try {
       await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, userProfile?.name || 'Usuário LeadsPay');
       setLiveToast({
-        message: 'Saque PIX D+0 processado com sucesso!',
+        message: 'Saque PIX D+9 processado com sucesso!',
         sub: `Chave ${pixKey} (${pixKeyType})`,
         amount: `- R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
@@ -764,6 +770,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações (Sair)', icon: Link2, badge: `${affiliations.length}` },
     { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${userVisibleTransactions.length}` },
     { id: 'financeiro' as PlatformTab, label: 'Saldo & Saque PIX', icon: Wallet },
+    { id: 'premiacoes' as PlatformTab, label: 'Premiações LeadsPay', icon: Trophy, badge: 'Novo' },
+    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
+    { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
     ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
@@ -775,9 +784,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'carteira' as PlatformTab, label: 'Carteira & Saques PIX', icon: Wallet },
     { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${userVisibleTransactions.length}` },
     { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
+    { id: 'premiacoes' as PlatformTab, label: 'Premiações LeadsPay', icon: Trophy, badge: 'Novo' },
+    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
+    { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
+    { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
     ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
   ];
 
@@ -845,7 +858,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/60">
                   {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'Carteira Empresa (PIX)'}
                 </span>
-                <span className="text-[10px] text-[#D9F22A] font-black">D+0</span>
+                <span className="text-[10px] text-[#D9F22A] font-black">D+9</span>
               </div>
               <div className="text-base font-black text-[#D9F22A] font-['Syne']">
                 {`R$ ${(userProfile?.availableBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
@@ -906,6 +919,53 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             })}
           </nav>
         </div>
+
+        {/* Faturamento & Milestone Widget matching Image 4 */}
+        {(!sidebarCollapsed || isMobileMenuOpen) && (
+          <div className="px-3 pb-2">
+            <div 
+              onClick={() => {
+                setActiveTab('premiacoes');
+                setIsMobileMenuOpen(false);
+              }}
+              className="p-3 rounded-2xl bg-gradient-to-b from-[#0c1424] to-[#060a14] border border-white/10 hover:border-[#D9F22A]/40 transition-all cursor-pointer shadow-lg group"
+              title="Clique para abrir Premiações LeadsPay"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-white/70 group-hover:text-white transition-colors">
+                  Faturamento
+                </span>
+                <span className="text-[10px] text-white/40 group-hover:text-[#D9F22A] flex items-center gap-0.5 transition-colors">
+                  Ver prêmios →
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-[#D9F22A]/15 text-[#D9F22A] flex items-center justify-center flex-shrink-0">
+                  <Trophy className="w-3.5 h-3.5" />
+                </div>
+                <div className="text-xs font-black text-white font-mono">
+                  R$ {(transactions.reduce((acc, s) => acc + (s.amount || 0), 0) || 55.85).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  <span className="text-white/40 font-normal ml-1">/ R$ 10K</span>
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full h-1.5 bg-black/60 border border-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-[#D9F22A] rounded-full shadow-[0_0_8px_#D9F22A]" 
+                  style={{ 
+                    width: `${Math.min(100, Math.max(1, Math.round(((transactions.reduce((acc, s) => acc + (s.amount || 0), 0) || 55.85) / 10000) * 100)))}%` 
+                  }} 
+                />
+              </div>
+              <div className="flex items-center justify-between text-[9.5px] text-white/40 mt-1">
+                <span>Nível 01</span>
+                <span className="font-bold text-[#D9F22A]">
+                  {Math.min(100, Math.max(1, Math.round(((transactions.reduce((acc, s) => acc + (s.amount || 0), 0) || 55.85) / 10000) * 100)))}%
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Bottom Sidebar Action */}
         <div className="p-3 border-t border-white/10 space-y-1">
@@ -1015,7 +1075,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             {/* Notification Bell with animated badge */}
             <div className="relative flex-shrink-0">
               <button 
-                onClick={() => setLiveToast({ message: 'Notificações Ativas', sub: 'Nenhuma pendência recente no sistema.', amount: 'D+0' })}
+                onClick={() => setLiveToast({ message: 'Notificações Ativas', sub: 'Nenhuma pendência recente no sistema.', amount: 'D+9' })}
                 className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white cursor-pointer transition-colors"
                 title="Notificações"
               >
@@ -1382,6 +1442,25 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <IntegracoesView 
               plans={myCompanyPlans} 
               company={myCompanies[0] || null} 
+            />
+          )}
+          {activeTab === 'premiacoes' && (
+            <PremiacoesView 
+              userProfile={userProfile} 
+              roleMode={roleMode} 
+              sales={userVisibleTransactions} 
+            />
+          )}
+          {activeTab === 'assinaturas' && (
+            <AssinaturasView 
+              plans={myCompanyPlans} 
+              sales={userVisibleTransactions} 
+              userProfile={userProfile} 
+            />
+          )}
+          {activeTab === 'cupons' && (
+            <CuponsView 
+              plans={myCompanyPlans} 
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}

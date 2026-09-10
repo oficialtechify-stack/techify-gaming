@@ -156,7 +156,7 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
           Cadastrar Perfil de Afiliado
         </h3>
         <p className="text-xs text-white/70 mb-5 leading-relaxed">
-          Para acessar a visão de Afiliado, divulgar startups e receber comissões automáticas via PIX D+0, complete seus dados cadastrais e bancários.
+          Para acessar a visão de Afiliado, divulgar startups e receber comissões automáticas via PIX D+9, complete seus dados cadastrais e bancários.
         </p>
 
         {errorMsg && (
@@ -217,7 +217,7 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
           <div className="p-4 bg-[#050811] border border-white/10 rounded-2xl flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs font-bold text-[#D9F22A]">
               <Wallet className="w-4 h-4" />
-              Chave PIX para Recebimento de Comissões (D+0)
+              Chave PIX para Recebimento de Comissões (D+9)
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

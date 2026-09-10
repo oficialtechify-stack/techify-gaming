@@ -45,7 +45,7 @@ export const INITIAL_PAYMENT_STATS: PaymentMethodStat[] = [
     totalValue: 0,
     percentage: 0,
     conversionRate: '0%',
-    badge: 'D+0 Direto',
+    badge: 'D+9 Direto',
     iconType: 'pix'
   },
   {

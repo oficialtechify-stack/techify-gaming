@@ -90,7 +90,7 @@ export const SponsorshipsSection: React.FC<SponsorshipsSectionProps> = ({
 
           <div className="lg:max-w-xl text-white/80 text-sm sm:text-base leading-relaxed flex flex-col gap-3">
             <p>
-              Conecte-se às startups e plataformas ativas no ecossistema LeadsPay. Todos os produtos possuem split automatizado em D+0 e comissões garantidas em tempo real.
+              Conecte-se às startups e plataformas ativas no ecossistema LeadsPay. Todos os produtos possuem split automatizado em D+9 e comissões garantidas em tempo real.
             </p>
             {onOpenRegisterCompany && (
               <button
@@ -184,7 +184,7 @@ export const SponsorshipsSection: React.FC<SponsorshipsSectionProps> = ({
                       Afiliar-se Agora →
                     </button>
                   ) : (
-                    <span className="text-[#D9F22A] font-bold">D+0 Instantâneo</span>
+                    <span className="text-[#D9F22A] font-bold">D+9 Instantâneo</span>
                   )}
                 </div>
               </motion.div>

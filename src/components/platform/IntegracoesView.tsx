@@ -635,7 +635,7 @@ async function gerarPixLeadsPay() {
                 </p>
               </div>
               <span className="shrink-0 px-3 py-1 rounded-lg bg-[#D9F22A]/10 border border-[#D9F22A]/20 text-[#D9F22A] text-[11px] font-mono font-bold self-start sm:self-auto">
-                PIX D+0 Asaas
+                PIX D+9 Asaas
               </span>
             </div>
 

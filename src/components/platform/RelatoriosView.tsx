@@ -77,7 +77,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({ transactions = [
           <div className="text-2xl font-black text-[#D9F22A] font-['Syne'] mt-1">
             R$ {totalCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
-          <span className="text-[11px] text-white/60 mt-1 block">Repasses D+0 aos parceiros</span>
+          <span className="text-[11px] text-white/60 mt-1 block">Repasses D+9 aos parceiros</span>
         </div>
       </div>
 

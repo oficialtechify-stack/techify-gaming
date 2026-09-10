@@ -17,8 +17,10 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
   showText = true
 }) => {
   const [branding, setBranding] = useState<PlatformBranding>(() => {
-    return getLocalBranding() || {
-      logoType: 'default_vector',
+    const local = getLocalBranding();
+    if (local && local.logoType) return local;
+    return {
+      logoType: 'preset_3d_star',
       logoText: 'LEADSPAY',
       logoSubtext: 'PAYMENTS & SPLIT',
       accentColor: '#D9F22A'
@@ -98,43 +100,17 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
               }}
             />
           ) : branding.logoType === 'preset_3d_star' ? (
-            /* 2. Preset: Emblema 3D com Estrela de 4 Pontas (Imagem 3 do usuário) */
-            <svg 
-              viewBox="0 0 100 100" 
-              fill="none" 
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-full relative z-10 drop-shadow-[0_4px_14px_rgba(217,242,42,0.5)]"
-            >
-              <defs>
-                <linearGradient id="starLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#FAFF6B" />
-                  <stop offset="35%" stopColor="#D9F22A" />
-                  <stop offset="75%" stopColor="#9BC504" />
-                  <stop offset="100%" stopColor="#557500" />
-                </linearGradient>
-                <filter id="neonGlowStar" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#D9F22A" floodOpacity="0.6"/>
-                </filter>
-              </defs>
-              {/* Moldura 3D estilizada em S */}
-              <path 
-                d="M32 18 C52 14, 76 18, 78 36 C80 50, 68 56, 56 60 C74 62, 84 74, 78 88 C70 98, 42 96, 26 88 L34 76 C46 82, 62 82, 66 74 C70 66, 60 62, 46 58 C32 54, 22 46, 22 34 C22 20, 36 14, 52 14"
-                fill="none"
-                stroke="url(#starLogoGrad)"
-                strokeWidth="11"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#neonGlowStar)"
+            /* 2. Preset: Emblema 3D Real com Estrela de 4 Pontas (Imagem 1 do usuário) */
+            <div className="w-full h-full relative z-10 flex items-center justify-center">
+              <img 
+                src="/logo_3d.jpg" 
+                alt="Logo 3D LeadsPay" 
+                className="w-full h-full object-contain rounded-lg drop-shadow-[0_4px_14px_rgba(217,242,42,0.55)] transition-transform hover:scale-105"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/leadspay_3d_logo.jpg';
+                }}
               />
-              {/* Estrela de 4 pontas no centro */}
-              <path 
-                d="M50 32 Q50 48, 66 48 Q50 48, 50 64 Q50 48, 34 48 Q50 48, 50 32 Z" 
-                fill="#FAFF85" 
-                stroke="#FFFFFF" 
-                strokeWidth="1.5"
-                className="drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-              />
-            </svg>
+            </div>
           ) : (
             /* 3. Preset Padrão & Neon Circle: O Raio Circular Oficial LeadsPay (Imagens 1 e 2 do usuário) */
             <svg 
