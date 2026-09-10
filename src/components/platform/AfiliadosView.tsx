@@ -18,13 +18,11 @@ import {
 interface AfiliadosViewProps {
   platforms: CompanyPlan[];
   userProfile: UserSellerProfile;
-  onSimulateSale: (product: CompanyPlan) => void;
 }
 
 export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
   platforms,
-  userProfile,
-  onSimulateSale
+  userProfile
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>(platforms[0]?.id || '');
   const [utmSource, setUtmSource] = useState<string>('instagram');
@@ -266,14 +264,6 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
               </div>
             </div>
           </div>
-
-          <button
-            onClick={() => onSimulateSale(selectedProduct)}
-            className="mt-6 w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            <DollarSign className="w-4 h-4" />
-            Registrar Venda Desta Plataforma
-          </button>
         </div>
       </div>
     </div>

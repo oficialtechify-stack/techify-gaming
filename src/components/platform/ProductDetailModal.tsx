@@ -6,13 +6,13 @@ import { formatAffiliatePlanUrl } from '../../utils/affiliateTracking';
 interface ProductDetailModalProps {
   product: CompanyPlan | null;
   onClose: () => void;
-  onSimulateSale: (product: CompanyPlan) => void;
+  onOpenCheckout?: (plan: CompanyPlan) => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   product,
   onClose,
-  onSimulateSale
+  onOpenCheckout
 }) => {
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -141,14 +141,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center gap-3 mt-6">
           <button
-            onClick={() => {
-              onClose();
-              onSimulateSale(product);
-            }}
+            onClick={handleCopy}
             className="w-full sm:flex-1 bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 px-6 rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all flex items-center justify-center gap-2"
           >
-            <Zap className="w-4 h-4 fill-current" />
-            Registrar Venda Deste Plano
+            {copied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4 stroke-[3]" />}
+            {copied ? 'Link Copiado com Sucesso!' : 'Copiar Link de Afiliado'}
           </button>
           <button
             onClick={onClose}

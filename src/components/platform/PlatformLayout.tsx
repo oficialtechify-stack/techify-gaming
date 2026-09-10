@@ -48,13 +48,11 @@ import { RelatoriosView } from './RelatoriosView';
 import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
 import { MeuPerfilView } from './MeuPerfilView';
-import { PremiacoesView } from './PremiacoesView';
 import { AssinaturasView } from './AssinaturasView';
 import { CuponsView } from './CuponsView';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
-import { RegisterSaleModal } from './RegisterSaleModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
 import { ProductEditorView } from './ProductEditorView';
@@ -149,9 +147,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [editingPlan, setEditingPlan] = useState<CompanyPlan | null>(null);
   const [detailedEditingPlan, setDetailedEditingPlan] = useState<CompanyPlan | null>(null);
   const [liveCheckoutPlan, setLiveCheckoutPlan] = useState<CompanyPlan | null>(null);
-  const [isRegisterSaleModalOpen, setIsRegisterSaleModalOpen] = useState<boolean>(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState<boolean>(false);
-  const [selectedPlanForSale, setSelectedPlanForSale] = useState<string | undefined>(undefined);
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<CompanyPlan | null>(null);
   const [companyAuthModal, setCompanyAuthModal] = useState<ActiveModal>(null);
 
@@ -770,7 +766,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações (Sair)', icon: Link2, badge: `${affiliations.length}` },
     { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${userVisibleTransactions.length}` },
     { id: 'financeiro' as PlatformTab, label: 'Saldo & Saque PIX', icon: Wallet },
-    { id: 'premiacoes' as PlatformTab, label: 'Premiações LeadsPay', icon: Trophy, badge: 'Novo' },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
     { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
@@ -784,7 +779,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'carteira' as PlatformTab, label: 'Carteira & Saques PIX', icon: Wallet },
     { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${userVisibleTransactions.length}` },
     { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
-    { id: 'premiacoes' as PlatformTab, label: 'Premiações LeadsPay', icon: Trophy, badge: 'Novo' },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
     { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
@@ -920,53 +914,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           </nav>
         </div>
 
-        {/* Faturamento & Milestone Widget matching Image 4 */}
-        {(!sidebarCollapsed || isMobileMenuOpen) && (
-          <div className="px-3 pb-2">
-            <div 
-              onClick={() => {
-                setActiveTab('premiacoes');
-                setIsMobileMenuOpen(false);
-              }}
-              className="p-3 rounded-2xl bg-gradient-to-b from-[#0c1424] to-[#060a14] border border-white/10 hover:border-[#D9F22A]/40 transition-all cursor-pointer shadow-lg group"
-              title="Clique para abrir Premiações LeadsPay"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-white/70 group-hover:text-white transition-colors">
-                  Faturamento
-                </span>
-                <span className="text-[10px] text-white/40 group-hover:text-[#D9F22A] flex items-center gap-0.5 transition-colors">
-                  Ver prêmios →
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-[#D9F22A]/15 text-[#D9F22A] flex items-center justify-center flex-shrink-0">
-                  <Trophy className="w-3.5 h-3.5" />
-                </div>
-                <div className="text-xs font-black text-white font-mono">
-                  R$ {(transactions.reduce((acc, s) => acc + (s.amount || 0), 0) || 55.85).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  <span className="text-white/40 font-normal ml-1">/ R$ 10K</span>
-                </div>
-              </div>
-              {/* Progress bar */}
-              <div className="w-full h-1.5 bg-black/60 border border-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-[#D9F22A] rounded-full shadow-[0_0_8px_#D9F22A]" 
-                  style={{ 
-                    width: `${Math.min(100, Math.max(1, Math.round(((transactions.reduce((acc, s) => acc + (s.amount || 0), 0) || 55.85) / 10000) * 100)))}%` 
-                  }} 
-                />
-              </div>
-              <div className="flex items-center justify-between text-[9.5px] text-white/40 mt-1">
-                <span>Nível 01</span>
-                <span className="font-bold text-[#D9F22A]">
-                  {Math.min(100, Math.max(1, Math.round(((transactions.reduce((acc, s) => acc + (s.amount || 0), 0) || 55.85) / 10000) * 100)))}%
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Bottom Sidebar Action */}
         <div className="p-3 border-t border-white/10 space-y-1">
           <button
@@ -1043,19 +990,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 <span className="hidden sm:inline">Nova Empresa</span>
               </button>
             )}
-
-            {/* Quick Register Sale Button */}
-            <button
-              onClick={() => {
-                setSelectedPlanForSale(undefined);
-                setIsRegisterSaleModalOpen(true);
-              }}
-              className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black p-1.5 sm:px-3.5 sm:py-1.5 rounded-full text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
-              title="Registrar Venda"
-            >
-              <Zap className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">Registrar Venda</span>
-            </button>
 
             {/* Dark / Light Mode Switcher */}
             <button 
@@ -1213,7 +1147,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         </header>
 
         {/* VIEW CONTAINER */}
-        <main className="flex-1 p-3.5 sm:p-5 md:p-6 lg:p-8 max-w-7xl w-full mx-auto min-w-0">
+        <main className="flex-1 p-3 sm:p-5 md:p-6 lg:p-8 pb-24 lg:pb-8 max-w-7xl w-full mx-auto min-w-0">
           {detailedEditingPlan ? (
             <ProductEditorView
               plan={detailedEditingPlan}
@@ -1240,10 +1174,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   paymentStats={userPaymentStats}
                   platforms={roleMode === 'empresa' && !isSuperAdmin ? myCompanyPlans : plans}
                   setActiveTab={setActiveTab}
-                  onOpenSimulateSale={() => {
-                    setSelectedPlanForSale(undefined);
-                    setIsRegisterSaleModalOpen(true);
-                  }}
                   onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
                   onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
                   selectedPeriod={selectedPeriod}
@@ -1302,10 +1232,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setEditingPlan(null);
                 setIsCreatePlanModalOpen(true);
               }}
-              onOpenRegisterSale={(planId) => {
-                setSelectedPlanForSale(planId);
-                setIsRegisterSaleModalOpen(true);
-              }}
               onEditPlan={(plan) => {
                 setDetailedEditingPlan(plan);
               }}
@@ -1337,10 +1263,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onJoinAffiliate={handleJoinAffiliate}
               onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
-              onSimulateSale={(prod) => {
-                setSelectedPlanForSale(prod.id);
-                setIsRegisterSaleModalOpen(true);
-              }}
               onOpenCheckout={(plan, ref) => {
                 setCheckoutAffiliateRef(ref || '');
                 setLiveCheckoutPlan(plan);
@@ -1385,10 +1307,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               plans={plans}
               isVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
               verificationStatus={userProfile.verificationStatus}
-              onOpenRegisterSale={(planId) => {
-                setSelectedPlanForSale(planId);
-                setIsRegisterSaleModalOpen(true);
-              }}
               onNavigateToVitrine={() => setActiveTab('vitrine')}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onDeleteAffiliation={handleDeleteAffiliation}
@@ -1399,10 +1317,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <AfiliadosView
               platforms={plans}
               userProfile={userProfile}
-              onSimulateSale={(prod) => {
-                setSelectedPlanForSale(prod.id);
-                setIsRegisterSaleModalOpen(true);
-              }}
             />
           )}
 
@@ -1410,10 +1324,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <VendasView
               roleMode={roleMode}
               transactions={userVisibleTransactions}
-              onOpenSimulateSale={() => {
-                setSelectedPlanForSale(undefined);
-                setIsRegisterSaleModalOpen(true);
-              }}
             />
           )}
 
@@ -1444,13 +1354,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               company={myCompanies[0] || null} 
             />
           )}
-          {activeTab === 'premiacoes' && (
-            <PremiacoesView 
-              userProfile={userProfile} 
-              roleMode={roleMode} 
-              sales={userVisibleTransactions} 
-            />
-          )}
           {activeTab === 'assinaturas' && (
             <AssinaturasView 
               plans={myCompanyPlans} 
@@ -1467,6 +1370,63 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             </>
           )}
         </main>
+
+        {/* MOBILE BOTTOM NAVIGATION BAR */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#060A15]/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 flex items-center justify-around shadow-2xl safe-area-inset-bottom">
+          <button
+            onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'dashboard' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+            }`}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            <span className="text-[10px] font-bold mt-1">Início</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab(roleMode === 'empresa' ? 'minha_empresa' : 'vitrine');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'vitrine' || activeTab === 'minha_empresa' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+            }`}
+          >
+            {roleMode === 'empresa' ? <Building2 className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
+            <span className="text-[10px] font-bold mt-1">{roleMode === 'empresa' ? 'Startup' : 'Marketplace'}</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('vendas'); setIsMobileMenuOpen(false); }}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'vendas' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+            }`}
+          >
+            <Receipt className="w-5 h-5" />
+            <span className="text-[10px] font-bold mt-1">Vendas</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab(roleMode === 'empresa' ? 'carteira' : 'financeiro');
+              setIsMobileMenuOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'financeiro' || activeTab === 'carteira' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+            }`}
+          >
+            <Wallet className="w-5 h-5" />
+            <span className="text-[10px] font-bold mt-1">Saldo PIX</span>
+          </button>
+
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
+          >
+            <Menu className="w-5 h-5" />
+            <span className="text-[10px] font-bold mt-1">Menu</span>
+          </button>
+        </nav>
       </div>
 
       {/* ===================== LIVE CHECKOUT OVERLAY (when active) ===================== */}
@@ -1540,18 +1500,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         onPlanUpdated={handleUpdatePlan}
       />
 
-      <RegisterSaleModal
-        isOpen={isRegisterSaleModalOpen}
-        onClose={() => setIsRegisterSaleModalOpen(false)}
-        platforms={plans}
-        defaultPlanId={selectedPlanForSale}
-        onSaleCreated={handleSaleCreated}
-        currentUserId={effectiveUserId}
-        currentUserName={userProfile?.name}
-        roleMode={roleMode}
-        affiliateCode={userAffiliationCodes[0]}
-      />
-
       <WithdrawModal
         isOpen={isWithdrawModalOpen}
         onClose={() => setIsWithdrawModalOpen(false)}
@@ -1562,11 +1510,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       <ProductDetailModal
         product={selectedDetailProduct}
         onClose={() => setSelectedDetailProduct(null)}
-        onSimulateSale={(product) => {
-          setSelectedDetailProduct(null);
-          setSelectedPlanForSale(product.id);
-          setIsRegisterSaleModalOpen(true);
-        }}
       />
 
       {/* Global Auth Modal for Company / Google switch flow */}

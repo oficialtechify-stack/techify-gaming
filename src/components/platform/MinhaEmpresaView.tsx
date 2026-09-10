@@ -50,7 +50,6 @@ interface MinhaEmpresaViewProps {
   onNavigateToProfile?: () => void;
   onOpenCreateCompany: () => void;
   onOpenCreatePlan: (companyId?: string) => void;
-  onOpenRegisterSale: (planId?: string) => void;
   onEditPlan?: (plan: CompanyPlan) => void;
   onDeleteCompany: (companyId: string) => void;
   onDeletePlan: (planId: string, companyId?: string) => void;
@@ -70,7 +69,6 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   onNavigateToProfile,
   onOpenCreateCompany,
   onOpenCreatePlan,
-  onOpenRegisterSale,
   onEditPlan,
   onDeleteCompany,
   onDeletePlan,
@@ -457,13 +455,6 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 Vendas & Contratos ({companySales.length})
               </button>
             </div>
-
-            <button
-              onClick={() => onOpenRegisterSale()}
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-[#D9F22A] bg-[#D9F22A]/10 border border-[#D9F22A]/30 px-3 py-1.5 rounded-xl hover:bg-[#D9F22A]/20 transition-all cursor-pointer"
-            >
-              <DollarSign className="w-3.5 h-3.5" /> Lançar Venda de Plano
-            </button>
           </div>
 
           {/* TAB 1: ÁREA PARA GERENCIAR OS PLANOS (Image 2 & 3) */}
@@ -1008,15 +999,9 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 <div className="text-center py-12 px-4 bg-[#080d1a] border border-white/10 rounded-2xl">
                   <DollarSign className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
                   <h4 className="text-base font-bold text-white font-['Syne']">Nenhuma venda registrada ainda</h4>
-                  <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
-                    Quando afiliados fecharem contratos usando seus links de afiliados ou você lançar vendas, os registros aparecerão em tempo real.
+                  <p className="text-xs text-white/50 max-w-sm mx-auto mt-1">
+                    Quando afiliados fecharem contratos usando seus links de afiliação ou clientes realizarem compras diretamente nos checkouts da sua startup, os registros aparecerão aqui em tempo real.
                   </p>
-                  <button
-                    onClick={() => onOpenRegisterSale()}
-                    className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2"
-                  >
-                    <DollarSign className="w-4 h-4" /> Lançar Venda de Teste
-                  </button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">

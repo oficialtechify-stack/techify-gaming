@@ -45,7 +45,6 @@ interface VitrineViewProps {
   verificationStatus?: string;
   onNavigateToProfile?: () => void;
   onSelectProductDetail: (product: CompanyPlan) => void;
-  onSimulateSale: (product: CompanyPlan) => void;
   onJoinAffiliate?: (product: CompanyPlan) => void;
   onOpenCreateCompany?: () => void;
   onOpenCreatePlan?: () => void;
@@ -64,7 +63,6 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   verificationStatus = 'unsubmitted',
   onNavigateToProfile,
   onSelectProductDetail,
-  onSimulateSale,
   onJoinAffiliate,
   onOpenCreateCompany,
   onOpenCreatePlan,

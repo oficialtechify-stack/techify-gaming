@@ -16,13 +16,11 @@ import {
 interface VendasViewProps {
   roleMode?: string;
   transactions: SaleTransaction[];
-  onOpenSimulateSale: () => void;
 }
 
 export const VendasView: React.FC<VendasViewProps> = ({
   roleMode = 'afiliado',
-  transactions,
-  onOpenSimulateSale
+  transactions
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -64,14 +62,6 @@ export const VendasView: React.FC<VendasViewProps> = ({
               : 'Histórico completo de contratos gerados através dos seus links de afiliação.'}
           </p>
         </div>
-
-        <button
-          onClick={onOpenSimulateSale}
-          className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2"
-        >
-          <Zap className="w-4 h-4 fill-current" />
-          Registrar Nova Venda
-        </button>
       </div>
 
       {/* Summary KPI Strip */}

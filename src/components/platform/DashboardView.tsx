@@ -37,7 +37,6 @@ interface DashboardViewProps {
   paymentStats: PaymentMethodStat[];
   platforms: CompanyPlan[];
   setActiveTab: (tab: PlatformTab) => void;
-  onOpenSimulateSale: () => void;
   onOpenWithdraw: () => void;
   onSelectProductDetail: (product: CompanyPlan) => void;
   selectedPeriod: string;
@@ -55,7 +54,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   paymentStats,
   platforms,
   setActiveTab,
-  onOpenSimulateSale,
   onOpenWithdraw,
   onSelectProductDetail,
   selectedPeriod,
@@ -144,18 +142,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex items-center gap-2 self-stretch sm:self-auto">
             <button
-              onClick={() => setActiveTab('equipe')}
+              onClick={() => setActiveTab(roleMode === 'empresa' ? 'equipe' : 'vitrine')}
               className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
             >
-              <span>Gerenciar Equipe</span>
+              <span>{roleMode === 'empresa' ? 'Gerenciar Equipe' : 'Explorar Marketplace'}</span>
               <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={onOpenSimulateSale}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(217,242,42,0.3)]"
-            >
-              <Zap className="w-3.5 h-3.5 fill-current" />
-              <span>Nova Venda</span>
             </button>
           </div>
         </div>
@@ -412,27 +403,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 0%
               </div>
               <span className="text-[10px] text-emerald-400/70 mt-1">Mecanismo BACEN</span>
-            </div>
-          </div>
-
-          {/* Premiações Quick Callout Card matching Image 4 */}
-          <div 
-            onClick={() => setActiveTab('premiacoes')}
-            className="p-4 rounded-2xl bg-gradient-to-r from-[#101c0c] to-[#080d1a] border border-[#D9F22A]/30 cursor-pointer hover:border-[#D9F22A] transition-all group shadow-lg"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#D9F22A]/15 text-[#D9F22A] flex items-center justify-center font-bold">
-                  🏆
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#D9F22A] block">Programa de Premiações</span>
-                  <span className="text-xs font-bold text-white group-hover:text-[#D9F22A] transition-colors">
-                    Ver Marcos & Placas Oficiais
-                  </span>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-[#D9F22A] group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
         </div>

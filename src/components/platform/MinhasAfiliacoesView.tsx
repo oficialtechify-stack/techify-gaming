@@ -26,7 +26,6 @@ interface MinhasAfiliacoesViewProps {
   plans: CompanyPlan[];
   isVerified?: boolean;
   verificationStatus?: string;
-  onOpenRegisterSale: (planId?: string) => void;
   onNavigateToVitrine: () => void;
   onNavigateToProfile?: () => void;
   onDeleteAffiliation: (affiliationId: string, planId?: string, companyId?: string) => void;
@@ -37,7 +36,6 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   plans = [],
   isVerified = false,
   verificationStatus = 'unsubmitted',
-  onOpenRegisterSale,
   onNavigateToVitrine,
   onNavigateToProfile,
   onDeleteAffiliation
@@ -295,13 +293,6 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                   </button>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onOpenRegisterSale(aff.planId)}
-                      className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-3 py-1.5 rounded-xl text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1"
-                    >
-                      <Zap className="w-3 h-3 fill-current" /> Registrar Venda
-                    </button>
-                    
                     <button
                       onClick={() => setLeavingAffiliationModal(aff)}
                       className="text-[11px] font-bold text-red-400/80 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"

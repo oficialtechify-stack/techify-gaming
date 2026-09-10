@@ -427,7 +427,6 @@ export type PlatformTab =
   | 'equipe' 
   | 'relatorios' 
   | 'integracoes'
-  | 'premiacoes'
   | 'assinaturas'
   | 'cupons'
   | 'database';

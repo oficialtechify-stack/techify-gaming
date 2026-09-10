@@ -2,20 +2,13 @@ import React, { useState } from 'react';
 import { 
   Repeat, 
   Search, 
-  Filter, 
-  Calendar, 
   CheckCircle2, 
   Clock, 
   XCircle, 
-  AlertCircle, 
-  DollarSign, 
-  ArrowUpRight, 
-  UserCheck, 
-  Download, 
-  RefreshCw,
-  Sparkles,
   CreditCard,
-  Building2
+  ShieldCheck,
+  Zap,
+  DollarSign
 } from 'lucide-react';
 import { CompanyPlan, SaleTransaction, UserSellerProfile } from '../../types/platform';
 
@@ -23,6 +16,20 @@ interface AssinaturasViewProps {
   plans?: CompanyPlan[];
   sales?: SaleTransaction[];
   userProfile?: UserSellerProfile;
+}
+
+interface SubscriptionItem {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  planName: string;
+  amount: number;
+  recurrence: string;
+  nextBilling: string;
+  status: 'ativa' | 'cancelada' | 'atrasada';
+  commission: number;
+  paymentMethod: string;
+  affiliateName?: string;
 }
 
 export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
@@ -33,57 +40,37 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'ativa' | 'cancelada' | 'atrasada'>('all');
 
-  // Subscriptions based on recurring plans
-  const recurringPlans = plans.filter(p => 
-    p.billingType === 'recorrente' || 
-    p.paymentType === 'Recorrente' || 
-    p.paymentType === 'Assinatura' || 
-    (p.recurrentCommission ?? 0) > 0
-  );
+  // Derive active subscriptions dynamically from real recurring sales transactions
+  const realSubscriptions: SubscriptionItem[] = sales
+    .filter(s => {
+      const plan = plans.find(p => p.id === s.platformId || p.id === (s as any).planId || p.id === s.plan_id);
+      const isRecurring = plan?.billingType === 'recorrente' || 
+                          plan?.paymentType === 'Recorrente' || 
+                          plan?.paymentType === 'Assinatura' || 
+                          (s as any)?.billingType === 'recorrente';
+      return isRecurring && s.status === 'Aprovado';
+    })
+    .map(s => {
+      const saleDate = s.date ? new Date(s.date) : new Date();
+      const nextDate = new Date(saleDate);
+      nextDate.setMonth(nextDate.getMonth() + 1);
 
-  const sampleSubscriptions = [
-    {
-      id: 'sub_01',
-      customerName: 'TechSolutions Brasil LTDA',
-      customerEmail: 'contato@techsolutions.com.br',
-      planName: plans[0]?.name || 'Plano Pro Enterprise',
-      amount: 497.00,
-      recurrence: 'Mensal',
-      nextBilling: '18/10/2026',
-      status: 'ativa',
-      commission: 149.10,
-      paymentMethod: 'Cartão de Crédito (Recorrente)',
-      affiliateName: 'Pedro Henrique (Afiliado Master)'
-    },
-    {
-      id: 'sub_02',
-      customerName: 'Alpha Nexus Software',
-      customerEmail: 'financeiro@alphanexus.io',
-      planName: plans[1]?.name || 'API Gateway High Volume',
-      amount: 890.00,
-      recurrence: 'Mensal',
-      nextBilling: '22/10/2026',
-      status: 'ativa',
-      commission: 267.00,
-      paymentMethod: 'PIX Automático',
-      affiliateName: 'Juliana Costa'
-    },
-    {
-      id: 'sub_03',
-      customerName: 'Studio Digital Criativo',
-      customerEmail: 'adm@studiodigital.com',
-      planName: 'Software CRM & Leads',
-      amount: 297.00,
-      recurrence: 'Mensal',
-      nextBilling: '05/10/2026',
-      status: 'atrasada',
-      commission: 89.10,
-      paymentMethod: 'Cartão de Crédito',
-      affiliateName: 'Venda Direta'
-    }
-  ];
+      return {
+        id: s.id,
+        customerName: s.buyerName || s.buyerCompany || 'Cliente Assinante',
+        customerEmail: s.buyerEmail || 'contato@cliente.com',
+        planName: s.platformName || 'Plano Recorrente',
+        amount: Number(s.amount) || 0,
+        recurrence: 'Mensal',
+        nextBilling: nextDate.toLocaleDateString('pt-BR'),
+        status: 'ativa' as const,
+        commission: Number(s.commissionEarned ?? (s as any).commissionValue) || 0,
+        paymentMethod: s.method || 'Cartão de Crédito (Recorrente)',
+        affiliateName: (s as any).affiliateName || 'Link Direto'
+      };
+    });
 
-  const filteredSubs = sampleSubscriptions.filter(sub => {
+  const filteredSubs = realSubscriptions.filter(sub => {
     if (statusFilter !== 'all' && sub.status !== statusFilter) return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
@@ -96,9 +83,11 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
     return true;
   });
 
-  const totalMRR = sampleSubscriptions
-    .filter(s => s.status === 'ativa')
-    .reduce((acc, s) => acc + s.amount, 0);
+  const activeSubs = realSubscriptions.filter(s => s.status === 'ativa');
+  const totalMRR = activeSubs.reduce((acc, s) => acc + s.amount, 0);
+  const activeCount = activeSubs.length;
+  const avgTicket = activeCount > 0 ? totalMRR / activeCount : 0;
+  const churnRate = 0.0;
 
   return (
     <div className="space-y-6 animate-fadeIn" id="leadspay-assinaturas-view">
@@ -113,7 +102,7 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
             Gestão de Assinaturas
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-xl">
-            Acompanhe a retenção dos clientes, renovações automáticas, cobranças ativas e comissões mensais recorrentes.
+            Acompanhe a retenção dos seus clientes, renovações automáticas e receita recorrente mensal (MRR).
           </p>
         </div>
 
@@ -136,20 +125,28 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
           <span className="text-xs font-bold uppercase tracking-wider text-white/50 block">Assinaturas Ativas</span>
-          <div className="text-2xl font-black text-white font-['Syne'] mt-1">2</div>
-          <span className="text-[11px] text-emerald-400 font-semibold mt-1 block">98.5% retenção</span>
+          <div className="text-2xl font-black text-white font-['Syne'] mt-1">
+            {activeCount}
+          </div>
+          <span className="text-[11px] text-emerald-400 font-semibold mt-1 block">
+            {activeCount > 0 ? '100% ativas' : 'Pronto para novos assinantes'}
+          </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
           <span className="text-xs font-bold uppercase tracking-wider text-white/50 block">Ticket Médio Recorrente</span>
-          <div className="text-2xl font-black text-white font-['Syne'] mt-1">R$ 561,33</div>
+          <div className="text-2xl font-black text-white font-['Syne'] mt-1">
+            R$ {avgTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </div>
           <span className="text-[11px] text-white/40 mt-1 block">Por contrato mensal</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
-          <span className="text-xs font-bold uppercase tracking-wider text-white/50 block">Churn Rate (Cancelamentos)</span>
-          <div className="text-2xl font-black text-emerald-400 font-['Syne'] mt-1">0.0%</div>
-          <span className="text-[11px] text-emerald-400/80 mt-1 block">Excelente estabilidade</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-white/50 block">Churn Rate</span>
+          <div className="text-2xl font-black text-emerald-400 font-['Syne'] mt-1">
+            {churnRate.toFixed(1)}%
+          </div>
+          <span className="text-[11px] text-emerald-400/80 mt-1 block">Estabilidade e retenção</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
@@ -160,7 +157,7 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
       </div>
 
       {/* Filter Bar & Search */}
-      <div className="bg-[#080d1a] border border-white/10 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-[#080d1a] border border-white/10 p-4 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -172,84 +169,102 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <button
             onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               statusFilter === 'all' ? 'bg-[#D9F22A] text-[#060A15]' : 'bg-white/5 text-white/60 hover:text-white'
             }`}
           >
-            Todas
+            Todas ({realSubscriptions.length})
           </button>
           <button
             onClick={() => setStatusFilter('ativa')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               statusFilter === 'ativa' ? 'bg-emerald-500 text-black' : 'bg-white/5 text-white/60 hover:text-white'
             }`}
           >
-            Ativas
+            Ativas ({activeCount})
           </button>
           <button
             onClick={() => setStatusFilter('atrasada')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               statusFilter === 'atrasada' ? 'bg-amber-500 text-black' : 'bg-white/5 text-white/60 hover:text-white'
             }`}
           >
-            Atrasadas
+            Atrasadas (0)
           </button>
         </div>
       </div>
 
-      {/* Subscriptions Table */}
+      {/* Subscriptions Table / Empty State */}
       <div className="bg-[#080d1a] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-white/10 bg-white/[0.02] text-white/50 uppercase tracking-wider font-bold">
-                <th className="p-4">Cliente & Contrato</th>
-                <th className="p-4">Plano</th>
-                <th className="p-4">Valor / Ciclo</th>
-                <th className="p-4">Próxima Cobrança</th>
-                <th className="p-4">Método</th>
-                <th className="p-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filteredSubs.map((sub) => (
-                <tr key={sub.id} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="p-4">
-                    <div className="font-bold text-white">{sub.customerName}</div>
-                    <div className="text-[11px] text-white/50">{sub.customerEmail}</div>
-                  </td>
-                  <td className="p-4">
-                    <span className="font-bold text-white">{sub.planName}</span>
-                    <span className="text-[10px] text-[#D9F22A] block font-mono">Comissão: R$ {sub.commission.toFixed(2)}/mês</span>
-                  </td>
-                  <td className="p-4 font-black text-white font-mono">
-                    R$ {sub.amount.toFixed(2)} <span className="text-[10px] text-white/40 font-normal">/mês</span>
-                  </td>
-                  <td className="p-4 text-white/80 font-mono">
-                    {sub.nextBilling}
-                  </td>
-                  <td className="p-4 text-white/60">
-                    {sub.paymentMethod}
-                  </td>
-                  <td className="p-4">
-                    {sub.status === 'ativa' ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        <CheckCircle2 className="w-3 h-3" /> Ativa
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                        <Clock className="w-3 h-3" /> Tentando Cobrança
-                      </span>
-                    )}
-                  </td>
+        {filteredSubs.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 mb-3">
+              <Repeat className="w-7 h-7 text-[#D9F22A]/60" />
+            </div>
+            <h3 className="text-base font-bold text-white font-['Syne']">
+              Nenhuma assinatura ativa encontrada
+            </h3>
+            <p className="text-xs text-white/50 max-w-md mt-1.5">
+              Quando clientes contratarem planos de assinatura recorrente através dos links de checkout ou campanhas, as assinaturas e o MRR serão computados aqui automaticamente em tempo real.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[650px]">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.02] text-white/50 uppercase tracking-wider font-bold">
+                  <th className="p-4">Cliente & Contrato</th>
+                  <th className="p-4">Plano</th>
+                  <th className="p-4">Valor / Ciclo</th>
+                  <th className="p-4">Próxima Cobrança</th>
+                  <th className="p-4">Método</th>
+                  <th className="p-4">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredSubs.map((sub) => (
+                  <tr key={sub.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="p-4">
+                      <div className="font-bold text-white">{sub.customerName}</div>
+                      <div className="text-[11px] text-white/50">{sub.customerEmail}</div>
+                    </td>
+                    <td className="p-4">
+                      <span className="font-bold text-white">{sub.planName}</span>
+                      {sub.commission > 0 && (
+                        <span className="text-[10px] text-[#D9F22A] block font-mono">
+                          Comissão: R$ {sub.commission.toFixed(2)}/mês
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 font-black text-white font-mono">
+                      R$ {sub.amount.toFixed(2)} <span className="text-[10px] text-white/40 font-normal">/mês</span>
+                    </td>
+                    <td className="p-4 text-white/80 font-mono">
+                      {sub.nextBilling}
+                    </td>
+                    <td className="p-4 text-white/60">
+                      {sub.paymentMethod}
+                    </td>
+                    <td className="p-4">
+                      {sub.status === 'ativa' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                          <CheckCircle2 className="w-3 h-3" /> Ativa
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                          <Clock className="w-3 h-3" /> Tentando Cobrança
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
