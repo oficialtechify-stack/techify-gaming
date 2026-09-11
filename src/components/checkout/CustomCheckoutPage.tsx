@@ -3,22 +3,17 @@ import { CompanyPlan, SaleTransaction } from '../../types/platform';
 import { 
   CreditCard, 
   QrCode, 
-  Smartphone, 
-  Apple, 
-  Check, 
   Lock, 
   ShieldCheck, 
   Copy, 
+  Check, 
   CheckCircle2, 
   ArrowLeft, 
   Tag, 
-  Sparkles,
   AlertCircle,
   Clock,
-  ChevronDown,
-  Info,
   RefreshCw,
-  ExternalLink
+  Zap
 } from 'lucide-react';
 import { createSaleTransactionInFirebase, fetchSellerSubaccountId } from '../../services/firestoreService';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
@@ -32,7 +27,7 @@ interface CustomCheckoutPageProps {
   onPaymentSuccess?: (transaction: SaleTransaction) => void;
 }
 
-export const PLATFORM_CHECKOUT_FEE = 0.99; // 99 centavos cobrados pela plataforma
+export const PLATFORM_CHECKOUT_FEE = 0.99; // Taxa de serviço R$ 0,99 cobrada pela plataforma LeadsPay
 
 export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   plan,
@@ -44,7 +39,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 }) => {
   // Query param apiKey fallback (?apiKey=lp_live_...)
   const queryApiKey = typeof window !== 'undefined' 
-    ? (new URLSearchParams(window.location.search).get('apiKey') || new URLSearchParams(window.location.search).get('x-api-key') || new URLSearchParams(window.location.search).get('key'))
+    ? (new URLSearchParams(window.location.search).get('apiKey') || 
+       new URLSearchParams(window.location.search).get('x-api-key') || 
+       new URLSearchParams(window.location.search).get('key'))
     : null;
   const effectiveApiKey = apiKey || queryApiKey || undefined;
 
@@ -54,15 +51,15 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [phone, setPhone] = useState<string>('');
   const [documentNumber, setDocumentNumber] = useState<string>('');
   
-  // Payment selection state
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'picpay' | 'apple_pay' | 'google_pay'>('pix');
+  // Payment selection state ('pix' | 'credit_card' | 'pix_automatico')
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'pix_automatico'>('pix');
   
   // Credit card fields
   const [cardNumber, setCardNumber] = useState<string>('');
   const [cardHolderName, setCardHolderName] = useState<string>('');
   const [cardExpiry, setCardExpiry] = useState<string>('');
   const [cardCvv, setCardCvv] = useState<string>('');
-  const [installments, setInstallments] = useState<number>(12);
+  const [installments, setInstallments] = useState<number>(1);
 
   // Coupon state
   const [couponInput, setCouponInput] = useState<string>('');
@@ -72,6 +69,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
   // Order bump addon state
   const [includeOrderBump, setIncludeOrderBump] = useState<boolean>(false);
+
+  // Minimum amount alert inline banner
+  const [minAmountAlert, setMinAmountAlert] = useState<string | null>(null);
 
   // Real PIX state from Asaas v3 API
   const [pixData, setPixData] = useState<{
@@ -113,7 +113,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculation values
-  const basePrice = plan.priceSetup || plan.priceMonthly || (plan as any).price || (plan as any).amount || (plan as any).valor || 197.00;
+  const basePrice = plan.priceSetup || plan.priceMonthly || (plan as any).price || (plan as any).amount || (plan as any).valor || 157.00;
+  const originalStrikePrice = Number((basePrice * 1.25).toFixed(2)) || 197.00;
   const bumpPrice = plan.orderBumps?.[0]?.active ? plan.orderBumps[0].price : 29.90;
   
   let discountAmount = 0;
@@ -126,15 +127,20 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   }
 
   const subtotal = Math.max(0, basePrice - discountAmount + (includeOrderBump ? bumpPrice : 0));
-  const finalTotal = subtotal + PLATFORM_CHECKOUT_FEE;
+  const finalTotal = Number((subtotal + PLATFORM_CHECKOUT_FEE).toFixed(2));
   
   // Installment price calculation
   const installment12xValue = Number(((finalTotal * 1.24) / 12).toFixed(2));
 
-  // Active PIX string from official Asaas response
-  const activePixCode = pixData?.copyAndPaste || '';
+  // Determine billing frequency label
+  const isAnnual = (plan.paymentType === 'Recorrente' || (plan as any).billingType === 'recorrente') && 
+    ((plan as any).billingInterval === 'yearly' || plan.name?.toLowerCase().includes('anual') || (plan as any).interval === 'yearly');
+  const isMonthly = (plan.paymentType === 'Recorrente' || (plan as any).billingType === 'recorrente') && 
+    ((plan as any).billingInterval === 'monthly' || plan.name?.toLowerCase().includes('mensal') || (plan as any).interval === 'monthly');
+  const billingSuffix = isAnnual ? ' / ano' : isMonthly ? ' / mês' : '';
+  const billingPeriodName = isAnnual ? 'Renovação anual' : isMonthly ? 'Renovação mensal' : 'Pagamento único';
 
-  // Handle format phone
+  // Format phone
   const handlePhoneChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 11);
     if (clean.length <= 10) {
@@ -144,7 +150,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // Handle format CPF/CNPJ
+  // Format CPF/CNPJ
   const handleDocChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 14);
     if (clean.length <= 11) {
@@ -154,13 +160,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // Handle format Card Number
+  // Format Card Number
   const handleCardNumberChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 16);
     setCardNumber(clean.replace(/(\d{4})(?=\d)/g, '$1 ').trim());
   };
 
-  // Handle format Expiry
+  // Format Expiry
   const handleExpiryChange = (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 4);
     if (clean.length <= 2) {
@@ -170,7 +176,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // Live 15-minute countdown timer that counts down second by second
+  // Live 15-minute countdown timer
   useEffect(() => {
     if (isPaid) return;
     const timer = setInterval(() => {
@@ -179,12 +185,11 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     return () => clearInterval(timer);
   }, [isPaid]);
 
-  // Persistência do Código do Afiliado via Cookie de 15 dias e localStorage
+  // Affiliate tracking
   useEffect(() => {
     handleAffiliateTracking();
   }, [affiliateRef]);
 
-  // Recupera código do afiliado do Cookie de 15 dias ou localStorage ou prop ou URL
   const getActiveAffiliateCode = (): string | null => {
     if (affiliateRef && affiliateRef.trim()) return affiliateRef.trim();
     return getActiveAffiliateRef();
@@ -198,9 +203,17 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
   // Trigger Real PIX Generation via Asaas API
   const generateRealPixPayment = async () => {
+    // 1. Validação no Frontend: Regra de valor mínimo exigida pela API do Asaas (R$ 5,00)
+    if (finalTotal < 5.00) {
+      setMinAmountAlert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
+      alert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
+      return;
+    }
+
     if (isGeneratingPix) return;
     setIsGeneratingPix(true);
     setPixError(null);
+    setMinAmountAlert(null);
 
     try {
       const activeAffiliate = getActiveAffiliateCode();
@@ -211,7 +224,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       const cleanPhone = phone.replace(/\D/g, '');
 
       if (!cleanDoc || cleanDoc.length < 11) {
-        setPixError('Por favor, informe seu CPF completo no formulário acima para gerar o Pix.');
+        setPixError('Por favor, informe seu CPF ou CNPJ no formulário acima para gerar o Pix.');
         setPixData(null);
         setIsGeneratingPix(false);
         return;
@@ -233,7 +246,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       const cleanDescription = plan.name || 'Cobrança LeadsPay';
       const effectivePlanId = (plan.id && plan.id !== 'checkout-dinamico' && plan.id !== 'checkout-direto') ? plan.id : undefined;
 
-      // Requisição POST direta para o endpoint oficial do Asaas /api/payments
       const response = await fetch('/api/payments', {
         method: 'POST',
         headers: {
@@ -283,8 +295,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         console.warn('[Checkout Pix] Falha no parse JSON de /api/payments:', responseText);
       }
 
-      // Adequação do Payload PIX conforme solicitado:
-      // response.qrCodeBase64 e response.copyAndPaste
       const qrCodeBase64 = data.qrCodeBase64 || data.encodedImage || data.qr_code_base64;
       const copyAndPaste = data.copyAndPaste || data.payload || data.qr_code;
       const activePaymentId = data.paymentId || data.payment_id || data.id;
@@ -298,23 +308,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           status: data.status || 'pending'
         });
         setPixError(null);
-        setPixSecondsLeft(900); // Reset 15:00 min timer
+        setPixSecondsLeft(900);
       } else {
-        // Exibe estritamente o erro retornado pela API do Asaas ou backend
         const asaasDescription = data?.errors?.[0]?.description;
         const asaasMessage = typeof data?.message === 'string' && data.message ? data.message : null;
-        const asaasDetails = Array.isArray(data?.details) 
-          ? data.details.map((d: any) => d?.description || d?.message || (typeof d === 'string' ? d : JSON.stringify(d))).filter(Boolean).join(' | ') 
-          : (typeof data?.details === 'string' ? data.details : (data?.details?.description || data?.details?.message));
-        const asaasError = typeof data?.error === 'string' && data.error !== 'true' ? data.error : null;
-        const fallbackText = responseText && !responseText.startsWith('<!DOCTYPE') && responseText.length < 500 ? responseText : null;
-
         const errorMsg = 
           asaasDescription || 
           asaasMessage || 
-          asaasDetails || 
-          asaasError || 
-          fallbackText ||
+          data?.error || 
           'Erro ao processar cobrança na API do Asaas.';
 
         console.error('[Checkout Pix Error Asaas]:', errorMsg, data);
@@ -330,16 +331,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // Auto-generate PIX on first mount or when switching to PIX or when CPF is completed
-  useEffect(() => {
-    if (paymentMethod === 'pix' && !pixData) {
-      const cleanDoc = documentNumber.replace(/\D/g, '');
-      if (cleanDoc.length >= 11) {
-        generateRealPixPayment();
-      }
-    }
-  }, [paymentMethod, finalTotal, documentNumber]);
-
   // Check PIX payment status in Asaas
   const checkPaymentStatus = async (paymentId: string) => {
     if (!paymentId || isPaid) return;
@@ -347,54 +338,48 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
     try {
       const res = await fetch(`/api/payments/asaas/${paymentId}`);
-
       if (res.ok) {
-        const text = await res.text();
-        try {
-          const data = JSON.parse(text);
-          if (data.status === 'approved' || data.status === 'CONFIRMED' || data.status === 'RECEIVED') {
-            await finalizeApprovedPayment('PIX', data.id || paymentId);
-          }
-        } catch (parseErr) {
-          console.warn('Erro ao parsear status de pagamento:', parseErr);
+        const data = await res.json();
+        if (data.status === 'RECEIVED' || data.status === 'CONFIRMED' || data.status === 'RECEIVED_IN_CASH' || data.paid) {
+          await finalizeApprovedPayment('PIX', paymentId);
+          return;
         }
       }
-    } catch (err) {
-      console.warn('Status check error:', err);
+    } catch (e) {
+      console.warn('Erro ao checar status do PIX:', e);
     } finally {
       setIsCheckingPixStatus(false);
     }
   };
 
-  // Polling for PIX payment approval every 3 seconds
+  // Polling for PIX payment verification
   useEffect(() => {
-    if (paymentMethod === 'pix' && pixData?.id && !isPaid) {
+    if (pixData?.id && !isPaid) {
       pollIntervalRef.current = setInterval(() => {
         checkPaymentStatus(pixData.id);
-      }, 3000);
+      }, 5000);
+    }
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [pixData?.id, isPaid]);
+
+  // Finalize payment
+  const finalizeApprovedPayment = async (methodName: string, transactionReference?: string) => {
+    if (isPaid) return;
+
+    const activeAffiliate = getActiveAffiliateCode();
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    let commissionEarned = 0;
+    const planCommissionPct = plan.commissionPercentage || (plan as any).affiliateCommission;
+    if (activeAffiliate && planCommissionPct) {
+      commissionEarned = (finalTotal * planCommissionPct) / 100;
     }
 
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
-  }, [paymentMethod, pixData?.id, isPaid]);
-
-  // Finalize an approved payment and record in Firestore
-  const finalizeApprovedPayment = async (methodName: string, transactionReference?: string) => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = now.toLocaleDateString('pt-BR');
-
-    // Calculate affiliate commission
-    const commissionPercentage = plan.commissionPercentage || 30;
-    const commissionEarned = Number(((basePrice * commissionPercentage) / 100).toFixed(2));
-
-    const salePayload: Omit<SaleTransaction, 'id' | 'createdAt'> = {
-      companyId: plan.companyId,
-      companyName: plan.companyName,
-      companyLogo: plan.companyLogo,
+    const salePayload: Omit<SaleTransaction, 'id'> = {
       platformId: plan.id,
       platformName: plan.name,
       buyerName: fullName.trim() || 'Cliente LeadsPay',
@@ -439,7 +424,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     const cleanCode = couponInput.trim().toUpperCase();
     if (!cleanCode) return;
 
-    // Check plan configured coupons or default global coupons
     const planCoupon = plan.coupons?.find(c => c.code.toUpperCase() === cleanCode && c.active);
     
     if (planCoupon) {
@@ -456,7 +440,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         type: 'percentage'
       });
       setCouponSuccess(`Cupom "${cleanCode}" de 10% OFF aplicado!`);
-    } else if (cleanCode === 'PRIMEIRACOMPRA' || cleanCode === 'VIP50') {
+    } else if (cleanCode === 'PRIMEIRACOMPRA' || cleanCode === 'VIP20') {
       setAppliedCoupon({
         code: cleanCode,
         discount: 20,
@@ -470,16 +454,23 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
   // Copy PIX Code
   const handleCopyPix = () => {
-    const textToCopy = pixData?.copyAndPaste || activePixCode;
+    const textToCopy = pixData?.copyAndPaste;
     if (!textToCopy) return;
     navigator.clipboard.writeText(textToCopy);
     setPixCopied(true);
     setTimeout(() => setPixCopied(false), 3000);
   };
 
-  // Submit Payment
+  // Process Payment Submission
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. VALIDAÇÃO OBRIGATÓRIA NO FRONTEND: Valor mínimo de cobrança R$ 5,00 conforme regra do Asaas
+    if (finalTotal < 5.00) {
+      setMinAmountAlert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
+      alert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
+      return;
+    }
 
     if (!fullName.trim() || fullName.trim().split(' ').length < 2) {
       alert('Por favor, preencha seu nome e sobrenome completos.');
@@ -492,7 +483,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
 
     if (!phone || phone.replace(/\D/g, '').length < 10) {
-      alert('Por favor, preencha seu número de celular com DDD.');
+      alert('Por favor, preencha seu celular com DDD.');
       return;
     }
 
@@ -501,8 +492,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       return;
     }
 
-    if (paymentMethod === 'pix') {
-      // Re-generate fresh PIX with actual payer details
+    if (paymentMethod === 'pix' || paymentMethod === 'pix_automatico') {
       await generateRealPixPayment();
       return;
     }
@@ -593,14 +583,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           return;
         }
       }
-
-      // Direct processing for Apple Pay, Google Pay, PicPay
-      let paymentMethodName = 'Cartão de Crédito';
-      if (paymentMethod === 'picpay') paymentMethodName = 'PicPay';
-      else if (paymentMethod === 'apple_pay') paymentMethodName = 'Apple Pay';
-      else if (paymentMethod === 'google_pay') paymentMethodName = 'Google Pay';
-
-      await finalizeApprovedPayment(paymentMethodName, `PAY-${Date.now().toString().slice(-8)}`);
     } catch (err: any) {
       console.error('Erro no checkout:', err);
       alert('Houve um problema ao processar seu pagamento. Tente novamente.');
@@ -612,218 +594,173 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   // If payment is completed, show the Success Order Receipt
   if (isPaid && completedTransaction) {
     return (
-      <div className="min-h-screen bg-[#070b14] text-white flex flex-col items-center justify-center p-4 sm:p-6 selection:bg-[#D9F22A] selection:text-[#060A15]">
-        <div className="w-full max-w-lg bg-[#0b1220] border border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center animate-in zoom-in-95 duration-300">
-          <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 mx-auto mb-5 shadow-lg">
-            <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
+      <div className="min-h-screen bg-[#f8fafc] text-gray-900 flex flex-col items-center justify-center p-4 sm:p-6 font-sans">
+        <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-xl text-center">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mx-auto mb-4">
+            <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
           </div>
 
-          <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 mb-3 inline-block">
+          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 mb-3 inline-block">
             ✓ Pagamento Aprovado com Sucesso
           </span>
 
-          <h2 className="text-2xl sm:text-3xl font-black text-white font-['Syne'] mb-2">
-            Parabéns pela sua contratação!
+          <h2 className="text-2xl font-black text-gray-900 mb-2">
+            Parabéns pela sua compra!
           </h2>
 
-          <p className="text-xs text-white/70 mb-6 leading-relaxed">
-            Seu acesso ao <strong>{plan.name}</strong> da <strong>{plan.companyName}</strong> já foi liberado. Enviamos o recibo e detalhes de acesso para <strong>{email || 'seu e-mail'}</strong>.
+          <p className="text-xs text-gray-600 mb-6 leading-relaxed">
+            Seu acesso ao <strong>{plan.name}</strong> já foi liberado com sucesso. Enviamos os detalhes para <strong>{email || 'seu e-mail'}</strong>.
           </p>
 
-          {/* Receipt Breakdown Card */}
-          <div className="bg-[#060A15] border border-white/10 rounded-2xl p-4 text-left space-y-2.5 text-xs mb-6">
-            <div className="flex justify-between text-white/60">
-              <span>Código da Transação:</span>
-              <span className="font-mono text-white font-bold">{completedTransaction.id}</span>
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-left space-y-2 mb-6 text-xs text-gray-700">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Transação ID:</span>
+              <span className="font-mono font-bold text-gray-800">{completedTransaction.id}</span>
             </div>
-            <div className="flex justify-between text-white/60">
-              <span>Plano / Produto:</span>
-              <span className="text-white font-bold">{plan.name}</span>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Método:</span>
+              <span className="font-semibold text-gray-800">{completedTransaction.method}</span>
             </div>
-            <div className="flex justify-between text-white/60">
-              <span>Empresa Responsável:</span>
-              <span className="text-white font-bold">{plan.companyName}</span>
-            </div>
-            <div className="flex justify-between text-white/60">
-              <span>Método de Pagamento:</span>
-              <span className="text-emerald-400 font-bold">{completedTransaction.method}</span>
-            </div>
-            <div className="flex justify-between text-white/60">
-              <span>Comprador:</span>
-              <span className="text-white font-bold">{completedTransaction.buyerName}</span>
-            </div>
-            {affiliateRef && (
-              <div className="flex justify-between text-white/60 pt-1 border-t border-white/5">
-                <span>Indicação de Afiliado:</span>
-                <span className="font-mono text-[#D9F22A] font-bold">{affiliateRef}</span>
-              </div>
-            )}
-            <div className="pt-2 border-t border-white/10 flex justify-between items-center text-sm font-black">
-              <span>Valor Total Pago:</span>
-              <span className="text-emerald-400 font-['Syne'] text-base">
+            <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-sm font-bold">
+              <span>Valor Pago:</span>
+              <span className="text-[#205a46] text-base">
                 R$ {completedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg"
-              >
-                Voltar para a Plataforma
-              </button>
-            )}
-          </div>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="w-full bg-[#205a46] hover:bg-[#194939] text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md"
+            >
+              Voltar para a Plataforma
+            </button>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white flex flex-col items-center justify-start p-4 sm:p-6 lg:p-10 selection:bg-[#D9F22A] selection:text-[#060A15]">
-      {/* Top Brand Banner */}
-      <div className="w-full max-w-lg mb-4 flex items-center justify-between">
-        {onBack && (
+    <div className="min-h-screen bg-white text-[#111827] flex flex-col items-center justify-start py-8 px-4 sm:px-6 font-sans selection:bg-[#205a46] selection:text-white">
+      {/* Top back button if within platform */}
+      {onBack && (
+        <div className="w-full max-w-[560px] mb-3 flex items-center justify-start">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar
           </button>
-        )}
-
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider">
-            Checkout Seguro Asaas Gateway
-          </span>
         </div>
-      </div>
+      )}
 
-      {/* Main Container */}
-      <div className="w-full max-w-lg bg-[#080d1a] border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
-        {/* Affiliate Attribution Ribbon */}
-        {affiliateRef && (
-          <div className="p-2.5 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-between text-xs">
-            <span className="text-white/70">Código de Indicação:</span>
-            <span className="font-mono font-bold text-[#D9F22A]">{affiliateRef}</span>
-          </div>
-        )}
-
-        {/* Product Title & Company */}
-        <div className="flex items-center gap-3.5 pb-4 border-b border-white/10">
-          <img
-            src={plan.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=100&q=80'}
-            alt={plan.companyName}
-            className="w-12 h-12 rounded-xl object-cover border border-[#D9F22A]/30 bg-[#050811] flex-shrink-0"
-          />
-          <div className="flex-1 min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
-              {plan.companyName}
-            </span>
-            <h1 className="text-lg font-black text-white font-['Syne'] truncate">
-              {plan.name}
-            </h1>
-            <span className="text-[11px] text-white/50 block truncate">
-              {plan.tagline || plan.description}
-            </span>
-          </div>
+      {/* Main Checkout Container - Exactly matching image.png */}
+      <div className="w-full max-w-[560px] space-y-6">
+        
+        {/* Title: Starter • Tração & Vendas */}
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight">
+            {plan.name}
+          </h1>
         </div>
 
-        {/* Checkout Form */}
+        {/* Form Fields */}
         <form onSubmit={handleProcessPayment} className="space-y-4">
-          {/* 1. Nome Completo */}
+          
+          {/* 1. Nome completo */}
           <div>
-            <label className="block text-xs font-semibold text-white/80 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Nome completo
             </label>
             <input
               type="text"
               required
-              placeholder="Preencha seu nome e sobrenome"
+              placeholder="Preencha seu nome"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
+              className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
             />
           </div>
 
           {/* 2. Email */}
           <div>
-            <label className="block text-xs font-semibold text-white/80 mb-1.5">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Email
             </label>
             <input
               type="email"
               required
-              placeholder="Preencha seu email para receber o acesso"
+              placeholder="Preencha seu email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
+              className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
             />
           </div>
 
-          {/* 3. Celular & CPF/CNPJ */}
+          {/* 3. Celular e CPF/CNPJ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-semibold text-white/80 mb-1.5">
-                Celular com DDD
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Celular
               </label>
               <input
                 type="text"
                 required
-                placeholder="(11) 99999-9999"
+                placeholder="Preencha seu celular"
                 value={phone}
                 onChange={(e) => handlePhoneChange(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
+                className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-white/80 mb-1.5">
-                CPF ou CNPJ
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                CPF/CNPJ
               </label>
               <input
                 type="text"
                 required
-                placeholder="000.000.000-00"
+                placeholder="Preencha seu CPF/CNPJ"
                 value={documentNumber}
                 onChange={(e) => handleDocChange(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
+                className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
               />
             </div>
           </div>
 
-          {/* Oferta Summary Header */}
-          <div className="pt-2 flex items-center justify-between">
-            <span className="text-xs font-bold text-white">Oferta Selecionada</span>
+          {/* 4. Oferta Header */}
+          <div className="pt-2 flex items-center justify-between border-t border-transparent">
+            <span className="text-xs font-bold text-gray-900">
+              Oferta
+            </span>
             <div className="text-right">
-              <span className="text-sm font-black text-emerald-400 block font-['Syne']">
-                12x de R$ {installment12xValue.toFixed(2).replace('.', ',')}
+              <span className="text-[11px] text-gray-400 line-through block">
+                R$ {originalStrikePrice.toFixed(2).replace('.', ',')}
               </span>
-              <span className="text-[11px] text-white/50">
-                R$ {finalTotal.toFixed(2).replace('.', ',')} à vista
+              <span className="text-sm sm:text-base font-bold text-[#205a46] block">
+                R$ {basePrice.toFixed(2).replace('.', ',')}{billingSuffix}
               </span>
             </div>
           </div>
 
-          {/* 4. Forma de Pagamento Tabs */}
+          {/* 5. Forma de Pagamento */}
           <div>
-            <label className="block text-xs font-bold text-white mb-2">
+            <label className="block text-xs font-bold text-gray-900 mb-2">
               Forma de Pagamento
             </label>
 
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2.5">
               {/* PIX */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('pix')}
-                className={`py-3 px-1.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   paymentMethod === 'pix'
-                    ? 'bg-[#1b4332] border-[#2d6a4f] text-white shadow-md'
-                    : 'bg-[#050811] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
+                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
                 }`}
               >
                 <div className="w-5 h-5 flex items-center justify-center">
@@ -831,72 +768,51 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                     <path d="M12 2L2 12l10 10 10-10L12 2zm0 3.5L18.5 12 12 18.5 5.5 12 12 5.5z"/>
                   </svg>
                 </div>
-                <span className="text-[10px] font-bold tracking-tight">PIX</span>
+                <span className="text-xs font-bold tracking-tight">PIX</span>
               </button>
 
               {/* Cartão de Crédito */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('credit_card')}
-                className={`py-3 px-1 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   paymentMethod === 'credit_card'
-                    ? 'bg-[#208b68] border-[#2bb084] text-white shadow-md'
-                    : 'bg-[#050811] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
+                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
                 }`}
               >
                 <CreditCard className="w-4 h-4" />
-                <span className="text-[10px] font-bold tracking-tight text-center leading-tight">Cartão</span>
+                <span className="text-xs font-bold tracking-tight text-center leading-tight">Cartão de Crédito</span>
               </button>
 
-              {/* PicPay */}
+              {/* Pix Automático */}
               <button
                 type="button"
-                onClick={() => setPaymentMethod('picpay')}
-                className={`py-3 px-1.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  paymentMethod === 'picpay'
-                    ? 'bg-[#1b4332] border-[#2d6a4f] text-white shadow-md'
-                    : 'bg-[#050811] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                onClick={() => setPaymentMethod('pix_automatico')}
+                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer relative ${
+                  paymentMethod === 'pix_automatico'
+                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
+                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <span className="text-sm font-black">P°</span>
-                <span className="text-[10px] font-bold tracking-tight">PicPay</span>
-              </button>
-
-              {/* Apple Pay */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('apple_pay')}
-                className={`py-3 px-1.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  paymentMethod === 'apple_pay'
-                    ? 'bg-[#1b4332] border-[#2d6a4f] text-white shadow-md'
-                    : 'bg-[#050811] border-white/10 text-white/60 hover:text-white hover:border-white/20'
-                }`}
-              >
-                <Apple className="w-4 h-4" />
-                <span className="text-[10px] font-bold tracking-tight">Apple Pay</span>
-              </button>
-
-              {/* Google Pay */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('google_pay')}
-                className={`py-3 px-1.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  paymentMethod === 'google_pay'
-                    ? 'bg-[#1b4332] border-[#2d6a4f] text-white shadow-md'
-                    : 'bg-[#050811] border-white/10 text-white/60 hover:text-white hover:border-white/20'
-                }`}
-              >
-                <span className="text-sm font-black">G</span>
-                <span className="text-[10px] font-bold tracking-tight">Google Pay</span>
+                <div className="relative">
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                    <path d="M12 2L2 12l10 10 10-10L12 2zm0 3.5L18.5 12 12 18.5 5.5 12 12 5.5z"/>
+                  </svg>
+                  <span className="absolute -top-1.5 -right-2 bg-emerald-500 text-white rounded-full p-0.5 shadow-xs">
+                    <Zap className="w-2.5 h-2.5 fill-current" />
+                  </span>
+                </div>
+                <span className="text-xs font-bold tracking-tight text-center leading-tight">Pix Automático</span>
               </button>
             </div>
           </div>
 
-          {/* 5. Credit Card Form Fields (When Selected) */}
+          {/* Campos de Cartão de Crédito (se selecionado) */}
           {paymentMethod === 'credit_card' && (
-            <div className="space-y-3.5 pt-1 animate-in fade-in duration-200">
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 animate-in fade-in duration-200">
               <div>
-                <label className="block text-xs font-semibold text-white/80 mb-1.5">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Número do cartão
                 </label>
                 <div className="relative">
@@ -906,14 +822,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                     placeholder="0000 0000 0000 0000"
                     value={cardNumber}
                     onChange={(e) => handleCardNumberChange(e.target.value)}
-                    className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 font-mono focus:outline-none transition-colors"
+                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 font-mono focus:outline-none transition-all"
                   />
-                  <CreditCard className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-white/40" />
+                  <CreditCard className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-white/80 mb-1.5">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Nome impresso no cartão
                 </label>
                 <input
@@ -921,14 +837,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   placeholder="Como está gravado no cartão"
                   value={cardHolderName}
                   onChange={(e) => setCardHolderName(e.target.value.toUpperCase())}
-                  className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 focus:outline-none transition-colors uppercase"
+                  className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all uppercase"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2.5">
                 <div>
-                  <label className="block text-xs font-semibold text-white/80 mb-1.5">
-                    Vencimento
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Validade
                   </label>
                   <input
                     type="text"
@@ -936,12 +852,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                     placeholder="MM/AA"
                     value={cardExpiry}
                     onChange={(e) => handleExpiryChange(e.target.value)}
-                    className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-3 py-3 text-xs text-white placeholder-white/30 text-center font-mono focus:outline-none transition-colors"
+                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] rounded-lg px-2 py-2.5 text-xs text-gray-900 placeholder-gray-400 text-center font-mono focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-white/80 mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
                     CVV
                   </label>
                   <input
@@ -951,24 +867,23 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                     placeholder="000"
                     value={cardCvv}
                     onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-3 py-3 text-xs text-white placeholder-white/30 text-center font-mono focus:outline-none transition-colors"
+                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] rounded-lg px-2 py-2.5 text-xs text-gray-900 placeholder-gray-400 text-center font-mono focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-white/80 mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Parcelas
                   </label>
                   <select
                     value={installments}
                     onChange={(e) => setInstallments(Number(e.target.value))}
-                    className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-2 py-3 text-xs text-white focus:outline-none cursor-pointer"
+                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] rounded-lg px-1.5 py-2.5 text-[11px] text-gray-900 focus:outline-none cursor-pointer"
                   >
                     <option value={1}>1x de R$ {finalTotal.toFixed(2).replace('.', ',')} (à vista)</option>
                     <option value={2}>2x de R$ {((finalTotal * 1.04) / 2).toFixed(2).replace('.', ',')}</option>
                     <option value={3}>3x de R$ {((finalTotal * 1.06) / 3).toFixed(2).replace('.', ',')}</option>
                     <option value={6}>6x de R$ {((finalTotal * 1.12) / 6).toFixed(2).replace('.', ',')}</option>
-                    <option value={10}>10x de R$ {((finalTotal * 1.18) / 10).toFixed(2).replace('.', ',')}</option>
                     <option value={12}>12x de R$ {installment12xValue.toFixed(2).replace('.', ',')}</option>
                   </select>
                 </div>
@@ -976,259 +891,220 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             </div>
           )}
 
-          {/* 6. Real PIX QR Code & Live Countdown Box */}
-          {paymentMethod === 'pix' && (
-            <div className="p-5 rounded-2xl bg-[#050811] border border-emerald-500/40 text-center space-y-3.5 animate-in fade-in duration-200">
-              {/* Live decrementing countdown */}
-              <div className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-xs font-black text-emerald-400">
-                <Clock className="w-4 h-4 animate-pulse" />
-                <span>Pague via PIX para aprovação instantânea ({formatCountdown(pixSecondsLeft)})</span>
-              </div>
+          {/* 6. Resumo do Pedido Box - Exactly like image.png */}
+          <div className="pt-2">
+            <h2 className="text-xs font-bold text-gray-900 mb-2">
+              Resumo do pedido
+            </h2>
 
-              {pixError ? (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs space-y-2.5">
-                  <div className="flex items-center justify-center gap-1.5 font-bold text-rose-400 text-sm">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Retorno da API Asaas:</span>
+            <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden shadow-xs">
+              
+              {/* Cupom Input Row */}
+              <div className="p-3.5 border-b border-gray-100">
+                <div className="flex items-center justify-between border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus-within:border-[#205a46] transition-colors">
+                  <div className="flex items-center gap-2 flex-1">
+                    <Tag className="w-3.5 h-3.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Código de desconto"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      className="w-full text-xs text-gray-800 placeholder-gray-400 focus:outline-none uppercase font-mono"
+                    />
                   </div>
-                  <div className="bg-black/50 p-3 rounded-lg border border-red-500/20 text-xs text-white font-mono break-words">
-                    {pixError}
-                  </div>
-                  {pixError.includes('chave Pix') && (
-                    <p className="text-[11px] text-amber-300/90 font-medium">
-                      💡 <strong>Dica de configuração:</strong> Acesse seu painel do Asaas em <em>Configurações &gt; Pix &gt; Minhas Chaves Pix</em> e cadastre uma chave Pix (CPF, CNPJ, e-mail ou chave aleatória) para habilitar o recebimento via Pix.
-                    </p>
-                  )}
                   <button
                     type="button"
-                    onClick={generateRealPixPayment}
-                    className="mt-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-xs transition cursor-pointer"
+                    onClick={handleApplyCoupon}
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer pl-2"
                   >
-                    Tentar Novamente
+                    Aplicar Cupom
                   </button>
                 </div>
-              ) : (
-                <>
-                  {/* Real Official QR Code Image from Asaas */}
-                  <div className="w-52 h-52 mx-auto bg-white p-3 rounded-2xl border-4 border-emerald-400 flex items-center justify-center shadow-2xl relative">
-                    {isGeneratingPix ? (
-                      <div className="flex flex-col items-center justify-center gap-2 text-[#060A15]">
-                        <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
-                        <span className="text-[10px] font-bold">Gerando PIX Oficial Asaas...</span>
-                      </div>
-                    ) : !pixData ? (
-                      <div className="flex flex-col items-center justify-center p-3 text-center text-[#060A15] gap-1.5">
-                        <QrCode className="w-9 h-9 text-emerald-600" />
-                        <span className="text-[11px] font-black leading-tight">Aguardando dados</span>
-                        <span className="text-[10px] text-gray-600 leading-tight">Preencha seu Nome, E-mail e CPF acima para gerar seu QR Code</span>
-                      </div>
-                    ) : pixData?.qrCodeBase64 ? (
-                      <img
-                        src={
-                          pixData.qrCodeBase64.startsWith('data:')
-                            ? pixData.qrCodeBase64
-                            : `data:image/png;base64,${pixData.qrCodeBase64}`
-                        }
-                        alt="QR Code PIX Asaas Oficial"
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center text-[#060A15] p-2 text-center">
-                        <span className="text-xs font-bold">Utilize o Pix Copia e Cola abaixo para pagar no seu app de banco.</span>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Copia e Cola with 1-click copy */}
-                  {pixData?.copyAndPaste && (
-                    <div className="space-y-1 text-left">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
-                        Código Pix Copia e Cola Oficial:
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          readOnly
-                          value={pixData.copyAndPaste}
-                          className="flex-1 bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-[10px] text-white/80 font-mono select-all truncate"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleCopyPix}
-                          className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shadow-md"
-                        >
-                          {pixCopied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
-                          {pixCopied ? 'Copiado!' : 'Copiar PIX'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick Status Check */}
-                  <div className="pt-2 flex items-center justify-between border-t border-white/10 text-[11px]">
-                    <span className="text-white/50 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
-                      Aguardando transferência...
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => pixData?.id && checkPaymentStatus(pixData.id)}
-                      disabled={isCheckingPixStatus}
-                      className="text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
-                      Verificar Pagamento
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Order Bump Add-on (If Available) */}
-          {plan.orderBumps && plan.orderBumps.length > 0 && (
-            <div className="p-4 rounded-2xl bg-[#13231c] border-2 border-emerald-500/40 relative overflow-hidden">
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="order-bump-checkbox"
-                  checked={includeOrderBump}
-                  onChange={(e) => setIncludeOrderBump(e.target.checked)}
-                  className="mt-1 w-4 h-4 text-emerald-500 rounded border-white/20 focus:ring-emerald-500 cursor-pointer"
-                />
-                <label htmlFor="order-bump-checkbox" className="flex-1 text-xs cursor-pointer">
-                  <span className="font-black text-[#D9F22A] block mb-0.5">
-                    🔥 OFERTA ESPECIAL: {plan.orderBumps[0].name} (+ R$ {plan.orderBumps[0].price.toFixed(2).replace('.', ',')})
-                  </span>
-                  <span className="text-white/80 leading-relaxed block text-[11px]">
-                    {plan.orderBumps[0].description}
-                  </span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* 7. Resumo do Pedido */}
-          <div className="pt-2">
-            <h3 className="text-xs font-bold text-white mb-2">Resumo do pedido</h3>
-
-            <div className="bg-[#050811] border border-white/10 rounded-2xl p-4 space-y-3">
-              {/* Cupom Input */}
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Tag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                  <input
-                    type="text"
-                    placeholder="Código de desconto"
-                    value={couponInput}
-                    onChange={(e) => setCouponInput(e.target.value)}
-                    className="w-full bg-[#080d1a] border border-white/15 focus:border-[#208b68] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-white/30 uppercase font-mono focus:outline-none"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 px-3 py-2 rounded-xl border border-emerald-500/30 hover:bg-emerald-500/10 transition-all cursor-pointer"
-                >
-                  Aplicar Cupom
-                </button>
+                {couponError && (
+                  <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1.5 font-medium">
+                    <AlertCircle className="w-3 h-3" /> {couponError}
+                  </p>
+                )}
+                {couponSuccess && (
+                  <p className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1.5 font-medium">
+                    <Check className="w-3 h-3" /> {couponSuccess}
+                  </p>
+                )}
               </div>
 
-              {couponError && (
-                <p className="text-[11px] text-rose-400 flex items-center gap-1 font-medium">
-                  <AlertCircle className="w-3 h-3" /> {couponError}
-                </p>
-              )}
-              {couponSuccess && (
-                <p className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="w-3 h-3" /> {couponSuccess}
-                </p>
-              )}
-
-              {/* Items Breakdown */}
-              <div className="space-y-1.5 pt-2 border-t border-white/10 text-xs">
-                <div className="flex justify-between text-white/80">
-                  <span>{plan.name} <span className="text-[10px] text-white/50 block">Pagamento único</span></span>
-                  <span className="font-semibold text-white">R$ {basePrice.toFixed(2).replace('.', ',')}</span>
+              {/* Order Items Breakdown */}
+              <div className="p-3.5 space-y-2 text-xs">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="font-medium text-gray-900 block">{plan.name}</span>
+                    <span className="text-[11px] text-gray-400 block">{billingPeriodName}</span>
+                  </div>
+                  <span className="font-bold text-gray-900">
+                    R$ {basePrice.toFixed(2).replace('.', ',')}{billingSuffix}
+                  </span>
                 </div>
 
                 {includeOrderBump && (
-                  <div className="flex justify-between text-emerald-300">
-                    <span>+ {plan.orderBumps?.[0]?.name || 'Adicional'}</span>
+                  <div className="flex justify-between items-center text-emerald-700 text-[11px]">
+                    <span>+ {plan.orderBumps?.[0]?.name || 'Oferta Adicional'}</span>
                     <span>R$ {bumpPrice.toFixed(2).replace('.', ',')}</span>
                   </div>
                 )}
 
                 {appliedCoupon && (
-                  <div className="flex justify-between text-emerald-400 font-bold">
+                  <div className="flex justify-between items-center text-emerald-700 font-semibold text-[11px]">
                     <span>Desconto do Cupom ({appliedCoupon.code})</span>
                     <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
                   </div>
                 )}
 
-                {/* Taxa de Serviço da Plataforma */}
-                <div className="flex justify-between text-white/60">
+                {/* Taxa de serviço R$ 0,99 */}
+                <div className="flex justify-between items-center text-gray-500 pt-1">
                   <span>Taxa de serviço</span>
-                  <span className="text-white/80">R$ {PLATFORM_CHECKOUT_FEE.toFixed(2).replace('.', ',')}</span>
+                  <span className="text-gray-700">R$ {PLATFORM_CHECKOUT_FEE.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
 
-              {/* Total Row */}
-              <div className="pt-2 border-t border-dashed border-white/15 flex items-center justify-between font-black text-sm">
-                <span className="text-white">Total</span>
-                <div className="text-right">
-                  <span className="text-emerald-400 font-['Syne'] text-base block">
-                    12x de R$ {installment12xValue.toFixed(2).replace('.', ',')}
-                  </span>
-                  <span className="text-[11px] text-white/50 font-normal block">
-                    ou R$ {finalTotal.toFixed(2).replace('.', ',')} à vista
-                  </span>
-                </div>
+              {/* Total Row with Classic Ticket/Receipt Serrated Divider */}
+              <div className="relative px-3.5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-900">Total</span>
+                <span className="text-sm sm:text-base font-bold text-gray-900">
+                  R$ {finalTotal.toFixed(2).replace('.', ',')}
+                </span>
               </div>
+
+              {/* Sawtooth edge pattern (from image) */}
+              <div className="w-full h-2.5 bg-repeat-x bg-[length:12px_10px]" style={{
+                backgroundImage: 'radial-gradient(circle at 6px -3px, transparent 6px, #f3f4f6 6.5px)'
+              }} />
             </div>
           </div>
 
-          {/* 8. Submit Button */}
+          {/* Validação de Valor Mínimo Alerta Amigável na Tela */}
+          {(minAmountAlert || finalTotal < 5.00) && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center gap-2 font-medium animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span>
+                {minAmountAlert || "O valor mínimo para cobranças via Asaas é de R$ 5,00"}
+              </span>
+            </div>
+          )}
+
+          {/* QR Code PIX Display (quando gerado via Asaas) */}
+          {(paymentMethod === 'pix' || paymentMethod === 'pix_automatico') && pixData && (
+            <div className="p-4 bg-gray-50 border border-emerald-200 rounded-xl space-y-3 text-center animate-in fade-in">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-bold">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Pague em até {formatCountdown(pixSecondsLeft)}</span>
+              </div>
+
+              {pixData.qrCodeBase64 && (
+                <div className="w-44 h-44 mx-auto bg-white p-2 border border-gray-200 rounded-xl shadow-xs flex items-center justify-center">
+                  <img
+                    src={
+                      pixData.qrCodeBase64.startsWith('data:')
+                        ? pixData.qrCodeBase64
+                        : `data:image/png;base64,${pixData.qrCodeBase64}`
+                    }
+                    alt="QR Code Pix"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              )}
+
+              {pixData.copyAndPaste && (
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                    Pix Copia e Cola:
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={pixData.copyAndPaste}
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[10px] text-gray-700 font-mono truncate"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyPix}
+                      className="bg-[#205a46] hover:bg-[#194939] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      {pixCopied ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-[11px]">
+                <span className="text-gray-500 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
+                  Aguardando confirmação...
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => checkPaymentStatus(pixData.id)}
+                  disabled={isCheckingPixStatus}
+                  className="text-emerald-700 hover:text-emerald-800 font-bold transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
+                  Verificar Pagamento
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Erro no PIX se houver */}
+          {pixError && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Atenção no pagamento:</span>
+                <span>{pixError}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 7. Action Button - Green button matching image.png */}
           <button
             type="submit"
-            disabled={isProcessing}
-            className="w-full bg-[#208b68] hover:bg-[#1b7658] text-white font-black py-4 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isProcessing || isGeneratingPix}
+            className="w-full bg-[#205a46] hover:bg-[#194939] active:bg-[#153e30] text-white font-bold py-3.5 rounded-lg text-sm transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isProcessing ? (
+            {isProcessing || isGeneratingPix ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Processando Pagamento...</span>
+                <span>Processando...</span>
               </>
             ) : paymentMethod === 'pix' ? (
-              <>
-                <QrCode className="w-4 h-4" />
-                <span>Gerar Novo PIX / Atualizar Dados</span>
-              </>
+              <span>Gerar Pix</span>
+            ) : paymentMethod === 'pix_automatico' ? (
+              <span>Gerar Pix Automático</span>
             ) : (
-              <>
-                <CreditCard className="w-4 h-4" />
-                <span>Finalizar Pagamento Seguro</span>
-              </>
+              <span>Pagar com Cartão de Crédito</span>
             )}
           </button>
 
-          {/* 9. Security Guarantee Footer */}
-          <div className="text-center pt-2 space-y-1 text-[11px] text-white/50 leading-tight">
-            <div className="flex items-center justify-center gap-1 text-white/70 font-semibold mb-1">
-              <Lock className="w-3 h-3 text-emerald-400" />
-              <span>Compra 100% Segura & Criptografada</span>
+          {/* 8. Trust & Security Footer - Exactly like image.png */}
+          <div className="text-center pt-2 space-y-2 text-xs text-gray-500">
+            <div className="flex items-center justify-center gap-1.5 text-gray-600 font-medium">
+              <Lock className="w-3.5 h-3.5 text-gray-500" />
+              <span>Compra segura</span>
             </div>
-            <p>
-              Ao prosseguir, você concorda com os Termos de uso de {plan.name}, além dos{' '}
-              <a href="#" className="underline hover:text-white">Termos</a> e{' '}
-              <a href="#" className="underline hover:text-white">Políticas</a> do LeadsPay.
+
+            <p className="text-[11px] text-gray-400 leading-relaxed px-4">
+              Ao prosseguir, você concorda com os Termos de uso de <strong className="text-gray-600">{plan.name}</strong>, além dos{' '}
+              <a href="#" className="underline hover:text-gray-700">Termos</a> e{' '}
+              <a href="#" className="underline hover:text-gray-700">Políticas</a> da LeadsPay.
             </p>
-            <p className="text-[10px] text-white/40 pt-1">
-              Processado por <strong>Asaas Pagamentos</strong> • Integração Oficial v3
+
+            <p className="text-[11px] text-gray-400">
+              Processado por <strong className="text-gray-600">LeadsPay</strong>
             </p>
           </div>
         </form>
+
       </div>
     </div>
   );

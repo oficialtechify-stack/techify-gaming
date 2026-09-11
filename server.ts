@@ -931,6 +931,14 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       return res.status(400).json({ error: true, message: 'Valor da cobrança inválido ou não informado.' });
     }
 
+    // Validação de integridade obrigatória de valor mínimo exigido pela API do Asaas (R$ 5,00)
+    if (finalAmount < 5.00 || (typeof amount === 'number' && amount < 5.00)) {
+      return res.status(400).json({ 
+        error: true, 
+        message: "O valor mínimo da cobrança deve ser de R$ 5,00 conforme exigência da operadora de pagamentos." 
+      });
+    }
+
     const rawCustomer = (req.body?.customer && typeof req.body.customer === 'object')
       ? req.body.customer 
       : ((user && typeof user === 'object') ? user : {});

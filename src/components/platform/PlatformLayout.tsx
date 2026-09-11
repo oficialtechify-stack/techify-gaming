@@ -1431,7 +1431,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
       {/* ===================== LIVE CHECKOUT OVERLAY (when active) ===================== */}
       {liveCheckoutPlan && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-[#070b14]">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
           <CustomCheckoutPage
             plan={liveCheckoutPlan}
             affiliateRef={checkoutAffiliateRef}

@@ -262,6 +262,9 @@ export async function createPixPayment(
   if (isNaN(cleanAmount) || cleanAmount <= 0) {
     throw new Error('Valor inválido para cobrança PIX no Asaas.');
   }
+  if (cleanAmount < 5.00) {
+    throw new Error('O valor mínimo da cobrança deve ser de R$ 5,00 conforme exigência da operadora de pagamentos.');
+  }
 
   // 2. Data de vencimento estritamente no formato YYYY-MM-DD
   const today = new Date().toISOString().split('T')[0];
@@ -392,6 +395,9 @@ export async function createCreditCardPayment(
   const cleanAmount = Number(parseFloat(String(amount)).toFixed(2));
   if (isNaN(cleanAmount) || cleanAmount <= 0) {
     throw new Error('Valor inválido para cobrança no cartão de crédito.');
+  }
+  if (cleanAmount < 5.00) {
+    throw new Error('O valor mínimo da cobrança deve ser de R$ 5,00 conforme exigência da operadora de pagamentos.');
   }
 
   // Normalização dos dados do cartão
