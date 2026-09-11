@@ -50,6 +50,10 @@ import { DatabaseManagerView } from './DatabaseManagerView';
 import { MeuPerfilView } from './MeuPerfilView';
 import { AssinaturasView } from './AssinaturasView';
 import { CuponsView } from './CuponsView';
+import { ClientesView } from './ClientesView';
+import { CobrancasView } from './CobrancasView';
+import { LinksPagamentoView } from './LinksPagamentoView';
+import { SaquesView } from './SaquesView';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
@@ -95,7 +99,11 @@ import {
   ShieldCheck,
   Trophy,
   Repeat,
-  Tag
+  Tag,
+  ChevronDown,
+  Package,
+  CreditCard,
+  ArrowUpRight
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -140,6 +148,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
 
   // Modals state
+  const [isCompanyAccordionOpen, setIsCompanyAccordionOpen] = useState<boolean>(true);
   const [isRegisterAffiliateModalOpen, setIsRegisterAffiliateModalOpen] = useState<boolean>(false);
   const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState<boolean>(false);
   const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState<boolean>(false);
@@ -759,13 +768,25 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   };
 
   // Dynamic Navigation Items based on active role
+  const companySectionName = myCompanies[0]?.name || 'LeadsPay';
+
+  const companyAccordionItems: { id: PlatformTab; label: string; icon: any; badge?: string }[] = [
+    { id: 'produtos' as PlatformTab, label: 'Produtos', icon: Package, badge: myCompanyPlans.length > 0 ? `${myCompanyPlans.length}` : undefined },
+    { id: 'cupons' as PlatformTab, label: 'Cupons', icon: Tag },
+    { id: 'clientes' as PlatformTab, label: 'Clientes', icon: Users },
+    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
+    { id: 'cobrancas' as PlatformTab, label: 'Cobranças', icon: CreditCard, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
+    { id: 'links_pagamento' as PlatformTab, label: 'Link de pagamentos', icon: Link2 },
+    { id: 'saques' as PlatformTab, label: 'Saques', icon: ArrowUpRight },
+  ];
+
   const affiliateNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações (Sair)', icon: Link2, badge: `${affiliations.length}` },
     { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${userVisibleTransactions.length}` },
-    { id: 'financeiro' as PlatformTab, label: 'Saldo & Saque PIX', icon: Wallet },
+    { id: 'saques' as PlatformTab, label: 'Saques & Transferências', icon: ArrowUpRight },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
     { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
@@ -774,13 +795,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const companyNavItems = [
-    { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
-    { id: 'minha_empresa' as PlatformTab, label: 'Minha Startup & Planos', icon: Building2, badge: `${myCompanies.length}` },
-    { id: 'carteira' as PlatformTab, label: 'Carteira & Saques PIX', icon: Wallet },
-    { id: 'vendas' as PlatformTab, label: 'Vendas da Empresa', icon: Receipt, badge: `${userVisibleTransactions.length}` },
+    { id: 'dashboard' as PlatformTab, label: 'Dashboard & Visão Geral', icon: LayoutDashboard },
     { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
-    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
-    { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
@@ -874,14 +890,17 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {/* Navigation Links */}
           <nav className="p-2 space-y-1 mt-1 max-h-[calc(100vh-280px)] overflow-y-auto">
-            {currentNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id || (item.id === 'carteira' && activeTab === 'financeiro') || (item.id === 'financeiro' && activeTab === 'carteira');
+            {/* 1. Dashboard always on top */}
+            {(() => {
+              const dashItem = currentNavItems.find(i => i.id === 'dashboard');
+              if (!dashItem) return null;
+              const Icon = dashItem.icon;
+              const isActive = activeTab === 'dashboard';
               return (
                 <button
-                  key={item.id}
+                  key="dashboard"
                   onClick={() => {
-                    setActiveTab(item.id);
+                    setActiveTab('dashboard');
                     setIsMobileMenuOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -889,28 +908,120 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                       ? 'bg-[#102419] text-[#D9F22A] border border-[#D9F22A]/40 shadow-[0_0_15px_rgba(217,242,42,0.15)]'
                       : 'text-white/70 hover:text-white hover:bg-white/[0.04]'
                   } ${sidebarCollapsed ? 'lg:justify-center lg:px-0' : ''}`}
-                  title={sidebarCollapsed ? item.label : undefined}
+                  title={sidebarCollapsed ? dashItem.label : undefined}
                 >
                   <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[#D9F22A]' : 'text-white/60'}`} />
                   {(!sidebarCollapsed || isMobileMenuOpen) && (
-                    <span className="flex-1 text-left truncate">{item.label}</span>
-                  )}
-                  {(!sidebarCollapsed || isMobileMenuOpen) && item.badge && (
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        item.id === 'database'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                          : isActive
-                          ? 'bg-[#D9F22A] text-[#060A15]'
-                          : 'bg-white/10 text-white/80'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
+                    <span className="flex-1 text-left truncate">{dashItem.label}</span>
                   )}
                 </button>
               );
-            })}
+            })()}
+
+            {/* 2. Collapsible Startup / Empresa Accordion (ETAPA 1) */}
+            {roleMode === 'empresa' && (
+              <div className="space-y-1 my-1">
+                <button
+                  onClick={() => {
+                    if (sidebarCollapsed && !isMobileMenuOpen) {
+                      setSidebarCollapsed(false);
+                    }
+                    setIsCompanyAccordionOpen(!isCompanyAccordionOpen);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    companyAccordionItems.some(sub => activeTab === sub.id || (sub.id === 'produtos' && activeTab === 'minha_empresa'))
+                      ? 'bg-white/[0.07] text-white border border-white/10'
+                      : 'text-white/70 hover:text-white hover:bg-white/[0.04]'
+                  } ${sidebarCollapsed ? 'lg:justify-center lg:px-0' : ''}`}
+                  title={sidebarCollapsed ? companySectionName : undefined}
+                >
+                  <Building2 className={`w-4 h-4 flex-shrink-0 ${companyAccordionItems.some(sub => activeTab === sub.id || (sub.id === 'produtos' && activeTab === 'minha_empresa')) ? 'text-[#D9F22A]' : 'text-white/60'}`} />
+                  {(!sidebarCollapsed || isMobileMenuOpen) && (
+                    <>
+                      <span className="flex-1 text-left truncate font-['Syne'] font-black">{companySectionName}</span>
+                      <ChevronDown 
+                        className={`w-4 h-4 text-white/50 transition-transform duration-200 ${
+                          isCompanyAccordionOpen ? 'rotate-180 text-[#D9F22A]' : ''
+                        }`} 
+                      />
+                    </>
+                  )}
+                </button>
+
+                {/* Accordion Sub-items */}
+                {isCompanyAccordionOpen && (!sidebarCollapsed || isMobileMenuOpen) && (
+                  <div className="pl-3.5 ml-3 border-l-2 border-white/10 space-y-1 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                    {companyAccordionItems.map((subItem) => {
+                      const SubIcon = subItem.icon;
+                      const isSubActive = activeTab === subItem.id || (subItem.id === 'produtos' && activeTab === 'minha_empresa');
+                      return (
+                        <button
+                          key={subItem.id}
+                          onClick={() => {
+                            setActiveTab(subItem.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all cursor-pointer ${
+                            isSubActive
+                              ? 'bg-[#102419] text-[#D9F22A] font-black border border-[#D9F22A]/40 shadow-[0_0_12px_rgba(217,242,42,0.15)]'
+                              : 'text-white/60 hover:text-white hover:bg-white/[0.05] font-medium'
+                          }`}
+                        >
+                          <SubIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isSubActive ? 'text-[#D9F22A]' : 'text-white/40'}`} />
+                          <span className="flex-1 text-left truncate">{subItem.label}</span>
+                          {subItem.badge && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-white/10 text-white/70">
+                              {subItem.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 3. Other navigation items */}
+            {currentNavItems
+              .filter(item => item.id !== 'dashboard')
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id || (item.id === 'carteira' && activeTab === 'financeiro') || (item.id === 'financeiro' && activeTab === 'carteira');
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#102419] text-[#D9F22A] border border-[#D9F22A]/40 shadow-[0_0_15px_rgba(217,242,42,0.15)]'
+                        : 'text-white/70 hover:text-white hover:bg-white/[0.04]'
+                    } ${sidebarCollapsed ? 'lg:justify-center lg:px-0' : ''}`}
+                    title={sidebarCollapsed ? item.label : undefined}
+                  >
+                    <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[#D9F22A]' : 'text-white/60'}`} />
+                    {(!sidebarCollapsed || isMobileMenuOpen) && (
+                      <span className="flex-1 text-left truncate">{item.label}</span>
+                    )}
+                    {(!sidebarCollapsed || isMobileMenuOpen) && item.badge && (
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                          item.id === 'database'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : isActive
+                            ? 'bg-[#D9F22A] text-[#060A15]'
+                            : 'bg-white/10 text-white/80'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
           </nav>
         </div>
 
@@ -1196,7 +1307,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
 
-          {activeTab === 'minha_empresa' && (
+          {(activeTab === 'minha_empresa' || activeTab === 'produtos') && (
             <MinhaEmpresaView
               companies={myCompanies}
               plans={myCompanyPlans}
@@ -1354,16 +1465,55 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               company={myCompanies[0] || null} 
             />
           )}
+          {activeTab === 'clientes' && (
+            <ClientesView
+              companies={myCompanies.length > 0 ? myCompanies : companies}
+              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
+              userRole={roleMode}
+            />
+          )}
+          {activeTab === 'cobrancas' && (
+            <CobrancasView
+              sales={userVisibleTransactions}
+              companies={myCompanies.length > 0 ? myCompanies : companies}
+              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
+              onRefresh={() => {}}
+            />
+          )}
+          {activeTab === 'links_pagamento' && (
+            <LinksPagamentoView
+              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
+              companies={myCompanies.length > 0 ? myCompanies : companies}
+              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
+              onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
+              onCreateCustomPlan={handleCreatePlan}
+            />
+          )}
+          {activeTab === 'saques' && (
+            <SaquesView
+              userProfile={userProfile}
+              withdrawals={withdrawals}
+              onWithdrawSuccess={handleWithdraw}
+              onRefresh={() => {}}
+            />
+          )}
           {activeTab === 'assinaturas' && (
             <AssinaturasView 
-              plans={myCompanyPlans} 
+              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
               sales={userVisibleTransactions} 
-              userProfile={userProfile} 
+              userProfile={userProfile}
+              onNavigateToProducts={() => setActiveTab('produtos')}
+              onOpenCreatePlan={() => {
+                setSelectedCompanyIdForPlan(myCompanies[0]?.id);
+                setEditingPlan(null);
+                setIsCreatePlanModalOpen(true);
+              }}
+              onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
             />
           )}
           {activeTab === 'cupons' && (
             <CuponsView 
-              plans={myCompanyPlans} 
+              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}

@@ -15,7 +15,11 @@ import {
   RefreshCw,
   Zap
 } from 'lucide-react';
-import { createSaleTransactionInFirebase, fetchSellerSubaccountId } from '../../services/firestoreService';
+import { 
+  createSaleTransactionInFirebase, 
+  fetchSellerSubaccountId,
+  createOrUpdateClientInFirebase
+} from '../../services/firestoreService';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
 
 interface CustomCheckoutPageProps {
@@ -396,6 +400,22 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
     try {
       const savedSale = await createSaleTransactionInFirebase(salePayload);
+      
+      // Auto-cadastro do cliente na coleção 'clients' da empresa correspondente (ETAPA 2)
+      try {
+        await createOrUpdateClientInFirebase({
+          store_id: plan.companyId || 'store_default',
+          name: fullName.trim() || 'Cliente LeadsPay',
+          email: email.trim(),
+          phone: phone.trim(),
+          document: documentNumber.replace(/\D/g, ''),
+          total_spent: finalTotal,
+          last_plan_name: plan.name
+        });
+      } catch (clientErr) {
+        console.warn('Aviso ao registrar cliente automaticamente:', clientErr);
+      }
+
       setCompletedTransaction({
         ...salePayload,
         id: transactionReference || savedSale.id || `TX-${Date.now().toString().slice(-6)}`,
@@ -426,6 +446,16 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
     const planCoupon = plan.coupons?.find(c => c.code.toUpperCase() === cleanCode && c.active);
     
+    // Buscar também na lista de cupons globais do lojista
+    let localCoupon: any = null;
+    try {
+      const storedCoupons = localStorage.getItem('leadspay_coupons_list');
+      if (storedCoupons) {
+        const parsed = JSON.parse(storedCoupons);
+        localCoupon = parsed.find((c: any) => c.code.toUpperCase() === cleanCode && c.status === 'active');
+      }
+    } catch (_) {}
+
     if (planCoupon) {
       setAppliedCoupon({
         code: planCoupon.code,
@@ -433,6 +463,17 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         type: planCoupon.discountType
       });
       setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
+    } else if (localCoupon) {
+      setAppliedCoupon({
+        code: localCoupon.code,
+        discount: localCoupon.value,
+        type: localCoupon.discountType
+      });
+      setCouponSuccess(
+        localCoupon.discountType === 'percentage'
+          ? `Cupom "${localCoupon.code}" de ${localCoupon.value}% OFF aplicado!`
+          : `Cupom "${localCoupon.code}" de R$ ${Number(localCoupon.value).toFixed(2)} OFF aplicado!`
+      );
     } else if (cleanCode === 'LEADSPAY10' || cleanCode === 'TECHIFY10' || cleanCode === 'DESCONTO10') {
       setAppliedCoupon({
         code: cleanCode,

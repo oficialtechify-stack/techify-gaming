@@ -129,6 +129,8 @@ export interface CompanyPlan {
   bannerImage: string;
   paymentType?: 'Único' | 'Recorrente' | 'Assinatura';
   billingType?: 'recorrente' | 'unico' | string;
+  billingCycle?: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'BIMONTHLY' | 'QUARTERLY' | 'SEMIANNUALLY' | 'YEARLY';
+  billingInterval?: 'weekly' | 'monthly' | 'quarterly' | 'semiannually' | 'yearly';
   supportEmail?: string;
   warrantyDays?: number;
   thankYouPageUrl?: string;
@@ -413,6 +415,20 @@ export interface TeamMember {
   status: string;
 }
 
+export interface PlatformClient {
+  id: string;
+  store_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  document?: string;
+  created_at: string;
+  total_spent?: number;
+  orders_count?: number;
+  last_order_at?: string;
+  last_plan_name?: string;
+}
+
 export type PlatformTab = 
   | 'dashboard' 
   | 'carteira'
@@ -423,10 +439,15 @@ export type PlatformTab =
   | 'vendas' 
   | 'financeiro' 
   | 'minha_empresa'
+  | 'produtos'
+  | 'clientes'
+  | 'assinaturas'
+  | 'cobrancas'
+  | 'links_pagamento'
+  | 'saques'
   | 'empresas_cadastradas'
   | 'equipe' 
   | 'relatorios' 
   | 'integracoes'
-  | 'assinaturas'
   | 'cupons'
   | 'database';

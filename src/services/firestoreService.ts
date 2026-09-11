@@ -24,7 +24,8 @@ import {
   UserSellerProfile, 
   AffiliateLinkItem,
   TeamMember,
-  VerificationRequest
+  VerificationRequest,
+  PlatformClient
 } from '../types/platform';
 import { formatAffiliatePlanUrl } from '../utils/affiliateTracking';
 
@@ -38,7 +39,8 @@ export type {
   UserSellerProfile, 
   AffiliateLinkItem,
   TeamMember,
-  VerificationRequest
+  VerificationRequest,
+  PlatformClient
 };
 import { 
   INITIAL_USER_PROFILE, 
@@ -53,6 +55,7 @@ export const COLLECTIONS = {
   AFFILIATIONS: 'affiliations',
   PLATFORMS: 'plans', // alias for backward compatibility
   SALES: 'sales',
+  CLIENTS: 'clients',
   WITHDRAWALS: 'withdrawals',
   PROFILES: 'user_profiles',
   AFFILIATE_LINKS: 'affiliate_links',
@@ -1724,5 +1727,225 @@ export async function savePlatformBranding(
   }
 
   return payload;
+}
+
+/* ==========================================================================
+   MÓDULO DE CLIENTES (ETAPA 2 - LEADSPAY)
+   ========================================================================== */
+
+const LOCAL_CLIENTS_KEY = 'leadspay_clients_cache';
+
+export function getLocalClients(): PlatformClient[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CLIENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function subscribeClients(
+  storeId: string | undefined,
+  callback: (clients: PlatformClient[]) => void
+): () => void {
+  const local = getLocalClients();
+  if (local.length > 0) {
+    if (storeId) {
+      callback(local.filter(c => c.store_id === storeId));
+    } else {
+      callback(local);
+    }
+  }
+
+  const clientsColl = collection(db, COLLECTIONS.CLIENTS);
+  const q = query(clientsColl, orderBy('created_at', 'desc'));
+
+  return onSnapshot(q, (snapshot) => {
+    const clients: PlatformClient[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      clients.push({
+        id: docSnap.id,
+        store_id: data.store_id || 'store_default',
+        name: data.name || 'Cliente Sem Nome',
+        email: data.email || '',
+        phone: data.phone || '',
+        document: data.document || '',
+        created_at: data.created_at || new Date().toISOString(),
+        total_spent: Number(data.total_spent) || 0,
+        orders_count: Number(data.orders_count) || 1,
+        last_order_at: data.last_order_at || data.created_at,
+        last_plan_name: data.last_plan_name || ''
+      });
+    });
+
+    try {
+      localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(clients));
+    } catch (_) {}
+
+    if (storeId) {
+      callback(clients.filter(c => c.store_id === storeId));
+    } else {
+      callback(clients);
+    }
+  }, (err) => {
+    console.warn('Erro ao escutar coleção clients no Firestore:', err);
+    if (local.length > 0) {
+      callback(storeId ? local.filter(c => c.store_id === storeId) : local);
+    }
+  });
+}
+
+export async function createOrUpdateClientInFirebase(clientData: {
+  store_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  document?: string;
+  total_spent?: number;
+  last_plan_name?: string;
+}): Promise<PlatformClient> {
+  const now = new Date().toISOString();
+  const cleanEmail = (clientData.email || '').trim().toLowerCase();
+  const cleanDoc = (clientData.document || '').replace(/\D/g, '');
+  const cleanPhone = (clientData.phone || '').trim();
+  const targetStoreId = clientData.store_id || 'store_default';
+
+  // ID previsível e seguro baseado na loja + email/doc
+  const safeDocKey = cleanDoc || cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
+  const clientId = `cli_${targetStoreId.slice(0, 10)}_${safeDocKey}`;
+  const clientDocRef = doc(db, COLLECTIONS.CLIENTS, clientId);
+
+  try {
+    const existingSnap = await getDoc(clientDocRef);
+    if (existingSnap.exists()) {
+      const prevData = existingSnap.data();
+      const updatedTotal = (Number(prevData.total_spent) || 0) + (Number(clientData.total_spent) || 0);
+      const updatedCount = (Number(prevData.orders_count) || 1) + 1;
+
+      const payload: Partial<PlatformClient> = {
+        name: clientData.name || prevData.name,
+        email: cleanEmail || prevData.email,
+        phone: cleanPhone || prevData.phone,
+        document: cleanDoc || prevData.document,
+        total_spent: updatedTotal,
+        orders_count: updatedCount,
+        last_order_at: now,
+        last_plan_name: clientData.last_plan_name || prevData.last_plan_name
+      };
+
+      await updateDoc(clientDocRef, sanitizeForFirestore(payload));
+      return {
+        id: clientId,
+        store_id: targetStoreId,
+        name: payload.name!,
+        email: payload.email!,
+        phone: payload.phone,
+        document: payload.document,
+        created_at: prevData.created_at || now,
+        total_spent: updatedTotal,
+        orders_count: updatedCount,
+        last_order_at: now,
+        last_plan_name: payload.last_plan_name
+      };
+    } else {
+      const newClient: PlatformClient = {
+        id: clientId,
+        store_id: targetStoreId,
+        name: clientData.name.trim(),
+        email: cleanEmail,
+        phone: cleanPhone,
+        document: cleanDoc,
+        created_at: now,
+        total_spent: Number(clientData.total_spent) || 0,
+        orders_count: 1,
+        last_order_at: now,
+        last_plan_name: clientData.last_plan_name || ''
+      };
+
+      await setDoc(clientDocRef, sanitizeForFirestore(newClient));
+      return newClient;
+    }
+  } catch (error: any) {
+    console.warn('Erro ao salvar cliente no Firestore, salvando no cache local:', error);
+    const newClient: PlatformClient = {
+      id: clientId,
+      store_id: targetStoreId,
+      name: clientData.name.trim(),
+      email: cleanEmail,
+      phone: cleanPhone,
+      document: cleanDoc,
+      created_at: now,
+      total_spent: Number(clientData.total_spent) || 0,
+      orders_count: 1,
+      last_order_at: now,
+      last_plan_name: clientData.last_plan_name || ''
+    };
+
+    try {
+      const local = getLocalClients();
+      const existingIdx = local.findIndex(c => c.id === clientId);
+      if (existingIdx >= 0) {
+        local[existingIdx] = { ...local[existingIdx], ...newClient };
+      } else {
+        local.unshift(newClient);
+      }
+      localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(local));
+    } catch (_) {}
+
+    return newClient;
+  }
+}
+
+export async function createManualClientInFirebase(
+  clientData: Omit<PlatformClient, 'id' | 'created_at'>
+): Promise<PlatformClient> {
+  const now = new Date().toISOString();
+  const cleanEmail = (clientData.email || '').trim().toLowerCase();
+  const cleanDoc = (clientData.document || '').replace(/\D/g, '');
+  const targetStoreId = clientData.store_id || 'store_default';
+  const safeDocKey = cleanDoc || cleanEmail.replace(/[^a-zA-Z0-9]/g, '_') || `man_${Date.now()}`;
+  const clientId = `cli_${targetStoreId.slice(0, 10)}_${safeDocKey}`;
+  const clientDocRef = doc(db, COLLECTIONS.CLIENTS, clientId);
+
+  const newClient: PlatformClient = {
+    id: clientId,
+    store_id: targetStoreId,
+    name: clientData.name.trim(),
+    email: cleanEmail,
+    phone: (clientData.phone || '').trim(),
+    document: cleanDoc,
+    created_at: now,
+    total_spent: Number(clientData.total_spent) || 0,
+    orders_count: Number(clientData.orders_count) || 0,
+    last_order_at: now,
+    last_plan_name: clientData.last_plan_name || 'Cadastro Manual'
+  };
+
+  try {
+    await setDoc(clientDocRef, sanitizeForFirestore(newClient));
+  } catch (err) {
+    console.warn('Fallback para cache local ao cadastrar cliente:', err);
+    const local = getLocalClients();
+    local.unshift(newClient);
+    try {
+      localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(local));
+    } catch (_) {}
+  }
+
+  return newClient;
+}
+
+export async function deleteClientInFirebase(clientId: string): Promise<void> {
+  try {
+    const docRef = doc(db, COLLECTIONS.CLIENTS, clientId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Erro ao deletar cliente no Firestore:', err);
+  }
+  try {
+    const local = getLocalClients().filter(c => c.id !== clientId);
+    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(local));
+  } catch (_) {}
 }
 

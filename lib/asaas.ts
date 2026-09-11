@@ -641,4 +641,104 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
   };
 }
 
+/**
+ * Criação de Assinatura Recorrente no Asaas (ETAPA 3 - LEADSPAY)
+ * Suporta ciclos: WEEKLY, MONTHLY, QUARTERLY, SEMIANNUALLY, YEARLY
+ */
+export interface CreateSubscriptionOptions {
+  customerId: string;
+  amount: number;
+  cycle: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'BIMONTHLY' | 'QUARTERLY' | 'SEMIANNUALLY' | 'YEARLY';
+  description: string;
+  billingType?: 'PIX' | 'CREDIT_CARD' | 'BOLETO' | 'UNDEFINED';
+  subaccountId?: string;
+  creditCard?: AsaasCreditCard;
+  creditCardHolderInfo?: AsaasCreditCardHolderInfo;
+  nextDueDate?: string;
+}
+
+export interface AsaasSubscriptionResult {
+  id: string;
+  status: string;
+  customer: string;
+  value: number;
+  cycle: string;
+  billingType: string;
+  nextDueDate: string;
+  description: string;
+  raw: any;
+}
+
+export async function createAsaasSubscription(
+  options: CreateSubscriptionOptions
+): Promise<AsaasSubscriptionResult> {
+  const {
+    customerId,
+    amount,
+    cycle = 'MONTHLY',
+    description,
+    billingType = 'PIX',
+    subaccountId,
+    creditCard,
+    creditCardHolderInfo,
+    nextDueDate
+  } = options;
+
+  if (amount < 5.00) {
+    throw new Error('O valor mínimo da assinatura deve ser de R$ 5,00 conforme regra obrigatória do Asaas.');
+  }
+
+  const { apiUrl } = getAsaasConfig();
+  const headers = getHeaders(subaccountId);
+
+  // Data da primeira cobrança (hoje ou amanhã em formato YYYY-MM-DD)
+  const dueDate = nextDueDate || new Date().toISOString().split('T')[0];
+
+  const payload: any = {
+    customer: customerId,
+    billingType: billingType,
+    value: Number(amount.toFixed(2)),
+    nextDueDate: dueDate,
+    cycle: cycle.toUpperCase(),
+    description: description.slice(0, 500)
+  };
+
+  if (billingType === 'CREDIT_CARD' && creditCard) {
+    payload.creditCard = creditCard;
+    if (creditCardHolderInfo) {
+      payload.creditCardHolderInfo = creditCardHolderInfo;
+    }
+  }
+
+  console.log(`[Asaas Subscriptions] Criando assinatura recorrente (Ciclo: ${cycle}, Valor: R$ ${amount.toFixed(2)})...`);
+
+  const response = await fetch(`${apiUrl}/subscriptions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  const resData = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error('[Asaas Subscriptions Error]', resData);
+    const detail = resData?.errors?.map((e: any) => e.description).join(' | ') || `Erro ao criar assinatura no Asaas (${response.status})`;
+    throw new Error(detail);
+  }
+
+  console.log(`✅ [Asaas Subscriptions] Assinatura criada com sucesso! ID: ${resData.id}`);
+
+  return {
+    id: resData.id,
+    status: resData.status || 'ACTIVE',
+    customer: resData.customer,
+    value: resData.value,
+    cycle: resData.cycle,
+    billingType: resData.billingType,
+    nextDueDate: resData.nextDueDate,
+    description: resData.description,
+    raw: resData
+  };
+}
+
 
