@@ -43,6 +43,8 @@ export interface CompanyStartup {
   totalSalesCount?: number;
   commissionRange: string;
   verified: boolean;
+  environment?: 'development' | 'production'; // Padrão: 'development' (Dev Mode / Sandbox)
+  kyc_status?: 'pending' | 'submitted' | 'verified'; // Status de homologação documental KYC
   status?: 'pending' | 'approved' | 'rejected' | 'banned';
   banned?: boolean;
   banReason?: string | null;
@@ -239,6 +241,8 @@ export interface SaleTransaction {
   createdAt?: string;
   timestamp?: string;
   paidAt?: string;
+  is_test?: boolean; // Transação em modo sandbox/desenvolvimento
+  environment?: 'development' | 'production';
   financialBreakdown?: {
     grossAmount: number;
     platformFee: number;
@@ -266,6 +270,8 @@ export interface WithdrawalRequest {
   mpTransferId?: string;
   asaasTransferId?: string; // ID da transferência Asaas
   failureReason?: string;
+  is_test?: boolean;
+  environment?: 'development' | 'production';
 }
 
 export interface PlatformFinances {
@@ -343,6 +349,8 @@ export interface UserSellerProfile {
   bannedAt?: string | null;
   status?: string;
   verificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected' | 'banned';
+  environment?: 'development' | 'production';
+  kyc_status?: 'pending' | 'submitted' | 'verified';
   verificationSubmittedAt?: string;
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
@@ -427,6 +435,8 @@ export interface PlatformClient {
   orders_count?: number;
   last_order_at?: string;
   last_plan_name?: string;
+  is_test?: boolean;
+  environment?: 'development' | 'production';
 }
 
 export type PlatformTab = 

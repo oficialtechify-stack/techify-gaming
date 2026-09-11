@@ -27,6 +27,8 @@ interface CustomCheckoutPageProps {
   checkoutSlug?: string;
   affiliateRef?: string;
   apiKey?: string;
+  isDevMode?: boolean;
+  environment?: 'development' | 'production';
   onBack?: () => void;
   onPaymentSuccess?: (transaction: SaleTransaction) => void;
 }
@@ -38,9 +40,20 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   checkoutSlug,
   affiliateRef,
   apiKey,
+  isDevMode: explicitDevMode,
+  environment: explicitEnv,
   onBack,
   onPaymentSuccess
 }) => {
+  // Verificação de ambiente Sandbox (Dev Mode)
+  const isDev = explicitDevMode ?? (
+    explicitEnv === 'development' || 
+    (plan as any)?.is_test === true || 
+    (plan as any)?.environment === 'development' ||
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sandbox') === 'true'
+  );
+  const currentEnv = isDev ? 'development' : 'production';
+
   // Query param apiKey fallback (?apiKey=lp_live_...)
   const queryApiKey = typeof window !== 'undefined' 
     ? (new URLSearchParams(window.location.search).get('apiKey') || 
@@ -254,10 +267,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-dev-mode': isDev ? 'true' : 'false',
+          'x-environment': currentEnv,
           ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
         },
         body: JSON.stringify({
           paymentMethod: 'PIX',
+          is_test: isDev,
+          environment: currentEnv,
           apiKey: effectiveApiKey,
           amount: cleanTotal,
           valorTotal: cleanTotal,
@@ -393,6 +410,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       commissionEarned: commissionEarned,
       method: methodName,
       status: 'Aprovado',
+      is_test: isDev,
+      environment: currentEnv,
       utmSource: affiliateRef ? `ref_${affiliateRef}` : 'checkout_direto_empresa',
       date: dateStr,
       time: timeStr
@@ -410,7 +429,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           phone: phone.trim(),
           document: documentNumber.replace(/\D/g, ''),
           total_spent: finalTotal,
-          last_plan_name: plan.name
+          last_plan_name: plan.name,
+          is_test: isDev,
+          environment: currentEnv
         });
       } catch (clientErr) {
         console.warn('Aviso ao registrar cliente automaticamente:', clientErr);
@@ -578,10 +599,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
+            'x-dev-mode': isDev ? 'true' : 'false',
+            'x-environment': currentEnv,
             ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
           },
           body: JSON.stringify({
             paymentMethod: 'CREDIT_CARD',
+            is_test: isDev,
+            environment: currentEnv,
             apiKey: effectiveApiKey,
             amount: cleanTotal,
             subaccountId: activeSubaccountId || undefined,
@@ -707,6 +732,22 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             {plan.name}
           </h1>
         </div>
+
+        {/* Sandbox Dev Mode Notice */}
+        {isDev && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+              <div>
+                <span className="font-bold block text-amber-950">🧪 Ambiente Sandbox (Dev Mode)</span>
+                <span className="text-[11px] text-amber-800">Modo de simulação seguro. Nenhum débito real será cobrado.</span>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded bg-amber-200/80 text-amber-950 font-black text-[10px] tracking-wider uppercase flex-shrink-0 border border-amber-300">
+              Teste
+            </span>
+          </div>
+        )}
 
         {/* Form Fields */}
         <form onSubmit={handleProcessPayment} className="space-y-4">
@@ -1093,6 +1134,44 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   Verificar Pagamento
                 </button>
               </div>
+
+              {/* Botão de aprovação imediata em Sandbox */}
+              {isDev && (
+                <div className="pt-2 border-t border-amber-200/80">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setIsCheckingPixStatus(true);
+                        const simRes = await fetch('/api/payments/simulate-approval', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ paymentId: pixData.id })
+                        });
+                        if (simRes.ok) {
+                          await finalizeApprovedPayment('PIX (Simulado Sandbox)', pixData.id);
+                        } else {
+                          // Fallback local caso o endpoint falhe
+                          await finalizeApprovedPayment('PIX (Simulado Sandbox)', pixData.id);
+                        }
+                      } catch (simErr) {
+                        console.error('Erro ao simular aprovação:', simErr);
+                        await finalizeApprovedPayment('PIX (Simulado Sandbox)', pixData.id);
+                      } finally {
+                        setIsCheckingPixStatus(false);
+                      }
+                    }}
+                    disabled={isCheckingPixStatus}
+                    className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow cursor-pointer transition-all active:scale-98 flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4 text-slate-950" />
+                    <span>Simular Pagamento Imediato (Sandbox)</span>
+                  </button>
+                  <span className="block text-[10px] text-amber-700 text-center mt-1">
+                    Disponível apenas em ambiente de desenvolvimento
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

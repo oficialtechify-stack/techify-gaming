@@ -904,23 +904,50 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
     }
 
-    // BLOQUEIO DINÂMICO NO CHECKOUT (PROIBIDO FALLBACK PARA CONTA MASTER)
-    if (!sellerSubaccountId) {
-      console.warn(`[Checkout Asaas] Tentativa de pagamento bloqueada: Empresa/vendedor sem subconta Asaas. PlanId: ${planId || plan_id}, CompanyId: ${companyId || company_id}, SellerId: ${sellerId || body.ownerId || partnerInfo?.userId}`);
+    // 🧪 DETECÇÃO DE MODO DE DESENVOLVIMENTO (DEV MODE / SANDBOX)
+    let companyEnvironment: 'development' | 'production' = 'development';
+    const effectiveCompId = (companyId || company_id || partnerInfo?.companyId || null)?.toString() || null;
+    if (effectiveCompId) {
+      try {
+        const compSnap = await getDoc(doc(db, 'companies', effectiveCompId));
+        if (compSnap.exists()) {
+          const cData = compSnap.data();
+          if (cData.environment === 'production' && (cData.verified || cData.kyc_status === 'verified')) {
+            companyEnvironment = 'production';
+          }
+        }
+      } catch (e) {}
+    }
+
+    const isDevMode = 
+      body.is_test === true || 
+      body.environment === 'development' || 
+      req.headers['x-dev-mode'] === 'true' || 
+      req.headers['x-environment'] === 'development' ||
+      companyEnvironment === 'development' ||
+      (!sellerSubaccountId);
+
+    // BLOQUEIO DINÂMICO NO CHECKOUT (PROIBIDO FALLBACK PARA CONTA MASTER EM PRODUÇÃO)
+    if (!sellerSubaccountId && !isDevMode) {
+      console.warn(`[Checkout Asaas] Tentativa de pagamento bloqueada: Empresa/vendedor sem subconta Asaas em Produção. PlanId: ${planId || plan_id}, CompanyId: ${companyId || company_id}, SellerId: ${sellerId || body.ownerId || partnerInfo?.userId}`);
       return res.status(400).json({
         error: true,
-        message: "Esta empresa ainda não possui uma subconta ativa no Asaas para receber pagamentos."
+        message: "Esta empresa ainda não possui uma subconta ativa no Asaas para receber pagamentos reais."
       });
+    }
+
+    if (isDevMode && !sellerSubaccountId) {
+      sellerSubaccountId = `sub_dev_${effectiveCompId || 'sandbox'}`;
     }
 
     // INJEÇÃO OBRIGATÓRIA: Toda chamada à API do Asaas v3 deve conter o header 'account'
     body.subaccountId = sellerSubaccountId;
-    console.log(`🔒 [Checkout Asaas] Header 'account' injetado com sucesso para a subconta Asaas: ${sellerSubaccountId}`);
+    console.log(`🔒 [Checkout] Subconta associada (${isDevMode ? 'Dev Mode/Sandbox' : 'Produção'}): ${sellerSubaccountId}`);
 
     const normalizedMethod = String(paymentMethod || 'PIX').toUpperCase().trim();
     if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD') {
       return res.status(400).json({ 
-        error: true,
+        error: true, 
         message: 'Método de pagamento inválido. Utilize "PIX" ou "CREDIT_CARD".',
         received: paymentMethod 
       });
@@ -970,6 +997,175 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     const finalSellerId = (sellerId || body.ownerId || body.userId || partnerInfo?.userId || null)?.toString() || null;
     const finalWebhookUrl = partnerInfo?.webhookUrl || body.webhookUrl || null;
     const finalDescription = (description || body.description || (targetPlanId ? `Assinatura Plano ${targetPlanId}` : 'Cobrança LeadsPay')).trim();
+    const nowIso = new Date().toISOString();
+
+    // =========================================================================
+    // 🧪 SIMULADOR DEV MODE / SANDBOX (ISOLAMENTO COMPLETO DE TESTES)
+    // =========================================================================
+    if (isDevMode) {
+      console.log(`🧪 [Sandbox Dev Mode] Processando transação simulada. Método: ${normalizedMethod}`);
+      const devPaymentId = `pay_dev_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+      // Auto-cadastro de cliente na coleção 'clients' com is_test: true
+      try {
+        const clientRef = doc(db, 'clients', `cli_${finalCompanyId || 'store'}_${cleanCpf || customerData.email.replace(/[^a-zA-Z0-9]/g, '_')}`);
+        await setDoc(clientRef, {
+          id: clientRef.id,
+          store_id: finalCompanyId || 'store_default',
+          name: customerData.name || 'Cliente Sandbox',
+          email: customerData.email,
+          phone: customerData.phone || customerData.mobilePhone || '',
+          document: cleanCpf,
+          is_test: true,
+          environment: 'development',
+          created_at: nowIso,
+          total_spent: finalAmount,
+          orders_count: 1,
+          last_order_at: nowIso,
+          last_plan_name: finalDescription
+        }, { merge: true });
+        console.log(`👤 [Sandbox Dev Mode] Cliente cadastrado com is_test: true`);
+      } catch (cErr) {
+        console.warn('Aviso ao registrar cliente simulado no Sandbox:', cErr);
+      }
+
+      // 1. Simulação de PIX
+      if (normalizedMethod === 'PIX') {
+        const simQrText = `00020126580014br.gov.bcb.pix0136leadspay-sandbox-simulated-payment-${devPaymentId}520400005303986540${finalAmount.toFixed(2)}5802BR5916LEADSPAY SANDBOX6009SAO PAULO62070503***6304DEV1`;
+        let simQrImage = '';
+        try {
+          simQrImage = await QRCode.toDataURL(simQrText, { margin: 2, width: 300 });
+        } catch (qrErr) {
+          simQrImage = '';
+        }
+
+        const saleDocRef = doc(db, 'sales', devPaymentId);
+        await setDoc(saleDocRef, {
+          id: devPaymentId,
+          payment_id: devPaymentId,
+          gateway: 'Simulador LeadsPay (Dev Mode)',
+          method: 'PIX',
+          billingType: 'PIX',
+          is_test: true,
+          environment: 'development',
+          subaccountId: sellerSubaccountId,
+          plan_id: finalPlanId,
+          platformId: finalPlanId || '',
+          platformName: finalDescription,
+          companyId: finalCompanyId,
+          sellerId: finalSellerId,
+          apiKey: partnerApiKey || null,
+          affiliate_code: finalRefCode,
+          affiliateCode: finalRefCode,
+          total_amount: finalAmount,
+          amount: finalAmount,
+          status: 'Pendente',
+          status_detail: 'waiting_transfer',
+          created_at: nowIso,
+          qr_code: simQrText,
+          qr_code_base64: simQrImage,
+          buyerName: customerData.name || 'Cliente LeadsPay',
+          buyerEmail: customerData.email,
+          buyerCpf: cleanCpf,
+          buyerPhone: customerData.phone || customerData.mobilePhone || null,
+          commissionCredited: false
+        });
+
+        return res.status(200).json({
+          success: true,
+          is_test: true,
+          environment: 'development',
+          paymentId: devPaymentId,
+          payment_id: devPaymentId,
+          id: devPaymentId,
+          value: finalAmount,
+          amount: finalAmount,
+          pix: {
+            copiaECola: simQrText,
+            qrCodeBase64: simQrImage,
+            expirationDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+          },
+          gateway: 'Simulador LeadsPay (Dev Mode)',
+          billingType: 'PIX',
+          status: 'PENDING',
+          qrCodeBase64: simQrImage,
+          copyAndPaste: simQrText,
+          payload: simQrText,
+          encodedImage: simQrImage,
+          qr_code: simQrText,
+          qr_code_base64: simQrImage,
+          canSimulateApproval: true,
+          simulateApprovalUrl: '/api/payments/simulate-approval'
+        });
+      }
+
+      // 2. Simulação de Cartão de Crédito (Aprovação Instantânea)
+      if (normalizedMethod === 'CREDIT_CARD') {
+        const saleDocRef = doc(db, 'sales', devPaymentId);
+        await setDoc(saleDocRef, {
+          id: devPaymentId,
+          payment_id: devPaymentId,
+          gateway: 'Simulador LeadsPay (Dev Mode)',
+          method: 'Cartão de Crédito',
+          billingType: 'CREDIT_CARD',
+          is_test: true,
+          environment: 'development',
+          subaccountId: sellerSubaccountId,
+          plan_id: finalPlanId,
+          platformId: finalPlanId || '',
+          platformName: finalDescription,
+          companyId: finalCompanyId,
+          sellerId: finalSellerId,
+          apiKey: partnerApiKey || null,
+          affiliate_code: finalRefCode,
+          affiliateCode: finalRefCode,
+          total_amount: finalAmount,
+          amount: finalAmount,
+          status: 'Aprovado',
+          status_detail: 'accredited',
+          created_at: nowIso,
+          paidAt: nowIso,
+          buyerName: customerData.name || 'Cliente LeadsPay',
+          buyerEmail: customerData.email,
+          buyerCpf: cleanCpf,
+          buyerPhone: customerData.phone || customerData.mobilePhone || null,
+          commissionCredited: true
+        });
+
+        // Credita saldo de testes
+        if (finalSellerId || finalCompanyId) {
+          try {
+            const targetProfId = finalSellerId || finalCompanyId;
+            const profRef = doc(db, 'user_profiles', String(targetProfId));
+            await setDoc(profRef, {
+              availableBalance: increment(finalAmount),
+              totalEarned: increment(finalAmount),
+              totalSalesCount: increment(1),
+              updatedAt: nowIso
+            }, { merge: true });
+          } catch (e) {}
+        }
+
+        return res.status(200).json({
+          success: true,
+          is_test: true,
+          environment: 'development',
+          paymentId: devPaymentId,
+          payment_id: devPaymentId,
+          id: devPaymentId,
+          value: finalAmount,
+          amount: finalAmount,
+          gateway: 'Simulador LeadsPay (Dev Mode)',
+          billingType: 'CREDIT_CARD',
+          status: 'CONFIRMED',
+          isApproved: true
+        });
+      }
+    }
+
+    // =========================================================================
+    // 🌐 AMBIENTE DE PRODUÇÃO REAL (ASAAS V3 GATEWAY)
+    // =========================================================================
 
     // 1. Obter ou Criar Cliente no Asaas
     let customerId: string;
@@ -1215,14 +1411,113 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
 });
 
 /**
+ * POST /api/payments/simulate-approval
+ * Permite aprovar imediatamente uma cobrança de teste gerada no Dev Mode (Sandbox)
+ */
+app.post('/api/payments/simulate-approval', async (req, res) => {
+  try {
+    const { paymentId, payment_id } = req.body || {};
+    const id = (paymentId || payment_id || '').toString();
+    if (!id) {
+      return res.status(400).json({ error: true, message: 'ID do pagamento é obrigatório para simulação.' });
+    }
+
+    const saleRef = doc(db, 'sales', id);
+    const saleSnap = await getDoc(saleRef);
+    const nowIso = new Date().toISOString();
+
+    if (saleSnap.exists()) {
+      const saleData = saleSnap.data();
+      await updateDoc(saleRef, {
+        status: 'Aprovado',
+        status_detail: 'accredited',
+        paidAt: nowIso,
+        releaseStatus: 'disponivel',
+        commissionCredited: true,
+        updatedAt: nowIso
+      });
+
+      // Credita saldo fictício no perfil da empresa/vendedor para testes completos
+      const targetSellerId = saleData.sellerId || saleData.companyOwnerId || saleData.companyId;
+      if (targetSellerId) {
+        try {
+          const profRef = doc(db, 'user_profiles', String(targetSellerId));
+          await setDoc(profRef, {
+            availableBalance: increment(saleData.amount || 0),
+            totalEarned: increment(saleData.amount || 0),
+            totalSalesCount: increment(1),
+            updatedAt: nowIso
+          }, { merge: true });
+        } catch (e) {}
+      }
+
+      return res.status(200).json({
+        success: true,
+        is_test: true,
+        message: 'Pagamento simulado aprovado com sucesso!',
+        paymentId: id,
+        status: 'CONFIRMED'
+      });
+    } else {
+      await setDoc(saleRef, {
+        id,
+        status: 'Aprovado',
+        status_detail: 'accredited',
+        is_test: true,
+        environment: 'development',
+        paidAt: nowIso,
+        updatedAt: nowIso
+      }, { merge: true });
+
+      return res.status(200).json({
+        success: true,
+        is_test: true,
+        message: 'Pagamento de teste aprovado!',
+        paymentId: id,
+        status: 'CONFIRMED'
+      });
+    }
+  } catch (err: any) {
+    console.error('Erro na rota /api/payments/simulate-approval:', err);
+    return res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
  * GET /api/payments/asaas/:id, /api/payments/pix/:id, /api/pix/:id
- * Consulta status atualizado da cobrança no Asaas
+ * Consulta status atualizado da cobrança no Asaas ou no Simulador Sandbox
  */
 app.get(['/api/payments/asaas/:id', '/api/payments/pix/:id', '/api/pix/:id'], async (req, res) => {
   try {
     const paymentId = req.params.id;
     if (!paymentId) {
-      return res.status(400).json({ error: 'ID da cobrança Asaas é obrigatório.' });
+      return res.status(400).json({ error: 'ID da cobrança é obrigatório.' });
+    }
+
+    // Se for pagamento simulado do Sandbox (pay_dev_...)
+    if (paymentId.startsWith('pay_dev_')) {
+      try {
+        const saleDoc = await getDoc(doc(db, 'sales', String(paymentId)));
+        if (saleDoc.exists()) {
+          const sData = saleDoc.data();
+          const isApproved = sData.status === 'Aprovado' || sData.status === 'CONFIRMED' || sData.status === 'RECEIVED';
+          return res.status(200).json({
+            id: paymentId,
+            status: isApproved ? 'CONFIRMED' : (sData.status || 'PENDING'),
+            is_test: true,
+            environment: 'development',
+            value: sData.amount || sData.total_amount,
+            paid: isApproved,
+            isApproved
+          });
+        }
+      } catch (e) {}
+      return res.status(200).json({
+        id: paymentId,
+        status: 'PENDING',
+        is_test: true,
+        environment: 'development'
+      });
     }
 
     const apiKey = (process.env.ASAAS_API_KEY || '').trim();
@@ -2258,46 +2553,56 @@ app.post('/api/withdrawals/request', async (req, res) => {
 
     console.log(`🏧 [Solicitação de Saque PIX] Usuário: ${targetUserId} | Solicitado: R$ ${requestedAmount} | Taxa: R$ ${fee} | Líquido Asaas: R$ ${netWithdrawal}`);
 
-    // Disparo da Transferência no Asaas (POST https://api.asaas.com/v3/transfers)
-    const asaasConfig = await getAsaasConfig();
-    const apiKey = asaasConfig.apiKey;
-    const apiUrl = asaasConfig.apiUrl || 'https://api.asaas.com/v3';
-    const subaccountId = subaccountParam || userProfile?.asaasSubaccountId || userProfile?.subaccountId || null;
+    const isDevMode = 
+      req.body?.is_test === true || 
+      req.body?.environment === 'development' || 
+      req.headers['x-dev-mode'] === 'true' || 
+      userProfile?.environment === 'development';
 
-    let asaasTransferId = `trf_asaas_${Date.now()}`;
+    let asaasTransferId = isDevMode ? `trf_dev_sim_${Date.now()}` : `trf_asaas_${Date.now()}`;
 
-    try {
-      const asaasHeaders: Record<string, string> = {
-        'access_token': apiKey,
-        'Content-Type': 'application/json'
-      };
-      if (subaccountId) {
-        asaasHeaders['account'] = subaccountId;
+    // Disparo da Transferência no Asaas somente se estiver em Produção
+    if (!isDevMode) {
+      const asaasConfig = await getAsaasConfig();
+      const apiKey = asaasConfig.apiKey;
+      const apiUrl = asaasConfig.apiUrl || 'https://api.asaas.com/v3';
+      const subaccountId = subaccountParam || userProfile?.asaasSubaccountId || userProfile?.subaccountId || null;
+
+      try {
+        const asaasHeaders: Record<string, string> = {
+          'access_token': apiKey,
+          'Content-Type': 'application/json'
+        };
+        if (subaccountId) {
+          asaasHeaders['account'] = subaccountId;
+        }
+
+        const asaasTransferPayload = {
+          value: netWithdrawal,
+          pixAddressKey: cleanPixKey,
+          pixAddressKeyType: asaasKeyType,
+          description: `Saque LeadsPay #${withdrawalId}`
+        };
+
+        const asaasTransferRes = await fetch(`${apiUrl}/transfers`, {
+          method: 'POST',
+          headers: asaasHeaders,
+          body: JSON.stringify(asaasTransferPayload)
+        });
+
+        if (asaasTransferRes.ok) {
+          const asaasTrfData = await asaasTransferRes.json();
+          if (asaasTrfData.id) asaasTransferId = String(asaasTrfData.id);
+          console.log(`✅ [Asaas Transfer] Sucesso! ID da transferência: ${asaasTransferId}`);
+        } else {
+          const errText = await asaasTransferRes.text();
+          console.warn('⚠️ [Asaas Transfer API Notice]:', errText);
+        }
+      } catch (trfErr) {
+        console.warn('⚠️ [Asaas Transfer Request Warning]:', trfErr);
       }
-
-      const asaasTransferPayload = {
-        value: netWithdrawal,
-        pixAddressKey: cleanPixKey,
-        pixAddressKeyType: asaasKeyType,
-        description: `Saque LeadsPay #${withdrawalId}`
-      };
-
-      const asaasTransferRes = await fetch(`${apiUrl}/transfers`, {
-        method: 'POST',
-        headers: asaasHeaders,
-        body: JSON.stringify(asaasTransferPayload)
-      });
-
-      if (asaasTransferRes.ok) {
-        const asaasTrfData = await asaasTransferRes.json();
-        if (asaasTrfData.id) asaasTransferId = String(asaasTrfData.id);
-        console.log(`✅ [Asaas Transfer] Sucesso! ID da transferência: ${asaasTransferId}`);
-      } else {
-        const errText = await asaasTransferRes.text();
-        console.warn('⚠️ [Asaas Transfer API Notice]:', errText);
-      }
-    } catch (trfErr) {
-      console.warn('⚠️ [Asaas Transfer Request Warning]:', trfErr);
+    } else {
+      console.log(`🧪 [Sandbox Dev Mode] Saque simulado processado com sucesso. ID: ${asaasTransferId}`);
     }
 
     // 5. Atualização no Firestore:
@@ -2333,6 +2638,8 @@ app.post('/api/withdrawals/request', async (req, res) => {
       pixKeyType: asaasKeyType,
       status: "COMPLETED",
       asaasTransferId: asaasTransferId,
+      is_test: isDevMode,
+      environment: isDevMode ? 'development' : 'production',
       createdAt: nowIso,
       requestedAt: formattedDate,
       completedAt: nowIso

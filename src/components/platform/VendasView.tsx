@@ -16,14 +16,17 @@ import {
 interface VendasViewProps {
   roleMode?: string;
   transactions: SaleTransaction[];
+  environment?: 'development' | 'production';
 }
 
 export const VendasView: React.FC<VendasViewProps> = ({
   roleMode = 'afiliado',
-  transactions
+  transactions,
+  environment
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [envFilter, setEnvFilter] = useState<'all' | 'development' | 'production'>('all');
   const [selectedTxDetail, setSelectedTxDetail] = useState<SaleTransaction | null>(null);
 
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
@@ -31,6 +34,10 @@ export const VendasView: React.FC<VendasViewProps> = ({
   const filteredTransactions = safeTransactions.filter(t => {
     if (!t) return false;
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+    if (envFilter !== 'all') {
+      const txEnv = (t as any).environment || ((t as any).is_test ? 'development' : 'production');
+      if (txEnv !== envFilter) return false;
+    }
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       return (
@@ -103,7 +110,17 @@ export const VendasView: React.FC<VendasViewProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <select
+            value={envFilter}
+            onChange={(e) => setEnvFilter(e.target.value as any)}
+            className="bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A] cursor-pointer"
+          >
+            <option value="all">Todos os Ambientes</option>
+            <option value="development">🧪 Sandbox (Testes)</option>
+            <option value="production">🟢 Produção (Real)</option>
+          </select>
+
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -144,7 +161,14 @@ export const VendasView: React.FC<VendasViewProps> = ({
                 filteredTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-4 px-4">
-                      <span className="font-mono font-bold text-white block">{tx.id}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-white block">{tx.id}</span>
+                        {((tx as any).is_test || (tx as any).environment === 'development') && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">
+                            Sandbox
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-white/50">{tx.date} às {tx.time}</span>
                     </td>
 

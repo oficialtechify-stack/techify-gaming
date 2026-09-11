@@ -584,6 +584,8 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
     totalAffiliatesCount: 0,
     totalSalesVolume: 0,
     verified: companyData.verified ?? false,
+    environment: companyData.environment || 'development',
+    kyc_status: companyData.kyc_status || (companyData.verified ? 'verified' : 'pending'),
     status: companyData.status ?? 'pending',
     submittedAt: companyData.submittedAt || now,
     submittedBy: companyData.submittedBy || DEFAULT_USER_ID,
@@ -599,7 +601,9 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
       await updateDoc(doc(db, COLLECTIONS.PROFILES, newCompany.ownerId), {
         companyId: id,
         companyName: newCompany.name,
-        hasCompanyProfile: true
+        hasCompanyProfile: true,
+        environment: newCompany.environment,
+        kyc_status: newCompany.kyc_status
       });
     } catch (e) {
       console.warn('Could not update user profile on company creation:', e);
@@ -607,6 +611,43 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
   }
 
   return newCompany;
+}
+
+/**
+ * Update company environment (Sandbox / Dev Mode vs Production)
+ */
+export async function updateCompanyEnvironmentInFirebase(
+  companyId: string, 
+  environment: 'development' | 'production'
+) {
+  try {
+    const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+    const now = new Date().toISOString();
+    await updateDoc(docRef, sanitizeForFirestore({
+      environment,
+      updatedAt: now
+    }));
+
+    // Sincroniza também no perfil do dono se for a empresa ativa
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const ownerId = data.ownerId || data.submittedBy;
+      if (ownerId && ownerId !== DEFAULT_USER_ID) {
+        try {
+          await updateDoc(doc(db, COLLECTIONS.PROFILES, ownerId), {
+            environment,
+            updatedAt: now
+          });
+        } catch (e) {}
+      }
+    }
+
+    return { success: true, environment };
+  } catch (err: any) {
+    console.error('Erro ao atualizar ambiente da empresa:', err);
+    throw err;
+  }
 }
 
 /**
@@ -1110,6 +1151,9 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
   const netCompanyAmount = Number(Math.max(0, saleData.amount - saleData.commissionEarned - checkoutFee).toFixed(2));
   const availableAt = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000).toISOString(); // Garantia de 9 dias
 
+  const isTest = saleData.is_test ?? (saleData.environment === 'development' || !saleData.environment);
+  const env = saleData.environment || (isTest ? 'development' : 'production');
+
   const fullSale: SaleTransaction = {
     ...saleData,
     id,
@@ -1117,6 +1161,8 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
     netCompanyAmount,
     releaseStatus: 'pendente',
     availableAt,
+    is_test: isTest,
+    environment: env,
     createdAt: now.toISOString()
   };
 
@@ -1266,12 +1312,16 @@ export async function requestWithdrawalViaBackend(
   pixKey: string,
   pixKeyType: string,
   userId: string = DEFAULT_USER_ID,
-  userName?: string
+  userName?: string,
+  isDevMode?: boolean,
+  environment?: 'development' | 'production'
 ): Promise<{ success: boolean; withdrawal: WithdrawalRequest; message?: string }> {
   const response = await fetch('/api/withdrawals/request', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'x-dev-mode': isDevMode ? 'true' : 'false',
+      'x-environment': environment || (isDevMode ? 'development' : 'production')
     },
     body: JSON.stringify({
       amount,
@@ -1279,7 +1329,9 @@ export async function requestWithdrawalViaBackend(
       pixKey,
       pixKeyType,
       userId,
-      userName
+      userName,
+      isDevMode,
+      environment: environment || (isDevMode ? 'development' : 'production')
     })
   });
 
@@ -1804,12 +1856,16 @@ export async function createOrUpdateClientInFirebase(clientData: {
   document?: string;
   total_spent?: number;
   last_plan_name?: string;
+  is_test?: boolean;
+  environment?: 'development' | 'production';
 }): Promise<PlatformClient> {
   const now = new Date().toISOString();
   const cleanEmail = (clientData.email || '').trim().toLowerCase();
   const cleanDoc = (clientData.document || '').replace(/\D/g, '');
   const cleanPhone = (clientData.phone || '').trim();
   const targetStoreId = clientData.store_id || 'store_default';
+  const isTest = clientData.is_test ?? true;
+  const env = clientData.environment || (isTest ? 'development' : 'production');
 
   // ID previsível e seguro baseado na loja + email/doc
   const safeDocKey = cleanDoc || cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
@@ -1831,7 +1887,9 @@ export async function createOrUpdateClientInFirebase(clientData: {
         total_spent: updatedTotal,
         orders_count: updatedCount,
         last_order_at: now,
-        last_plan_name: clientData.last_plan_name || prevData.last_plan_name
+        last_plan_name: clientData.last_plan_name || prevData.last_plan_name,
+        is_test: isTest,
+        environment: env
       };
 
       await updateDoc(clientDocRef, sanitizeForFirestore(payload));
@@ -1846,7 +1904,9 @@ export async function createOrUpdateClientInFirebase(clientData: {
         total_spent: updatedTotal,
         orders_count: updatedCount,
         last_order_at: now,
-        last_plan_name: payload.last_plan_name
+        last_plan_name: payload.last_plan_name,
+        is_test: isTest,
+        environment: env
       };
     } else {
       const newClient: PlatformClient = {
@@ -1860,7 +1920,9 @@ export async function createOrUpdateClientInFirebase(clientData: {
         total_spent: Number(clientData.total_spent) || 0,
         orders_count: 1,
         last_order_at: now,
-        last_plan_name: clientData.last_plan_name || ''
+        last_plan_name: clientData.last_plan_name || '',
+        is_test: isTest,
+        environment: env
       };
 
       await setDoc(clientDocRef, sanitizeForFirestore(newClient));
@@ -1879,7 +1941,9 @@ export async function createOrUpdateClientInFirebase(clientData: {
       total_spent: Number(clientData.total_spent) || 0,
       orders_count: 1,
       last_order_at: now,
-      last_plan_name: clientData.last_plan_name || ''
+      last_plan_name: clientData.last_plan_name || '',
+      is_test: isTest,
+      environment: env
     };
 
     try {

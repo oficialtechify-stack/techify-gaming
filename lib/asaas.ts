@@ -64,14 +64,21 @@ export interface AsaasCreditCardResponse {
   bankSlipUrl?: string;
 }
 
-export function getAsaasConfig() {
-  const apiKey = (process.env.ASAAS_API_KEY || '').trim();
+export function getAsaasConfig(environment?: 'development' | 'production') {
+  const isDev = environment === 'development';
+  let apiKey = (process.env.ASAAS_API_KEY || '').trim();
+  
+  if (isDev && process.env.ASAAS_SANDBOX_API_KEY) {
+    apiKey = process.env.ASAAS_SANDBOX_API_KEY.trim();
+  } else if (!isDev && process.env.ASAAS_PRODUCTION_API_KEY) {
+    apiKey = process.env.ASAAS_PRODUCTION_API_KEY.trim();
+  }
+
   let apiUrl = (process.env.ASAAS_API_URL || '').trim();
 
-  // Sincronia automática estrita de ambientes:
-  // Chave de Sandbox: inicia com $aact_hml_ ou contém 'hml'/'sandbox'
-  // Chave de Produção: inicia com $aact_prod_ ou $aact_
-  const isSandbox = apiKey.includes('_hml_') || apiKey.includes('sandbox') || apiUrl.includes('sandbox');
+  // Sincronia automática de ambientes:
+  // Se explicitamente solicitado development ou chave sandbox
+  const isSandbox = isDev || apiKey.includes('_hml_') || apiKey.includes('sandbox') || apiUrl.includes('sandbox');
 
   if (isSandbox) {
     apiUrl = 'https://sandbox.asaas.com/api/v3';
@@ -86,7 +93,7 @@ export function getAsaasConfig() {
   apiUrl = apiUrl.replace(/\/+$/, '');
 
   if (!apiKey) {
-    console.error('[Asaas Service] ERRO CRÍTICO: process.env.ASAAS_API_KEY está undefined ou vazia!');
+    console.warn('[Asaas Service] Aviso: Chave de API Asaas não configurada no ambiente.');
   } else {
     console.log(`[Asaas Service] Ambiente sincronizado: ${isSandbox ? 'SANDBOX' : 'PRODUÇÃO'} (${apiUrl})`);
   }
@@ -94,15 +101,15 @@ export function getAsaasConfig() {
   return { apiKey, apiUrl, isSandbox };
 }
 
-export function getHeaders(subaccountId?: string) {
-  const { apiKey } = getAsaasConfig();
-  const token = process.env.ASAAS_API_KEY || apiKey;
+export function getHeaders(subaccountId?: string, environment?: 'development' | 'production') {
+  const { apiKey } = getAsaasConfig(environment);
+  const token = apiKey || process.env.ASAAS_API_KEY || '';
   if (!token) {
-    console.error('[Asaas Service] ERRO CRÍTICO: process.env.ASAAS_API_KEY está undefined ao montar headers!');
+    console.warn('[Asaas Service] Aviso: Token Asaas não informado ao montar headers.');
   }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'access_token': (process.env.ASAAS_API_KEY || token || '') as string
+    'access_token': token
   };
 
   if (subaccountId) {
