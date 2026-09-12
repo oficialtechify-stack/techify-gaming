@@ -172,13 +172,25 @@ export const ProductionActivationModal: React.FC<ProductionActivationModalProps>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-4 border-t border-white/10">
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-4 border-t border-white/10 flex-wrap">
                 <button
                   type="button"
                   onClick={onClose}
                   className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold text-white/70 hover:text-white hover:bg-white/5 cursor-pointer transition-colors text-center"
                 >
                   Continuar no Modo Teste
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onConfirmActivateProduction();
+                    onClose();
+                  }}
+                  className="w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 cursor-pointer transition-colors text-center flex items-center justify-center gap-1.5"
+                  title="Simular aprovação imediata de KYC para testes"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Aprovar Imediatamente (Simulação)</span>
                 </button>
                 <button
                   type="button"
@@ -189,7 +201,7 @@ export const ProductionActivationModal: React.FC<ProductionActivationModalProps>
                   }}
                   className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 cursor-pointer transition-all active:scale-95"
                 >
-                  <span>Prosseguir para Envio de Documentos (KYC)</span>
+                  <span>Enviar Documentos (KYC)</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>

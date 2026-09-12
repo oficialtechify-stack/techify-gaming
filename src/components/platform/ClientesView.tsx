@@ -229,21 +229,33 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
           )}
         </div>
 
-        {companies.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-white/50 font-bold whitespace-nowrap">Filtrar por Empresa:</span>
-            <select
-              value={selectedCompanyFilter}
-              onChange={(e) => setSelectedCompanyFilter(e.target.value)}
-              className="bg-[#050811] border border-white/15 text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-[#D9F22A]"
-            >
-              <option value="all">Todas as Minhas Empresas</option>
-              {companies.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={environmentFilter}
+            onChange={(e) => setEnvironmentFilter(e.target.value as any)}
+            className="bg-[#050811] border border-white/15 text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-[#D9F22A] cursor-pointer"
+          >
+            <option value="all">Todos os Ambientes</option>
+            <option value="development">🧪 Sandbox (Testes)</option>
+            <option value="production">🟢 Produção (Real)</option>
+          </select>
+
+          {companies.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-white/50 font-bold whitespace-nowrap">Empresa:</span>
+              <select
+                value={selectedCompanyFilter}
+                onChange={(e) => setSelectedCompanyFilter(e.target.value)}
+                className="bg-[#050811] border border-white/15 text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-[#D9F22A]"
+              >
+                <option value="all">Todas as Empresas</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Clients Table */}
@@ -296,6 +308,11 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                       <td className="p-4 font-mono text-[11px] text-white/60">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate max-w-[120px]">{client.id}</span>
+                          {((client as any).is_test || (client as any).environment === 'development') && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">
+                              Sandbox
+                            </span>
+                          )}
                           <button
                             onClick={() => handleCopy(client.id, client.id)}
                             className="text-white/40 hover:text-[#D9F22A] transition-colors p-1"

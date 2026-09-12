@@ -1195,8 +1195,6 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       });
     }
 
-    const nowIso = new Date().toISOString();
-
     // 2. Cobrança PIX via Asaas
     if (normalizedMethod === 'PIX') {
       try {
@@ -2740,23 +2738,49 @@ app.all(['/api/webhooks/mercadopago', '/api/payments/webhook'], async (req, res)
 
 // Start Server with Vite Middleware
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
+  try {
+    if (process.env.NODE_ENV !== 'production') {
+      const vite = await createViteServer({
+        server: { 
+          middlewareMode: true,
+          hmr: process.env.DISABLE_HMR !== 'true'
+        },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`⚡ LeadsPay Server online on http://0.0.0.0:${PORT}`);
-  });
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`⚡ LeadsPay Server online on http://0.0.0.0:${PORT}`);
+    });
+
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} already in use. Waiting or retrying...`);
+      } else {
+        console.error('❌ Server listener error:', err);
+      }
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+  }
 }
 
-startServer();
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught Exception:', err);
+});
+
+startServer().catch((err) => {
+  console.error('❌ startServer promise rejection:', err);
+});
+

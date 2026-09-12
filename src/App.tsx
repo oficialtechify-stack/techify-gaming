@@ -11,6 +11,14 @@ import { ResponsibleGamingSection } from './components/ResponsibleGamingSection'
 import { FooterMarquee } from './components/FooterMarquee';
 import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
+import { 
+  HeroAiBanner, 
+  CodeVibeIntegrationsSection, 
+  DocsAndSuiteSection, 
+  IsometricFeatureCardsSection, 
+  FeeCalculatorSection, 
+  FaqSection 
+} from './components/ModernLandingSections';
 import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
@@ -235,13 +243,34 @@ function MainApp() {
           onOpenPlatform={() => setViewPlatform(true)} 
         />
         <StatsCounter />
+
+        {/* Section Image 2: "Construa seu produto. A gente ajuda a vender." */}
+        <HeroAiBanner onOpenPlatform={() => setViewPlatform(true)} />
+
+        {/* Section Image 3: "Integre como quiser! Code, vibe-code, no-code!" */}
+        <CodeVibeIntegrationsSection />
+
+        {/* Section Image 4: "Documentação", "Integrar fácil" & "Uma suite de soluções para o seu negócio." */}
+        <DocsAndSuiteSection />
+
+        {/* Section Image 5: "Proteção antifraude" & "Check-out integrado" */}
+        <IsometricFeatureCardsSection />
+
         <AboutSection />
         <HowItWorksSection onOpenModal={handleOpenModal} />
+        
+        {/* Section Image 6: "Simule e veja quanto você recebe de verdade." (Calculadora Pix / Boleto) */}
+        <FeeCalculatorSection />
+
         <SponsorshipsSection 
           onOpenPlatform={() => setViewPlatform(true)} 
           onOpenRegisterCompany={() => handleOpenModal('register_company')} 
         />
         <CultureBanner />
+
+        {/* Section Image 7: "Tem dúvidas? Relaxa, nós temos as respostas." (FAQ Accordion) */}
+        <FaqSection />
+
         <ResponsibleGamingSection onOpenModal={handleOpenModal} />
       </main>
 

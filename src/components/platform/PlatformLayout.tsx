@@ -34,7 +34,8 @@ import {
   createSaleTransactionInFirebase,
   createWithdrawalInFirebase,
   updateUserProfileInFirebase,
-  submitVerificationRequestInFirebase
+  submitVerificationRequestInFirebase,
+  updateCompanyEnvironmentInFirebase
 } from '../../services/firestoreService';
 import { DashboardView } from './DashboardView';
 import { VitrineView } from './VitrineView';
@@ -61,6 +62,9 @@ import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
 import { ProductEditorView } from './ProductEditorView';
 import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
+import { DevModeBanner } from './DevModeBanner';
+import { DevModeToggle } from './DevModeToggle';
+import { ProductionActivationModal } from './ProductionActivationModal';
 import { Modals } from '../Modals';
 import { ActiveModal } from '../../types';
 import { completeAffiliateProfile } from '../../services/authService';
@@ -343,6 +347,64 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       (userProfile?.companyId && c.id === userProfile.companyId)
     );
   }, [companies, effectiveUserId, userProfile?.companyId, roleMode, isSuperAdmin]);
+
+  const activeCompany = useMemo(() => {
+    return myCompanies[0] || companies[0] || null;
+  }, [myCompanies, companies]);
+
+  // Dev Mode Sandbox vs Production
+  const [activeEnvironment, setActiveEnvironment] = useState<'development' | 'production'>('development');
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (activeCompany?.environment) {
+      setActiveEnvironment(activeCompany.environment);
+    }
+  }, [activeCompany?.environment]);
+
+  const handleToggleEnvironment = async (targetEnv: 'development' | 'production') => {
+    if (targetEnv === 'production') {
+      const currentKyc = activeCompany?.kyc_status;
+      if (currentKyc !== 'verified') {
+        setIsActivationModalOpen(true);
+        return;
+      }
+    }
+
+    setActiveEnvironment(targetEnv);
+    if (activeCompany?.id) {
+      try {
+        await updateCompanyEnvironmentInFirebase(activeCompany.id, targetEnv, activeCompany.kyc_status);
+        setLiveToast({
+          message: targetEnv === 'production' ? 'Modo Produção Ativado' : 'Modo Sandbox Ativado',
+          sub: targetEnv === 'production' 
+            ? 'Transacionando em ambiente bancário real.' 
+            : 'Transacionando em modo de testes seguro.',
+          amount: targetEnv === 'production' ? 'PROD' : 'DEV'
+        });
+        setTimeout(() => setLiveToast(null), 3500);
+      } catch (err) {
+        console.error('Erro ao alternar ambiente:', err);
+      }
+    }
+  };
+
+  const handleProductionActivationSuccess = async () => {
+    setActiveEnvironment('production');
+    if (activeCompany?.id) {
+      try {
+        await updateCompanyEnvironmentInFirebase(activeCompany.id, 'production', 'verified');
+      } catch (err) {
+        console.error('Erro ao aprovar produção:', err);
+      }
+    }
+    setLiveToast({
+      message: 'Modo Produção Habilitado!',
+      sub: 'Conta aprovada para transacionar em ambiente real.',
+      amount: 'PRODUÇÃO'
+    });
+    setTimeout(() => setLiveToast(null), 4000);
+  };
 
   const myCompanyIds = useMemo(() => myCompanies.map(c => c.id), [myCompanies]);
 
@@ -1092,6 +1154,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {/* Right Top Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 ml-auto flex-shrink-0">
+            {/* Dev Mode Sandbox vs Production Toggle */}
+            <DevModeToggle
+              environment={activeEnvironment}
+              onChange={handleToggleEnvironment}
+            />
+
             {roleMode === 'empresa' && (
               <button
                 onClick={() => setIsCreateCompanyModalOpen(true)}
@@ -1256,6 +1324,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             </div>
           </div>
         </header>
+
+        {/* Sandbox Dev Mode Banner */}
+        <DevModeBanner
+          environment={activeEnvironment}
+          onSwitchToProduction={() => {
+            if (activeCompany?.kyc_status === 'verified') {
+              handleToggleEnvironment('production');
+            } else {
+              setIsActivationModalOpen(true);
+            }
+          }}
+        />
 
         {/* VIEW CONTAINER */}
         <main className="flex-1 p-3 sm:p-5 md:p-6 lg:p-8 pb-24 lg:pb-8 max-w-7xl w-full mx-auto min-w-0">
@@ -1435,6 +1515,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <VendasView
               roleMode={roleMode}
               transactions={userVisibleTransactions}
+              environment={activeEnvironment}
             />
           )}
 
@@ -1470,6 +1551,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               companies={myCompanies.length > 0 ? myCompanies : companies}
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               userRole={roleMode}
+              environment={activeEnvironment}
             />
           )}
           {activeTab === 'cobrancas' && (
@@ -1493,6 +1575,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <SaquesView
               userProfile={userProfile}
               withdrawals={withdrawals}
+              isDevMode={activeEnvironment === 'development'}
+              environment={activeEnvironment}
               onWithdrawSuccess={handleWithdraw}
               onRefresh={() => {}}
             />
@@ -1585,6 +1669,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           <CustomCheckoutPage
             plan={liveCheckoutPlan}
             affiliateRef={checkoutAffiliateRef}
+            isDevMode={activeEnvironment === 'development'}
+            environment={activeEnvironment}
             onBack={() => setLiveCheckoutPlan(null)}
             onPaymentSuccess={(tx) => {
               setLiveToast({
@@ -1660,6 +1746,20 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       <ProductDetailModal
         product={selectedDetailProduct}
         onClose={() => setSelectedDetailProduct(null)}
+      />
+
+      {/* Production & KYC Activation Modal */}
+      <ProductionActivationModal
+        isOpen={isActivationModalOpen}
+        onClose={() => setIsActivationModalOpen(false)}
+        isVerified={activeCompany?.kyc_status === 'verified'}
+        currentKycStatus={activeCompany?.kyc_status || 'pending'}
+        companyName={activeCompany?.name || 'Sua Empresa'}
+        onConfirmActivateProduction={handleProductionActivationSuccess}
+        onNavigateToKYC={() => {
+          setIsActivationModalOpen(false);
+          setActiveTab('meu_perfil');
+        }}
       />
 
       {/* Global Auth Modal for Company / Google switch flow */}

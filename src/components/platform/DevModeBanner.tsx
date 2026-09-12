@@ -2,14 +2,21 @@ import React from 'react';
 import { FlaskConical, ArrowRight, ShieldCheck } from 'lucide-react';
 
 interface DevModeBannerProps {
-  onGoToProduction: () => void;
+  environment?: 'development' | 'production';
+  onSwitchToProduction?: () => void;
+  onGoToProduction?: () => void;
   isVerified?: boolean;
 }
 
 export const DevModeBanner: React.FC<DevModeBannerProps> = ({
+  environment = 'development',
+  onSwitchToProduction,
   onGoToProduction,
   isVerified = false
 }) => {
+  if (environment === 'production') return null;
+
+  const handleAction = onSwitchToProduction || onGoToProduction || (() => {});
   return (
     <div 
       id="dev-mode-sandbox-banner"
@@ -35,7 +42,7 @@ export const DevModeBanner: React.FC<DevModeBannerProps> = ({
       <div className="flex items-center gap-2 flex-shrink-0">
         <button
           id="btn-banner-go-to-production"
-          onClick={onGoToProduction}
+          onClick={handleAction}
           className="cursor-pointer flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-slate-950 text-amber-300 hover:bg-slate-900 hover:text-amber-200 text-xs font-black uppercase tracking-wider shadow transition-all active:scale-95"
           title="Alternar para o ambiente de produção real"
         >

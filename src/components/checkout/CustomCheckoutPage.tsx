@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Clock,
   RefreshCw,
-  Zap
+  Zap,
+  Sparkles
 } from 'lucide-react';
 import { 
   createSaleTransactionInFirebase, 

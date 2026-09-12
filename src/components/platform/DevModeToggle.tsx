@@ -3,13 +3,15 @@ import { FlaskConical, ShieldCheck, Zap } from 'lucide-react';
 
 interface DevModeToggleProps {
   environment: 'development' | 'production';
-  onToggle: (newEnv: 'development' | 'production') => void;
+  onToggle?: (newEnv: 'development' | 'production') => void;
+  onChange?: (newEnv: 'development' | 'production') => void;
   isLoading?: boolean;
 }
 
 export const DevModeToggle: React.FC<DevModeToggleProps> = ({
   environment,
   onToggle,
+  onChange,
   isLoading = false
 }) => {
   const isDev = environment === 'development';
@@ -17,7 +19,10 @@ export const DevModeToggle: React.FC<DevModeToggleProps> = ({
   const handleClick = () => {
     if (isLoading) return;
     const targetEnv = isDev ? 'production' : 'development';
-    onToggle(targetEnv);
+    const callback = onToggle || onChange;
+    if (callback) {
+      callback(targetEnv);
+    }
   };
 
   return (

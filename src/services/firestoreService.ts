@@ -618,15 +618,20 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
  */
 export async function updateCompanyEnvironmentInFirebase(
   companyId: string, 
-  environment: 'development' | 'production'
+  environment: 'development' | 'production',
+  kyc_status?: 'pending' | 'submitted' | 'verified'
 ) {
   try {
     const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
     const now = new Date().toISOString();
-    await updateDoc(docRef, sanitizeForFirestore({
+    const updateData: any = {
       environment,
       updatedAt: now
-    }));
+    };
+    if (kyc_status) {
+      updateData.kyc_status = kyc_status;
+    }
+    await updateDoc(docRef, sanitizeForFirestore(updateData));
 
     // Sincroniza também no perfil do dono se for a empresa ativa
     const snap = await getDoc(docRef);
