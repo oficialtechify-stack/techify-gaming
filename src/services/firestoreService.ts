@@ -190,6 +190,7 @@ export async function submitVerificationRequestInFirebase(
     ...profileData,
     hasCompanyProfile: isCompany ? true : profileData.hasCompanyProfile,
     verificationStatus: 'pending',
+    kyc_status: 'submitted',
     verified: false,
     verificationSubmittedAt: now,
     updatedAt: now
@@ -230,6 +231,9 @@ export async function submitVerificationRequestInFirebase(
     city: profileData.city || '',
     address: profileData.address || '',
     status: 'pending',
+    kyc_status: 'submitted',
+    pixKey: profileData.pixKey || '',
+    pixKeyType: profileData.pixKeyType || 'CPF',
     submittedAt: now
   }), { merge: true });
 
@@ -323,15 +327,26 @@ export function subscribeVerifications(callback: (requests: VerificationRequest[
 export async function approveVerificationInFirebase(userId: string) {
   const now = new Date().toISOString();
   
-  // 1. Update user profile to verified = true and verificationStatus = 'approved'
+  // 1. Update user profile to verified = true, verificationStatus = 'approved', and kyc_status = 'verified'
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
   await setDoc(profileRef, {
     verified: true,
     verificationStatus: 'approved',
+    kyc_status: 'verified',
     verificationReviewedAt: now,
     verificationRejectionReason: null,
     updatedAt: now
   }, { merge: true });
+
+  // Also sync to users collection if present
+  try {
+    await setDoc(doc(db, 'users', userId), {
+      verified: true,
+      verificationStatus: 'approved',
+      kyc_status: 'verified',
+      updatedAt: now
+    }, { merge: true });
+  } catch (e) {}
 
   // 2. Update verification request record
   const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
@@ -349,6 +364,7 @@ export async function approveVerificationInFirebase(userId: string) {
       await updateDoc(cDoc.ref, {
         status: 'approved',
         verified: true,
+        kyc_status: 'verified',
         reviewedAt: now,
         rejectionReason: null
       });
