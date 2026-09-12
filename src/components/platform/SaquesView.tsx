@@ -22,8 +22,6 @@ import { requestWithdrawalViaBackend } from '../../services/firestoreService';
 interface SaquesViewProps {
   userProfile: UserSellerProfile;
   withdrawals?: WithdrawalRequest[];
-  isDevMode?: boolean;
-  environment?: 'development' | 'production';
   onWithdrawSuccess?: (amount: number, pixKey: string, pixKeyType: string) => void;
   onRefresh?: () => void;
 }
@@ -31,13 +29,9 @@ interface SaquesViewProps {
 export const SaquesView: React.FC<SaquesViewProps> = ({
   userProfile,
   withdrawals = [],
-  isDevMode: explicitDevMode,
-  environment: explicitEnv,
   onWithdrawSuccess,
   onRefresh
 }) => {
-  const isDevMode = explicitDevMode ?? (explicitEnv === 'development' || userProfile?.environment === 'development');
-  const currentEnv = isDevMode ? 'development' : 'production';
   const availableBalance = Number(userProfile?.availableBalance ?? 0);
   const pendingBalance = Number(userProfile?.pendingBalance ?? 0);
   
@@ -87,9 +81,7 @@ export const SaquesView: React.FC<SaquesViewProps> = ({
         pixKey.trim(),
         pixKeyType,
         userProfile?.userId || userProfile?.id || 'usr_leadspay_main',
-        userProfile?.name || 'Titular da Conta',
-        isDevMode,
-        currentEnv
+        userProfile?.name || 'Titular da Conta'
       );
 
       if (result.success) {
@@ -139,24 +131,6 @@ export const SaquesView: React.FC<SaquesViewProps> = ({
           </button>
         )}
       </div>
-
-      {/* Sandbox Alert Banner */}
-      {isDevMode && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-4 text-xs text-amber-200">
-          <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
-            <div>
-              <strong className="block text-amber-300 font-bold">🧪 Modo de Desenvolvimento Ativo (Sandbox)</strong>
-              <span className="text-amber-200/80">
-                Solicitações de saque em ambiente Sandbox são simuladas imediatamente. O saldo é debitado e registrado como teste, sem efetuar transferência bancária real no Asaas.
-              </span>
-            </div>
-          </div>
-          <span className="px-2.5 py-1 rounded bg-amber-400/20 text-amber-300 font-black text-[10px] tracking-wider uppercase border border-amber-400/30 flex-shrink-0">
-            SIMULAÇÃO
-          </span>
-        </div>
-      )}
 
       {/* Financial Balances Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -29,14 +29,12 @@ interface ClientesViewProps {
   companies?: CompanyStartup[];
   activeCompanyId?: string;
   userRole?: string;
-  environment?: 'development' | 'production';
 }
 
 export const ClientesView: React.FC<ClientesViewProps> = ({
   companies = [],
   activeCompanyId,
-  userRole,
-  environment
+  userRole
 }) => {
   const [clients, setClients] = useState<PlatformClient[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -44,7 +42,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>(activeCompanyId || 'all');
-  const [environmentFilter, setEnvironmentFilter] = useState<'all' | 'development' | 'production'>('all');
 
   // Manual Client Form State
   const [formName, setFormName] = useState<string>('');
@@ -91,7 +88,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
 
     setIsSubmitting(true);
     try {
-      const isTestClient = (environment || 'development') === 'development';
       await createManualClientInFirebase({
         store_id: formCompanyId,
         name: formName.trim(),
@@ -101,8 +97,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         total_spent: parseFloat(formSpent) || 0,
         orders_count: 1,
         last_plan_name: 'Cadastro Manual',
-        is_test: isTestClient,
-        environment: environment || (isTestClient ? 'development' : 'production')
+        is_test: false,
+        environment: 'production'
       });
 
       setIsModalOpen(false);
@@ -120,10 +116,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
 
   const filteredClients = clients.filter(c => {
     if (selectedCompanyFilter !== 'all' && c.store_id !== selectedCompanyFilter) return false;
-    if (environmentFilter !== 'all') {
-      const clientEnv = (c as any).environment || ((c as any).is_test ? 'development' : 'production');
-      if (clientEnv !== environmentFilter) return false;
-    }
     if (!searchTerm.trim()) return true;
     const q = searchTerm.toLowerCase();
     return (
@@ -230,16 +222,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={environmentFilter}
-            onChange={(e) => setEnvironmentFilter(e.target.value as any)}
-            className="bg-[#050811] border border-white/15 text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-[#D9F22A] cursor-pointer"
-          >
-            <option value="all">Todos os Ambientes</option>
-            <option value="development">🧪 Sandbox (Testes)</option>
-            <option value="production">🟢 Produção (Real)</option>
-          </select>
-
           {companies.length > 1 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-white/50 font-bold whitespace-nowrap">Empresa:</span>

@@ -28,8 +28,6 @@ interface CustomCheckoutPageProps {
   checkoutSlug?: string;
   affiliateRef?: string;
   apiKey?: string;
-  isDevMode?: boolean;
-  environment?: 'development' | 'production';
   onBack?: () => void;
   onPaymentSuccess?: (transaction: SaleTransaction) => void;
 }
@@ -41,20 +39,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   checkoutSlug,
   affiliateRef,
   apiKey,
-  isDevMode: explicitDevMode,
-  environment: explicitEnv,
   onBack,
   onPaymentSuccess
 }) => {
-  // Verificação de ambiente Sandbox (Dev Mode)
-  const isDev = explicitDevMode ?? (
-    explicitEnv === 'development' || 
-    (plan as any)?.is_test === true || 
-    (plan as any)?.environment === 'development' ||
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sandbox') === 'true'
-  );
-  const currentEnv = isDev ? 'development' : 'production';
-
   // Query param apiKey fallback (?apiKey=lp_live_...)
   const queryApiKey = typeof window !== 'undefined' 
     ? (new URLSearchParams(window.location.search).get('apiKey') || 
@@ -411,8 +398,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       commissionEarned: commissionEarned,
       method: methodName,
       status: 'Aprovado',
-      is_test: isDev,
-      environment: currentEnv,
+      is_test: false,
+      environment: 'production',
       utmSource: affiliateRef ? `ref_${affiliateRef}` : 'checkout_direto_empresa',
       date: dateStr,
       time: timeStr
@@ -431,8 +418,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           document: documentNumber.replace(/\D/g, ''),
           total_spent: finalTotal,
           last_plan_name: plan.name,
-          is_test: isDev,
-          environment: currentEnv
+          is_test: false,
+          environment: 'production'
         });
       } catch (clientErr) {
         console.warn('Aviso ao registrar cliente automaticamente:', clientErr);

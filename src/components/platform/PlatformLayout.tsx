@@ -63,9 +63,6 @@ import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
 import { ProductEditorView } from './ProductEditorView';
 import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
-import { DevModeBanner } from './DevModeBanner';
-import { DevModeToggle } from './DevModeToggle';
-import { ProductionActivationModal } from './ProductionActivationModal';
 import { Modals } from '../Modals';
 import { ActiveModal } from '../../types';
 import { completeAffiliateProfile } from '../../services/authService';
@@ -371,189 +368,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return 'pending';
   }, [isUserVerified, userProfile?.verificationStatus, userProfile?.kyc_status, roleMode, activeCompany?.kyc_status]);
 
-  // Dev Mode Sandbox vs Production
-  const [activeEnvironment, setActiveEnvironment] = useState<'development' | 'production'>('development');
-  const [isActivationModalOpen, setIsActivationModalOpen] = useState<boolean>(false);
-  const [isSimulatingSale, setIsSimulatingSale] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (activeCompany?.environment) {
-      // If user is not verified, force development mode
-      if (activeCompany.environment === 'production' && !isUserVerified) {
-        setActiveEnvironment('development');
-      } else {
-        setActiveEnvironment(activeCompany.environment);
-      }
-    }
-  }, [activeCompany?.environment, isUserVerified]);
-
-  // Switch between Test Mode (Sandbox) and Real Production
-  const handleToggleEnvironment = async (targetEnv: 'development' | 'production') => {
-    if (targetEnv === 'production') {
-      if (!isUserVerified) {
-        // STRICT ENFORCEMENT: User CANNOT exit test mode until verified!
-        setIsActivationModalOpen(true);
-        setLiveToast({
-          message: 'Homologação Obrigatória',
-          sub: 'Preencha seu perfil cadastral para aprovação antes de acessar o Sistema de Produção Real.',
-          amount: 'BLOQUEADO'
-        });
-        setTimeout(() => setLiveToast(null), 4000);
-        return;
-      }
-    }
-
-    setActiveEnvironment(targetEnv);
-    if (activeCompany?.id) {
-      try {
-        await updateCompanyEnvironmentInFirebase(activeCompany.id, targetEnv, activeCompany.kyc_status);
-      } catch (err) {
-        console.error('Erro ao alternar ambiente na empresa:', err);
-      }
-    }
-    if (effectiveUserId) {
-      try {
-        await updateCompanyEnvironmentInFirebase(effectiveUserId, targetEnv, currentKycStatus);
-      } catch (err) {
-        console.error('Erro ao sincronizar ambiente do usuário:', err);
-      }
-    }
-
-    setLiveToast({
-      message: targetEnv === 'production' ? 'Sistema Real de Produção Ativo' : 'Modo de Teste (Sandbox) Ativado',
-      sub: targetEnv === 'production' 
-        ? 'Transacionando em ambiente bancário real via Asaas & Mercado Pago (D+9).' 
-        : 'Ambiente simulado para testes livres. Todas as funções liberadas.',
-      amount: targetEnv === 'production' ? 'PROD REAL' : 'SANDBOX'
-    });
-    setTimeout(() => setLiveToast(null), 4000);
-  };
-
-  const handleProductionActivationSuccess = async () => {
-    setActiveEnvironment('production');
-    setIsActivationModalOpen(false);
-    if (activeCompany?.id) {
-      try {
-        await updateCompanyEnvironmentInFirebase(activeCompany.id, 'production', 'verified');
-      } catch (err) {
-        console.error('Erro ao aprovar produção:', err);
-      }
-    }
-    if (effectiveUserId) {
-      try {
-        await updateCompanyEnvironmentInFirebase(effectiveUserId, 'production', 'verified');
-      } catch (err) {
-        console.error('Erro ao atualizar usuário para produção:', err);
-      }
-    }
-    setLiveToast({
-      message: 'Sistema Real de Produção Ativado!',
-      sub: 'Sua conta está homologada e pronta para faturar.',
-      amount: 'PRODUÇÃO'
-    });
-    setTimeout(() => setLiveToast(null), 4000);
-  };
-
-  // Submit profile to administration from the KYC modal
-  const handleSubmitVerificationFromModal = async (profileData: Partial<UserSellerProfile>) => {
-    if (!effectiveUserId) return;
-    try {
-      await submitVerificationRequestInFirebase({
-        ...userProfile,
-        ...profileData,
-        id: effectiveUserId,
-        userId: effectiveUserId,
-        kyc_status: 'submitted',
-        verificationStatus: 'pending'
-      });
-      setLiveToast({
-        message: 'Perfil Enviado para Análise!',
-        sub: 'A administração analisará seus dados cadastrais em até 24 horas úteis.',
-        amount: 'EM ANÁLISE'
-      });
-      setTimeout(() => setLiveToast(null), 5000);
-    } catch (err: any) {
-      console.error('Erro ao submeter perfil KYC:', err);
-      throw err;
-    }
-  };
-
-  // Immediate approval for admin privilege
-  const handleApproveAsAdminFromModal = async () => {
-    if (!effectiveUserId) return;
-    try {
-      await approveVerificationInFirebase(effectiveUserId);
-      setLiveToast({
-        message: 'Perfil Homologado!',
-        sub: 'Conta aprovada com sucesso. Modo de Produção Real liberado.',
-        amount: 'APROVADO'
-      });
-      setTimeout(() => setLiveToast(null), 5000);
-    } catch (err: any) {
-      console.error('Erro ao aprovar como admin:', err);
-      throw err;
-    }
-  };
-
-  // Instant Test Sale Simulation in Sandbox
-  const handleSimulateTestSale = async () => {
-    if (isSimulatingSale) return;
-    setIsSimulatingSale(true);
-    try {
-      const sampleNames = [
-        'Lucas Ferreira', 
-        'Mariana Alencar', 
-        'Carlos Eduardo Lima', 
-        'Beatriz Souza', 
-        'Rodrigo Mendes', 
-        'Juliana Rocha'
-      ];
-      const randomBuyer = sampleNames[Math.floor(Math.random() * sampleNames.length)];
-      const targetPlan = (myCompanyPlans && myCompanyPlans[0]) || (plans && plans[0]) || null;
-      const planTitle = targetPlan?.name || 'Plano Pro - LeadsPay';
-      const planPrice = targetPlan?.priceMonthly || targetPlan?.priceSetup || 197.00;
-      const commissionRate = targetPlan?.commissionPercentage || 30;
-      const commissionVal = Number(((planPrice * commissionRate) / 100).toFixed(2));
-      const txId = `SIM-${Date.now()}`;
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('pt-BR');
-      const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-      const sampleSale: SaleTransaction = {
-        id: txId,
-        platformId: targetPlan?.id || 'sim_plan_1',
-        platformName: planTitle,
-        buyerName: randomBuyer,
-        buyerEmail: `${randomBuyer.toLowerCase().replace(/\s+/g, '.')}@email.com`,
-        buyerCompany: 'Cliente Sandbox',
-        amount: planPrice,
-        commissionEarned: commissionVal,
-        method: 'PIX',
-        status: 'Aprovado',
-        date: dateStr,
-        time: timeStr,
-        createdAt: now.toISOString(),
-        affiliateId: effectiveUserId,
-        companyId: targetPlan?.companyId || activeCompany?.id || effectiveUserId,
-        is_test: true,
-        environment: 'development'
-      };
-
-      await createSaleTransactionInFirebase(sampleSale);
-
-      setLiveToast({
-        message: '⚡ Venda de Teste Aprovada!',
-        sub: `R$ ${planPrice.toFixed(2)} recebido via PIX (${randomBuyer})`,
-        amount: `+R$ ${commissionVal.toFixed(2)}`
-      });
-      setTimeout(() => setLiveToast(null), 4500);
-    } catch (err: any) {
-      console.warn('Erro ao simular venda teste:', err);
-    } finally {
-      setIsSimulatingSale(false);
-    }
-  };
-
   const myCompanyIds = useMemo(() => myCompanies.map(c => c.id), [myCompanies]);
 
   // Plans belonging strictly to THIS user's companies
@@ -608,37 +422,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return [];
   }, [transactions, effectiveUserId, roleMode, isSuperAdmin, userAffiliationCodes, myCompanyIds, myCompanyPlanIds]);
 
-  // STRICT ENVIRONMENT DATA SEPARATION:
-  // - In Sandbox (development): shows simulated / test transactions
-  // - In Production: shows ONLY real banking transactions
-  const environmentTransactions = useMemo(() => {
-    return userVisibleTransactions.filter(s => {
-      if (activeEnvironment === 'production') {
-        return s.environment === 'production' && s.is_test !== true;
-      } else {
-        return s.environment === 'development' || s.is_test === true || !s.environment;
-      }
-    });
-  }, [userVisibleTransactions, activeEnvironment]);
-
-  const environmentWithdrawals = useMemo(() => {
-    return withdrawals.filter(w => {
-      if (activeEnvironment === 'production') {
-        return w.environment === 'production' && w.is_test !== true;
-      } else {
-        return w.environment === 'development' || w.is_test === true || !w.environment;
-      }
-    });
-  }, [withdrawals, activeEnvironment]);
-
-  // Dynamic payment stats derived strictly from environmentTransactions
+  // Dynamic payment stats derived strictly from real transactions
   const userPaymentStats = useMemo(() => {
     let pixVal = 0, pixCount = 0;
     let cardVal = 0, cardCount = 0;
     let picpayVal = 0, picpayCount = 0;
     let cryptoVal = 0, cryptoCount = 0;
 
-    environmentTransactions.forEach((s) => {
+    userVisibleTransactions.forEach((s) => {
       const amount = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
       if (s.method === 'PIX') { pixVal += amount; pixCount++; }
       else if (s.method === 'Cartão de Crédito') { cardVal += amount; cardCount++; }
@@ -1325,13 +1116,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {/* Right Top Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 ml-auto flex-shrink-0">
-            {/* Dev Mode Sandbox vs Production Toggle */}
-            <DevModeToggle
-              environment={activeEnvironment}
-              isVerified={isUserVerified}
-              onChange={handleToggleEnvironment}
-            />
-
             {roleMode === 'empresa' && (
               <button
                 onClick={() => setIsCreateCompanyModalOpen(true)}
@@ -1497,20 +1281,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           </div>
         </header>
 
-        {/* Sandbox Dev Mode vs Production Banner */}
-        <DevModeBanner
-          environment={activeEnvironment}
-          isVerified={isUserVerified}
-          isSimulating={isSimulatingSale}
-          onSwitchToProduction={() => handleToggleEnvironment('production')}
-          onSwitchToDevelopment={() => handleToggleEnvironment('development')}
-          onSimulateSale={handleSimulateTestSale}
-          onOpenTestCheckout={() => {
-            const planToTest = (myCompanyPlans && myCompanyPlans[0]) || (plans && plans[0]) || null;
-            if (planToTest) setLiveCheckoutPlan(planToTest);
-          }}
-        />
-
         {/* VIEW CONTAINER */}
         <main className="flex-1 p-3 sm:p-5 md:p-6 lg:p-8 pb-24 lg:pb-8 max-w-7xl w-full mx-auto min-w-0">
           {detailedEditingPlan ? (
@@ -1535,7 +1305,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 <DashboardView
                   roleMode={roleMode}
                   userProfile={userProfile}
-                  transactions={environmentTransactions}
+                  transactions={userVisibleTransactions}
                   paymentStats={userPaymentStats}
                   platforms={roleMode === 'empresa' && !isSuperAdmin ? myCompanyPlans : plans}
                   setActiveTab={setActiveTab}
@@ -1566,32 +1336,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               companies={myCompanies}
               plans={myCompanyPlans}
               affiliations={myCompanyAffiliations}
-              sales={environmentTransactions}
+              sales={userVisibleTransactions}
               userProfile={userProfile}
-              isCompanyVerified={isUserVerified || activeEnvironment === 'development'}
+              isCompanyVerified={isUserVerified}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onOpenCreateCompany={() => {
-                if (activeEnvironment === 'production' && !isUserVerified) {
-                  setLiveToast({
-                    message: 'Verificação Obrigatória',
-                    sub: 'A empresa precisa ser verificada pela administração para criar empresas em ambiente real.',
-                    amount: 'Pendente'
-                  });
-                  setIsActivationModalOpen(true);
-                  return;
-                }
                 setIsCreateCompanyModalOpen(true);
               }}
               onOpenCreatePlan={(compId) => {
-                if (activeEnvironment === 'production' && !isUserVerified) {
-                  setLiveToast({
-                    message: 'Verificação Obrigatória',
-                    sub: 'A empresa precisa ser verificada pela administração para cadastrar produtos reais.',
-                    amount: 'Pendente'
-                  });
-                  setIsActivationModalOpen(true);
-                  return;
-                }
                 const targetCompId = compId || (myCompanies.length > 0 ? myCompanies[0].id : undefined);
                 setSelectedCompanyIdForPlan(targetCompId);
                 setEditingPlan(null);
@@ -1725,12 +1477,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               companies={myCompanies.length > 0 ? myCompanies : companies}
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               userRole={roleMode}
-              environment={activeEnvironment}
             />
           )}
           {activeTab === 'cobrancas' && (
             <CobrancasView
-              sales={environmentTransactions}
+              sales={userVisibleTransactions}
               companies={myCompanies.length > 0 ? myCompanies : companies}
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               onRefresh={() => {}}
@@ -1748,9 +1499,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'saques' && (
             <SaquesView
               userProfile={userProfile}
-              withdrawals={environmentWithdrawals}
-              isDevMode={activeEnvironment === 'development'}
-              environment={activeEnvironment}
+              withdrawals={withdrawals}
               onWithdrawSuccess={handleWithdraw}
               onRefresh={() => {}}
             />
@@ -1758,7 +1507,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'assinaturas' && (
             <AssinaturasView 
               plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
-              sales={environmentTransactions} 
+              sales={userVisibleTransactions} 
               userProfile={userProfile}
               onNavigateToProducts={() => setActiveTab('produtos')}
               onOpenCreatePlan={() => {
@@ -1843,8 +1592,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           <CustomCheckoutPage
             plan={liveCheckoutPlan}
             affiliateRef={checkoutAffiliateRef}
-            isDevMode={activeEnvironment === 'development'}
-            environment={activeEnvironment}
             onBack={() => setLiveCheckoutPlan(null)}
             onPaymentSuccess={(tx) => {
               setLiveToast({
@@ -1920,25 +1667,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       <ProductDetailModal
         product={selectedDetailProduct}
         onClose={() => setSelectedDetailProduct(null)}
-      />
-
-      {/* Production & KYC Activation Modal */}
-      <ProductionActivationModal
-        isOpen={isActivationModalOpen}
-        onClose={() => setIsActivationModalOpen(false)}
-        isVerified={isUserVerified}
-        currentKycStatus={currentKycStatus}
-        companyName={activeCompany?.name || userProfile?.name || 'Sua Conta'}
-        userProfile={userProfile}
-        onSubmitVerification={handleSubmitVerificationFromModal}
-        onApproveAsAdmin={handleApproveAsAdminFromModal}
-        isSuperAdmin={isSuperAdmin}
-        roleMode={roleMode}
-        onConfirmActivateProduction={handleProductionActivationSuccess}
-        onNavigateToKYC={() => {
-          setIsActivationModalOpen(false);
-          setActiveTab('meu_perfil');
-        }}
       />
 
       {/* Global Auth Modal for Company / Google switch flow */}
