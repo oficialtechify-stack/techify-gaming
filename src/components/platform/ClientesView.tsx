@@ -267,12 +267,13 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[760px]">
+            <table className="w-full text-left text-xs min-w-[850px]">
               <thead>
                 <tr className="border-b border-white/10 bg-white/[0.02] text-white/50 uppercase tracking-wider font-bold">
                   <th className="p-4">ID do Cliente</th>
                   <th className="p-4">Nome & Documento</th>
                   <th className="p-4">E-mail & Celular</th>
+                  <th className="p-4">Status & Remarketing</th>
                   <th className="p-4">Total Gasto / Pedidos</th>
                   <th className="p-4">Data de Criação</th>
                   <th className="p-4 text-right">Ações</th>
@@ -339,6 +340,54 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                             )}
                           </div>
                         )}
+                      </td>
+
+                      {/* Status & Remarketing */}
+                      <td className="p-4">
+                        {(() => {
+                          const st = (client.status_compra || client.status || 'ATIVO').toUpperCase();
+                          if (st === 'PIX_GERADO' || st === 'PENDENTE') {
+                            return (
+                              <div>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                  Pix Gerado (Aguardando)
+                                </span>
+                                {whatsappUrl && (
+                                  <a
+                                    href={`${whatsappUrl}?text=${encodeURIComponent(`Olá ${client.name}! Notamos que você gerou um Pix para "${client.last_plan_name || 'seu pedido'}" no valor de R$ ${(client.valor_pedido || client.total_spent || 0).toFixed(2)}. Precisa de ajuda para concluir seu pagamento?`)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block mt-1.5 text-[10px] font-bold text-[#D9F22A] hover:underline"
+                                  >
+                                    💬 Recuperar via WhatsApp
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (st === 'PAGO' || st === 'APROVADO' || st === 'CONFIRMED' || st === 'RECEIVED') {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                Pago
+                              </span>
+                            );
+                          }
+                          if (st === 'REEMBOLSADO') {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                                Reembolsado
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/10 text-white/70 border border-white/10">
+                              {client.status_compra || client.status || 'Ativo'}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Total Spent & Orders */}

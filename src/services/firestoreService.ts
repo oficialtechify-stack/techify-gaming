@@ -1910,16 +1910,26 @@ export function subscribeClients(
       const data = docSnap.data();
       clients.push({
         id: docSnap.id,
-        store_id: data.store_id || 'store_default',
-        name: data.name || 'Cliente Sem Nome',
+        store_id: data.store_id || data.empresa_id || 'store_default',
+        empresa_id: data.empresa_id || data.store_id || 'store_default',
+        name: data.name || data.nome_completo || 'Cliente Sem Nome',
+        nome_completo: data.nome_completo || data.name || 'Cliente Sem Nome',
         email: data.email || '',
-        phone: data.phone || '',
-        document: data.document || '',
-        created_at: data.created_at || new Date().toISOString(),
-        total_spent: Number(data.total_spent) || 0,
+        phone: data.phone || data.celular || '',
+        celular: data.celular || data.phone || '',
+        document: data.document || data.cpf_cnpj || '',
+        cpf_cnpj: data.cpf_cnpj || data.document || '',
+        created_at: data.created_at || data.data_criacao || new Date().toISOString(),
+        data_criacao: data.data_criacao || data.created_at || new Date().toISOString(),
+        total_spent: Number(data.total_spent || data.valor_pedido) || 0,
+        valor_pedido: Number(data.valor_pedido || data.total_spent) || 0,
         orders_count: Number(data.orders_count) || 1,
         last_order_at: data.last_order_at || data.created_at,
-        last_plan_name: data.last_plan_name || ''
+        last_plan_name: data.last_plan_name || '',
+        status_compra: data.status_compra || data.status || 'PAGO',
+        status: data.status || data.status_compra || 'PAGO',
+        is_test: data.is_test ?? false,
+        environment: data.environment || 'production'
       });
     });
 
@@ -1928,14 +1938,14 @@ export function subscribeClients(
     } catch (_) {}
 
     if (storeId) {
-      callback(clients.filter(c => c.store_id === storeId));
+      callback(clients.filter(c => c.store_id === storeId || c.empresa_id === storeId));
     } else {
       callback(clients);
     }
   }, (err) => {
     console.warn('Erro ao escutar coleção clients no Firestore:', err);
     if (local.length > 0) {
-      callback(storeId ? local.filter(c => c.store_id === storeId) : local);
+      callback(storeId ? local.filter(c => c.store_id === storeId || c.empresa_id === storeId) : local);
     }
   });
 }
@@ -1948,6 +1958,8 @@ export async function createOrUpdateClientInFirebase(clientData: {
   document?: string;
   total_spent?: number;
   last_plan_name?: string;
+  status_compra?: string;
+  status?: string;
   is_test?: boolean;
   environment?: 'development' | 'production';
 }): Promise<PlatformClient> {
@@ -1958,6 +1970,7 @@ export async function createOrUpdateClientInFirebase(clientData: {
   const targetStoreId = clientData.store_id || 'store_default';
   const isTest = clientData.is_test ?? true;
   const env = clientData.environment || (isTest ? 'development' : 'production');
+  const statusCompra = clientData.status_compra || clientData.status || 'PIX_GERADO';
 
   // ID previsível e seguro baseado na loja + email/doc
   const safeDocKey = cleanDoc || cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
@@ -1973,13 +1986,19 @@ export async function createOrUpdateClientInFirebase(clientData: {
 
       const payload: Partial<PlatformClient> = {
         name: clientData.name || prevData.name,
+        nome_completo: clientData.name || prevData.name,
         email: cleanEmail || prevData.email,
         phone: cleanPhone || prevData.phone,
+        celular: cleanPhone || prevData.phone,
         document: cleanDoc || prevData.document,
+        cpf_cnpj: cleanDoc || prevData.document,
         total_spent: updatedTotal,
+        valor_pedido: Number(clientData.total_spent) || updatedTotal,
         orders_count: updatedCount,
         last_order_at: now,
         last_plan_name: clientData.last_plan_name || prevData.last_plan_name,
+        status_compra: statusCompra,
+        status: statusCompra,
         is_test: isTest,
         environment: env
       };
@@ -1988,15 +2007,23 @@ export async function createOrUpdateClientInFirebase(clientData: {
       return {
         id: clientId,
         store_id: targetStoreId,
+        empresa_id: targetStoreId,
         name: payload.name!,
+        nome_completo: payload.name!,
         email: payload.email!,
         phone: payload.phone,
+        celular: payload.phone,
         document: payload.document,
+        cpf_cnpj: payload.document,
         created_at: prevData.created_at || now,
+        data_criacao: prevData.created_at || now,
         total_spent: updatedTotal,
+        valor_pedido: payload.valor_pedido,
         orders_count: updatedCount,
         last_order_at: now,
         last_plan_name: payload.last_plan_name,
+        status_compra: statusCompra,
+        status: statusCompra,
         is_test: isTest,
         environment: env
       };
@@ -2004,15 +2031,23 @@ export async function createOrUpdateClientInFirebase(clientData: {
       const newClient: PlatformClient = {
         id: clientId,
         store_id: targetStoreId,
+        empresa_id: targetStoreId,
         name: clientData.name.trim(),
+        nome_completo: clientData.name.trim(),
         email: cleanEmail,
         phone: cleanPhone,
+        celular: cleanPhone,
         document: cleanDoc,
+        cpf_cnpj: cleanDoc,
         created_at: now,
+        data_criacao: now,
         total_spent: Number(clientData.total_spent) || 0,
+        valor_pedido: Number(clientData.total_spent) || 0,
         orders_count: 1,
         last_order_at: now,
         last_plan_name: clientData.last_plan_name || '',
+        status_compra: statusCompra,
+        status: statusCompra,
         is_test: isTest,
         environment: env
       };
@@ -2025,15 +2060,23 @@ export async function createOrUpdateClientInFirebase(clientData: {
     const newClient: PlatformClient = {
       id: clientId,
       store_id: targetStoreId,
+      empresa_id: targetStoreId,
       name: clientData.name.trim(),
+      nome_completo: clientData.name.trim(),
       email: cleanEmail,
       phone: cleanPhone,
+      celular: cleanPhone,
       document: cleanDoc,
+      cpf_cnpj: cleanDoc,
       created_at: now,
+      data_criacao: now,
       total_spent: Number(clientData.total_spent) || 0,
+      valor_pedido: Number(clientData.total_spent) || 0,
       orders_count: 1,
       last_order_at: now,
       last_plan_name: clientData.last_plan_name || '',
+      status_compra: statusCompra,
+      status: statusCompra,
       is_test: isTest,
       environment: env
     };

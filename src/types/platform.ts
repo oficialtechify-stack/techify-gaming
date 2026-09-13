@@ -447,15 +447,23 @@ export interface TeamMember {
 export interface PlatformClient {
   id: string;
   store_id: string;
+  empresa_id?: string;
   name: string;
+  nome_completo?: string;
   email: string;
   phone?: string;
+  celular?: string;
   document?: string;
+  cpf_cnpj?: string;
   created_at: string;
+  data_criacao?: string;
   total_spent?: number;
+  valor_pedido?: number;
   orders_count?: number;
   last_order_at?: string;
   last_plan_name?: string;
+  status_compra?: 'PIX_GERADO' | 'PAGO' | 'REEMBOLSADO' | 'CANCELADO' | string;
+  status?: string;
   is_test?: boolean;
   environment?: 'development' | 'production';
 }

@@ -128,24 +128,29 @@ export function cleanDocument(docStr?: string | number | null): string {
 }
 
 /**
- * getOrCreateCustomer(userData, subaccountId?)
+ * getOrCreateCustomer(userData, subaccountId?, options?)
  * 1. Limpa o CPF/CNPJ removendo qualquer pontuação (apenas dígitos).
  * 2. Faz GET para ${ASAAS_API_URL}/customers?cpfCnpj=${cpfCnpj} com o header 'access_token' (e 'account' se subconta).
  * 3. Se o cliente já existir no Asaas, retorna o id encontrado.
  * 4. Se não existir, faz POST para ${ASAAS_API_URL}/customers para cadastrar e retorna o novo id.
  */
-export async function getOrCreateCustomer(userData: AsaasCustomerData, subaccountId?: string): Promise<string> {
+export async function getOrCreateCustomer(
+  userData: AsaasCustomerData, 
+  subaccountId?: string,
+  options?: { companyApiKey?: string }
+): Promise<string> {
   const { apiUrl, apiKey } = getAsaasConfig();
-  if (!apiKey) {
+  const token = (options?.companyApiKey?.trim()) || (process.env.ASAAS_API_KEY || apiKey) as string;
+  if (!token) {
     throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'access_token': (process.env.ASAAS_API_KEY || apiKey) as string
+    'access_token': token
   };
 
-  if (subaccountId) {
+  if (subaccountId && !options?.companyApiKey) {
     headers['account'] = subaccountId;
   }
   const cpfCnpj = cleanDocument(userData?.cpfCnpj);
@@ -233,30 +238,42 @@ export async function getOrCreateCustomer(userData: AsaasCustomerData, subaccoun
   return createData.id;
 }
 
+export interface AsaasPixPaymentOptions {
+  split?: Array<{ walletId: string; percent?: number; fixedValue?: number }>;
+  walletId?: string;
+  externalReference?: string;
+  notificationDisabled?: boolean;
+  dueDate?: string;
+  companyApiKey?: string;
+}
+
 /**
- * createPixPayment(customerId, amount, description, subaccountId?)
+ * createPixPayment(customerId, amount, description, subaccountId?, options?)
  * 1. Faz POST para ${ASAAS_API_URL}/payments com billingType: 'PIX', valor numérico e vencimento YYYY-MM-DD.
- * 2. Faz GET para ${ASAAS_API_URL}/payments/${paymentId}/pixQrCode para obter Copia e Cola e QR Code em Base64.
- * 3. Injeta o header 'account' quando subaccountId for fornecido.
- * 4. Retorna os dados completos do PIX com logs de erro detalhados.
+ * 2. Suporta split para walletId da empresa produtora, externalReference, dueDate e token dedicado da subconta.
+ * 3. Faz GET para ${ASAAS_API_URL}/payments/${paymentId}/pixQrCode para obter Copia e Cola e QR Code em Base64.
+ * 4. Injeta o header 'account' quando subaccountId for fornecido e não houver token customizado.
+ * 5. Retorna os dados completos do PIX com logs de erro detalhados.
  */
 export async function createPixPayment(
   customerId: string, 
   amount: number, 
   description?: string,
-  subaccountId?: string
+  subaccountId?: string,
+  options?: AsaasPixPaymentOptions
 ): Promise<AsaasPixResponse> {
   const { apiUrl, apiKey } = getAsaasConfig();
-  if (!apiKey) {
+  const token = (options?.companyApiKey?.trim()) || (process.env.ASAAS_API_KEY || apiKey) as string;
+  if (!token) {
     throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'access_token': (process.env.ASAAS_API_KEY || apiKey) as string
+    'access_token': token
   };
 
-  if (subaccountId) {
+  if (subaccountId && !options?.companyApiKey) {
     headers['account'] = subaccountId;
   }
 
@@ -276,13 +293,29 @@ export async function createPixPayment(
   // 2. Data de vencimento estritamente no formato YYYY-MM-DD
   const today = new Date().toISOString().split('T')[0];
 
-  const paymentPayload = {
+  const paymentPayload: Record<string, any> = {
     customer: customerId,
     billingType: 'PIX',
     value: cleanAmount,
-    dueDate: today,
-    description: description || 'Pagamento LeadsPay'
+    dueDate: options?.dueDate || today,
+    description: description || 'Pagamento LeadsPay',
+    notificationDisabled: options?.notificationDisabled ?? false
   };
+
+  if (options?.externalReference) {
+    paymentPayload.externalReference = options.externalReference;
+  }
+
+  if (options?.split && Array.isArray(options.split) && options.split.length > 0) {
+    paymentPayload.split = options.split;
+  } else if (options?.walletId) {
+    paymentPayload.split = [
+      {
+        walletId: options.walletId,
+        percent: 100
+      }
+    ];
+  }
 
   console.log('[Asaas] Solicitando criação de cobrança PIX:', paymentPayload, subaccountId ? `(Subconta: ${subaccountId})` : '(Conta Master)');
 

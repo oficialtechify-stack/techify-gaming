@@ -838,6 +838,129 @@ app.post(['/api/subaccounts/create', '/api/subaccounts'], async (req, res) => {
 // =========================================================================
 
 /**
+ * Salva ou atualiza imediatamente o comprador na base da empresa para Remarketing
+ * assim que ele clica em "Gerar Pix" ou gera uma cobrança
+ */
+async function registrarClienteCheckout(dadosCheckout: {
+  nome?: string;
+  name?: string;
+  email: string;
+  celular?: string;
+  phone?: string;
+  cpfCnpj?: string;
+  document?: string;
+  valorTotal?: number;
+  amount?: number;
+  status_compra?: string;
+  status?: string;
+  last_plan_name?: string;
+  description?: string;
+  is_test?: boolean;
+  environment?: 'development' | 'production';
+}, empresaId: string) {
+  try {
+    const cleanEmail = (dadosCheckout.email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      console.warn('[registrarClienteCheckout] E-mail ausente, pulando auto-cadastro.');
+      return;
+    }
+
+    const cleanDoc = cleanDocument(dadosCheckout.cpfCnpj || dadosCheckout.document);
+    const cleanPhone = (dadosCheckout.celular || dadosCheckout.phone || '').trim();
+    const customerName = (dadosCheckout.nome || dadosCheckout.name || 'Cliente LeadsPay').trim();
+    const valor = Number(dadosCheckout.valorTotal || dadosCheckout.amount || 0);
+    const targetStoreId = (empresaId || 'store_default').toString();
+    const nowIso = new Date().toISOString();
+    const statusCompra = dadosCheckout.status_compra || dadosCheckout.status || 'PIX_GERADO';
+    const planName = dadosCheckout.last_plan_name || dadosCheckout.description || 'Cobrança LeadsPay';
+    const isTest = dadosCheckout.is_test ?? false;
+    const env = dadosCheckout.environment || (isTest ? 'development' : 'production');
+
+    // 1. Coleção 'clients' (Lida diretamente pelo painel 'Clientes da Empresa' / ClientesView)
+    const safeDocKey = cleanDoc || cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
+    const clientId = `cli_${targetStoreId.slice(0, 10)}_${safeDocKey}`;
+    const clientRef = doc(db, 'clients', clientId);
+
+    const clientSnap = await getDoc(clientRef);
+    if (clientSnap.exists()) {
+      const prev = clientSnap.data();
+      await updateDoc(clientRef, {
+        name: customerName || prev.name,
+        nome_completo: customerName || prev.nome_completo || prev.name,
+        email: cleanEmail,
+        phone: cleanPhone || prev.phone || '',
+        celular: cleanPhone || prev.celular || prev.phone || '',
+        document: cleanDoc || prev.document || '',
+        cpf_cnpj: cleanDoc || prev.cpf_cnpj || prev.document || '',
+        status_compra: statusCompra,
+        status: statusCompra,
+        valor_pedido: valor > 0 ? valor : (prev.valor_pedido || 0),
+        total_spent: valor > 0 ? ((prev.total_spent || 0) + valor) : (prev.total_spent || 0),
+        orders_count: (prev.orders_count || 1) + 1,
+        last_order_at: nowIso,
+        last_plan_name: planName || prev.last_plan_name || '',
+        updated_at: nowIso
+      });
+      console.log(`👤 [Remarketing] Lead/Cliente existente atualizado: ${cleanEmail} -> Status: ${statusCompra} (Empresa: ${targetStoreId})`);
+    } else {
+      await setDoc(clientRef, {
+        id: clientId,
+        store_id: targetStoreId,
+        empresa_id: targetStoreId,
+        name: customerName,
+        nome_completo: customerName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        celular: cleanPhone,
+        document: cleanDoc,
+        cpf_cnpj: cleanDoc,
+        status_compra: statusCompra,
+        status: statusCompra,
+        valor_pedido: valor,
+        total_spent: valor,
+        orders_count: 1,
+        created_at: nowIso,
+        data_criacao: nowIso,
+        last_order_at: nowIso,
+        last_plan_name: planName,
+        is_test: isTest,
+        environment: env
+      });
+      console.log(`👤 [Remarketing] Novo lead/cliente registrado na aba Clientes: ${cleanEmail} -> Status: ${statusCompra} (Empresa: ${targetStoreId})`);
+    }
+
+    // 2. Coleção 'clientes_empresas' (Compatibilidade total com o modelo relacional de remarketing)
+    try {
+      const compClientDocId = `${targetStoreId}_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const compClientRef = doc(db, 'clientes_empresas', compClientDocId);
+      await setDoc(compClientRef, {
+        empresa_id: targetStoreId,
+        store_id: targetStoreId,
+        nome_completo: customerName,
+        name: customerName,
+        email: cleanEmail,
+        celular: cleanPhone,
+        phone: cleanPhone,
+        cpf_cnpj: cleanDoc,
+        document: cleanDoc,
+        status_compra: statusCompra,
+        status: statusCompra,
+        valor_pedido: valor,
+        data_criacao: nowIso,
+        created_at: nowIso,
+        last_plan_name: planName,
+        is_test: isTest,
+        environment: env
+      }, { merge: true });
+    } catch (eRel) {
+      console.warn('Aviso ao sincronizar coleção clientes_empresas:', eRel);
+    }
+  } catch (err) {
+    console.error('❌ [Remarketing] Erro ao registrar cliente no banco:', err);
+  }
+}
+
+/**
  * POST /api/payments, /api/payments/pix, /api/pix, /api/checkout
  * Processa pagamentos via Asaas v3 (PIX ou Cartão de Crédito)
  */
@@ -849,21 +972,35 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       amount,
       valorTotal,
       total_amount,
+      value,
       description,
       user,
+      customer,
       creditCard,
       holderInfo,
       planId,
       plan_id,
       companyId,
       company_id,
+      empresaId,
+      empresa_id,
+      storeId,
+      store_id,
       sellerId,
       refCode,
       affiliate_code,
-      affiliateRef
+      affiliateRef,
+      split,
+      walletId,
+      asaasWalletId,
+      dueDate,
+      externalReference,
+      notificationDisabled
     } = body;
 
     let sellerSubaccountId = body.subaccountId;
+    let sellerWalletId: string | null = walletId || asaasWalletId || body.subaccountWalletId || null;
+    let sellerApiKey: string | null = body.asaasApiKey || body.apiKey || null;
 
     // 🔑 ETAPA 1: Autenticação via API Key do Parceiro (x-api-key ou Authorization: Bearer lp_live_...)
     const rawApiKey = 
@@ -1098,6 +1235,17 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     const finalDescription = (description || body.description || (targetPlanId ? `Assinatura Plano ${targetPlanId}` : 'Cobrança LeadsPay')).trim();
     const nowIso = new Date().toISOString();
 
+    // Configuração de Split de Pagamento (se a empresa produtora tiver walletId configurado ou payload fornecer)
+    let effectiveSplit = Array.isArray(split) && split.length > 0 ? split : undefined;
+    if (!effectiveSplit && sellerWalletId) {
+      effectiveSplit = [
+        {
+          walletId: sellerWalletId,
+          percent: 100
+        }
+      ];
+    }
+
     // =========================================================================
     // 🧪 SIMULADOR DEV MODE / SANDBOX (ISOLAMENTO COMPLETO DE TESTES)
     // =========================================================================
@@ -1267,43 +1415,80 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     // =========================================================================
 
     // 1. Obter ou Criar Cliente no Asaas
-    let customerId: string;
-    try {
-      customerId = await getOrCreateCustomer({
-        name: customerData.name || 'Cliente LeadsPay',
-        email: customerData.email,
-        cpfCnpj: cleanCpf,
-        phone: customerData.phone,
-        mobilePhone: customerData.mobilePhone || customerData.phone,
-        postalCode: customerData.postalCode,
-        address: customerData.address,
-        addressNumber: customerData.addressNumber
-      }, body.subaccountId);
-    } catch (custError: any) {
-      console.error('[Server Asaas Customer Error] Falha detalhada ao obter/criar cliente:', custError);
-      const status = custError.status || custError.statusCode || 400;
-      const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro desconhecido na API do Asaas';
-      const errList = custError.errors || custError.details?.errors || (Array.isArray(custError.details) ? custError.details : [{ description: errMsg }]);
-      return res.status(status).json({ 
-        error: true,
-        message: errMsg,
-        description: errMsg,
-        errors: errList,
-        details: custError.details || custError.responseData || null,
-        code: 'CUSTOMER_CREATION_FAILED'
-      });
+    let customerId: string | null = null;
+    if (typeof body.customer === 'string' && body.customer.trim().startsWith('cus_')) {
+      customerId = body.customer.trim();
+    }
+
+    if (!customerId) {
+      try {
+        customerId = await getOrCreateCustomer({
+          name: customerData.name || 'Cliente LeadsPay',
+          email: customerData.email,
+          cpfCnpj: cleanCpf,
+          phone: customerData.phone,
+          mobilePhone: customerData.mobilePhone || customerData.phone,
+          postalCode: customerData.postalCode,
+          address: customerData.address,
+          addressNumber: customerData.addressNumber
+        }, body.subaccountId, { companyApiKey: sellerApiKey || undefined });
+      } catch (custError: any) {
+        console.error('[Server Asaas Customer Error] Falha detalhada ao obter/criar cliente:', custError);
+        const status = custError.status || custError.statusCode || 400;
+        const errMsg = custError.errors?.[0]?.description || custError.message || 'Erro desconhecido na API do Asaas';
+        const errList = custError.errors || custError.details?.errors || (Array.isArray(custError.details) ? custError.details : [{ description: errMsg }]);
+        return res.status(status).json({ 
+          error: true,
+          message: errMsg,
+          description: errMsg,
+          errors: errList,
+          details: custError.details || custError.responseData || null,
+          code: 'CUSTOMER_CREATION_FAILED'
+        });
+      }
     }
 
     // 2. Cobrança PIX via Asaas
     if (normalizedMethod === 'PIX') {
       try {
-        console.log("GERANDO PIX NA SUBCONTA:", body.subaccountId);
+        console.log("GERANDO PIX NA SUBCONTA:", body.subaccountId, sellerWalletId ? `(Split Wallet: ${sellerWalletId})` : '');
+
+        // ⚡ AÇÃO SIMULTÂNEA OBRIGATÓRIA: Auto-cadastro imediato do comprador na aba 'Clientes da Empresa' para Remarketing
+        try {
+          await registrarClienteCheckout({
+            nome: customerData.name,
+            name: customerData.name,
+            email: customerData.email,
+            celular: customerData.phone || customerData.mobilePhone,
+            phone: customerData.phone || customerData.mobilePhone,
+            cpfCnpj: cleanCpf,
+            document: cleanCpf,
+            valorTotal: finalAmount,
+            amount: finalAmount,
+            status_compra: 'PIX_GERADO',
+            status: 'PIX_GERADO',
+            last_plan_name: finalDescription,
+            description: finalDescription,
+            is_test: false,
+            environment: 'production'
+          }, finalCompanyId || 'store_default');
+        } catch (clientErr) {
+          console.warn('Aviso no salvamento de cliente para remarketing:', clientErr);
+        }
 
         const pixResult = await createPixPayment(
           customerId, 
           finalAmount, 
           finalDescription,
-          body.subaccountId
+          body.subaccountId,
+          {
+            split: effectiveSplit,
+            walletId: sellerWalletId || undefined,
+            externalReference: body.externalReference || finalPlanId || undefined,
+            notificationDisabled: body.notificationDisabled ?? false,
+            dueDate: body.dueDate || undefined,
+            companyApiKey: sellerApiKey || undefined
+          }
         );
 
         // Persiste registro na coleção 'sales' do Firestore
@@ -1337,7 +1522,8 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             buyerEmail: customerData.email,
             buyerCpf: cleanCpf,
             buyerPhone: customerData.phone || customerData.mobilePhone || null,
-            commissionCredited: false
+            commissionCredited: false,
+            split: effectiveSplit || null
           }, { merge: true });
           console.log(`✅ [Firestore Asaas Sales] Venda PIX registrada: ${pixResult.paymentId} (Subconta: ${body.subaccountId || 'Master'})`);
         } catch (dbErr) {
@@ -1375,7 +1561,8 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
             sellerId: finalSellerId,
             affiliateRef: finalRefCode,
             customerId,
-            subaccountId: body.subaccountId || null
+            subaccountId: body.subaccountId || null,
+            split: effectiveSplit || null
           }
         });
       } catch (pixErr: any) {
@@ -1739,6 +1926,22 @@ app.post(['/webhook/asaas', '/api/webhooks/asaas', '/api/webhook/asaas'], async 
 
         console.log(`[Webhook Asaas Server] Liquidação e saldos persistidos no Firestore para a venda ${paymentId}.`);
 
+        // Atualiza status do comprador para PAGO na aba Clientes da Empresa para Remarketing
+        if (saleData.buyerEmail && (saleData.companyId || saleData.store_id)) {
+          try {
+            await registrarClienteCheckout({
+              email: saleData.buyerEmail,
+              nome: saleData.buyerName,
+              status_compra: 'PAGO',
+              status: 'PAGO',
+              valorTotal: Number(amountPaid || saleData.amount || saleData.total_amount || 0),
+              last_plan_name: saleData.platformName
+            }, saleData.companyId || saleData.store_id);
+          } catch (cSyncErr) {
+            console.warn('Aviso ao sincronizar status do cliente para PAGO:', cSyncErr);
+          }
+        }
+
         // Disparo de Webhook / Postback para o Parceiro (se configurado)
         let targetWebhookUrl = saleData.webhookUrl || null;
         const sellerId = saleData.sellerId || saleData.ownerId;
@@ -1824,6 +2027,22 @@ app.post(['/webhook/asaas', '/api/webhooks/asaas', '/api/webhook/asaas'], async 
       
       if (paymentId) {
         const revokedSale = await revokeSaleAndCommission(String(paymentId), eventType, payment);
+
+        // Atualiza status do comprador para REEMBOLSADO na aba Clientes da Empresa
+        if (revokedSale?.buyerEmail && (revokedSale?.companyId || revokedSale?.store_id)) {
+          try {
+            await registrarClienteCheckout({
+              email: revokedSale.buyerEmail,
+              nome: revokedSale.buyerName,
+              status_compra: eventType === 'PAYMENT_REFUNDED' ? 'REEMBOLSADO' : 'CANCELADO',
+              status: eventType === 'PAYMENT_REFUNDED' ? 'REEMBOLSADO' : 'CANCELADO',
+              valorTotal: Number(revokedSale.amount || revokedSale.total_amount || 0),
+              last_plan_name: revokedSale.platformName
+            }, revokedSale.companyId || revokedSale.store_id);
+          } catch (cSyncErr) {
+            console.warn('Aviso ao sincronizar status do cliente para REEMBOLSADO:', cSyncErr);
+          }
+        }
 
         // Notifica o postback do parceiro para que o cliente seja bloqueado no sistema externo
         let targetWebhookUrl = revokedSale?.webhookUrl || null;
