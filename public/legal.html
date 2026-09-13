@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Jurídico e Compliance | Leadspay</title>
+    <meta name="description" content="Consulte os Termos de Uso, Política de Privacidade, Cookies e Canal de Ética da Leadspay. Transparência e segurança jurídica para afiliados e empresas.">
+    <link rel="canonical" href="https://www.leadspay.com.br/legal.html">
+    <style>
+        :root {
+            --bg-color: #060A15;
+            --card-bg: #080D1A;
+            --accent: #D9F22A;
+            --text-main: #ffffff;
+            --text-muted: #9ca3af;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; padding: 20px; }
+        .container { max-width: 900px; margin: 40px auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; }
+        .logo { font-size: 24px; font-weight: 900; color: var(--accent); text-decoration: none; letter-spacing: -0.5px; }
+        .back-link { color: var(--text-muted); text-decoration: none; font-size: 14px; transition: color 0.2s; font-weight: 600; }
+        .back-link:hover { color: var(--accent); }
+        
+        /* Abas de navegação */
+        .tabs { display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
+        .tab-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; transition: all 0.3s ease; }
+        .tab-btn.active, .tab-btn:hover { background: var(--accent); color: #060A15; border-color: var(--accent); }
+
+        /* Conteúdo das abas */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1 { font-size: 28px; margin-bottom: 20px; color: var(--text-main); font-weight: 800; }
+        h2 { font-size: 18px; margin-top: 25px; margin-bottom: 10px; color: var(--accent); }
+        p, li { color: var(--text-muted); margin-bottom: 15px; font-size: 15px; }
+        ul { padding-left: 20px; margin-bottom: 15px; }
+        strong { color: #ffffff; }
+        
+        @media(max-width: 768px) {
+            .container { padding: 20px; margin: 10px; }
+            .tabs { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <a href="/" class="logo">LEADSPAY</a>
+            <a href="/" class="back-link">← Voltar para a Plataforma</a>
+        </header>
+
+        <!-- Menu de Abas Jurídicas -->
+        <div class="tabs">
+            <button id="btn-termos" class="tab-btn active" onclick="openTab(event, 'termos')">Termos de Uso</button>
+            <button id="btn-privacidade" class="tab-btn" onclick="openTab(event, 'privacidade')">Política de Privacidade</button>
+            <button id="btn-cookies" class="tab-btn" onclick="openTab(event, 'cookies')">Política de Cookies</button>
+            <button id="btn-etica" class="tab-btn" onclick="openTab(event, 'etica')">Canal de Ética</button>
+        </div>
+
+        <!-- 1. Termos de Uso -->
+        <div id="termos" class="tab-content active">
+            <h1>Termos e Condições Gerais de Uso</h1>
+            <p>Bem-vindo à <strong>Leadspay</strong>. Estes Termos de Uso regulamentam o acesso e a utilização da nossa plataforma de marketplace para afiliados, infoprodutos e planos de startups.</p>
+            
+            <h2>1. Aceitação dos Termos</h2>
+            <p>Ao se cadastrar na Leadspay, seja como Empresa/Produtor ou como Afiliado, você concorda expressamente com estes termos e com a nossa Política de Privacidade.</p>
+            
+            <h2>2. Elegibilidade e Cadastro</h2>
+            <p>O usuário deve fornecer dados verídicos, completos e atualizados. Contas criadas com informações falsas poderão ser suspensas ou banidas permanentemente para garantir a segurança das transações processadas via Asaas.</p>
+            
+            <h2>3. Regras para Empresas e Afiliados</h2>
+            <ul>
+                <li><strong>Empresas:</strong> Responsáveis legais pela entrega do produto, curso ou plano comercializado, além de responder por suporte e eventuais reembolsos.</li>
+                <li><strong>Afiliados:</strong> Devem promover os produtos de forma ética, sendo proibido o uso de práticas de spam, anúncios enganosos ou promessas falsas.</li>
+            </ul>
+
+            <h2>4. Cancelamentos e Estornos (Refund)</h2>
+            <p>Em consonância com as normas do gateway Asaas, caso haja cancelamento ou reembolso de uma transação, as comissões atribuídas ao afiliado correspondente serão automaticamente estornadas e o acesso do comprador revogado.</p>
+        </div>
+
+        <!-- 2. Política de Privacidade -->
+        <div id="privacidade" class="tab-content">
+            <h1>Política de Privacidade (LGPD)</h1>
+            <p>A Leadspay valoriza a segurança e a privacidade dos dados de seus usuários em total conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018).</p>
+            
+            <h2>1. Coleta de Dados</h2>
+            <p>Coletamos dados fornecidos no cadastro (Nome, E-mail, CPF/CNPJ) e informações transacionais processadas de forma segura através do nosso gateway de pagamento parceiro, o <strong>Asaas</strong>.</p>
+            
+            <h2>2. Finalidade do Uso</h2>
+            <p>Os dados coletados são utilizados exclusivamente para viabilizar o repasse de comissões, processar pagamentos via Pix/Cartão/Boleto, prevenir fraudes e cumprir obrigações legais fiscais.</p>
+
+            <h2>3. Compartilhamento de Dados</h2>
+            <p>Não comercializamos dados pessoais com terceiros. As informações financeiras são tratadas e transmitidas sob criptografia de ponta a ponta para a instituição de liquidação bancária.</p>
+        </div>
+
+        <!-- 3. Política de Cookies -->
+        <div id="cookies" class="tab-content">
+            <h1>Política de Cookies</h1>
+            <p>Utilizamos cookies e tecnologias de rastreamento para otimizar a experiência de navegação em nossa plataforma e em áreas de checkout.</p>
+            
+            <h2>1. O que são Cookies?</h2>
+            <p>São pequenos arquivos salvos no seu navegador para lembrar preferências de acesso, sessões ativas de login e métricas de conversão para afiliados.</p>
+            
+            <h2>2. Gestão de Consentimento</h2>
+            <p>O usuário pode, a qualquer momento, limpar ou bloquear os cookies diretamente nas configurações do seu navegador, ciente de que algumas funções da plataforma (como o login automático ou rastreamento de comissões) podem ser afetadas.</p>
+        </div>
+
+        <!-- 4. Canal de Ética -->
+        <div id="etica" class="tab-content">
+            <h1>Canal de Ética e Compliance</h1>
+            <p>A Leadspay repudia qualquer ato de fraude, corrupção, pirataria ou violação de direitos autorais dentro de sua infraestrutura.</p>
+            
+            <h2>1. Relatos de Irregularidades</h2>
+            <p>Caso identifique produtos fraudulentos, clonados ou uso indevido da nossa marca e ferramentas de pagamento, entre em contato imediatamente com nossa equipe de compliance através do suporte oficial da plataforma.</p>
+
+            <h2>2. Sigilo e Proteção ao Denunciante</h2>
+            <p>Garantimos sigilo absoluto e proteção integral aos dados do relator, assegurando apuração imparcial e imediata de quaisquer infrações às políticas da Leadspay.</p>
+        </div>
+    </div>
+
+    <script>
+        function openTab(evt, tabName) {
+            const contents = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < contents.length; i++) {
+                contents[i].classList.remove("active");
+            }
+            const buttons = document.getElementsByClassName("tab-btn");
+            for (let i = 0; i < buttons.length; i++) {
+                buttons[i].classList.remove("active");
+            }
+            const targetContent = document.getElementById(tabName);
+            if (targetContent) {
+                targetContent.classList.add("active");
+            }
+            if (evt && evt.currentTarget) {
+                evt.currentTarget.classList.add("active");
+            } else {
+                const btn = document.getElementById('btn-' + tabName);
+                if (btn) btn.classList.add("active");
+            }
+            // Atualiza hash da URL sem scroll
+            if (history.pushState) {
+                history.pushState(null, null, '#' + tabName);
+            } else {
+                location.hash = '#' + tabName;
+            }
+        }
+
+        // Abre aba correspondente via Hash da URL (ex: #termos, #privacidade, #cookies, #etica)
+        window.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash.replace('#', '');
+            if (['termos', 'privacidade', 'cookies', 'etica'].includes(hash)) {
+                openTab(null, hash);
+            }
+        });
+        window.addEventListener('hashchange', () => {
+            const hash = window.location.hash.replace('#', '');
+            if (['termos', 'privacidade', 'cookies', 'etica'].includes(hash)) {
+                openTab(null, hash);
+            }
+        });
+    </script>
+</body>
+</html>

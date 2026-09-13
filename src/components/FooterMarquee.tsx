@@ -121,27 +121,64 @@ export const FooterMarquee: React.FC<FooterMarqueeProps> = ({ onOpenModal }) => 
             </ul>
           </div>
 
-          {/* Col 4: ACESSO */}
+          {/* Col 4: ACESSO & JURÍDICO */}
           <div className="lg:col-span-2">
             <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-[#D9F22A] mb-4">
-              PORTAL
+              PORTAL & JURÍDICO
             </h4>
             <ul className="flex flex-col gap-2.5 text-xs font-semibold text-white/80">
               <li>
                 <button
                   onClick={() => onOpenModal('login')}
                   className="text-white hover:text-[#D9F22A] transition-colors text-left cursor-pointer font-bold"
+                  tabIndex={0}
                 >
                   Entrar na Plataforma →
                 </button>
               </li>
               <li>
-                <button
-                  onClick={() => onOpenModal('report')}
-                  className="hover:text-[#D9F22A] transition-colors text-left cursor-pointer text-white/70"
+                <a
+                  href="/legal.html#termos"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-[#D9F22A] transition-colors text-left text-white/70 block"
+                  tabIndex={0}
+                >
+                  Termos de Uso
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/legal.html#privacidade"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-[#D9F22A] transition-colors text-left text-white/70 block"
+                  tabIndex={0}
+                >
+                  Política de Privacidade
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/legal.html#cookies"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-[#D9F22A] transition-colors text-left text-white/70 block"
+                  tabIndex={0}
+                >
+                  Política de Cookies
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/legal.html#etica"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-[#D9F22A] transition-colors text-left text-white/70 block"
+                  tabIndex={0}
                 >
                   Canal de Ética
-                </button>
+                </a>
               </li>
             </ul>
           </div>

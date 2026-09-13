@@ -83,6 +83,27 @@ export interface ProductCoupon {
   discountValue: number;
   active: boolean;
   usedCount?: number;
+  applicablePlans?: string[];
+  applicableAffiliates?: string[];
+}
+
+export interface CompanyCoupon {
+  id: string;
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  value: number;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: string;
+  status: 'active' | 'expired' | 'paused';
+  companyId?: string;
+  companyName?: string;
+  applicablePlans: string[]; // ['all'] or array of plan IDs (produtos que a empresa postou)
+  applicablePlansNames?: string[];
+  applicableAffiliates: string[]; // ['all'] or array of affiliate IDs/refs (afiliados vinculados)
+  applicableAffiliatesNames?: string[];
+  createdAt?: string;
+  createdBy?: string;
 }
 
 export interface ProductCustomCheckout {

@@ -16,6 +16,7 @@ import {
   setDoc, 
   updateDoc,
   deleteDoc,
+  addDoc,
   query,
   where,
   increment,
@@ -555,6 +556,104 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
 
   } catch (err) {
     console.error('Erro ao creditar comissão e persistir saldos da venda:', err);
+  }
+}
+
+/**
+ * Automatiza o estorno de comissão e revogação de acesso de clientes (PAYMENT_REFUNDED / PAYMENT_DELETED)
+ */
+async function revokeSaleAndCommission(paymentId: string, eventType: string, paymentData?: any) {
+  try {
+    const saleRef = doc(db, 'sales', String(paymentId));
+    const saleSnap = await getDoc(saleRef);
+    if (!saleSnap.exists()) {
+      console.warn(`[Revoke Sale] Venda ${paymentId} não encontrada no banco para estorno/revogação.`);
+      return null;
+    }
+
+    const sale = saleSnap.data();
+    const nowIso = new Date().toISOString();
+    const newStatus = eventType === 'PAYMENT_REFUNDED' ? 'Estornado' : 'Cancelado';
+
+    console.log(`⚠️ [Revoke Sale] Processando ${eventType} para pagamento ${paymentId}. Atualizando para ${newStatus}...`);
+
+    // 1. Estorno de comissão do afiliado
+    const affiliateId = sale.affiliateId || sale.sellerId;
+    const commissionEarned = Number(sale.commissionEarned || sale.financialBreakdown?.affiliateCommission || 0);
+
+    if (affiliateId && commissionEarned > 0) {
+      console.log(`🔻 [Revoke Commission] Estornando R$ ${commissionEarned} do saldo do afiliado ${affiliateId}...`);
+      try {
+        const uRef = doc(db, 'users', String(affiliateId));
+        const uSnap = await getDoc(uRef);
+        if (uSnap.exists()) {
+          await updateDoc(uRef, {
+            balance: increment(-commissionEarned),
+            availableBalance: increment(-commissionEarned),
+            updatedAt: nowIso
+          });
+        }
+        const pRef = doc(db, 'user_profiles', String(affiliateId));
+        const pSnap = await getDoc(pRef);
+        if (pSnap.exists()) {
+          await updateDoc(pRef, {
+            balance: increment(-commissionEarned),
+            availableBalance: increment(-commissionEarned),
+            updatedAt: nowIso
+          });
+        }
+        // Registra histórico do estorno na coleção de auditoria
+        await addDoc(collection(db, 'withdrawals'), {
+          userId: affiliateId,
+          amount: commissionEarned,
+          type: 'ESTORNO_COMISSAO',
+          status: 'concluido',
+          description: `Estorno de comissão referente ao reembolso/cancelamento do pagamento #${paymentId}`,
+          paymentId: String(paymentId),
+          date: nowIso,
+          created_at: nowIso
+        });
+      } catch (affErr) {
+        console.error(`❌ [Revoke Commission Error] Falha ao debitar comissão do afiliado:`, affErr);
+      }
+    }
+
+    // 2. Revogação de acesso do cliente
+    try {
+      const buyerEmail = sale.buyerEmail || sale.customerEmail;
+      if (buyerEmail) {
+        const clientsRef = collection(db, 'clients');
+        const qC = query(clientsRef, where('email', '==', buyerEmail));
+        const cSnaps = await getDocs(qC);
+        for (const cDoc of cSnaps.docs) {
+          await updateDoc(doc(db, 'clients', cDoc.id), {
+            status: 'revoked',
+            accessRevoked: true,
+            revokedAt: nowIso,
+            revocationReason: `${eventType}: Pagamento estornado/cancelado no gateway Asaas`
+          });
+        }
+      }
+    } catch (cErr) {
+      console.warn('Aviso ao revogar acesso do cliente na coleção clients:', cErr);
+    }
+
+    // 3. Atualiza status da venda
+    const saleUpdate: Record<string, any> = {
+      status: newStatus,
+      clientAccessStatus: 'revoked',
+      accessGranted: false,
+      accessRevoked: true,
+      refundedAt: nowIso,
+      updated_at: nowIso,
+      revocationEvent: eventType
+    };
+    await updateDoc(saleRef, saleUpdate);
+
+    return { ...sale, ...saleUpdate };
+  } catch (err) {
+    console.error('Erro ao processar estorno/revogação de venda:', err);
+    return null;
   }
 }
 
@@ -1591,32 +1690,42 @@ app.get(['/api/payments/asaas/:id', '/api/payments/pix/:id', '/api/pix/:id'], as
 });
 
 /**
- * POST /api/webhooks/asaas
+ * POST /webhook/asaas, /api/webhooks/asaas, /api/webhook/asaas
  * Webhook Oficial do Asaas para recebimento de notificações de pagamento em tempo real
+ * Trata PAYMENT_RECEIVED, PAYMENT_REFUNDED e PAYMENT_DELETED com liquidação, estorno e revogação de acesso
  */
-app.post('/api/webhooks/asaas', async (req, res) => {
+app.post(['/webhook/asaas', '/api/webhooks/asaas', '/api/webhook/asaas'], async (req, res) => {
   try {
+    // 1. Validação básica de segurança (token do Asaas no header)
+    const asaasToken = req.headers['asaas-access-token'];
+    if (process.env.ASAAS_WEBHOOK_TOKEN && asaasToken !== process.env.ASAAS_WEBHOOK_TOKEN) {
+      console.warn(`[Webhook Asaas] Token de acesso não autorizado: ${asaasToken}`);
+      return res.status(401).send('Unauthorized');
+    }
+
     const { event, payment } = req.body || {};
-    console.log(`[Webhook Asaas Server] Evento recebido: ${event}`, {
-      paymentId: payment?.id,
+    const eventType = event || req.body?.eventType;
+    const paymentId = payment?.id;
+
+    console.log(`[Webhook Asaas Server] Evento recebido: ${eventType}`, {
+      paymentId: paymentId,
       customer: payment?.customer,
       value: payment?.value
     });
 
-    // Intercepta eventos PAYMENT_RECEIVED e PAYMENT_CONFIRMED
-    if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
-      const paymentId = payment?.id;
+    // 2. Intercepta eventos PAYMENT_RECEIVED e PAYMENT_CONFIRMED
+    if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') {
       const customerId = payment?.customer;
       const amountPaid = payment?.value;
 
-      console.log(`✅ [Webhook Asaas Server] Pagamento confirmado! ID: ${paymentId} | Cliente: ${customerId} | R$ ${amountPaid}`);
+      console.log(`✅ [Webhook Asaas Server] Pagamento ${paymentId} aprovado. Liberando acesso...`);
 
       if (paymentId) {
         const saleRef = doc(db, 'sales', String(paymentId));
         let saleSnap = await getDoc(saleRef);
         const nowIso = new Date().toISOString();
 
-        // 1. Processa a liquidação financeira, breakdown e persistência atômica no Firestore
+        // Processa a liquidação financeira, breakdown e persistência atômica no Firestore
         await creditSaleCommissionAndBalances(String(paymentId), {
           transaction_amount: amountPaid,
           value: amountPaid,
@@ -1630,15 +1739,11 @@ app.post('/api/webhooks/asaas', async (req, res) => {
 
         console.log(`[Webhook Asaas Server] Liquidação e saldos persistidos no Firestore para a venda ${paymentId}.`);
 
-        // 2. Disparo de Webhook / Postback para o Parceiro (se configurado)
+        // Disparo de Webhook / Postback para o Parceiro (se configurado)
         let targetWebhookUrl = saleData.webhookUrl || null;
         const sellerId = saleData.sellerId || saleData.ownerId;
         const companyId = saleData.companyId;
 
-        // Se não estiver salvo diretamente na venda, busca no Firestore:
-        // 1. users/{sellerId}.webhookUrl
-        // 2. user_profiles/{sellerId}.webhookUrl
-        // 3. companies/{companyId}.webhookUrl
         if (!targetWebhookUrl && sellerId) {
           try {
             const uDoc = await getDoc(doc(db, 'users', String(sellerId)));
@@ -1689,7 +1794,6 @@ app.post('/api/webhooks/asaas', async (req, res) => {
 
           console.log(`📤 [Webhook Postback] Disparando postback para o parceiro em: ${targetWebhookUrl}`, postbackPayload);
 
-          // Disparo assíncrono protegido que nunca bloqueia o retorno 200 do Asaas
           fetch(targetWebhookUrl, {
             method: 'POST',
             headers: {
@@ -1710,6 +1814,50 @@ app.post('/api/webhooks/asaas', async (req, res) => {
             } catch (_) {}
           }).catch((pbErr: any) => {
             console.error(`❌ [Webhook Postback Error] Falha ao enviar postback para ${targetWebhookUrl}:`, pbErr?.message || pbErr);
+          });
+        }
+      }
+    } 
+    // 3. Intercepta eventos de estorno e cancelamento (PAYMENT_REFUNDED / PAYMENT_DELETED)
+    else if (eventType === 'PAYMENT_REFUNDED' || eventType === 'PAYMENT_DELETED') {
+      console.log(`Pagamento ${paymentId} estornado/cancelado. Iniciando revogação...`);
+      
+      if (paymentId) {
+        const revokedSale = await revokeSaleAndCommission(String(paymentId), eventType, payment);
+
+        // Notifica o postback do parceiro para que o cliente seja bloqueado no sistema externo
+        let targetWebhookUrl = revokedSale?.webhookUrl || null;
+        if (!targetWebhookUrl && revokedSale?.sellerId) {
+          try {
+            const uDoc = await getDoc(doc(db, 'users', String(revokedSale.sellerId)));
+            if (uDoc.exists()) targetWebhookUrl = uDoc.data()?.webhookUrl || uDoc.data()?.postbackUrl || null;
+          } catch (_) {}
+        }
+
+        if (targetWebhookUrl && typeof targetWebhookUrl === 'string' && targetWebhookUrl.startsWith('http')) {
+          const refundPayload = {
+            event: eventType === 'PAYMENT_REFUNDED' ? "PAYMENT_REFUNDED" : "PAYMENT_DELETED",
+            paymentId: String(paymentId),
+            status: eventType === 'PAYMENT_REFUNDED' ? "REFUNDED" : "CANCELLED",
+            action: "REVOKE_ACCESS",
+            customer: {
+              name: revokedSale?.buyerName || "",
+              email: revokedSale?.buyerEmail || "",
+              cpfCnpj: revokedSale?.buyerCpf || ""
+            },
+            refundedAt: new Date().toISOString()
+          };
+
+          fetch(targetWebhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'LeadsPay-Webhook-Engine/1.0'
+            },
+            body: JSON.stringify(refundPayload),
+            signal: AbortSignal.timeout(10000)
+          }).catch((pbErr) => {
+            console.error(`❌ [Webhook Refund Postback Error] Falha ao notificar cancelamento para ${targetWebhookUrl}:`, pbErr?.message || pbErr);
           });
         }
       }
@@ -2753,6 +2901,20 @@ app.all(['/api/webhooks/mercadopago', '/api/payments/webhook'], async (req, res)
     console.error('Webhook error:', err);
     res.status(200).send('OK');
   }
+});
+
+// Juridical & LGPD Compliance HTML Routes
+app.get(['/legal', '/legal.html'], (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'legal.html'));
+});
+app.get(['/termos-de-uso', '/termos-de-uso.html'], (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'legal.html'));
+});
+app.get(['/politica-privacidade', '/politica-privacidade.html'], (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'legal.html'));
+});
+app.get(['/politica-de-cookies', '/politica-de-cookies.html'], (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'legal.html'));
 });
 
 // Start Server with Vite Middleware

@@ -26,6 +26,7 @@ import { getCompanyPlanByIdOrSlug } from './services/firestoreService';
 import { CompanyPlan } from './types/platform';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliateTracking';
+import { CookieConsentBanner } from './components/CookieConsentBanner';
 
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -283,6 +284,9 @@ function MainApp() {
         onClose={handleCloseModal}
         onLoginSuccess={handleLoginSuccess}
       />
+
+      {/* LGPD Cookie Consent Banner */}
+      <CookieConsentBanner />
     </div>
   );
 }

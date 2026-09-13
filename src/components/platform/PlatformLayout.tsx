@@ -150,7 +150,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
 
   // Modals state
-  const [isCompanyAccordionOpen, setIsCompanyAccordionOpen] = useState<boolean>(true);
+  const [isCompanyAccordionOpen, setIsCompanyAccordionOpen] = useState<boolean>(false);
   const [isRegisterAffiliateModalOpen, setIsRegisterAffiliateModalOpen] = useState<boolean>(false);
   const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState<boolean>(false);
   const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState<boolean>(false);
@@ -1520,6 +1520,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'cupons' && (
             <CuponsView 
               plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
+              affiliations={myCompanyAffiliations.length > 0 ? myCompanyAffiliations : allAffiliations}
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}

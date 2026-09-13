@@ -190,10 +190,21 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     return () => clearInterval(timer);
   }, [isPaid]);
 
-  // Affiliate tracking
+  // Affiliate tracking & auto-coupon from URL
   useEffect(() => {
     handleAffiliateTracking();
-  }, [affiliateRef]);
+
+    try {
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        const urlCoupon = searchParams.get('coupon') || searchParams.get('cupom');
+        if (urlCoupon) {
+          setCouponInput(urlCoupon.toUpperCase());
+          executeApplyCoupon(urlCoupon.toUpperCase());
+        }
+      }
+    } catch (_) {}
+  }, [affiliateRef, plan.id]);
 
   const getActiveAffiliateCode = (): string | null => {
     if (affiliateRef && affiliateRef.trim()) return affiliateRef.trim();
@@ -442,18 +453,17 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // Handle Apply Coupon
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Core Coupon Application with Product & Affiliate Linkage Validation
+  const executeApplyCoupon = (rawCode: string) => {
     setCouponError('');
     setCouponSuccess('');
 
-    const cleanCode = couponInput.trim().toUpperCase();
+    const cleanCode = rawCode.trim().toUpperCase();
     if (!cleanCode) return;
 
     const planCoupon = plan.coupons?.find(c => c.code.toUpperCase() === cleanCode && c.active);
     
-    // Buscar também na lista de cupons globais do lojista
+    // Buscar também na lista de cupons globais da empresa
     let localCoupon: any = null;
     try {
       const storedCoupons = localStorage.getItem('leadspay_coupons_list');
@@ -463,14 +473,36 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       }
     } catch (_) {}
 
-    if (planCoupon) {
-      setAppliedCoupon({
-        code: planCoupon.code,
-        discount: planCoupon.discountValue,
-        type: planCoupon.discountType
-      });
-      setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
-    } else if (localCoupon) {
+    const activeAffiliate = getActiveAffiliateCode();
+
+    if (localCoupon) {
+      // 1. Validação de Vínculo com Produtos (Planos que a empresa postou)
+      if (
+        localCoupon.applicablePlans && 
+        Array.isArray(localCoupon.applicablePlans) && 
+        !localCoupon.applicablePlans.includes('all')
+      ) {
+        const isProductAllowed = localCoupon.applicablePlans.includes(plan.id) || 
+          (plan.slug && localCoupon.applicablePlans.includes(plan.slug));
+
+        if (!isProductAllowed) {
+          setCouponError('Este cupom não é válido para este produto.');
+          return;
+        }
+      }
+
+      // 2. Validação de Vínculo com Afiliados (Disponibilizado para afiliados específicos)
+      if (
+        localCoupon.applicableAffiliates && 
+        Array.isArray(localCoupon.applicableAffiliates) && 
+        !localCoupon.applicableAffiliates.includes('all')
+      ) {
+        if (!activeAffiliate || !localCoupon.applicableAffiliates.includes(activeAffiliate)) {
+          setCouponError('Este cupom é exclusivo para links de afiliados autorizados.');
+          return;
+        }
+      }
+
       setAppliedCoupon({
         code: localCoupon.code,
         discount: localCoupon.value,
@@ -478,9 +510,31 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       });
       setCouponSuccess(
         localCoupon.discountType === 'percentage'
-          ? `Cupom "${localCoupon.code}" de ${localCoupon.value}% OFF aplicado!`
-          : `Cupom "${localCoupon.code}" de R$ ${Number(localCoupon.value).toFixed(2)} OFF aplicado!`
+          ? `Cupom "${localCoupon.code}" de ${localCoupon.value}% OFF aplicado com sucesso!`
+          : `Cupom "${localCoupon.code}" de R$ ${Number(localCoupon.value).toFixed(2)} OFF aplicado com sucesso!`
       );
+      return;
+    }
+
+    if (planCoupon) {
+      // Validação de afiliados se configurado no plano
+      if (
+        planCoupon.applicableAffiliates &&
+        Array.isArray(planCoupon.applicableAffiliates) &&
+        !planCoupon.applicableAffiliates.includes('all')
+      ) {
+        if (!activeAffiliate || !planCoupon.applicableAffiliates.includes(activeAffiliate)) {
+          setCouponError('Este cupom é exclusivo para compras via afiliados autorizados.');
+          return;
+        }
+      }
+
+      setAppliedCoupon({
+        code: planCoupon.code,
+        discount: planCoupon.discountValue,
+        type: planCoupon.discountType
+      });
+      setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
     } else if (cleanCode === 'LEADSPAY10' || cleanCode === 'TECHIFY10' || cleanCode === 'DESCONTO10') {
       setAppliedCoupon({
         code: cleanCode,
@@ -498,6 +552,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     } else {
       setCouponError('Cupom inválido ou expirado.');
     }
+  };
+
+  // Handle Apply Coupon Form Submit
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeApplyCoupon(couponInput);
   };
 
   // Copy PIX Code
