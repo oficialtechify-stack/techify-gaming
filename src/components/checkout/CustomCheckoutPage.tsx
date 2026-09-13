@@ -14,12 +14,14 @@ import {
   Clock,
   RefreshCw,
   Zap,
-  Sparkles
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 import { 
   createSaleTransactionInFirebase, 
   fetchSellerSubaccountId,
-  createOrUpdateClientInFirebase
+  createOrUpdateClientInFirebase,
+  findCouponByCodeInFirebase
 } from '../../services/firestoreService';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
 
@@ -66,11 +68,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [cardCvv, setCardCvv] = useState<string>('');
   const [installments, setInstallments] = useState<number>(1);
 
-  // Coupon state
+  // Coupon state (Closed by default as requested, opens on user click or URL param)
+  const [isCouponOpen, setIsCouponOpen] = useState<boolean>(false);
   const [couponInput, setCouponInput] = useState<string>('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; type: 'percentage' | 'fixed' } | null>(null);
   const [couponError, setCouponError] = useState<string>('');
   const [couponSuccess, setCouponSuccess] = useState<string>('');
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState<boolean>(false);
 
   // Order bump addon state
   const [includeOrderBump, setIncludeOrderBump] = useState<boolean>(false);
@@ -199,6 +203,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         const searchParams = new URLSearchParams(window.location.search);
         const urlCoupon = searchParams.get('coupon') || searchParams.get('cupom');
         if (urlCoupon) {
+          setIsCouponOpen(true);
           setCouponInput(urlCoupon.toUpperCase());
           executeApplyCoupon(urlCoupon.toUpperCase());
         }
@@ -454,109 +459,136 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   };
 
   // Core Coupon Application with Product & Affiliate Linkage Validation
-  const executeApplyCoupon = (rawCode: string) => {
+  const executeApplyCoupon = async (rawCode: string) => {
     setCouponError('');
     setCouponSuccess('');
 
     const cleanCode = rawCode.trim().toUpperCase();
     if (!cleanCode) return;
 
-    const planCoupon = plan.coupons?.find(c => c.code.toUpperCase() === cleanCode && c.active);
-    
-    // Buscar também na lista de cupons globais da empresa
-    let localCoupon: any = null;
+    setIsApplyingCoupon(true);
+
     try {
-      const storedCoupons = localStorage.getItem('leadspay_coupons_list');
-      if (storedCoupons) {
-        const parsed = JSON.parse(storedCoupons);
-        localCoupon = parsed.find((c: any) => c.code.toUpperCase() === cleanCode && c.status === 'active');
-      }
-    } catch (_) {}
+      const planCoupon = plan.coupons?.find(c => c.code.toUpperCase() === cleanCode && c.active);
+      
+      // Buscar na lista de cupons globais da empresa (localStorage)
+      let localCoupon: any = null;
+      try {
+        const storedCoupons = localStorage.getItem('leadspay_coupons_list');
+        if (storedCoupons) {
+          const parsed = JSON.parse(storedCoupons);
+          localCoupon = parsed.find((c: any) => c.code.toUpperCase() === cleanCode && c.status === 'active');
+        }
+      } catch (_) {}
 
-    const activeAffiliate = getActiveAffiliateCode();
-
-    if (localCoupon) {
-      // 1. Validação de Vínculo com Produtos (Planos que a empresa postou)
-      if (
-        localCoupon.applicablePlans && 
-        Array.isArray(localCoupon.applicablePlans) && 
-        !localCoupon.applicablePlans.includes('all')
-      ) {
-        const isProductAllowed = localCoupon.applicablePlans.includes(plan.id) || 
-          (plan.slug && localCoupon.applicablePlans.includes(plan.slug));
-
-        if (!isProductAllowed) {
-          setCouponError('Este cupom não é válido para este produto.');
-          return;
+      // Se não encontrou no local, busca no Firestore
+      if (!localCoupon && !planCoupon) {
+        try {
+          const firestoreCoupon = await findCouponByCodeInFirebase(cleanCode);
+          if (firestoreCoupon && firestoreCoupon.status === 'active') {
+            localCoupon = firestoreCoupon;
+          }
+        } catch (fErr) {
+          console.warn('Erro ao consultar cupom no Firestore:', fErr);
         }
       }
 
-      // 2. Validação de Vínculo com Afiliados (Disponibilizado para afiliados específicos)
-      if (
-        localCoupon.applicableAffiliates && 
-        Array.isArray(localCoupon.applicableAffiliates) && 
-        !localCoupon.applicableAffiliates.includes('all')
-      ) {
-        if (!activeAffiliate || !localCoupon.applicableAffiliates.includes(activeAffiliate)) {
-          setCouponError('Este cupom é exclusivo para links de afiliados autorizados.');
-          return;
+      const activeAffiliate = getActiveAffiliateCode();
+
+      if (localCoupon) {
+        // 1. Validação de Vínculo com Produtos (Planos que a empresa postou)
+        if (
+          localCoupon.applicablePlans && 
+          Array.isArray(localCoupon.applicablePlans) && 
+          !localCoupon.applicablePlans.includes('all')
+        ) {
+          const isProductAllowed = localCoupon.applicablePlans.includes(plan.id) || 
+            (plan.slug && localCoupon.applicablePlans.includes(plan.slug)) ||
+            (plan.name && localCoupon.applicablePlansNames && localCoupon.applicablePlansNames.includes(plan.name));
+
+          if (!isProductAllowed) {
+            setCouponError('Este cupom não é válido para este produto.');
+            return;
+          }
         }
+
+        // 2. Validação de Vínculo com Afiliados (Disponibilizado para afiliados parceiros específicos)
+        if (
+          localCoupon.applicableAffiliates && 
+          Array.isArray(localCoupon.applicableAffiliates) && 
+          !localCoupon.applicableAffiliates.includes('all')
+        ) {
+          if (!activeAffiliate || !localCoupon.applicableAffiliates.includes(activeAffiliate)) {
+            setCouponError('Este cupom é exclusivo para compras feitas pelo link de afiliados autorizados.');
+            return;
+          }
+        }
+
+        setAppliedCoupon({
+          code: localCoupon.code,
+          discount: Number(localCoupon.value),
+          type: localCoupon.discountType
+        });
+        setCouponSuccess(
+          localCoupon.discountType === 'percentage'
+            ? `Cupom "${localCoupon.code}" de ${localCoupon.value}% OFF aplicado com sucesso!`
+            : `Cupom "${localCoupon.code}" de R$ ${Number(localCoupon.value).toFixed(2)} OFF aplicado com sucesso!`
+        );
+        return;
       }
 
-      setAppliedCoupon({
-        code: localCoupon.code,
-        discount: localCoupon.value,
-        type: localCoupon.discountType
-      });
-      setCouponSuccess(
-        localCoupon.discountType === 'percentage'
-          ? `Cupom "${localCoupon.code}" de ${localCoupon.value}% OFF aplicado com sucesso!`
-          : `Cupom "${localCoupon.code}" de R$ ${Number(localCoupon.value).toFixed(2)} OFF aplicado com sucesso!`
-      );
-      return;
-    }
-
-    if (planCoupon) {
-      // Validação de afiliados se configurado no plano
-      if (
-        planCoupon.applicableAffiliates &&
-        Array.isArray(planCoupon.applicableAffiliates) &&
-        !planCoupon.applicableAffiliates.includes('all')
-      ) {
-        if (!activeAffiliate || !planCoupon.applicableAffiliates.includes(activeAffiliate)) {
-          setCouponError('Este cupom é exclusivo para compras via afiliados autorizados.');
-          return;
+      if (planCoupon) {
+        // Validação de afiliados se configurado no plano
+        if (
+          planCoupon.applicableAffiliates &&
+          Array.isArray(planCoupon.applicableAffiliates) &&
+          !planCoupon.applicableAffiliates.includes('all')
+        ) {
+          if (!activeAffiliate || !planCoupon.applicableAffiliates.includes(activeAffiliate)) {
+            setCouponError('Este cupom é exclusivo para compras via afiliados autorizados.');
+            return;
+          }
         }
-      }
 
-      setAppliedCoupon({
-        code: planCoupon.code,
-        discount: planCoupon.discountValue,
-        type: planCoupon.discountType
-      });
-      setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
-    } else if (cleanCode === 'LEADSPAY10' || cleanCode === 'TECHIFY10' || cleanCode === 'DESCONTO10') {
-      setAppliedCoupon({
-        code: cleanCode,
-        discount: 10,
-        type: 'percentage'
-      });
-      setCouponSuccess(`Cupom "${cleanCode}" de 10% OFF aplicado!`);
-    } else if (cleanCode === 'PRIMEIRACOMPRA' || cleanCode === 'VIP20') {
-      setAppliedCoupon({
-        code: cleanCode,
-        discount: 20,
-        type: 'fixed'
-      });
-      setCouponSuccess(`Cupom "${cleanCode}" de R$ 20,00 OFF aplicado!`);
-    } else {
-      setCouponError('Cupom inválido ou expirado.');
+        setAppliedCoupon({
+          code: planCoupon.code,
+          discount: planCoupon.discountValue,
+          type: planCoupon.discountType
+        });
+        setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
+      } else if (cleanCode === 'LEADSPAY10' || cleanCode === 'TECHIFY10' || cleanCode === 'DESCONTO10') {
+        setAppliedCoupon({
+          code: cleanCode,
+          discount: 10,
+          type: 'percentage'
+        });
+        setCouponSuccess(`Cupom "${cleanCode}" de 10% OFF aplicado!`);
+      } else if (cleanCode === 'PRIMEIRACOMPRA' || cleanCode === 'VIP20') {
+        setAppliedCoupon({
+          code: cleanCode,
+          discount: 20,
+          type: 'fixed'
+        });
+        setCouponSuccess(`Cupom "${cleanCode}" de R$ 20,00 OFF aplicado!`);
+      } else {
+        setCouponError('Cupom inválido ou expirado.');
+      }
+    } finally {
+      setIsApplyingCoupon(false);
     }
   };
 
+  // Handle Remove Coupon
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+    setCouponSuccess('');
+  };
+
   // Handle Apply Coupon Form Submit
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleApplyCoupon = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     executeApplyCoupon(couponInput);
   };
 
@@ -1009,39 +1041,113 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
             <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden shadow-xs">
               
-              {/* Cupom Input Row */}
-              <div className="p-3.5 border-b border-gray-100">
-                <div className="flex items-center justify-between border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus-within:border-[#205a46] transition-colors">
-                  <div className="flex items-center gap-2 flex-1">
-                    <Tag className="w-3.5 h-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Código de desconto"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
-                      className="w-full text-xs text-gray-800 placeholder-gray-400 focus:outline-none uppercase font-mono"
-                    />
-                  </div>
+              {/* Cupom Section (Fechada por padrão ao entrar no site, abre com clique) */}
+              {!isCouponOpen && !appliedCoupon ? (
+                <div className="p-3.5 border-b border-gray-100 bg-gray-50/40">
                   <button
                     type="button"
-                    onClick={handleApplyCoupon}
-                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors cursor-pointer pl-2"
+                    id="btn-abrir-cupom"
+                    onClick={() => setIsCouponOpen(true)}
+                    className="w-full flex items-center justify-between text-xs text-[#205a46] hover:text-[#184636] font-semibold transition-colors cursor-pointer group py-0.5"
                   >
-                    Aplicar Cupom
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-3.5 h-3.5 text-[#205a46] transition-transform group-hover:scale-110" />
+                      <span>Possui um cupom de desconto?</span>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 group-hover:text-[#205a46] flex items-center gap-0.5">
+                      Inserir cupom
+                      <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+                    </span>
                   </button>
                 </div>
+              ) : (
+                <div className="p-3.5 border-b border-gray-100 bg-gray-50/20">
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-emerald-800 uppercase font-mono">{appliedCoupon.code}</span>
+                            <span className="text-[10px] font-bold bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded">
+                              {appliedCoupon.type === 'percentage' ? `${appliedCoupon.discount}% OFF` : `R$ ${appliedCoupon.discount.toFixed(2)} OFF`}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-emerald-700 block mt-0.5 font-medium">Cupom de desconto ativo no pedido</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        id="btn-remover-cupom"
+                        onClick={handleRemoveCoupon}
+                        className="text-xs text-rose-600 hover:text-rose-700 font-bold transition-colors cursor-pointer hover:underline pl-2"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <Tag className="w-3 h-3 text-[#205a46]" /> Inserir Cupom de Desconto
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCouponOpen(false);
+                            setCouponError('');
+                          }}
+                          className="text-[11px] text-gray-400 hover:text-gray-600 cursor-pointer"
+                        >
+                          Fechar
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus-within:border-[#205a46] transition-colors">
+                        <div className="flex items-center gap-2 flex-1">
+                          <Tag className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <input
+                            type="text"
+                            id="input-cupom-checkout"
+                            placeholder="CÓDIGO DO CUPOM"
+                            value={couponInput}
+                            onChange={(e) => {
+                              setCouponInput(e.target.value.toUpperCase());
+                              setCouponError('');
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleApplyCoupon();
+                              }
+                            }}
+                            className="w-full text-xs text-gray-800 placeholder-gray-400 focus:outline-none uppercase font-mono font-bold"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          id="btn-aplicar-cupom"
+                          onClick={() => handleApplyCoupon()}
+                          disabled={isApplyingCoupon || !couponInput.trim()}
+                          className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-40 transition-colors cursor-pointer pl-2"
+                        >
+                          {isApplyingCoupon ? 'Aplicando...' : 'Aplicar'}
+                        </button>
+                      </div>
 
-                {couponError && (
-                  <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1.5 font-medium">
-                    <AlertCircle className="w-3 h-3" /> {couponError}
-                  </p>
-                )}
-                {couponSuccess && (
-                  <p className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1.5 font-medium">
-                    <Check className="w-3 h-3" /> {couponSuccess}
-                  </p>
-                )}
-              </div>
+                      {couponError && (
+                        <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1.5 font-medium">
+                          <AlertCircle className="w-3 h-3 shrink-0" /> {couponError}
+                        </p>
+                      )}
+                      {couponSuccess && (
+                        <p className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1.5 font-medium">
+                          <Check className="w-3 h-3 shrink-0" /> {couponSuccess}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Order Items Breakdown */}
               <div className="p-3.5 space-y-2 text-xs">

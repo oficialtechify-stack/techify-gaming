@@ -933,3 +933,7 @@ export async function resetPassword(email: string): Promise<{ success: boolean; 
 export async function logoutUser(): Promise<void> {
   await signOut(auth);
 }
+
+// Re-export Partner Auth services and types
+export { validateApiKey, generatePartnerApiKey, getOrGenerateUserApiKey } from '../../lib/auth-partner';
+export type { PartnerAuthResult } from '../../lib/auth-partner';

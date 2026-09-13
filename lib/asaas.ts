@@ -1,7 +1,9 @@
 /**
  * Módulo de Serviços da API v3 do Asaas (LeadsPay)
- * Comunicação direta com a API REST do Asaas utilizando fetch nativo
+ * Comunicação com a API REST do Asaas utilizando fetch nativo e axios
  */
+import axios from 'axios';
+import { validateApiKey, PartnerAuthResult } from './auth-partner';
 
 export interface AsaasCustomerData {
   name: string;
@@ -564,6 +566,7 @@ export interface CreateSubaccountData {
   province?: string;
   postalCode?: string;
   companyType?: string;
+  incomeValue?: number;
 }
 
 export interface AsaasSubaccountResult {
@@ -593,10 +596,23 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
   const cleanPhone = cleanDocument(data.phone || data.mobilePhone || '');
   const cleanPostalCode = cleanDocument(data.postalCode || '');
 
+  const webhookUrl = process.env.LEADSPAY_WEBHOOK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook/asaas` : 'https://leadspay.com.br/webhook/asaas');
+
   const payload: Record<string, any> = {
     name: (data.name || '').trim(),
     email: (data.email || '').trim(),
-    cpfCnpj: cleanDoc
+    cpfCnpj: cleanDoc,
+    incomeValue: data.incomeValue || 5000,
+    webhooks: [
+      {
+        name: 'LeadsPay Webhook',
+        url: webhookUrl,
+        email: data.email,
+        enabled: true,
+        interrupted: false,
+        apiVersion: 3
+      }
+    ]
   };
 
   if (cleanPhone) {
@@ -780,5 +796,99 @@ export async function createAsaasSubscription(
     raw: resData
   };
 }
+
+export interface CreatePaymentDTO {
+  customer: string;
+  billingType: 'PIX' | 'BOLETO' | 'CREDIT_CARD';
+  value: number;
+  dueDate: string;
+  description?: string;
+  partnerApiKey?: string; // Chave lp_live_... do parceiro enviada na requisição
+  subaccountId?: string;
+  subaccountApiKey?: string;
+  externalReference?: string;
+  notificationDisabled?: boolean;
+  split?: Array<{
+    walletId: string;
+    percent?: number;
+    fixedValue?: number;
+  }>;
+}
+
+/**
+ * Cria uma cobrança no Asaas vinculada à subconta do parceiro
+ */
+export async function createAsaasPayment(paymentData: CreatePaymentDTO) {
+  let subaccountId: string | undefined = paymentData.subaccountId;
+  let subaccountApiKey: string | undefined = paymentData.subaccountApiKey;
+
+  // 1. Valida a chave lp_live_ enviada na requisição
+  if (paymentData.partnerApiKey) {
+    const authResult: PartnerAuthResult = await validateApiKey(paymentData.partnerApiKey);
+    
+    if (authResult.isValid) {
+      // Recupera o ID da subconta ou chave específica cadastrada para a empresa
+      subaccountId = authResult.asaasSubaccountId || authResult.subaccountId;
+      subaccountApiKey = authResult.asaasApiKey || authResult.subaccountApiKey;
+    }
+  }
+
+  // 2. Prepara os headers da requisição
+  // Se possuir a chave específica da subconta, usa ela diretamente no access_token.
+  // Caso contrário, usa a chave Master ($) e passa o header 'account: subaccountId'
+  const { apiUrl, apiKey: masterApiKey } = getAsaasConfig();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  if (subaccountApiKey) {
+    headers['access_token'] = subaccountApiKey;
+  } else {
+    headers['access_token'] = masterApiKey;
+    if (subaccountId) {
+      headers['account'] = subaccountId;
+    }
+  }
+
+  // 3. Monta o payload de cobrança
+  const payload: any = {
+    customer: paymentData.customer,
+    billingType: paymentData.billingType,
+    value: paymentData.value,
+    dueDate: paymentData.dueDate,
+    description: paymentData.description,
+    externalReference: paymentData.externalReference,
+    notificationDisabled: paymentData.notificationDisabled ?? false
+  };
+
+  if (paymentData.split && Array.isArray(paymentData.split) && paymentData.split.length > 0) {
+    payload.split = paymentData.split;
+  }
+
+  // 4. Executa a criação no Asaas
+  console.log('[createAsaasPayment] Enviando cobrança:', payload, subaccountApiKey ? '(Subconta com Token Próprio)' : (subaccountId ? `(Subconta Account: ${subaccountId})` : '(Master)'));
+  const response = await axios.post(`${apiUrl}/payments`, payload, { headers });
+  const payment = response.data;
+
+  // 5. Se for PIX, resgata o Copia e Cola e QR Code
+  if (paymentData.billingType === 'PIX' && payment && payment.id) {
+    try {
+      const qrResponse = await axios.get(`${apiUrl}/payments/${payment.id}/pixQrCode`, { headers });
+      return {
+        ...payment,
+        pix: {
+          copiaECola: qrResponse.data.payload,
+          qrCodeBase64: qrResponse.data.encodedImage,
+          expirationDate: qrResponse.data.expirationDate
+        }
+      };
+    } catch (qrErr) {
+      console.warn('[createAsaasPayment] Erro ao buscar QR Code PIX:', qrErr);
+    }
+  }
+
+  return payment;
+}
+
 
 

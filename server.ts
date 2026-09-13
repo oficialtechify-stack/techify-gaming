@@ -28,6 +28,7 @@ import {
   createCreditCardPayment, 
   cleanDocument,
   createAsaasSubaccount,
+  createAsaasPayment,
   getAsaasConfig,
   getHeaders
 } from './lib/asaas';
@@ -778,9 +779,15 @@ app.post(['/api/subaccounts/create', '/api/subaccounts'], async (req, res) => {
     const firestoreUpdates: Record<string, any> = {
       asaasSubaccountId: subaccount.id,
       asaasWalletId: subaccount.walletId,
+      subaccountId: subaccount.id,
+      walletId: subaccount.walletId,
       documentType: finalDocType,
       updatedAt: new Date().toISOString()
     };
+    if (subaccount.apiKey) {
+      firestoreUpdates.asaasApiKey = subaccount.apiKey;
+      firestoreUpdates.subaccountApiKey = subaccount.apiKey;
+    }
 
     // 1. Grava no Firestore do Usuário (users/{userId})
     if (targetUserId) {
@@ -961,6 +968,52 @@ async function registrarClienteCheckout(dadosCheckout: {
 }
 
 /**
+ * POST /api/v3/payments
+ * Cria cobrança Asaas diretamente vinculada à subconta do parceiro ou conta master
+ */
+app.post('/api/v3/payments', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const rawApiKey = 
+      req.headers['x-api-key'] || 
+      req.headers['X-API-KEY'] || 
+      req.headers['x-partner-key'] ||
+      (typeof req.query?.apiKey === 'string' ? req.query.apiKey : undefined) ||
+      body.partnerApiKey ||
+      body.apiKey;
+
+    let partnerApiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : undefined;
+    const authHeader = req.headers.authorization;
+    if (!partnerApiKey && authHeader && authHeader.startsWith('Bearer ')) {
+      partnerApiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+    }
+
+    const paymentResult = await createAsaasPayment({
+      customer: body.customer,
+      billingType: body.billingType || 'PIX',
+      value: Number(body.value || body.amount || 0),
+      dueDate: body.dueDate || new Date().toISOString().split('T')[0],
+      description: body.description,
+      partnerApiKey,
+      subaccountId: body.subaccountId,
+      subaccountApiKey: body.subaccountApiKey || body.asaasApiKey,
+      externalReference: body.externalReference,
+      notificationDisabled: body.notificationDisabled ?? false,
+      split: body.split
+    });
+
+    return res.status(200).json(paymentResult);
+  } catch (err: any) {
+    console.error('❌ [/api/v3/payments] Erro ao criar cobrança:', err);
+    return res.status(err.response?.status || err.status || 500).json({
+      error: true,
+      message: err.response?.data?.errors?.[0]?.description || err.message || 'Erro ao processar cobrança Asaas',
+      details: err.response?.data || err.details || null
+    });
+  }
+});
+
+/**
  * POST /api/payments, /api/payments/pix, /api/pix, /api/checkout
  * Processa pagamentos via Asaas v3 (PIX ou Cartão de Crédito)
  */
@@ -1030,12 +1083,18 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
       partnerInfo = partner;
 
-      // Injete automaticamente o subaccountId resolvido da empresa vinculada àquela API Key
-      if (partner.asaasSubaccountId) {
-        sellerSubaccountId = partner.asaasSubaccountId;
-        body.subaccountId = partner.asaasSubaccountId;
-        console.log(`🔑 [API Partner] Autenticado com sucesso para ${partner.companyName || partner.userId} (Subconta Asaas: ${partner.asaasSubaccountId})`);
+      // Injete automaticamente os dados de subconta resolvidos da empresa vinculada àquela API Key
+      if (partner.asaasSubaccountId || partner.subaccountId) {
+        sellerSubaccountId = partner.asaasSubaccountId || partner.subaccountId;
+        body.subaccountId = sellerSubaccountId;
       }
+      if (partner.asaasWalletId || partner.walletId) {
+        sellerWalletId = partner.asaasWalletId || partner.walletId;
+      }
+      if (partner.asaasApiKey || partner.subaccountApiKey) {
+        sellerApiKey = partner.asaasApiKey || partner.subaccountApiKey;
+      }
+      console.log(`🔑 [API Partner] Autenticado com sucesso para ${partner.companyName || partner.userId} (Subconta: ${sellerSubaccountId || 'Master'}, Wallet: ${sellerWalletId || 'Master'})`);
     }
 
     // Se amount não foi informado diretamente, mas planId foi passado, busca preço do plano

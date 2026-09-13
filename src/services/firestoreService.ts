@@ -2148,3 +2148,65 @@ export async function deleteClientInFirebase(clientId: string): Promise<void> {
   } catch (_) {}
 }
 
+export interface CouponItem {
+  id: string;
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  value: number;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: string;
+  status: 'active' | 'expired' | 'paused';
+  applicablePlans: string[]; // ['all'] or array of plan IDs
+  applicablePlansNames?: string[];
+  applicableAffiliates: string[]; // ['all'] or array of affiliate codes or IDs
+  applicableAffiliatesNames?: string[];
+  companyId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Operações de Cupons no Firestore
+ */
+export async function saveCouponToFirebase(coupon: CouponItem, companyId?: string): Promise<void> {
+  try {
+    const couponId = coupon.id || `cup_${Date.now()}`;
+    const cleanCoupon = sanitizeForFirestore({
+      ...coupon,
+      id: couponId,
+      code: coupon.code.toUpperCase().trim(),
+      companyId: companyId || coupon.companyId || 'global',
+      updatedAt: new Date().toISOString()
+    });
+    await setDoc(doc(db, 'coupons', couponId), cleanCoupon, { merge: true });
+    console.log(`✅ [Firestore Cupons] Cupom ${cleanCoupon.code} salvo com sucesso no Firestore!`);
+  } catch (err) {
+    console.warn('Erro ao salvar cupom no Firestore:', err);
+  }
+}
+
+export async function deleteCouponInFirebase(couponId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'coupons', couponId));
+    console.log(`✅ [Firestore Cupons] Cupom ${couponId} removido do Firestore.`);
+  } catch (err) {
+    console.warn('Erro ao remover cupom do Firestore:', err);
+  }
+}
+
+export async function findCouponByCodeInFirebase(code: string): Promise<CouponItem | null> {
+  try {
+    const cleanCode = code.toUpperCase().trim();
+    const q = query(collection(db, 'coupons'), where('code', '==', cleanCode));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docData = snap.docs[0].data() as CouponItem;
+      return { id: snap.docs[0].id, ...docData };
+    }
+  } catch (err) {
+    console.warn('Erro ao buscar cupom no Firestore:', err);
+  }
+  return null;
+}
+
