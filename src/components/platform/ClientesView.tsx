@@ -290,11 +290,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                       <td className="p-4 font-mono text-[11px] text-white/60">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate max-w-[120px]">{client.id}</span>
-                          {((client as any).is_test || (client as any).environment === 'development') && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase">
-                              Sandbox
-                            </span>
-                          )}
                           <button
                             onClick={() => handleCopy(client.id, client.id)}
                             className="text-white/40 hover:text-[#D9F22A] transition-colors p-1"

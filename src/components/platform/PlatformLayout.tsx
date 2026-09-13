@@ -1440,8 +1440,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'vendas' && (
             <VendasView
               roleMode={roleMode}
-              transactions={environmentTransactions}
-              environment={activeEnvironment}
+              transactions={userVisibleTransactions}
             />
           )}
 
@@ -1450,8 +1449,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               roleMode={roleMode}
               userProfile={userProfile}
               company={myCompanies[0] || companies[0] || null}
-              transactions={environmentTransactions}
-              withdrawals={environmentWithdrawals}
+              transactions={userVisibleTransactions}
+              withdrawals={withdrawals}
               onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
             />
           )}
@@ -1465,7 +1464,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onRemoveAffiliate={handleCompanyRemoveAffiliate}
             />
           )}
-          {activeTab === 'relatorios' && <RelatoriosView transactions={environmentTransactions} />}
+          {activeTab === 'relatorios' && <RelatoriosView transactions={userVisibleTransactions} />}
           {activeTab === 'integracoes' && (
             <IntegracoesView 
               plans={myCompanyPlans} 

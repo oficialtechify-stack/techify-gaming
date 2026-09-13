@@ -822,7 +822,7 @@ export const FaqSection: React.FC = () => {
     },
     {
       question: 'Quanto tempo demora para a minha conta ser verificada?',
-      answer: 'No modo Sandbox (ambiente de testes), a liberação é imediata. Para o modo Produção e saques bancários reais, a análise dos dados cadastrais (KYC) leva de alguns minutos até 7 dias úteis.'
+      answer: 'A análise dos dados cadastrais (KYC) e homologação da empresa ou afiliado pela administração da LeadsPay é ágil, levando de alguns minutos até 24 horas úteis.'
     }
   ];
 
