@@ -16,9 +16,9 @@ import {
   CodeVibeIntegrationsSection, 
   DocsAndSuiteSection, 
   IsometricFeatureCardsSection, 
-  FeeCalculatorSection, 
   FaqSection 
 } from './components/ModernLandingSections';
+import { MarketFeeComparisonSection } from './components/MarketFeeComparisonSection';
 import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
@@ -260,8 +260,11 @@ function MainApp() {
         <AboutSection />
         <HowItWorksSection onOpenModal={handleOpenModal} />
         
-        {/* Section Image 6: "Simule e veja quanto você recebe de verdade." (Calculadora Pix / Boleto) */}
-        <FeeCalculatorSection />
+        {/* Seção 2: Comparativo de Mercado (Quebra de Objeção - LeadsPay vs Kiwify, Cakto, Hotmart) */}
+        <MarketFeeComparisonSection 
+          onOpenModal={handleOpenModal} 
+          onOpenPlatform={() => setViewPlatform(true)} 
+        />
 
         <SponsorshipsSection 
           onOpenPlatform={() => setViewPlatform(true)} 

@@ -135,7 +135,7 @@ export const CodeVibeIntegrationsSection: React.FC = () => {
 
         {/* Subtitle */}
         <p className="mt-4 text-sm sm:text-base md:text-lg text-white/70 max-w-xl mx-auto leading-relaxed">
-          Integre com o nosso MCP via API ou use um dos 15+ SDKs prontos. Ideal até para quem programa com IA.
+          Integre facilmente via API REST, Webhooks em tempo real e MCP. Ideal tanto para desenvolvedores quanto para quem programa com IA.
         </p>
 
         {/* Floating Language Badges with LeadsPay Dark Neon Cards */}

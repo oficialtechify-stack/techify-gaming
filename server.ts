@@ -4,7 +4,6 @@ dotenv.config();
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { MercadoPagoConfig, Payment } from 'mercadopago';
 import QRCode from 'qrcode';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
@@ -39,23 +38,9 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Server-only Secure Mercado Pago Credentials (NEVER exposed to client)
-const MP_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5352039864226161-090210-52ddde4037f8daf9e7dbde717d0cd562-3152233934';
-const MP_PUBLIC_KEY = process.env.MERCADOPAGO_PUBLIC_KEY || process.env.VITE_MERCADOPAGO_PUBLIC_KEY || process.env.MERCADO_PAGO_PUBLIC_KEY || 'APP_USR-f4c1df9a-12c7-41ef-9ad3-54c27fe1d002';
-const MP_CLIENT_ID = process.env.MERCADOPAGO_CLIENT_ID || process.env.MERCADO_PAGO_CLIENT_ID || '5352039864226161';
-const MP_CLIENT_SECRET = process.env.MERCADOPAGO_CLIENT_SECRET || process.env.MERCADO_PAGO_CLIENT_SECRET || 'v0VOxiURJ4axUD45KtuPHMhZI6JJSWSR';
-
-// Initialize Official Mercado Pago SDK Client on the Server
-const mpClient = new MercadoPagoConfig({
-  accessToken: MP_ACCESS_TOKEN,
-  options: {
-    timeout: 10000
-  }
-});
-
-const mpPaymentService = new Payment(mpClient);
-
-console.log('⚡ Mercado Pago SDK inicializado com sucesso no backend Node.js');
+// Asaas API v3 Configuration
+const { apiUrl: ASAAS_ACTIVE_URL, apiKey: ASAAS_ACTIVE_KEY } = getAsaasConfig();
+console.log(`⚡ LeadsPay Gateway: Operando exclusivamente com Asaas v3 (${ASAAS_ACTIVE_URL})`);
 
 // Firebase Configuration for Backend
 const firebaseConfig = {
@@ -290,17 +275,18 @@ app.get('/api/finances/summary', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    gateway: 'Mercado Pago SDK Active',
+    gateway: 'Asaas API v3 Active',
     cron: 'Rotina de 9 dias ativa',
     time: new Date().toISOString() 
   });
 });
 
-// 2. Mercado Pago Config / Public Info (ONLY Public Key returned)
+// 2. Asaas Config / Public Info
 app.get('/api/payments/config', (req, res) => {
+  const { apiUrl } = getAsaasConfig();
   res.json({
-    publicKey: MP_PUBLIC_KEY,
-    gateway: 'Mercado Pago Oficial'
+    gateway: 'Asaas v3 Oficial',
+    environment: apiUrl.includes('sandbox') ? 'sandbox' : 'production'
   });
 });
 
@@ -663,14 +649,14 @@ async function revokeSaleAndCommission(paymentId: string, eventType: string, pay
 // =========================================================================
 
 /**
- * POST /api/subaccounts/create, /api/subaccounts
+ * POST /api/v3/accounts, /api/subaccounts/create, /api/subaccounts
  * Suporta dinamicamente cadastros com CNPJ, MEI ou CPF do Fundador.
  * Cria a subconta na API do Asaas v3 (POST /v3/accounts) e grava no Firestore:
  * - asaasSubaccountId: data.id (ex: "acc_...")
  * - asaasWalletId: data.walletId
  * - documentType: "CNPJ" | "MEI" | "CPF"
  */
-app.post(['/api/subaccounts/create', '/api/subaccounts'], async (req, res) => {
+app.post(['/api/v3/accounts', '/api/subaccounts/create', '/api/subaccounts', '/api/asaas/subaccounts', '/api/v3/subaccounts'], async (req, res) => {
   try {
     const body = req.body || {};
     const {
@@ -837,6 +823,82 @@ app.post(['/api/subaccounts/create', '/api/subaccounts'], async (req, res) => {
       error: true,
       message: err.message || 'Erro inesperado ao criar subconta no Asaas.'
     });
+  }
+});
+
+/**
+ * GET /api/v3/accounts/:id & GET /api/v3/accounts
+ * Busca informações da subconta Asaas v3 no Asaas e no Firestore
+ */
+app.get(['/api/v3/accounts/:id', '/api/subaccounts/:id'], async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: true, message: 'ID da subconta não informado' });
+    }
+
+    const { apiUrl, apiKey } = getAsaasConfig();
+    const headers = getHeaders(apiKey);
+
+    const asaasRes = await fetch(`${apiUrl}/accounts/${id}`, {
+      headers
+    });
+
+    if (!asaasRes.ok) {
+      const errText = await asaasRes.text();
+      return res.status(asaasRes.status).send(errText);
+    }
+
+    const accountData = await asaasRes.json();
+    return res.json(accountData);
+  } catch (err: any) {
+    return res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+app.get(['/api/v3/accounts', '/api/subaccounts'], async (req, res) => {
+  try {
+    const { cpfCnpj, email, userId, companyId } = req.query as Record<string, string>;
+    
+    // Check Firestore first if userId or companyId provided
+    if (userId) {
+      const uSnap = await getDoc(doc(db, 'users', userId));
+      if (uSnap.exists()) {
+        const uData = uSnap.data();
+        if (uData?.asaasSubaccountId) {
+          return res.json({ subaccountId: uData.asaasSubaccountId, walletId: uData.asaasWalletId, found: true });
+        }
+      }
+    }
+    if (companyId) {
+      const cSnap = await getDoc(doc(db, 'companies', companyId));
+      if (cSnap.exists()) {
+        const cData = cSnap.data();
+        if (cData?.asaasSubaccountId) {
+          return res.json({ subaccountId: cData.asaasSubaccountId, walletId: cData.asaasWalletId, found: true });
+        }
+      }
+    }
+
+    // Query Asaas /v3/accounts
+    const { apiUrl, apiKey } = getAsaasConfig();
+    const headers = getHeaders(apiKey);
+    const searchParams = new URLSearchParams();
+    if (cpfCnpj) searchParams.append('cpfCnpj', cleanDocument(cpfCnpj));
+    if (email) searchParams.append('email', email);
+
+    const asaasRes = await fetch(`${apiUrl}/accounts?${searchParams.toString()}`, {
+      headers
+    });
+
+    if (!asaasRes.ok) {
+      return res.status(asaasRes.status).send(await asaasRes.text());
+    }
+
+    const data = await asaasRes.json();
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ error: true, message: err.message });
   }
 });
 
@@ -1126,13 +1188,15 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
     }
 
+    const effectiveCompId = (companyId || company_id || partnerInfo?.companyId || null)?.toString() || null;
+    const candidateSellerId = sellerId || body.ownerId || body.userId || companyId || company_id || (planId || plan_id) || partnerInfo?.userId || partnerInfo?.companyId;
+
     // Se o subaccountId não veio no payload, resolve no Firestore:
     // 1) users/{sellerId}.asaasSubaccountId
     // 2) user_profiles/{sellerId}.asaasSubaccountId
     // 3) companies/{companyId}.asaasSubaccountId
     // 4) plans/{planId}.asaasSubaccountId
     if (!sellerSubaccountId) {
-      const candidateSellerId = sellerId || body.ownerId || body.userId || companyId || company_id || (planId || plan_id) || partnerInfo?.userId || partnerInfo?.companyId;
       if (candidateSellerId) {
         try {
           const userDoc = await getDoc(doc(db, 'users', String(candidateSellerId)));
@@ -1199,9 +1263,80 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
     }
 
+    // Se ainda não encontrou subconta, tenta buscar ou gerar automaticamente no Asaas com os dados fiscais da empresa/parceiro
+    if (!sellerSubaccountId && (effectiveCompId || candidateSellerId)) {
+      try {
+        let fiscalDoc: any = null;
+        let isCompanyDoc = false;
+        let targetDocId = '';
+
+        if (effectiveCompId) {
+          const compSnap = await getDoc(doc(db, 'companies', String(effectiveCompId)));
+          if (compSnap.exists()) {
+            fiscalDoc = compSnap.data();
+            isCompanyDoc = true;
+            targetDocId = String(effectiveCompId);
+          }
+        }
+        if (!fiscalDoc && candidateSellerId) {
+          const userSnap = await getDoc(doc(db, 'users', String(candidateSellerId)));
+          if (userSnap.exists()) {
+            fiscalDoc = userSnap.data();
+            targetDocId = String(candidateSellerId);
+          }
+        }
+
+        const rawDocNumber = fiscalDoc?.cnpj || fiscalDoc?.cpf || fiscalDoc?.documentNumber || fiscalDoc?.document || fiscalDoc?.cpfCnpj;
+        const cleanDocNumber = rawDocNumber ? cleanDocument(rawDocNumber) : '';
+
+        if (cleanDocNumber && (fiscalDoc?.name || fiscalDoc?.companyName || fiscalDoc?.razaoSocial)) {
+          const targetName = fiscalDoc.companyName || fiscalDoc.razaoSocial || fiscalDoc.name || 'Empresa Parceira';
+          const targetEmail = fiscalDoc.email || fiscalDoc.companyEmail || 'financeiro@leadspay.com.br';
+          console.log(`[Auto Asaas Subaccount] Gerando subconta para empresa/parceiro ${targetDocId} (Doc: ${cleanDocNumber})...`);
+
+          const createdSub = await createAsaasSubaccount({
+            name: targetName,
+            email: targetEmail,
+            cpfCnpj: cleanDocNumber,
+            phone: fiscalDoc.phone || fiscalDoc.mobilePhone || '11999999999',
+            postalCode: fiscalDoc.cep || fiscalDoc.postalCode || '01310100',
+            address: fiscalDoc.address || 'Av Paulista',
+            addressNumber: fiscalDoc.addressNumber || '1000',
+            companyType: cleanDocNumber.length > 11 ? 'LIMITED' : 'MEI'
+          });
+
+          if (createdSub?.id) {
+            sellerSubaccountId = createdSub.id;
+            sellerWalletId = createdSub.walletId || null;
+            sellerApiKey = createdSub.apiKey || null;
+            body.subaccountId = createdSub.id;
+
+            const updateData: Record<string, any> = {
+              asaasSubaccountId: createdSub.id,
+              asaasWalletId: createdSub.walletId || null,
+              subaccountId: createdSub.id,
+              walletId: createdSub.walletId || null
+            };
+            if (createdSub.apiKey) {
+              updateData.asaasApiKey = createdSub.apiKey;
+            }
+
+            if (isCompanyDoc) {
+              await updateDoc(doc(db, 'companies', targetDocId), updateData);
+              console.log(`✅ [Auto Asaas Subaccount] companies/${targetDocId} vinculada à subconta ${createdSub.id}`);
+            } else {
+              await updateDoc(doc(db, 'users', targetDocId), updateData);
+              console.log(`✅ [Auto Asaas Subaccount] users/${targetDocId} vinculada à subconta ${createdSub.id}`);
+            }
+          }
+        }
+      } catch (autoSubErr) {
+        console.warn('[Auto Asaas Subaccount] Não foi possível auto-gerar subconta no Asaas:', autoSubErr);
+      }
+    }
+
     // 🧪 DETECÇÃO DE MODO DE DESENVOLVIMENTO (DEV MODE / SANDBOX)
     let companyEnvironment: 'development' | 'production' = 'development';
-    const effectiveCompId = (companyId || company_id || partnerInfo?.companyId || null)?.toString() || null;
     if (effectiveCompId) {
       try {
         const compSnap = await getDoc(doc(db, 'companies', effectiveCompId));
@@ -3112,73 +3247,9 @@ app.post('/api/withdrawals/request', async (req, res) => {
   }
 });
 
-// 5. Webhook listener for Mercado Pago Notifications (/api/webhooks/mercadopago & /api/payments/webhook)
-app.all(['/api/webhooks/mercadopago', '/api/payments/webhook'], async (req, res) => {
-  try {
-    console.log('[Mercado Pago Webhook Received]:', req.query, req.body);
-    const topic = req.query.topic || req.body?.type || req.query.type;
-    const paymentId = req.query.id || req.body?.data?.id || req.body?.id;
-
-    if ((topic === 'payment' || req.body?.action?.includes('payment') || req.body?.type === 'payment') && paymentId) {
-      let paymentData: any = null;
-      let status = 'approved';
-
-      try {
-        paymentData = await mpPaymentService.get({ id: String(paymentId) });
-        status = paymentData?.status || 'approved';
-        console.log(`[Webhook MP Verified]: Payment ${paymentId} -> status ${status}`);
-      } catch (checkErr) {
-        console.warn('[Webhook MP Warning verifying payment with SDK]:', checkErr);
-      }
-
-      const saleRef = doc(db, 'sales', String(paymentId));
-      const existingSnap = await getDoc(saleRef);
-
-      if (existingSnap.exists()) {
-        const updatePayload: Record<string, any> = {
-          status: status === 'approved' ? 'approved' : status,
-          updated_at: new Date().toISOString()
-        };
-        if (status === 'approved') {
-          updatePayload.approved_at = new Date().toISOString();
-        }
-        await updateDoc(saleRef, updatePayload);
-        console.log(`✅ [Webhook sales] Documento ${paymentId} atualizado para status: ${status}`);
-        if (status === 'approved') {
-          await creditSaleCommissionAndBalances(String(paymentId), paymentData);
-        }
-      } else {
-        // Se ainda não existia, cria o documento na coleção sales
-        const planId = paymentData?.metadata?.plan_id || null;
-        const affiliateCode = paymentData?.metadata?.affiliate_code || paymentData?.metadata?.affiliate_ref || null;
-        const totalAmount = Number(paymentData?.transaction_amount) || 0;
-        const nowIso = new Date().toISOString();
-
-        await setDoc(saleRef, {
-          payment_id: String(paymentId),
-          plan_id: planId,
-          affiliate_code: affiliateCode,
-          total_amount: totalAmount,
-          status: status === 'approved' ? 'approved' : status,
-          created_at: paymentData?.date_created || nowIso,
-          approved_at: status === 'approved' ? (paymentData?.date_approved || nowIso) : null,
-          id: String(paymentId),
-          amount: totalAmount,
-          platformId: planId || '',
-          method: 'PIX'
-        }, { merge: true });
-        console.log(`✅ [Webhook sales] Novo documento ${paymentId} criado no sales com status: ${status}`);
-        if (status === 'approved') {
-          await creditSaleCommissionAndBalances(String(paymentId), paymentData);
-        }
-      }
-    }
-
-    res.status(200).send('OK');
-  } catch (err) {
-    console.error('Webhook error:', err);
-    res.status(200).send('OK');
-  }
+// Legacy webhook route compatibility (200 OK - All active webhooks are processed at /webhook/asaas)
+app.all(['/api/payments/webhook'], (_req, res) => {
+  res.status(200).send('OK');
 });
 
 // Juridical & LGPD Compliance HTML Routes

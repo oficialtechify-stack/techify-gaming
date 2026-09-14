@@ -77,7 +77,7 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
             <CreditCard className="w-4 h-4" />
-            Histórico & Gateway (Asaas / Mercado Pago)
+            Histórico & Gateway Oficial Asaas v3
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
             Cobranças & Transações

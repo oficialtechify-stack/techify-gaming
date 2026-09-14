@@ -287,8 +287,7 @@ export interface WithdrawalRequest {
   requestedAt: string;
   completedAt?: string;
   createdAt?: string;
-  endToEndId?: string; // ID E2E do PIX Mercado Pago / Bacen
-  mpTransferId?: string;
+  endToEndId?: string; // ID E2E do PIX Asaas / Bacen
   asaasTransferId?: string; // ID da transferência Asaas
   failureReason?: string;
   is_test?: boolean;
@@ -376,6 +375,11 @@ export interface UserSellerProfile {
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
   updatedAt?: string;
+  // Plano de Assinatura LeadsPay
+  subscriptionTier?: 'afiliado_starter' | 'afiliado_vip' | 'starter' | 'pro' | 'scale' | string;
+  subscriptionName?: string;
+  subscriptionPrice?: number;
+  subscriptionActiveAt?: string;
 }
 
 export interface VerificationRequest {
@@ -489,4 +493,5 @@ export type PlatformTab =
   | 'relatorios' 
   | 'integracoes'
   | 'cupons'
+  | 'planos'
   | 'database';

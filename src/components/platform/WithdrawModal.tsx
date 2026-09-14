@@ -81,7 +81,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
           <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />
-          Saque Instantâneo PIX Mercado Pago
+          Saque Instantâneo PIX Asaas v3
         </div>
 
         <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne'] mb-2">

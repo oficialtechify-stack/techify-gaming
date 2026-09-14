@@ -17,51 +17,62 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main Hero Headline - Centered, Balanced, Clear */}
         <div className="text-center max-w-4xl mx-auto mb-6 sm:mb-8">
-          <h1 className="elementor-heading-title text-2xl sm:text-4xl md:text-5xl lg:text-[48px] font-extrabold tracking-tight uppercase leading-[1.12] sm:leading-[1.16] [text-wrap:balance]">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#D9F22A]/30 bg-[#080d1a] text-xs font-bold uppercase tracking-wider text-[#D9F22A] shadow-[0_0_15px_rgba(217,242,42,0.15)] mb-4">
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>As Menores Taxas do Mercado</span>
+          </div>
+
+          <h1 className="elementor-heading-title text-2xl sm:text-4xl md:text-5xl lg:text-[46px] font-extrabold tracking-tight uppercase leading-[1.14] sm:leading-[1.16] [text-wrap:balance]">
             <span className="cor block drop-shadow-[0_0_25px_rgba(217,242,42,0.3)]">
-              Conectamos Startups Inovadoras
+              A plataforma de pagamentos e afiliação
             </span>
-            <span className="text-white block mt-1.5 sm:mt-2 text-xl sm:text-3xl md:text-4xl lg:text-[42px] font-bold">
-              a uma Rede de Afiliados que Vende Todos os Dias
+            <span className="text-white block mt-1.5 sm:mt-2 text-xl sm:text-3xl md:text-4xl lg:text-[40px] font-bold">
+              com as menores taxas do mercado.
             </span>
           </h1>
 
           {/* Subheading Narrative */}
           <p className="mt-5 sm:mt-6 text-sm sm:text-base md:text-lg text-white/85 max-w-2xl mx-auto font-normal leading-relaxed text-center">
-            A infraestrutura comercial definitiva: startups e empresas escalam distribuição sem custo fixo, enquanto afiliados e vendedores profissionais monetizam comissões de <span className="text-[#D9F22A] font-bold">30% a 50%</span> e repasses automáticos via <span className="text-[#D9F22A] font-bold">PIX D+9</span>.
+            Venda seus infoprodutos e serviços com split automático PJ, checkout de alta conversão e receba suas comissões direto no PIX com saque mínimo de apenas <span className="text-[#D9F22A] font-bold">R$ 10,00</span>.
           </p>
         </div>
 
         {/* Central Call-to-Actions */}
         <div className="flex flex-wrap items-center justify-center gap-3.5 sm:gap-4 mb-10 sm:mb-12">
+          <button
+            onClick={() => onOpenModal('register_affiliate')}
+            className="group flex items-center gap-2.5 sm:gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-7 sm:py-4 sm:px-9 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider shadow-[0_0_30px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300 cursor-pointer"
+          >
+            <span>Criar Conta Grátis</span>
+            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
+
           {onOpenPlatform ? (
             <button
               onClick={onOpenPlatform}
-              className="group flex items-center gap-2.5 sm:gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-6 sm:py-4 sm:px-8 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider shadow-[0_0_30px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300 cursor-pointer"
+              className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white border border-white/15 font-bold py-3.5 px-6 sm:py-4 sm:px-7 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider transition-all duration-300 cursor-pointer backdrop-blur-sm"
             >
-              <span>Explorar Marketplace de Startups</span>
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+              <span>Acessar Painel</span>
             </button>
           ) : (
             <button
               onClick={() => onOpenModal('login')}
-              className="group flex items-center gap-2.5 sm:gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-6 sm:py-4 sm:px-8 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider shadow-[0_0_30px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300 cursor-pointer"
+              className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white border border-white/15 font-bold py-3.5 px-6 sm:py-4 sm:px-7 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider transition-all duration-300 cursor-pointer backdrop-blur-sm"
             >
-              <span>Acessar Plataforma & Vitrine</span>
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+              <span>Entrar na Conta</span>
             </button>
           )}
 
           <a
-            href="#como-funciona"
+            href="#comparativo-taxas"
             onClick={(e) => {
               e.preventDefault();
-              const el = document.getElementById('como-funciona');
+              const el = document.getElementById('comparativo-taxas');
               if (el) el.scrollIntoView({ behavior: 'smooth' });
             }}
-            className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white border border-white/15 font-bold py-3.5 px-6 sm:py-4 sm:px-7 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider transition-all duration-300 cursor-pointer backdrop-blur-sm"
+            className="flex items-center gap-2 text-white/70 hover:text-white font-medium py-3.5 px-4 text-xs sm:text-sm uppercase tracking-wider transition-all cursor-pointer underline underline-offset-4"
           >
-            <span>Como Funciona</span>
+            <span>Ver Tabela Comparativa</span>
           </a>
         </div>
 

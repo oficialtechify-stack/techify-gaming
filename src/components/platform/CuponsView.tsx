@@ -19,6 +19,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { CompanyPlan, UserAffiliation } from '../../types/platform';
+import { saveCouponToFirebase, deleteCouponInFirebase } from '../../services/firestoreService';
 
 export interface CouponItem {
   id: string;
@@ -171,6 +172,13 @@ export const CuponsView: React.FC<CuponsViewProps> = ({ plans = [], affiliations
     setCoupons([newCoupon, ...coupons]);
     setIsCreateModalOpen(false);
 
+    // Persiste no Firestore para sincronização global com checkouts
+    try {
+      saveCouponToFirebase(newCoupon, plans[0]?.companyId);
+    } catch (e) {
+      console.warn('Aviso ao sincronizar cupom no Firestore:', e);
+    }
+
     // Reset Form
     setFormCode('');
     setFormValue(10);
@@ -185,16 +193,28 @@ export const CuponsView: React.FC<CuponsViewProps> = ({ plans = [], affiliations
   const handleDeleteCoupon = (id: string) => {
     if (confirm('Tem certeza que deseja excluir este cupom de desconto?')) {
       setCoupons(coupons.filter(c => c.id !== id));
+      try {
+        deleteCouponInFirebase(id);
+      } catch (e) {
+        console.warn('Aviso ao excluir cupom do Firestore:', e);
+      }
     }
   };
 
   const handleToggleStatus = (id: string) => {
     setCoupons(coupons.map(c => {
       if (c.id === id) {
-        return {
+        const nextStatus = c.status === 'active' ? 'paused' : 'active';
+        const updated = {
           ...c,
-          status: c.status === 'active' ? 'paused' : 'active'
+          status: nextStatus as 'active' | 'paused'
         };
+        try {
+          saveCouponToFirebase(updated, plans[0]?.companyId);
+        } catch (e) {
+          console.warn('Aviso ao atualizar status do cupom no Firestore:', e);
+        }
+        return updated;
       }
       return c;
     }));
