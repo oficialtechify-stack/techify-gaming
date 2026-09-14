@@ -19,7 +19,6 @@ import {
   RefreshCw,
   Info,
   Radio,
-  Terminal,
   Code2,
   Lock
 } from 'lucide-react';
@@ -77,7 +76,6 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
   const [isGeneratingCheckout, setIsGeneratingCheckout] = useState(false);
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
   const [pixCopied, setPixCopied] = useState(false);
-  const [isSimulatingWebhook, setIsSimulatingWebhook] = useState(false);
   const [activationSuccess, setActivationSuccess] = useState<string | null>(null);
   const [showWebhookGuide, setShowWebhookGuide] = useState(false);
 
@@ -349,54 +347,6 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
       });
     } finally {
       setIsGeneratingCheckout(false);
-    }
-  };
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // 3. SIMULAÇÃO DE WEBHOOK ASAAS PARA TESTES LOCAIS/DEV
-  // Permite testar o recebimento de PAYMENT_RECEIVED/PAYMENT_CONFIRMED instantaneamente
-  // ──────────────────────────────────────────────────────────────────────────
-  const handleSimulateWebhook = async (planId: string) => {
-    setIsSimulatingWebhook(true);
-    try {
-      const res = await fetch('/webhooks/asaas', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'asaas-access-token': 'teste_webhook_secret'
-        },
-        body: JSON.stringify({
-          event: 'PAYMENT_CONFIRMED',
-          payment: {
-            id: `pay_sim_${Date.now()}`,
-            customer: `cus_${currentUserId}`,
-            value: selectedPlanModal?.price || 29.90,
-            status: 'CONFIRMED',
-            externalReference: `${currentUserId}:${planId}`,
-            description: `Assinatura ${planId} LeadsPay`
-          }
-        })
-      });
-
-      if (!res.ok) {
-        // Tenta a rota de simulação direta
-        await fetch('/api/webhooks/asaas/simulate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: currentUserId,
-            planId: planId,
-            event: 'PAYMENT_CONFIRMED'
-          })
-        });
-      }
-
-      setActivationSuccess(`⚡ Notificação de webhook enviada com sucesso! Atualizando status em tempo real...`);
-      setTimeout(() => setActivationSuccess(null), 3000);
-    } catch (simErr) {
-      console.error('Erro na simulação do webhook:', simErr);
-    } finally {
-      setIsSimulatingWebhook(false);
     }
   };
 
@@ -759,22 +709,6 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
               {selectedPlanModal.description}
             </p>
 
-            {/* Identificadores do Fluxo (UserId e PlanId) */}
-            <div className="p-3.5 rounded-2xl bg-[#050811] border border-white/10 mb-5 grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <span className="text-white/40 block text-[10px] uppercase font-bold">User ID Autenticado</span>
-                <span className="font-mono text-white text-xs truncate block" title={currentUserId}>
-                  {currentUserId}
-                </span>
-              </div>
-              <div>
-                <span className="text-white/40 block text-[10px] uppercase font-bold">Plan ID Vinculado</span>
-                <span className="font-mono text-[#D9F22A] text-xs font-bold">
-                  {selectedPlanModal.id}
-                </span>
-              </div>
-            </div>
-
             {/* Resumo da Cobrança */}
             <div className="p-4 rounded-2xl bg-[#050811] border border-white/10 mb-5 space-y-2 text-xs">
               <div className="flex justify-between items-center text-white/70">
@@ -798,28 +732,33 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
               <div className="p-8 rounded-2xl bg-[#050811] border border-white/10 flex flex-col items-center justify-center gap-3 text-center my-4">
                 <RefreshCw className="w-8 h-8 text-[#D9F22A] animate-spin" />
                 <div className="text-sm font-bold text-white">Gerando cobrança Asaas vinculada ao seu usuário...</div>
-                <div className="text-xs text-white/50">Criando externalReference: {currentUserId}:{selectedPlanModal.id}</div>
+                <div className="text-xs text-white/50">Aguarde um instante...</div>
               </div>
             ) : checkoutData ? (
               <div className="space-y-4 mb-6">
-                {/* QR Code PIX e Copia e Cola */}
-                <div className="p-5 rounded-2xl bg-[#050811] border border-[#D9F22A]/30 flex flex-col items-center text-center">
+                {/* QR Code PIX e Copia e Cola Real da API Asaas */}
+                <div className="p-5 sm:p-6 rounded-2xl bg-[#050811] border border-[#D9F22A]/30 flex flex-col items-center text-center">
                   <div className="text-xs font-bold uppercase tracking-wider text-[#D9F22A] mb-3 flex items-center gap-1.5">
                     <QrCode className="w-4 h-4" />
-                    <span>Pague via PIX para Ativação Instantânea</span>
+                    <span>Pague via PIX para Ativação Automática</span>
                   </div>
 
                   {checkoutData.pixQrCode?.encodedImage ? (
-                    <div className="p-3 bg-white rounded-2xl shadow-xl mb-3">
+                    <div className="p-4 bg-white rounded-2xl shadow-xl mb-4 flex items-center justify-center">
                       <img 
-                        src={`data:image/png;base64,${checkoutData.pixQrCode.encodedImage}`} 
-                        alt="PIX QR Code Asaas" 
-                        className="w-40 h-40 object-contain"
+                        src={
+                          checkoutData.pixQrCode.encodedImage.startsWith('data:')
+                            ? checkoutData.pixQrCode.encodedImage
+                            : `data:image/png;base64,${checkoutData.pixQrCode.encodedImage}`
+                        }
+                        alt="QR Code PIX Asaas" 
+                        className="w-48 h-48 sm:w-56 sm:h-56 object-contain"
                       />
                     </div>
                   ) : (
-                    <div className="w-36 h-36 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 mb-3">
+                    <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center text-white/40 mb-4 gap-2">
                       <QrCode className="w-12 h-12 text-[#D9F22A]" />
+                      <span className="text-[11px] text-white/50">Carregando QR Code...</span>
                     </div>
                   )}
 
@@ -828,75 +767,41 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
                       <button
                         type="button"
                         onClick={handleCopyPix}
-                        className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/15"
+                        className="w-full py-3 px-4 rounded-xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(217,242,42,0.3)] hover:scale-101"
                       >
                         {pixCopied ? (
                           <>
-                            <Check className="w-4 h-4 text-emerald-400" />
-                            <span className="text-emerald-400">Código PIX Copiado!</span>
+                            <Check className="w-4 h-4 text-black stroke-[3]" />
+                            <span>Código PIX Copiado!</span>
                           </>
                         ) : (
                           <>
-                            <Copy className="w-4 h-4 text-[#D9F22A]" />
-                            <span>Copiar Código PIX Copia e Cola</span>
+                            <Copy className="w-4 h-4 text-black" />
+                            <span>Copiar Código Pix Copia e Cola</span>
                           </>
                         )}
                       </button>
                     </div>
                   )}
-
-                  {/* Status do Webhook em Tempo Real */}
-                  <div className="mt-4 flex items-center gap-2 text-xs text-white/70 bg-[#D9F22A]/10 px-3 py-2 rounded-xl border border-[#D9F22A]/20">
-                    <Radio className="w-3.5 h-3.5 text-[#D9F22A] animate-pulse flex-shrink-0" />
-                    <span>Aguardando webhook do Asaas (PAYMENT_RECEIVED / CONFIRMED)...</span>
-                  </div>
                 </div>
 
-                {/* Opção de Checkout Direto Asaas em Nova Aba */}
+                {/* Opção de Checkout / Fatura Direta Asaas em Nova Aba */}
                 {checkoutData.invoiceUrl && (
                   <a
                     href={checkoutData.invoiceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-white/10"
+                    className="w-full py-3.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-white/10 hover:border-[#D9F22A]/40 group text-center"
                   >
                     <span>Abrir Fatura / Checkout no Asaas</span>
-                    <ExternalLink className="w-4 h-4 text-[#D9F22A]" />
+                    <ExternalLink className="w-4 h-4 text-[#D9F22A] group-hover:translate-x-0.5 transition-transform" />
                   </a>
                 )}
 
-                {/* Ferramenta de Simulação para Teste do Webhook */}
-                <div className="p-4 rounded-2xl bg-black/40 border border-white/10">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[11px] font-bold text-white/60 flex items-center gap-1.5">
-                      <Terminal className="w-3.5 h-3.5 text-[#D9F22A]" />
-                      Ambiente de Testes / Sandbox
-                    </span>
-                    <span className="text-[10px] text-[#D9F22A] font-mono">POST /webhooks/asaas</span>
-                  </div>
-
-                  <p className="text-[11px] text-white/50 leading-relaxed mb-3">
-                    Simule o disparo real do webhook Asaas para validar a escuta em tempo real do Firestore:
-                  </p>
-
-                  <button
-                    type="button"
-                    disabled={isSimulatingWebhook}
-                    onClick={() => handleSimulateWebhook(selectedPlanModal.id)}
-                    className="w-full py-2.5 px-4 rounded-xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(217,242,42,0.3)] disabled:opacity-50"
-                  >
-                    {isSimulatingWebhook ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Enviando PAYMENT_CONFIRMED...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-3.5 h-3.5 fill-current" />
-                        <span>Simular Notificação Asaas (PAYMENT_CONFIRMED)</span>
-                      </>
-                    )}
-                  </button>
+                {/* Indicador visual discreto aguardando confirmação via Webhook no Firestore */}
+                <div className="flex items-center justify-center gap-2.5 text-xs text-white/70 bg-white/5 px-4 py-3 rounded-2xl border border-white/10">
+                  <Radio className="w-3.5 h-3.5 text-[#D9F22A] animate-pulse flex-shrink-0" />
+                  <span>Aguardando confirmação do pagamento... Seu plano será ativado automaticamente.</span>
                 </div>
               </div>
             ) : null}

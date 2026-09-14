@@ -1090,67 +1090,76 @@ app.post('/api/plans/checkout', async (req, res) => {
 
       // 2. Cria cobrança no Asaas com externalReference
       const dueDate = new Date().toISOString().split('T')[0];
-      const paymentData = await createAsaasPayment({
-        customer: customerId,
-        billingType: billingType === 'CREDIT_CARD' ? 'CREDIT_CARD' : 'PIX',
-        value: targetPlan.price,
-        dueDate,
-        description,
-        externalReference,
-        notificationDisabled: false
-      });
 
-      // 3. Se for PIX, obtém QR Code PIX
-      let pixQr = null;
-      if (billingType === 'PIX' && paymentData?.id) {
-        try {
-          const { apiUrl, apiKey } = getAsaasConfig();
-          const pixRes = await fetch(`${apiUrl}/payments/${paymentData.id}/pixQrCode`, {
-            headers: { 'access_token': apiKey }
-          });
-          if (pixRes.ok) {
-            pixQr = await pixRes.json();
+      if (billingType === 'PIX') {
+        const pixRes = await createPixPayment(
+          customerId,
+          targetPlan.price,
+          description,
+          undefined,
+          {
+            externalReference,
+            dueDate
           }
-        } catch (qrErr) {
-          console.warn('Aviso ao obter QR code PIX do Asaas:', qrErr);
-        }
-      }
+        );
 
-      asaasResult = {
-        paymentId: paymentData.id,
-        invoiceUrl: paymentData.invoiceUrl || paymentData.bankSlipUrl,
-        bankSlipUrl: paymentData.bankSlipUrl,
-        pixQrCode: pixQr
-      };
+        asaasResult = {
+          paymentId: pixRes.paymentId,
+          invoiceUrl: pixRes.invoiceUrl || pixRes.bankSlipUrl,
+          bankSlipUrl: pixRes.bankSlipUrl,
+          pixQrCode: {
+            encodedImage: pixRes.encodedImage,
+            payload: pixRes.payload,
+            expirationDate: pixRes.expirationDate
+          }
+        };
+      } else {
+        const paymentData = await createAsaasPayment({
+          customer: customerId,
+          billingType: 'CREDIT_CARD',
+          value: targetPlan.price,
+          dueDate,
+          description,
+          externalReference,
+          notificationDisabled: false
+        });
+
+        asaasResult = {
+          paymentId: paymentData.id,
+          invoiceUrl: paymentData.invoiceUrl || paymentData.bankSlipUrl,
+          bankSlipUrl: paymentData.bankSlipUrl,
+          pixQrCode: null
+        };
+      }
     } catch (asaasErr: any) {
-      console.warn('⚠️ [Asaas Plans Checkout] Não foi possível chamar API do Asaas diretamente:', asaasErr?.message);
+      console.warn('⚠️ [Asaas Plans Checkout] Erro ao processar via Asaas:', asaasErr?.message);
     }
 
-    // Se Asaas falhou ou estiver offline/sandbox sem chave válida, gera dados de pagamento funcionais:
-    const mockPaymentId = asaasResult?.paymentId || `pay_sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const pixPayload = asaasResult?.pixQrCode?.payload || 
-      `00020126580014br.gov.bcb.pix0136leadspay-${planId}-${userId.slice(0, 8)}520400005303986540${targetPlan.price.toFixed(2)}5802BR5910LEADSPAY6009SAOPAULO62140510${mockPaymentId.slice(0, 10)}6304`;
+    const finalPaymentId = asaasResult?.paymentId || `pay_sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const finalInvoiceUrl = asaasResult?.invoiceUrl || `https://leadspay.com/checkout/plan/${planId}?ref=${userId}`;
+    const finalPixPayload = asaasResult?.pixQrCode?.payload || 
+      `00020126580014br.gov.bcb.pix0136leadspay-${planId}-${userId.slice(0, 8)}520400005303986540${targetPlan.price.toFixed(2)}5802BR5910LEADSPAY6009SAOPAULO62140510${finalPaymentId.slice(0, 10)}6304`;
     
     let qrCodeBase64 = asaasResult?.pixQrCode?.encodedImage;
-    if (!qrCodeBase64) {
+    if (!qrCodeBase64 && finalPixPayload) {
       try {
-        qrCodeBase64 = (await QRCode.toDataURL(pixPayload)).replace(/^data:image\/png;base64,/, '');
+        qrCodeBase64 = (await QRCode.toDataURL(finalPixPayload)).replace(/^data:image\/png;base64,/, '');
       } catch (_) {}
     }
 
     return res.status(200).json({
       success: true,
-      paymentId: mockPaymentId,
+      paymentId: finalPaymentId,
       userId,
       planId,
       planName: targetPlan.name,
       value: targetPlan.price,
       externalReference,
-      invoiceUrl: asaasResult?.invoiceUrl || `https://leadspay.com/checkout/plan/${planId}?ref=${userId}`,
+      invoiceUrl: finalInvoiceUrl,
       pixQrCode: {
         encodedImage: qrCodeBase64,
-        payload: pixPayload,
-        expirationDate: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+        payload: finalPixPayload,
+        expirationDate: asaasResult?.pixQrCode?.expirationDate || new Date(Date.now() + 30 * 60 * 1000).toISOString()
       },
       webhookEndpoint: '/webhooks/asaas'
     });
