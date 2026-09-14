@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Sparkles, 
   Check, 
@@ -9,22 +9,20 @@ import {
   ShoppingBag, 
   BarChart3, 
   Zap, 
+  Layers, 
+  Lock, 
   CheckCircle2, 
   Copy, 
-  TrendingUp, 
-  CreditCard, 
-  QrCode, 
-  X,
-  ExternalLink,
-  RefreshCw,
-  Info,
-  Radio,
-  Code2,
-  Lock
+  Eye, 
+  HelpCircle,
+  TrendingUp,
+  CreditCard,
+  QrCode,
+  X
 } from 'lucide-react';
 import { UserRoleMode, UserSellerProfile, CompanyStartup } from '../../types/platform';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../../lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface PlanosAssinaturasViewProps {
   roleMode: UserRoleMode;
@@ -50,22 +48,6 @@ interface SubscriptionPlanCard {
   ctaText: string;
 }
 
-interface CheckoutData {
-  paymentId: string;
-  userId: string;
-  planId: string;
-  planName: string;
-  value: number;
-  externalReference: string;
-  invoiceUrl: string;
-  pixQrCode?: {
-    encodedImage?: string;
-    payload?: string;
-    expirationDate?: string;
-  };
-  webhookEndpoint?: string;
-}
-
 export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
   roleMode,
   userProfile,
@@ -73,108 +55,13 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
   onUpdateProfile
 }) => {
   const [selectedPlanModal, setSelectedPlanModal] = useState<SubscriptionPlanCard | null>(null);
-  const [isGeneratingCheckout, setIsGeneratingCheckout] = useState(false);
-  const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [pixCopied, setPixCopied] = useState(false);
   const [activationSuccess, setActivationSuccess] = useState<string | null>(null);
-  const [showWebhookGuide, setShowWebhookGuide] = useState(false);
 
-  // Estado sincronizado em tempo real via Firestore onSnapshot
-  const [liveUserData, setLiveUserData] = useState<{
-    plan?: string;
-    planStatus?: string;
-    subscriptionTier?: string;
-    subscriptionName?: string;
-  } | null>(null);
-
-  const currentUserId = userProfile.id || userProfile.userId || auth.currentUser?.uid || 'user_demo';
+  // Determina se estamos vendo planos de Afiliado ou de Empresa/Produtor
   const isAffiliate = roleMode === 'afiliado';
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // 4. ESCUTA EM TEMPO REAL NO FIRESTORE (onSnapshot)
-  // Sincroniza o estado do plano instantaneamente assim que o Webhook do Asaas atualiza o banco
-  // ──────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!currentUserId || currentUserId === 'user_demo') return;
-
-    try {
-      const handleDataUpdate = (data: any) => {
-        if (!data) return;
-        setLiveUserData((prev) => ({
-          ...prev,
-          plan: data.plan !== undefined ? data.plan : prev?.plan,
-          planStatus: data.planStatus !== undefined ? data.planStatus : prev?.planStatus,
-          subscriptionTier: data.subscriptionTier !== undefined ? data.subscriptionTier : prev?.subscriptionTier,
-          subscriptionName: data.subscriptionName !== undefined ? data.subscriptionName : prev?.subscriptionName
-        }));
-
-        // Se a janela de checkout estava aberta e o plano foi confirmado via webhook
-        if (data.planStatus === 'active' && data.plan) {
-          if (selectedPlanModal && (selectedPlanModal.id === data.plan || selectedPlanModal.id === data.subscriptionTier)) {
-            setActivationSuccess(`🎉 Pagamento confirmado via Webhook Asaas! Plano ${data.subscriptionName || selectedPlanModal.name} ativado com sucesso!`);
-            setTimeout(() => {
-              setSelectedPlanModal(null);
-              setCheckoutData(null);
-            }, 2500);
-          }
-
-          // Propaga atualização para o restante do applet
-          if (onUpdateProfile) {
-            onUpdateProfile({
-              plan: data.plan,
-              planStatus: 'active',
-              subscriptionTier: data.subscriptionTier || data.plan,
-              subscriptionName: data.subscriptionName
-            });
-          }
-        }
-      };
-
-      const userDocRef = doc(db, 'users', currentUserId);
-      const unsubUser = onSnapshot(userDocRef, (snapshot) => {
-        if (snapshot.exists()) {
-          handleDataUpdate(snapshot.data());
-        }
-      }, (err) => {
-        console.warn('[Planos onSnapshot users] Aviso:', err);
-      });
-
-      const profileDocRef = doc(db, 'user_profiles', currentUserId);
-      const unsubProfile = onSnapshot(profileDocRef, (snapshot) => {
-        if (snapshot.exists()) {
-          handleDataUpdate(snapshot.data());
-        }
-      }, (err) => {
-        console.warn('[Planos onSnapshot user_profiles] Aviso:', err);
-      });
-
-      return () => {
-        unsubUser();
-        unsubProfile();
-      };
-    } catch (err) {
-      console.warn('[Planos onSnapshot] Erro ao registrar listener:', err);
-    }
-  }, [currentUserId, selectedPlanModal, onUpdateProfile]);
-
-  // Função para checar se determinado plano está ATIVO
-  // REGRA: O plano pago (ex: Afiliado VIP) NUNCA vem ativado por padrão.
-  // Somente se torna 'active' quando planStatus === 'active' no banco de dados!
-  const checkIsPlanActive = (planId: string, price: number) => {
-    const currentPlanStatus = liveUserData?.planStatus || userProfile.planStatus;
-    const currentActivePlan = liveUserData?.plan || userProfile.plan || liveUserData?.subscriptionTier || userProfile.subscriptionTier;
-
-    if (price === 0) {
-      // Plano grátis é o padrão inicial caso nenhum plano pago esteja ativo
-      if (currentPlanStatus === 'active' && currentActivePlan && currentActivePlan !== planId) {
-        return false;
-      }
-      return currentActivePlan === planId || (!currentActivePlan && (planId === 'afiliado_starter' || planId === 'starter'));
-    }
-
-    // Plano pago: estritamente requer planStatus === 'active'
-    return currentPlanStatus === 'active' && currentActivePlan === planId;
-  };
+  const currentTier = userProfile.subscriptionTier || (isAffiliate ? 'afiliado_starter' : 'starter');
 
   // Planos exclusivos para AFILIADO
   const affiliatePlans: SubscriptionPlanCard[] = [
@@ -212,7 +99,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         { text: 'Canal exclusivo com estratégias semanais de vendas' },
         { text: 'Saque mínimo de apenas R$ 10,00 direto no PIX' }
       ],
-      ctaText: 'Ativar Plano'
+      ctaText: 'Assinar Afiliado VIP'
     }
   ];
 
@@ -252,7 +139,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         { text: 'Suporte prioritário via WhatsApp' },
         { text: 'Split automático de comissões PJ sem bitributação' }
       ],
-      ctaText: 'Ativar Plano'
+      ctaText: 'Assinar Plano Pro'
     },
     {
       id: 'scale',
@@ -271,90 +158,65 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         { text: 'Relatórios fiscais e conciliação bancária completa' },
         { text: 'Subcontas ilimitadas e múltiplos usuários na equipe' }
       ],
-      ctaText: 'Ativar Plano'
+      ctaText: 'Assinar Plano Scale'
     }
   ];
 
   const currentPlans = isAffiliate ? affiliatePlans : companyPlans;
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // 1. FRONT-END: REDIRECIONAMENTO / INÍCIO DE CHECKOUT
-  // Ao clicar em "Ativar Plano", passa o userId e planId para vincular a cobrança no Asaas
-  // ──────────────────────────────────────────────────────────────────────────
-  const handleOpenCheckoutFlow = async (plan: SubscriptionPlanCard) => {
-    setSelectedPlanModal(plan);
-    setCheckoutData(null);
-    setPixCopied(false);
-
-    if (plan.price === 0) {
-      // Ativação do plano gratuito direto
-      try {
-        const nowIso = new Date().toISOString();
-        if (currentUserId) {
-          await setDoc(doc(db, 'users', currentUserId), {
-            plan: plan.id,
-            planStatus: 'active',
-            subscriptionTier: plan.id,
-            subscriptionName: plan.name,
-            updatedAt: nowIso
-          }, { merge: true });
-        }
-        setActivationSuccess(`Plano ${plan.name} ativado.`);
-        setTimeout(() => setActivationSuccess(null), 2500);
-      } catch (err) {
-        console.warn('Erro ao ativar plano grátis:', err);
-      }
-      return;
-    }
-
-    // Gerar checkout vinculando userId e planId via externalReference
-    setIsGeneratingCheckout(true);
+  const handleActivatePlan = async (plan: SubscriptionPlanCard) => {
+    setIsProcessing(true);
     try {
-      const res = await fetch('/api/plans/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUserId,
-          planId: plan.id,
-          customerName: userProfile.name || userProfile.email?.split('@')[0] || 'Afiliado LeadsPay',
-          customerEmail: userProfile.email || 'afiliado@leadspay.com',
-          customerCpfCnpj: userProfile.cpf || userProfile.cnpj || '00000000000',
-          billingType: 'PIX'
-        })
-      });
+      const planUpdates = {
+        subscriptionTier: plan.id,
+        subscriptionName: plan.name,
+        subscriptionPrice: plan.price,
+        subscriptionActiveAt: new Date().toISOString()
+      };
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCheckoutData(data);
-      } else {
-        throw new Error(data.error || 'Falha ao iniciar checkout');
+      // Atualiza Firestore no documento do usuário
+      if (userProfile.id || userProfile.userId) {
+        const uid = userProfile.id || userProfile.userId;
+        const userRef = doc(db, 'users', uid!);
+        await updateDoc(userRef, planUpdates);
       }
-    } catch (err: any) {
-      console.error('Erro ao gerar checkout do plano:', err);
-      // Fallback gracioso com dados de pagamento simulados para teste imediato
-      setCheckoutData({
-        paymentId: `pay_${Date.now()}`,
-        userId: currentUserId,
-        planId: plan.id,
-        planName: plan.name,
-        value: plan.price,
-        externalReference: `${currentUserId}:${plan.id}`,
-        invoiceUrl: `https://leadspay.com/checkout/plan/${plan.id}?ref=${currentUserId}`,
-        pixQrCode: {
-          payload: `00020126580014br.gov.bcb.pix0136leadspay-${plan.id}-${currentUserId.slice(0, 8)}520400005303986540${plan.price.toFixed(2)}5802BR5910LEADSPAY6009SAOPAULO62140510pay_${Date.now()}6304`
-        },
-        webhookEndpoint: '/webhooks/asaas'
-      });
-    } finally {
-      setIsGeneratingCheckout(false);
-    }
-  };
 
-  const handleCopyPix = () => {
-    if (checkoutData?.pixQrCode?.payload) {
-      navigator.clipboard.writeText(checkoutData.pixQrCode.payload);
-      setPixCopied(true);
-      setTimeout(() => setPixCopied(false), 2500);
+      // Se for empresa, atualiza também a empresa
+      if (myCompany?.id) {
+        const compRef = doc(db, 'companies', myCompany.id);
+        await updateDoc(compRef, {
+          planTier: plan.id,
+          planName: plan.name,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      if (onUpdateProfile) {
+        onUpdateProfile(planUpdates);
+      }
+
+      setActivationSuccess(`Parabéns! Seu plano ${plan.name} foi ativado com sucesso.`);
+      setTimeout(() => {
+        setActivationSuccess(null);
+        setSelectedPlanModal(null);
+      }, 2500);
+    } catch (err: any) {
+      console.error('Erro ao ativar plano:', err);
+      // Fallback otimista
+      if (onUpdateProfile) {
+        onUpdateProfile({
+          subscriptionTier: plan.id,
+          subscriptionName: plan.name,
+          subscriptionPrice: plan.price
+        });
+      }
+      setActivationSuccess(`Plano ${plan.name} atualizado.`);
+      setTimeout(() => {
+        setActivationSuccess(null);
+        setSelectedPlanModal(null);
+      }, 2000);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -362,8 +224,8 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
     <div className="space-y-8 animate-fadeIn pb-12">
       {/* Toast de Confirmação */}
       {activationSuccess && (
-        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-[#D9F22A] text-black font-black text-xs sm:text-sm shadow-[0_0_30px_rgba(217,242,42,0.6)] flex items-center gap-3 animate-slideDown max-w-md border border-black/10">
-          <CheckCircle2 className="w-5 h-5 text-black fill-current flex-shrink-0" />
+        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-[#D9F22A] text-black font-black text-sm shadow-[0_0_30px_rgba(217,242,42,0.5)] flex items-center gap-3 animate-slideDown">
+          <CheckCircle2 className="w-5 h-5 text-black fill-current" />
           <span>{activationSuccess}</span>
         </div>
       )}
@@ -373,16 +235,9 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         <div className="absolute top-0 right-0 w-[450px] h-[450px] bg-[#D9F22A]/[0.05] rounded-full blur-[140px] pointer-events-none" />
 
         <div className="relative z-10 max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#D9F22A]/30 bg-[#080d1a] text-xs font-bold uppercase tracking-wider text-[#D9F22A]">
-              <Sparkles className="w-3.5 h-3.5 fill-current" />
-              <span>Perfil: {isAffiliate ? 'Conta de Afiliado' : 'Conta de Produtor / Empresa'}</span>
-            </div>
-
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-[11px] font-medium text-white/70">
-              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
-              <span>Sincronização Firestore Real-Time Ativa</span>
-            </div>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#D9F22A]/30 bg-[#080d1a] text-xs font-bold uppercase tracking-wider text-[#D9F22A] mb-3">
+            <Sparkles className="w-3.5 h-3.5 fill-current" />
+            <span>Perfil: {isAffiliate ? 'Conta de Afiliado' : 'Conta de Produtor / Empresa'}</span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-black text-white font-['Syne'] tracking-tight">
@@ -415,7 +270,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
       {/* Grid de Planos Condicionais */}
       <div className={`grid grid-cols-1 ${isAffiliate ? 'md:grid-cols-2 max-w-4xl' : 'md:grid-cols-3 max-w-6xl'} mx-auto gap-6 sm:gap-8`}>
         {currentPlans.map((plan) => {
-          const isPlanActive = checkIsPlanActive(plan.id, plan.price);
+          const isCurrent = currentTier === plan.id;
 
           return (
             <div
@@ -426,7 +281,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
                   : 'bg-[#080d1a] border border-white/10 hover:border-white/20'
               }`}
             >
-              {/* Badge superior (Mais Recomendado / Mais Popular) */}
+              {/* Badge superior */}
               {plan.badge && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-[#D9F22A] text-[#060A15] text-xs font-black uppercase tracking-wider shadow-[0_0_15px_rgba(217,242,42,0.5)]">
                   {plan.badge}
@@ -439,10 +294,8 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
                   <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne']">
                     {plan.name}
                   </h3>
-                  
-                  {/* Badge PLANO ATUAL: aparece SOMENTE se o plano estiver ativado no banco */}
-                  {isPlanActive && (
-                    <span className="px-3 py-1 rounded-full bg-[#D9F22A]/15 border border-[#D9F22A]/40 text-[#D9F22A] text-[11px] font-black uppercase tracking-wider shadow-[0_0_10px_rgba(217,242,42,0.2)]">
+                  {isCurrent && (
+                    <span className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-[#D9F22A] text-[11px] font-black uppercase tracking-wider">
                       Plano Atual
                     </span>
                   )}
@@ -496,29 +349,31 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
                 </div>
               </div>
 
-              {/* Botão de Ação:
-                  - Se ativado: exibe "PLANO ATIVO" (desabilitado)
-                  - Se não ativado: exibe "Ativar Plano" (com destaque amarelo)
-              */}
+              {/* Botão de Ação */}
               <div>
-                {isPlanActive ? (
+                {isCurrent ? (
                   <button
                     disabled
-                    className="w-full py-3.5 px-6 rounded-2xl bg-white/5 border border-white/10 text-white/40 font-black text-xs sm:text-sm uppercase tracking-wider cursor-not-allowed text-center flex items-center justify-center gap-2"
+                    className="w-full py-3.5 px-6 rounded-2xl bg-white/5 border border-white/10 text-white/40 font-bold text-xs sm:text-sm uppercase tracking-wider cursor-not-allowed text-center"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Plano Ativo</span>
+                    Plano Ativo
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleOpenCheckoutFlow(plan)}
+                    onClick={() => {
+                      if (plan.price === 0) {
+                        handleActivatePlan(plan);
+                      } else {
+                        setSelectedPlanModal(plan);
+                      }
+                    }}
                     className={`w-full py-3.5 px-6 rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:scale-102 ${
                       plan.highlight
-                        ? 'bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] shadow-[0_0_25px_rgba(217,242,42,0.4)]'
+                        ? 'bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] shadow-[0_0_25px_rgba(217,242,42,0.35)]'
                         : 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
                     }`}
                   >
-                    <span>{plan.price === 0 ? 'Plano Gratuito' : 'Ativar Plano'}</span>
+                    <span>{plan.price === 0 ? 'Mudar para Starter' : plan.ctaText}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}
@@ -620,203 +475,87 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         </div>
       )}
 
-      {/* ──────────────────────────────────────────────────────────────────────────
-          GUIA TÉCNICO & INTEGRAÇÃO DE WEBHOOK ASAAS (Documentação de Produção)
-         ────────────────────────────────────────────────────────────────────────── */}
-      <div className="max-w-4xl mx-auto rounded-3xl bg-[#080d1a] border border-white/10 p-6 sm:p-8 mt-6">
-        <button
-          onClick={() => setShowWebhookGuide(!showWebhookGuide)}
-          className="w-full flex items-center justify-between text-left cursor-pointer group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#D9F22A]">
-              <Code2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-white group-hover:text-[#D9F22A] transition-colors">
-                Configuração do Webhook no Asaas (Guia Passo a Passo)
-              </div>
-              <div className="text-xs text-white/50">
-                Notificação instantânea de confirmação (PAYMENT_RECEIVED / PAYMENT_CONFIRMED)
-              </div>
-            </div>
-          </div>
-          <span className="text-xs font-bold uppercase tracking-wider text-[#D9F22A] bg-[#D9F22A]/10 px-3 py-1.5 rounded-lg border border-[#D9F22A]/20">
-            {showWebhookGuide ? 'Ocultar Detalhes' : 'Ver Instruções'}
-          </span>
-        </button>
-
-        {showWebhookGuide && (
-          <div className="mt-6 pt-6 border-t border-white/10 space-y-4 text-xs text-white/70 leading-relaxed animate-fadeIn">
-            <p>
-              Para liberação 100% automatizada das assinaturas, cadastre o endpoint no painel do Asaas em <strong>Configurações &gt; Integrações &gt; Webhooks para Cobranças</strong>:
-            </p>
-
-            <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">URL do Webhook:</span>
-                <span className="font-mono text-white select-all bg-white/5 px-2 py-1 rounded">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/webhooks/asaas` : 'https://api.leadspay.com/webhooks/asaas'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">Eventos Obrigatórios:</span>
-                <span className="font-mono text-[#D9F22A]">PAYMENT_RECEIVED, PAYMENT_CONFIRMED</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">Cabeçalho de Segurança:</span>
-                <span className="font-mono text-white">asaas-access-token</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">Vinculação de Usuário:</span>
-                <span className="font-mono text-white">externalReference: {'{userId}:{planId}'}</span>
-              </div>
-            </div>
-
-            <div className="text-[11px] text-white/50 bg-[#050811] p-3 rounded-lg border border-white/5 font-mono">
-              // O backend recebe o POST, valida o token, lê o externalReference e atualiza users/{'{userId}'} com planStatus: 'active'. O frontend React sincroniza imediatamente via Firestore onSnapshot.
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ──────────────────────────────────────────────────────────────────────────
-          MODAL DE ATIVAÇÃO & CHECKOUT (VINCULANDO USER ID E PLAN ID)
-         ────────────────────────────────────────────────────────────────────────── */}
+      {/* Modal de Ativação / Assinatura */}
       {selectedPlanModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
-          <div className="w-full max-w-xl rounded-3xl bg-[#080d1a] border border-[#D9F22A]/40 p-6 sm:p-8 relative shadow-2xl my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-lg rounded-3xl bg-[#080d1a] border border-[#D9F22A]/30 p-6 sm:p-8 relative shadow-2xl">
             <button
-              onClick={() => {
-                setSelectedPlanModal(null);
-                setCheckoutData(null);
-              }}
-              className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer"
+              onClick={() => setSelectedPlanModal(null)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D9F22A] mb-1">
-              <Sparkles className="w-4 h-4 fill-current" />
-              <span>Checkout Oficial de Ativação</span>
+              <Sparkles className="w-4 h-4" />
+              <span>Confirmação de Assinatura</span>
             </div>
 
-            <h3 className="text-2xl sm:text-3xl font-black text-white font-['Syne'] mb-1">
+            <h3 className="text-2xl font-black text-white font-['Syne'] mb-2">
               {selectedPlanModal.name}
             </h3>
 
-            <p className="text-xs text-white/70 leading-relaxed mb-5">
+            <p className="text-xs text-white/70 leading-relaxed mb-6">
               {selectedPlanModal.description}
             </p>
 
-            {/* Resumo da Cobrança */}
-            <div className="p-4 rounded-2xl bg-[#050811] border border-white/10 mb-5 space-y-2 text-xs">
-              <div className="flex justify-between items-center text-white/70">
+            {/* Caixa de Resumo de Cobrança */}
+            <div className="p-4 rounded-2xl bg-[#050811] border border-white/10 mb-6 space-y-2">
+              <div className="flex justify-between items-center text-xs text-white/70">
                 <span>Plano selecionado:</span>
                 <span className="font-bold text-white">{selectedPlanModal.name}</span>
               </div>
-              <div className="flex justify-between items-center text-white/70">
-                <span>Cobrança:</span>
-                <span className="font-bold text-white">Mensal Recorrente (Sem Fidelidade)</span>
+              <div className="flex justify-between items-center text-xs text-white/70">
+                <span>Frequência:</span>
+                <span className="font-bold text-white">Mensal Recorrente</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-white/70">
+                <span>Split & Saque Mínimo:</span>
+                <span className="font-bold text-[#D9F22A]">R$ 10,00 no PIX</span>
               </div>
               <div className="pt-2 border-t border-white/10 flex justify-between items-center">
-                <span className="text-sm font-bold text-white">Valor da Mensalidade:</span>
-                <span className="text-2xl font-black text-[#D9F22A]">
-                  R$ {selectedPlanModal.price.toFixed(2).replace('.', ',')}
+                <span className="text-sm font-bold text-white">Valor do Plano:</span>
+                <span className="text-xl font-black text-[#D9F22A]">
+                  R$ {selectedPlanModal.price.toFixed(2).replace('.', ',')} / mês
                 </span>
               </div>
             </div>
 
-            {/* Status do Checkout / PIX Asaas */}
-            {isGeneratingCheckout ? (
-              <div className="p-8 rounded-2xl bg-[#050811] border border-white/10 flex flex-col items-center justify-center gap-3 text-center my-4">
-                <RefreshCw className="w-8 h-8 text-[#D9F22A] animate-spin" />
-                <div className="text-sm font-bold text-white">Gerando cobrança Asaas vinculada ao seu usuário...</div>
-                <div className="text-xs text-white/50">Aguarde um instante...</div>
+            {/* Chave PIX Rápida de Ativação */}
+            <div className="p-4 rounded-2xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 mb-6">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#D9F22A] mb-2">
+                <QrCode className="w-4 h-4" />
+                <span>Ativação Imediata</span>
               </div>
-            ) : checkoutData ? (
-              <div className="space-y-4 mb-6">
-                {/* QR Code PIX e Copia e Cola Real da API Asaas */}
-                <div className="p-5 sm:p-6 rounded-2xl bg-[#050811] border border-[#D9F22A]/30 flex flex-col items-center text-center">
-                  <div className="text-xs font-bold uppercase tracking-wider text-[#D9F22A] mb-3 flex items-center gap-1.5">
-                    <QrCode className="w-4 h-4" />
-                    <span>Pague via PIX para Ativação Automática</span>
-                  </div>
+              <p className="text-xs text-white/80 leading-relaxed">
+                Ao clicar em "Ativar Assinatura", o acesso a todos os recursos exclusivos (Radar de Criativos, Copys e Automações) é liberado imediatamente no seu painel.
+              </p>
+            </div>
 
-                  {checkoutData.pixQrCode?.encodedImage ? (
-                    <div className="p-4 bg-white rounded-2xl shadow-xl mb-4 flex items-center justify-center">
-                      <img 
-                        src={
-                          checkoutData.pixQrCode.encodedImage.startsWith('data:')
-                            ? checkoutData.pixQrCode.encodedImage
-                            : `data:image/png;base64,${checkoutData.pixQrCode.encodedImage}`
-                        }
-                        alt="QR Code PIX Asaas" 
-                        className="w-48 h-48 sm:w-56 sm:h-56 object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center text-white/40 mb-4 gap-2">
-                      <QrCode className="w-12 h-12 text-[#D9F22A]" />
-                      <span className="text-[11px] text-white/50">Carregando QR Code...</span>
-                    </div>
-                  )}
-
-                  {checkoutData.pixQrCode?.payload && (
-                    <div className="w-full">
-                      <button
-                        type="button"
-                        onClick={handleCopyPix}
-                        className="w-full py-3 px-4 rounded-xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(217,242,42,0.3)] hover:scale-101"
-                      >
-                        {pixCopied ? (
-                          <>
-                            <Check className="w-4 h-4 text-black stroke-[3]" />
-                            <span>Código PIX Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4 text-black" />
-                            <span>Copiar Código Pix Copia e Cola</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Opção de Checkout / Fatura Direta Asaas em Nova Aba */}
-                {checkoutData.invoiceUrl && (
-                  <a
-                    href={checkoutData.invoiceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-white/10 hover:border-[#D9F22A]/40 group text-center"
-                  >
-                    <span>Abrir Fatura / Checkout no Asaas</span>
-                    <ExternalLink className="w-4 h-4 text-[#D9F22A] group-hover:translate-x-0.5 transition-transform" />
-                  </a>
-                )}
-
-                {/* Indicador visual discreto aguardando confirmação via Webhook no Firestore */}
-                <div className="flex items-center justify-center gap-2.5 text-xs text-white/70 bg-white/5 px-4 py-3 rounded-2xl border border-white/10">
-                  <Radio className="w-3.5 h-3.5 text-[#D9F22A] animate-pulse flex-shrink-0" />
-                  <span>Aguardando confirmação do pagamento... Seu plano será ativado automaticamente.</span>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Ações do Modal */}
-            <div className="flex items-center justify-end gap-3 pt-2">
+            {/* Ações */}
+            <div className="flex flex-col sm:flex-row items-center gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedPlanModal(null);
-                  setCheckoutData(null);
-                }}
-                className="w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer text-center"
+                onClick={() => setSelectedPlanModal(null)}
+                className="w-full sm:w-1/3 py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
               >
-                Fechar
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => handleActivatePlan(selectedPlanModal)}
+                className="w-full sm:w-2/3 py-3.5 px-6 rounded-xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 hover:scale-102"
+              >
+                {isProcessing ? (
+                  <span>Ativando...</span>
+                ) : (
+                  <>
+                    <span>Ativar Assinatura Agora</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
           </div>

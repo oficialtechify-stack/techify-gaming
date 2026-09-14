@@ -376,8 +376,6 @@ export interface UserSellerProfile {
   verificationRejectionReason?: string;
   updatedAt?: string;
   // Plano de Assinatura LeadsPay
-  plan?: string;
-  planStatus?: 'active' | 'inactive' | 'pending';
   subscriptionTier?: 'afiliado_starter' | 'afiliado_vip' | 'starter' | 'pro' | 'scale' | string;
   subscriptionName?: string;
   subscriptionPrice?: number;

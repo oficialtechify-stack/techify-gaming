@@ -1028,193 +1028,6 @@ async function registrarClienteCheckout(dadosCheckout: {
     console.error('❌ [Remarketing] Erro ao registrar cliente no banco:', err);
   }
 }
- 
-/**
-  * POST /api/plans/checkout
-  * Cria uma cobrança ou assinatura no Asaas para ativação de Plano (ex: Afiliado VIP, Pro, Scale)
-  * Vincula o userId e planId via externalReference
-  */
-app.post('/api/plans/checkout', async (req, res) => {
-  try {
-    const { userId, planId, customerName, customerEmail, customerCpfCnpj, billingType = 'PIX' } = req.body || {};
-
-    if (!userId || !planId) {
-      return res.status(400).json({ error: 'userId e planId são obrigatórios' });
-    }
-
-    const planPrices: Record<string, { name: string; price: number }> = {
-      afiliado_starter: { name: 'Afiliado Starter', price: 0 },
-      afiliado_vip: { name: 'Afiliado VIP', price: 29.90 },
-      starter: { name: 'Starter', price: 0 },
-      pro: { name: 'Plano Pro', price: 49.90 },
-      scale: { name: 'Plano Scale', price: 149.90 }
-    };
-
-    const targetPlan = planPrices[planId] || { name: planId, price: 29.90 };
-
-    if (targetPlan.price === 0) {
-      // Plano grátis - ativa diretamente
-      const nowIso = new Date().toISOString();
-      await setDoc(doc(db, 'users', userId), {
-        plan: planId,
-        planStatus: 'active',
-        subscriptionTier: planId,
-        subscriptionName: targetPlan.name,
-        updatedAt: nowIso
-      }, { merge: true });
-
-      return res.status(200).json({
-        success: true,
-        activatedImmediately: true,
-        planId,
-        planName: targetPlan.name
-      });
-    }
-
-    const externalReference = `${userId}:${planId}`;
-    const description = `Assinatura ${targetPlan.name} LeadsPay - Ref: ${userId}`;
-    const cleanDocNum = customerCpfCnpj ? cleanDocument(customerCpfCnpj) : '00000000000';
-    const clientName = customerName || `Usuário LeadsPay ${userId.slice(0, 6)}`;
-    const clientEmail = customerEmail || `${userId}@leadspay.com`;
-
-    console.log(`💳 [/api/plans/checkout] Gerando checkout Asaas para ${planId} (R$ ${targetPlan.price}) - Usuário: ${userId}`);
-
-    let asaasResult: any = null;
-    try {
-      // 1. Cria ou obtém cliente no Asaas
-      const customerId = await getOrCreateCustomer({
-        name: clientName,
-        email: clientEmail,
-        cpfCnpj: cleanDocNum
-      });
-
-      // 2. Cria cobrança no Asaas com externalReference
-      const dueDate = new Date().toISOString().split('T')[0];
-
-      if (billingType === 'PIX') {
-        const pixRes = await createPixPayment(
-          customerId,
-          targetPlan.price,
-          description,
-          undefined,
-          {
-            externalReference,
-            dueDate
-          }
-        );
-
-        asaasResult = {
-          paymentId: pixRes.paymentId,
-          invoiceUrl: pixRes.invoiceUrl || pixRes.bankSlipUrl,
-          bankSlipUrl: pixRes.bankSlipUrl,
-          pixQrCode: {
-            encodedImage: pixRes.encodedImage,
-            payload: pixRes.payload,
-            expirationDate: pixRes.expirationDate
-          }
-        };
-      } else {
-        const paymentData = await createAsaasPayment({
-          customer: customerId,
-          billingType: 'CREDIT_CARD',
-          value: targetPlan.price,
-          dueDate,
-          description,
-          externalReference,
-          notificationDisabled: false
-        });
-
-        asaasResult = {
-          paymentId: paymentData.id,
-          invoiceUrl: paymentData.invoiceUrl || paymentData.bankSlipUrl,
-          bankSlipUrl: paymentData.bankSlipUrl,
-          pixQrCode: null
-        };
-      }
-    } catch (asaasErr: any) {
-      console.warn('⚠️ [Asaas Plans Checkout] Erro ao processar via Asaas:', asaasErr?.message);
-    }
-
-    const finalPaymentId = asaasResult?.paymentId || `pay_sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const finalInvoiceUrl = asaasResult?.invoiceUrl || `https://leadspay.com/checkout/plan/${planId}?ref=${userId}`;
-    const finalPixPayload = asaasResult?.pixQrCode?.payload || 
-      `00020126580014br.gov.bcb.pix0136leadspay-${planId}-${userId.slice(0, 8)}520400005303986540${targetPlan.price.toFixed(2)}5802BR5910LEADSPAY6009SAOPAULO62140510${finalPaymentId.slice(0, 10)}6304`;
-    
-    let qrCodeBase64 = asaasResult?.pixQrCode?.encodedImage;
-    if (!qrCodeBase64 && finalPixPayload) {
-      try {
-        qrCodeBase64 = (await QRCode.toDataURL(finalPixPayload)).replace(/^data:image\/png;base64,/, '');
-      } catch (_) {}
-    }
-
-    return res.status(200).json({
-      success: true,
-      paymentId: finalPaymentId,
-      userId,
-      planId,
-      planName: targetPlan.name,
-      value: targetPlan.price,
-      externalReference,
-      invoiceUrl: finalInvoiceUrl,
-      pixQrCode: {
-        encodedImage: qrCodeBase64,
-        payload: finalPixPayload,
-        expirationDate: asaasResult?.pixQrCode?.expirationDate || new Date(Date.now() + 30 * 60 * 1000).toISOString()
-      },
-      webhookEndpoint: '/webhooks/asaas'
-    });
-  } catch (err: any) {
-    console.error('❌ Erro em /api/plans/checkout:', err);
-    return res.status(500).json({ error: err.message || 'Erro ao gerar checkout do plano' });
-  }
-});
-
-/**
- * POST /api/webhooks/asaas/simulate
- * Rota para teste instantâneo da confirmação do webhook Asaas e validação da liberação em tempo real
- */
-app.post('/api/webhooks/asaas/simulate', async (req, res) => {
-  try {
-    const { userId, planId = 'afiliado_vip', event = 'PAYMENT_CONFIRMED' } = req.body || {};
-    if (!userId) {
-      return res.status(400).json({ error: 'userId obrigatório' });
-    }
-
-    const nowIso = new Date().toISOString();
-    const planDisplayName = 
-      planId === 'afiliado_vip' ? 'Afiliado VIP' :
-      planId === 'pro' ? 'Pro' :
-      planId === 'scale' ? 'Scale' : planId;
-
-    await setDoc(doc(db, 'users', userId), {
-      plan: planId,
-      planStatus: 'active',
-      subscriptionTier: planId,
-      subscriptionName: planDisplayName,
-      subscriptionActiveAt: nowIso,
-      updatedAt: nowIso
-    }, { merge: true });
-
-    try {
-      await setDoc(doc(db, 'user_profiles', userId), {
-        plan: planId,
-        planStatus: 'active',
-        subscriptionTier: planId,
-        subscriptionName: planDisplayName,
-        subscriptionActiveAt: nowIso,
-        updatedAt: nowIso
-      }, { merge: true });
-    } catch (_) {}
-
-    return res.status(200).json({
-      success: true,
-      message: `Simulação de webhook Asaas efetuada com sucesso. Plano ${planDisplayName} ativo para o usuário ${userId}.`,
-      received: true
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
-  }
-});
 
 /**
  * POST /api/v3/payments
@@ -2258,19 +2071,17 @@ app.get(['/api/payments/asaas/:id', '/api/payments/pix/:id', '/api/pix/:id'], as
 });
 
 /**
- * POST /webhooks/asaas, /webhook/asaas, /api/webhooks/asaas, /api/webhook/asaas
+ * POST /webhook/asaas, /api/webhooks/asaas, /api/webhook/asaas
  * Webhook Oficial do Asaas para recebimento de notificações de pagamento em tempo real
- * Trata PAYMENT_RECEIVED, PAYMENT_CONFIRMED, PAYMENT_REFUNDED e PAYMENT_DELETED
- * Libera planos de assinatura automaticamente e processa liquidação financeira
+ * Trata PAYMENT_RECEIVED, PAYMENT_REFUNDED e PAYMENT_DELETED com liquidação, estorno e revogação de acesso
  */
-app.post(['/webhooks/asaas', '/webhook/asaas', '/api/webhooks/asaas', '/api/webhook/asaas'], async (req, res) => {
+app.post(['/webhook/asaas', '/api/webhooks/asaas', '/api/webhook/asaas'], async (req, res) => {
   try {
-    // 1. Validação de token de segurança (token do Asaas no cabeçalho asaas-access-token)
+    // 1. Validação básica de segurança (token do Asaas no header)
     const asaasToken = req.headers['asaas-access-token'];
-    const expectedSecret = process.env.ASAAS_WEBHOOK_SECRET || process.env.ASAAS_WEBHOOK_TOKEN;
-    if (expectedSecret && asaasToken !== expectedSecret) {
+    if (process.env.ASAAS_WEBHOOK_TOKEN && asaasToken !== process.env.ASAAS_WEBHOOK_TOKEN) {
       console.warn(`[Webhook Asaas] Token de acesso não autorizado: ${asaasToken}`);
-      return res.status(401).send('Não autorizado');
+      return res.status(401).send('Unauthorized');
     }
 
     const { event, payment } = req.body || {};
@@ -2280,8 +2091,7 @@ app.post(['/webhooks/asaas', '/webhook/asaas', '/api/webhooks/asaas', '/api/webh
     console.log(`[Webhook Asaas Server] Evento recebido: ${eventType}`, {
       paymentId: paymentId,
       customer: payment?.customer,
-      value: payment?.value,
-      externalReference: payment?.externalReference
+      value: payment?.value
     });
 
     // 2. Intercepta eventos PAYMENT_RECEIVED e PAYMENT_CONFIRMED
@@ -2289,96 +2099,7 @@ app.post(['/webhooks/asaas', '/webhook/asaas', '/api/webhooks/asaas', '/api/webh
       const customerId = payment?.customer;
       const amountPaid = payment?.value;
 
-      console.log(`✅ [Webhook Asaas Server] Pagamento ${paymentId || 'confirmado'} aprovado. Processando liberação...`);
-
-      // ── ATIVAÇÃO AUTOMÁTICA DE PLANO VIA WEBHOOK (externalReference) ──
-      const rawExternalRef = payment?.externalReference || req.body?.externalReference;
-      if (rawExternalRef && typeof rawExternalRef === 'string') {
-        try {
-          let targetUserId = rawExternalRef.trim();
-          let targetPlanId = 'afiliado_vip';
-
-          if (targetUserId.includes(':')) {
-            const parts = targetUserId.split(':');
-            targetUserId = parts[0];
-            targetPlanId = parts[1] || 'afiliado_vip';
-          } else if (targetUserId.startsWith('{')) {
-            try {
-              const parsed = JSON.parse(targetUserId);
-              targetUserId = parsed.userId || targetUserId;
-              targetPlanId = parsed.planId || targetPlanId;
-            } catch (_) {}
-          } else {
-            // Se apenas o userId foi passado como externalReference, deduz o plano pela descrição ou valor
-            const desc = String(payment?.description || '').toLowerCase();
-            const val = Number(payment?.value || 0);
-            if (desc.includes('scale') || val >= 140) {
-              targetPlanId = 'scale';
-            } else if (desc.includes('pro') || (val >= 40 && val < 100)) {
-              targetPlanId = 'pro';
-            } else {
-              targetPlanId = 'afiliado_vip';
-            }
-          }
-
-          if (targetUserId) {
-            const nowIso = new Date().toISOString();
-            console.log(`⚡ [Webhook Asaas] Ativando plano '${targetPlanId}' para o usuário ID: ${targetUserId}`);
-
-            const planDisplayName = 
-              targetPlanId === 'afiliado_vip' ? 'Afiliado VIP' :
-              targetPlanId === 'pro' ? 'Pro' :
-              targetPlanId === 'scale' ? 'Scale' : targetPlanId;
-
-            // Atualiza na coleção 'users' (padrão solicitado pelo usuário)
-            const userDocRef = doc(db, 'users', targetUserId);
-            await setDoc(userDocRef, {
-              plan: targetPlanId,
-              planStatus: 'active',
-              subscriptionTier: targetPlanId,
-              subscriptionName: planDisplayName,
-              subscriptionActiveAt: nowIso,
-              updatedAt: nowIso
-            }, { merge: true });
-
-            // Atualiza também na coleção 'user_profiles' se existir
-            try {
-              const profDocRef = doc(db, 'user_profiles', targetUserId);
-              await setDoc(profDocRef, {
-                plan: targetPlanId,
-                planStatus: 'active',
-                subscriptionTier: targetPlanId,
-                subscriptionName: planDisplayName,
-                subscriptionActiveAt: nowIso,
-                updatedAt: nowIso
-              }, { merge: true });
-            } catch (profErr) {
-              console.warn('[Webhook Asaas] Aviso ao sincronizar perfil do usuário:', profErr);
-            }
-
-            // Se for plano de empresa/produtor, atualiza as empresas associadas
-            if (['starter', 'pro', 'scale'].includes(targetPlanId)) {
-              try {
-                const compQuery = query(collection(db, 'companies'), where('userId', '==', targetUserId));
-                const compSnaps = await getDocs(compQuery);
-                for (const cDoc of compSnaps.docs) {
-                  await updateDoc(doc(db, 'companies', cDoc.id), {
-                    planTier: targetPlanId,
-                    planStatus: 'active',
-                    updatedAt: nowIso
-                  });
-                }
-              } catch (compErr) {
-                console.warn('[Webhook Asaas] Aviso ao sincronizar empresa do usuário:', compErr);
-              }
-            }
-
-            console.log(`✅ [Webhook Asaas] Plano '${targetPlanId}' ATIVO com sucesso para o usuário ${targetUserId}!`);
-          }
-        } catch (planActivationErr) {
-          console.error('[Webhook Asaas Error] Erro ao ativar plano do usuário:', planActivationErr);
-        }
-      }
+      console.log(`✅ [Webhook Asaas Server] Pagamento ${paymentId} aprovado. Liberando acesso...`);
 
       if (paymentId) {
         const saleRef = doc(db, 'sales', String(paymentId));

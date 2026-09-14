@@ -67,12 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               currentSalesProgress: typeof data.currentSalesProgress === 'number' && !isNaN(data.currentSalesProgress) ? data.currentSalesProgress : 0,
               partnerLevel: data.partnerLevel || 'Afiliado Starter',
               activeRoleMode: data.activeRoleMode || 'afiliado',
-              role: data.role || (data.activeRoleMode === 'empresa' ? 'Empresa / Produtor' : 'Afiliado de Alta Performance'),
-              plan: data.plan,
-              planStatus: data.planStatus,
-              subscriptionTier: data.subscriptionTier,
-              subscriptionName: data.subscriptionName,
-              subscriptionActiveAt: data.subscriptionActiveAt
+              role: data.role || (data.activeRoleMode === 'empresa' ? 'Empresa / Produtor' : 'Afiliado de Alta Performance')
             };
             setUserProfile(safeProfile);
             if (safeProfile.activeRoleMode) {
