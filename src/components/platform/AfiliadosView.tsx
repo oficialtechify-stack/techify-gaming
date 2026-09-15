@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CompanyPlan, UserSellerProfile } from '../../types/platform';
+import { CompanyPlan, UserSellerProfile, UserAffiliation } from '../../types/platform';
 import { 
   Link as LinkIcon, 
   Copy, 
@@ -12,17 +12,24 @@ import {
   Share2, 
   ArrowRight,
   ShieldAlert,
-  Download
+  Download,
+  Lock,
+  Zap
 } from 'lucide-react';
+import { formatAffiliatePlanUrl } from '../../utils/affiliateTracking';
 
 interface AfiliadosViewProps {
   platforms: CompanyPlan[];
   userProfile: UserSellerProfile;
+  affiliations?: UserAffiliation[];
+  onJoinAffiliate?: (plan: CompanyPlan) => void;
 }
 
 export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
   platforms,
-  userProfile
+  userProfile,
+  affiliations = [],
+  onJoinAffiliate
 }) => {
   const [selectedProductId, setSelectedProductId] = useState<string>(platforms[0]?.id || '');
   const [utmSource, setUtmSource] = useState<string>('instagram');
@@ -52,11 +59,20 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
     status: 'Ativo'
   };
 
-  const selectedSlug = (selectedProduct as any).slug || selectedProduct.id || 'checkout';
-  const selectedCode = (selectedProduct as any).affiliateCode || 'LEADS';
-  const generatedAffiliateUrl = `https://leadspay.com/checkout/${selectedSlug}?ref=${selectedCode}&utm_source=${utmSource}&utm_medium=${utmMedium}&utm_campaign=${utmCampaign}`;
+  // Enforce individual affiliate link: Only available if user is affiliated with this specific plan
+  const userAffiliation = affiliations.find(a => 
+    (a.planId && a.planId === selectedProduct.id) || 
+    (a.plan_id && a.plan_id === selectedProduct.id)
+  );
+  const isAffiliatedToSelected = Boolean(userAffiliation && (userAffiliation.affiliateCode || userAffiliation.affiliate_code));
+  const activeAffiliateCode = userAffiliation?.affiliateCode || userAffiliation?.affiliate_code || '';
+
+  const generatedAffiliateUrl = isAffiliatedToSelected
+    ? `${formatAffiliatePlanUrl(selectedProduct.id, activeAffiliateCode)}&utm_source=${encodeURIComponent(utmSource)}&utm_medium=${encodeURIComponent(utmMedium)}&utm_campaign=${encodeURIComponent(utmCampaign)}`
+    : '';
 
   const handleCopy = () => {
+    if (!isAffiliatedToSelected) return;
     navigator.clipboard.writeText(generatedAffiliateUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -141,33 +157,67 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
           </div>
         </div>
 
-        {/* Link Result Box */}
-        <div className="p-4 rounded-xl bg-[#050811] border border-[#D9F22A]/30 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="w-full min-w-0">
-            <span className="text-[10px] uppercase font-bold text-[#D9F22A] block mb-1">
-              Link Rastreado Pronto para Divulgação & Contratos:
-            </span>
-            <div className="font-mono text-xs text-white/90 truncate select-all">
-              {generatedAffiliateUrl}
+        {/* Link Result Box: Only shown if user is affiliated to this plan */}
+        {isAffiliatedToSelected ? (
+          <div className="p-4 rounded-xl bg-[#050811] border border-[#D9F22A]/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="w-full min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] uppercase font-bold text-[#D9F22A] block">
+                  Link Rastreado Pronto para Divulgação:
+                </span>
+                <span className="text-[10px] font-mono font-bold text-[#D9F22A] bg-[#D9F22A]/10 border border-[#D9F22A]/30 px-2 py-0.5 rounded">
+                  Código: {activeAffiliateCode}
+                </span>
+              </div>
+              <div className="font-mono text-xs text-white/90 truncate select-all">
+                {generatedAffiliateUrl}
+              </div>
             </div>
+            <button
+              onClick={handleCopy}
+              className="w-full sm:w-auto bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(217,242,42,0.3)] whitespace-nowrap"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Copiado com Sucesso!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copiar Meu Link
+                </>
+              )}
+            </button>
           </div>
-          <button
-            onClick={handleCopy}
-            className="w-full sm:w-auto bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(217,242,42,0.3)] whitespace-nowrap"
-          >
-            {copiedLink ? (
-              <>
-                <Check className="w-4 h-4" />
-                Copiado com Sucesso!
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                Copiar Link
-              </>
+        ) : (
+          <div className="p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-amber-300">
+                  Código de Divulgação Protegido
+                </h4>
+                <p className="text-xs text-white/70 mt-0.5">
+                  Você precisa ser afiliado deste plano para desbloquear seu código e link individual parametrizado.
+                </p>
+              </div>
+            </div>
+
+            {onJoinAffiliate && (
+              <button
+                type="button"
+                onClick={() => onJoinAffiliate(selectedProduct)}
+                className="w-full sm:w-auto px-5 py-3 bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black text-xs rounded-xl cursor-pointer transition-all uppercase tracking-wider shadow-[0_0_15px_rgba(217,242,42,0.3)] whitespace-nowrap flex items-center justify-center gap-2"
+              >
+                <Zap className="w-4 h-4 fill-current" />
+                Quero me Afiliar e Obter Código
+              </button>
             )}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 2. CALCULADORA DE COMISSÕES */}

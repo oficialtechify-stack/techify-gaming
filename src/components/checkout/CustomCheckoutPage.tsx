@@ -15,7 +15,8 @@ import {
   RefreshCw,
   Zap,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  FileText
 } from 'lucide-react';
 import { 
   createSaleTransactionInFirebase, 
@@ -58,8 +59,16 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [phone, setPhone] = useState<string>('');
   const [documentNumber, setDocumentNumber] = useState<string>('');
   
-  // Payment selection state ('pix' | 'credit_card' | 'pix_automatico')
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'pix_automatico'>('pix');
+  // Payment selection state ('pix' | 'boleto' | 'credit_card' | 'pix_automatico')
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'pix_automatico' | 'boleto'>('pix');
+  const [boletoData, setBoletoData] = useState<{
+    bankSlipUrl?: string;
+    identificationField?: string;
+    barCode?: string;
+    dueDate?: string;
+    paymentId?: string;
+  } | null>(null);
+  const [boletoCopied, setBoletoCopied] = useState<boolean>(false);
   
   // Credit card fields
   const [cardNumber, setCardNumber] = useState<string>('');
@@ -725,6 +734,68 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           return;
         }
       }
+
+      if (paymentMethod === 'boleto') {
+        const activeAffiliate = getActiveAffiliateCode();
+        const cleanDoc = documentNumber.replace(/\D/g, '') || '19119119100';
+        const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
+        const cleanEmail = (email || 'cliente@leadspay.com').trim();
+        const cleanName = (fullName || 'Cliente LeadsPay').trim();
+        const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
+
+        let activeSubaccountId = subaccountId || (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null;
+        if (!activeSubaccountId) {
+          try {
+            activeSubaccountId = await fetchSellerSubaccountId(plan);
+          } catch (e) {}
+        }
+
+        const res = await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
+          },
+          body: JSON.stringify({
+            paymentMethod: 'BOLETO',
+            amount: cleanTotal,
+            subaccountId: activeSubaccountId || undefined,
+            description: plan.name || 'Cobrança LeadsPay',
+            planId: (plan.id && plan.id !== 'checkout-dinamico' && plan.id !== 'checkout-direto') ? plan.id : undefined,
+            user: {
+              name: cleanName,
+              email: cleanEmail,
+              cpfCnpj: cleanDoc,
+              phone: cleanPhone
+            },
+            customer: {
+              name: cleanName,
+              email: cleanEmail,
+              cpfCnpj: cleanDoc,
+              phone: cleanPhone
+            },
+            companyId: plan.companyId,
+            sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
+            refCode: activeAffiliate
+          })
+        });
+
+        const data = await res.json().catch(() => ({ error: true, message: 'Falha ao gerar boleto bancário.' }));
+        if (res.ok && !data.error && (data.bankSlipUrl || data.identificationField || data.id)) {
+          setBoletoData({
+            bankSlipUrl: data.bankSlipUrl,
+            identificationField: data.identificationField || data.barCode,
+            barCode: data.barCode || data.identificationField,
+            dueDate: data.dueDate,
+            paymentId: data.paymentId || data.id
+          });
+          return;
+        } else {
+          const errMsg = data?.errors?.[0]?.description || data?.message || 'Falha ao gerar boleto. Verifique os dados informados.';
+          alert(errMsg);
+          return;
+        }
+      }
     } catch (err: any) {
       console.error('Erro no checkout:', err);
       alert('Houve um problema ao processar seu pagamento. Tente novamente.');
@@ -894,7 +965,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               Forma de Pagamento
             </label>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {/* PIX */}
               <button
                 type="button"
@@ -911,6 +982,20 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   </svg>
                 </div>
                 <span className="text-xs font-bold tracking-tight">PIX</span>
+              </button>
+
+              {/* Boleto Bancário */}
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('boleto')}
+                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  paymentMethod === 'boleto'
+                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
+                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span className="text-xs font-bold tracking-tight text-center leading-tight">Boleto</span>
               </button>
 
               {/* Cartão de Crédito */}
@@ -1282,6 +1367,65 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             </div>
           )}
 
+          {/* Boleto Bancário Display (quando gerado via Asaas) */}
+          {paymentMethod === 'boleto' && boletoData && (
+            <div className="p-4 bg-gray-50 border border-emerald-200 rounded-xl space-y-3 text-center animate-in fade-in">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-bold">
+                <FileText className="w-3.5 h-3.5" />
+                <span>Boleto Gerado com Sucesso!</span>
+              </div>
+
+              {boletoData.dueDate && (
+                <p className="text-xs text-gray-600 font-medium">
+                  Vencimento: <strong>{new Date(boletoData.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
+                </p>
+              )}
+
+              {boletoData.identificationField && (
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                    Linha Digitável / Código de Barras:
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={boletoData.identificationField}
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[10px] text-gray-700 font-mono truncate"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (boletoData.identificationField) {
+                          navigator.clipboard.writeText(boletoData.identificationField);
+                          setBoletoCopied(true);
+                          setTimeout(() => setBoletoCopied(false), 3000);
+                        }
+                      }}
+                      className="bg-[#205a46] hover:bg-[#194939] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      {boletoCopied ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {boletoData.bankSlipUrl && (
+                <div className="pt-2">
+                  <a
+                    href={boletoData.bankSlipUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Visualizar / Imprimir Boleto PDF
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 7. Action Button - Green button matching image.png */}
           <button
             type="submit"
@@ -1297,6 +1441,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               <span>Gerar Pix</span>
             ) : paymentMethod === 'pix_automatico' ? (
               <span>Gerar Pix Automático</span>
+            ) : paymentMethod === 'boleto' ? (
+              <span>Gerar Boleto Bancário</span>
             ) : (
               <span>Pagar com Cartão de Crédito</span>
             )}

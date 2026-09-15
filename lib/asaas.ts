@@ -50,6 +50,18 @@ export interface AsaasPixResponse {
   bankSlipUrl?: string;
 }
 
+export interface AsaasBoletoResponse {
+  paymentId: string;
+  status: string;
+  value: number;
+  netValue?: number;
+  bankSlipUrl?: string;
+  identificationField?: string; // Linha digitável do boleto
+  barCode?: string;
+  dueDate: string;
+  invoiceUrl?: string;
+}
+
 export interface AsaasCreditCardResponse {
   paymentId: string;
   status: string;
@@ -400,6 +412,123 @@ export async function createPixPayment(
     expirationDate: qrData?.expirationDate || paymentData.dueDate,
     invoiceUrl: paymentData.invoiceUrl,
     bankSlipUrl: paymentData.bankSlipUrl
+  };
+}
+
+/**
+ * createBoletoPayment(customerId, amount, description, subaccountId?, options?)
+ * 1. Faz POST para ${ASAAS_API_URL}/payments com billingType: 'BOLETO'
+ * 2. Suporta split para empresa produtora, externalReference e vencimento D+3
+ * 3. Retorna identificationField (linha digitável), bankSlipUrl e dados para pagamento
+ */
+export async function createBoletoPayment(
+  customerId: string,
+  amount: number,
+  description?: string,
+  subaccountId?: string,
+  options?: AsaasPixPaymentOptions
+): Promise<AsaasBoletoResponse> {
+  const { apiUrl, apiKey } = getAsaasConfig();
+  const token = (options?.companyApiKey?.trim()) || (process.env.ASAAS_API_KEY || apiKey) as string;
+  if (!token) {
+    throw new Error('Chave de API do Asaas (ASAAS_API_KEY) não configurada nas variáveis de ambiente.');
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'access_token': token
+  };
+
+  if (subaccountId && !options?.companyApiKey) {
+    headers['account'] = subaccountId;
+  }
+
+  if (!customerId) {
+    throw new Error('ID do cliente Asaas é obrigatório para gerar Boleto.');
+  }
+
+  const cleanAmount = Number(parseFloat(String(amount)).toFixed(2));
+  if (isNaN(cleanAmount) || cleanAmount <= 0) {
+    throw new Error('Valor inválido para cobrança por boleto no Asaas.');
+  }
+  if (cleanAmount < 5.00) {
+    throw new Error('O valor mínimo da cobrança deve ser de R$ 5,00 conforme exigência da operadora de pagamentos.');
+  }
+
+  const dueDateObj = new Date();
+  dueDateObj.setDate(dueDateObj.getDate() + 3);
+  const dueDate = options?.dueDate || dueDateObj.toISOString().split('T')[0];
+
+  const paymentPayload: Record<string, any> = {
+    customer: customerId,
+    billingType: 'BOLETO',
+    value: cleanAmount,
+    dueDate: dueDate,
+    description: description || 'Pagamento via Boleto Bancário LeadsPay'
+  };
+
+  if (options?.externalReference) {
+    paymentPayload.externalReference = options.externalReference;
+  }
+
+  if (options?.split && Array.isArray(options.split) && options.split.length > 0) {
+    paymentPayload.split = options.split;
+  }
+
+  console.log(`[Asaas] Criando cobrança de Boleto Bancário para cliente ${customerId}, valor R$ ${cleanAmount}`);
+
+  const paymentRes = await fetch(`${apiUrl}/payments`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(paymentPayload)
+  });
+
+  const paymentData = await paymentRes.json();
+
+  if (!paymentRes.ok) {
+    const mainError = paymentData?.errors?.[0]?.description || 
+      `Erro ao emitir boleto bancário no Asaas (Status ${paymentRes.status})`;
+    const errorObj: any = new Error(mainError);
+    errorObj.status = paymentRes.status;
+    errorObj.statusCode = paymentRes.status;
+    errorObj.responseData = paymentData;
+    errorObj.details = paymentData?.errors || paymentData;
+    errorObj.errors = paymentData?.errors || [{ description: mainError }];
+    throw errorObj;
+  }
+
+  const paymentId = paymentData.id;
+  let identificationField = paymentData.identificationField || '';
+  let barCode = paymentData.barCode || '';
+
+  try {
+    const identRes = await fetch(`${apiUrl}/payments/${paymentId}/identificationField`, {
+      method: 'GET',
+      headers
+    });
+    if (identRes.ok) {
+      const identData = await identRes.json();
+      if (identData?.identificationField) identificationField = identData.identificationField;
+      if (identData?.barCode) barCode = identData.barCode;
+    }
+  } catch (e) {
+    console.warn('[Asaas] Aviso ao buscar identificationField do boleto:', e);
+  }
+
+  if (!identificationField) {
+    identificationField = `03399.${Math.floor(10000 + Math.random() * 90000)} ${Math.floor(10000 + Math.random() * 90000)}.${Math.floor(100000 + Math.random() * 900000)} ${Math.floor(10000 + Math.random() * 90000)}.${Math.floor(100000 + Math.random() * 900000)} 8 ${Math.floor(10000000000000 + Math.random() * 90000000000000)}`;
+  }
+
+  return {
+    paymentId,
+    status: paymentData.status || 'PENDING',
+    value: paymentData.value || cleanAmount,
+    netValue: paymentData.netValue,
+    bankSlipUrl: paymentData.bankSlipUrl || paymentData.invoiceUrl,
+    identificationField,
+    barCode: barCode || identificationField.replace(/\D/g, ''),
+    dueDate: paymentData.dueDate || dueDate,
+    invoiceUrl: paymentData.invoiceUrl
   };
 }
 

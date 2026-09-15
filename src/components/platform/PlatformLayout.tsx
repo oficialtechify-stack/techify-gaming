@@ -175,7 +175,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         const tabParam = urlParams.get('tab');
 
         if (window.location.pathname.includes('/dashboard/planos') || tabParam === 'planos' || window.location.hash === '#planos') {
-          setActiveTab('planos');
+          setActiveTab('dashboard');
         }
 
         if (refParam) {
@@ -806,7 +806,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'cupons' as PlatformTab, label: 'Cupons', icon: Tag },
     { id: 'clientes' as PlatformTab, label: 'Clientes', icon: Users },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
-    { id: 'planos' as PlatformTab, label: 'Planos & Assinaturas', icon: Sparkles, badge: 'Pro/Scale' },
     { id: 'cobrancas' as PlatformTab, label: 'Cobranças', icon: CreditCard, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
     { id: 'links_pagamento' as PlatformTab, label: 'Link de pagamentos', icon: Link2 },
     { id: 'saques' as PlatformTab, label: 'Saques', icon: ArrowUpRight },
@@ -814,7 +813,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const affiliateNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
-    { id: 'planos' as PlatformTab, label: 'Planos & Assinaturas', icon: Sparkles, badge: 'VIP' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações (Sair)', icon: Link2, badge: `${affiliations.length}` },
@@ -829,7 +827,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const companyNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Visão Geral', icon: LayoutDashboard },
-    { id: 'planos' as PlatformTab, label: 'Planos & Assinaturas', icon: Sparkles, badge: 'Escala' },
     { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
@@ -1444,6 +1441,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <AfiliadosView
               platforms={plans}
               userProfile={userProfile}
+              affiliations={affiliations}
+              onJoinAffiliate={handleJoinAffiliate}
             />
           )}
 
@@ -1531,14 +1530,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <CuponsView 
               plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
               affiliations={myCompanyAffiliations.length > 0 ? myCompanyAffiliations : allAffiliations}
-            />
-          )}
-          {activeTab === 'planos' && (
-            <PlanosAssinaturasView
-              roleMode={roleMode}
-              userProfile={userProfile}
-              myCompany={myCompanies[0]}
-              onUpdateProfile={handleSaveProfile}
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}

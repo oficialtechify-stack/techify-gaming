@@ -25,6 +25,7 @@ import {
   getOrCreateCustomer, 
   createPixPayment, 
   createCreditCardPayment, 
+  createBoletoPayment,
   cleanDocument,
   createAsaasSubaccount,
   createAsaasPayment,
@@ -1562,10 +1563,10 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
     console.log(`🔒 [Checkout] Subconta associada (${isDevMode ? 'Dev Mode/Sandbox' : 'Produção'}): ${sellerSubaccountId}`);
 
     const normalizedMethod = String(paymentMethod || 'PIX').toUpperCase().trim();
-    if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD') {
+    if (normalizedMethod !== 'PIX' && normalizedMethod !== 'CREDIT_CARD' && normalizedMethod !== 'BOLETO' && normalizedMethod !== 'PIX_AUTOMATICO') {
       return res.status(400).json({ 
         error: true, 
-        message: 'Método de pagamento inválido. Utilize "PIX" ou "CREDIT_CARD".',
+        message: 'Método de pagamento inválido. Utilize "PIX", "BOLETO", "CREDIT_CARD" ou "PIX_AUTOMATICO".',
         received: paymentMethod 
       });
     }
@@ -1787,6 +1788,59 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
           billingType: 'CREDIT_CARD',
           status: 'CONFIRMED',
           isApproved: true
+        });
+      }
+
+      // 3. Simulação de Boleto Bancário (Dev Mode)
+      if (normalizedMethod === 'BOLETO') {
+        const simBarCode = `34191.79001 01043.510047 91020.150008 8 ${Math.floor(Math.random() * 8999999999 + 1000000000)}`;
+        const simBoletoUrl = `https://sandbox.asaas.com/b/pdf/${devPaymentId}`;
+        const saleDocRef = doc(db, 'sales', devPaymentId);
+        await setDoc(saleDocRef, {
+          id: devPaymentId,
+          payment_id: devPaymentId,
+          gateway: 'Simulador LeadsPay (Dev Mode)',
+          method: 'Boleto Bancário',
+          billingType: 'BOLETO',
+          is_test: true,
+          environment: 'development',
+          subaccountId: sellerSubaccountId,
+          plan_id: finalPlanId,
+          platformId: finalPlanId || '',
+          platformName: finalDescription,
+          companyId: finalCompanyId,
+          sellerId: finalSellerId,
+          apiKey: partnerApiKey || null,
+          affiliate_code: finalRefCode,
+          affiliateCode: finalRefCode,
+          total_amount: finalAmount,
+          amount: finalAmount,
+          status: 'PENDING',
+          created_at: nowIso,
+          buyerName: customerData.name || 'Cliente LeadsPay',
+          buyerEmail: customerData.email,
+          buyerCpf: cleanCpf,
+          buyerPhone: customerData.phone || customerData.mobilePhone || null,
+          bankSlipUrl: simBoletoUrl,
+          identificationField: simBarCode,
+          barCode: simBarCode
+        });
+
+        return res.status(200).json({
+          success: true,
+          id: devPaymentId,
+          paymentId: devPaymentId,
+          status: 'PENDING',
+          billingType: 'BOLETO',
+          value: finalAmount,
+          bankSlipUrl: simBoletoUrl,
+          identificationField: simBarCode,
+          barCode: simBarCode,
+          dueDate: new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
+          is_test: true,
+          environment: 'development',
+          canSimulateApproval: true,
+          simulateApprovalUrl: '/api/payments/simulate-approval'
         });
       }
     }
@@ -2060,6 +2114,80 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
         return res.status(400).json({
           error: cardErr.message || 'Cartão de crédito recusado ou inválido.',
           code: 'CARD_PAYMENT_DECLINED'
+        });
+      }
+    }
+
+    // 4. Cobrança Boleto Bancário via Asaas
+    if (normalizedMethod === 'BOLETO') {
+      try {
+        console.log("GERANDO BOLETO NA SUBCONTA:", body.subaccountId, sellerWalletId ? `(Split Wallet: ${sellerWalletId})` : '');
+        const effectiveCustomerId = customerId || await getOrCreateCustomer(customerData, body.subaccountId, { companyApiKey: sellerApiKey || undefined });
+        if (!effectiveCustomerId) {
+          return res.status(500).json({
+            error: 'Falha ao sincronizar cadastro de pagador no Asaas para emissão de boleto.'
+          });
+        }
+
+        const boletoData = await createBoletoPayment(
+          effectiveCustomerId,
+          finalAmount,
+          finalDescription,
+          body.subaccountId,
+          {
+            split: effectiveSplit,
+            companyApiKey: sellerApiKey || undefined,
+            dueDate: req.body?.dueDate
+          }
+        );
+
+        const boletoPaymentId = boletoData.paymentId;
+        const saleDocRef = doc(db, 'sales', boletoPaymentId);
+        await setDoc(saleDocRef, {
+          id: boletoPaymentId,
+          payment_id: boletoPaymentId,
+          gateway: 'Asaas v3 Oficial',
+          method: 'Boleto Bancário',
+          billingType: 'BOLETO',
+          subaccountId: body.subaccountId || null,
+          plan_id: finalPlanId,
+          platformId: finalPlanId || '',
+          platformName: finalDescription,
+          companyId: finalCompanyId,
+          sellerId: finalSellerId,
+          apiKey: partnerApiKey || null,
+          affiliate_code: finalRefCode,
+          affiliateCode: finalRefCode,
+          total_amount: finalAmount,
+          amount: finalAmount,
+          status: 'PENDING',
+          created_at: nowIso,
+          buyerName: customerData.name,
+          buyerEmail: customerData.email,
+          buyerCpf: cleanCpf,
+          buyerPhone: customerData.phone || customerData.mobilePhone || null,
+          bankSlipUrl: boletoData.bankSlipUrl,
+          identificationField: boletoData.identificationField,
+          invoiceUrl: boletoData.invoiceUrl
+        });
+
+        return res.status(200).json({
+          success: true,
+          id: boletoPaymentId,
+          paymentId: boletoPaymentId,
+          status: boletoData.status,
+          billingType: 'BOLETO',
+          value: finalAmount,
+          bankSlipUrl: boletoData.bankSlipUrl,
+          identificationField: boletoData.identificationField,
+          invoiceUrl: boletoData.invoiceUrl,
+          dueDate: boletoData.dueDate
+        });
+      } catch (boletoErr: any) {
+        console.error('Erro na emissão do Boleto via Asaas:', boletoErr);
+        return res.status(500).json({
+          error: true,
+          message: boletoErr.message || 'Erro ao gerar boleto bancário no gateway.'
         });
       }
     }

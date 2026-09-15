@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { 
   COLLECTIONS, 
   clearAllFirestoreData,
@@ -82,8 +82,8 @@ export const DatabaseManagerView: React.FC = () => {
   // Tab Principal de Navegação
   const [mainTab, setMainTab] = useState<MainAdminTab>('affiliates_approval');
   
-  // Sub-filtro de Status (Pendentes é o padrão como solicitado pelo usuário)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
+  // Sub-filtro de Status (Padrão 'all' para exibir todas as empresas e afiliados cadastrados)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   
   // Coleção selecionada quando estiver no Explorador de Banco de Dados
   const [explorerCollection, setExplorerCollection] = useState<string>(COLLECTIONS.PROFILES);
@@ -99,6 +99,7 @@ export const DatabaseManagerView: React.FC = () => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
+  const [registeredProfiles, setRegisteredProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -131,7 +132,7 @@ export const DatabaseManagerView: React.FC = () => {
     isProcessing: false
   });
 
-  // Assinatura em Tempo Real para Solicitações de Verificação e Empresas
+  // Assinatura em Tempo Real para Solicitações de Verificação, Empresas e Perfis
   useEffect(() => {
     if (!isSuperAdmin) return;
     const unsubVerifs = subscribeVerifications((reqs) => {
@@ -140,9 +141,20 @@ export const DatabaseManagerView: React.FC = () => {
     const unsubComps = subscribeCompanies((comps) => {
       setCompanies(comps);
     });
+    const unsubProfiles = onSnapshot(collection(db, COLLECTIONS.PROFILES), (snap) => {
+      const pList: any[] = [];
+      snap.forEach((d) => {
+        pList.push({ id: d.id, ...d.data() });
+      });
+      setRegisteredProfiles(pList);
+    }, (err) => {
+      console.warn('Erro ao carregar perfis para o admin:', err);
+    });
+
     return () => {
       unsubVerifs();
       unsubComps();
+      unsubProfiles();
     };
   }, [isSuperAdmin]);
 
@@ -406,26 +418,144 @@ export const DatabaseManagerView: React.FC = () => {
 
   // ================= FILTROS E CONTAGENS =================
 
-  // Filtro de Afiliados (KYC de pessoas físicas / role 'afiliado')
-  const affiliateVerifications = verifications.filter(v => (v.roleType || 'afiliado') !== 'empresa');
+  // Unificação Inteligente: Afiliados (KYC + Perfis de Usuários Registrados)
+  const allAffiliates: VerificationRequest[] = useMemo(() => {
+    const map = new Map<string, VerificationRequest>();
 
-  // Filtro de Empresas (KYC de empresas ou lista de companies)
-  const companyVerifications = verifications.filter(v => v.roleType === 'empresa');
+    // 1. Verificações explícitas
+    verifications.forEach((v) => {
+      if ((v.roleType || 'afiliado') !== 'empresa') {
+        const key = v.userId || v.id;
+        map.set(key, v);
+      }
+    });
+
+    // 2. Perfis de usuários cadastrados
+    registeredProfiles.forEach((p) => {
+      const key = p.userId || p.id;
+      if (!map.has(key)) {
+        const isVerified = p.verified === true || p.verificationStatus === 'approved';
+        const isBanned = p.banned === true;
+        let status: any = 'pending';
+        if (isBanned) status = 'banned';
+        else if (p.verificationStatus === 'rejected') status = 'rejected';
+        else if (isVerified) status = 'approved';
+        else status = p.verificationStatus || 'approved';
+
+        map.set(key, {
+          id: key,
+          userId: key,
+          name: p.name || p.fullName || (p.email ? p.email.split('@')[0] : 'Afiliado ' + key.slice(0, 5)),
+          email: p.email || '',
+          phone: p.phone || p.whatsapp || '',
+          cpf: p.cpf || '',
+          city: p.city || '',
+          state: p.state || '',
+          pixKey: p.pixKey || '',
+          pixKeyType: p.pixKeyType || 'CPF',
+          roleType: p.roleType || p.role || 'afiliado',
+          status,
+          banned: isBanned,
+          avatar: p.avatar || '',
+          submittedAt: p.submittedAt || p.createdAt || p.updatedAt || new Date().toISOString()
+        } as VerificationRequest);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [verifications, registeredProfiles]);
+
+  // Unificação Inteligente: Empresas (Lista de Companies + Perfis com Empresa)
+  const allCompanies: CompanyStartup[] = useMemo(() => {
+    const map = new Map<string, CompanyStartup>();
+
+    // 1. Empresas existentes no banco
+    companies.forEach((c) => {
+      map.set(c.id, c);
+    });
+
+    // 2. Solicitações de verificação com perfil empresa
+    verifications.forEach((v) => {
+      if (v.roleType === 'empresa') {
+        const key = v.userId || v.id;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: key,
+            name: v.companyName || v.name || 'Empresa ' + key.slice(0, 5),
+            slug: (v.companyName || v.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+            tagline: v.companyTagline || 'Inovação e escala digital',
+            logo: v.companyLogo || '',
+            bannerImage: '',
+            website: v.companyWebsite || '',
+            commissionRange: '10% - 50%',
+            cnpj: v.companyCnpj || v.cpf || '',
+            category: (v.companyCategory as any) || 'SaaS / B2B',
+            description: v.companyTagline || 'Empresa parceira cadastrada na plataforma LeadsPay.',
+            email: v.email || '',
+            whatsapp: v.phone || '',
+            ownerId: v.userId || v.id,
+            submittedBy: v.userId || v.id,
+            status: v.status === 'approved' ? 'approved' : (v.status || 'pending'),
+            verified: v.status === 'approved',
+            totalPlansCount: 0,
+            totalAffiliatesCount: 0,
+            totalSalesVolume: 0,
+            createdAt: v.submittedAt || new Date().toISOString()
+          } as CompanyStartup);
+        }
+      }
+    });
+
+    // 3. Perfis cadastrados com dados empresariais
+    registeredProfiles.forEach((p) => {
+      const compId = p.companyId || (p.companyName || p.role === 'empresa' ? (p.userId || p.id) : null);
+      if (compId && !map.has(compId)) {
+        map.set(compId, {
+          id: compId,
+          name: p.companyName || p.name || 'Empresa ' + compId.slice(0, 5),
+          slug: (p.companyName || p.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          tagline: p.tagline || 'Inovação e escala digital',
+          logo: p.logo || '',
+          bannerImage: '',
+          website: p.website || '',
+          commissionRange: '10% - 50%',
+          cnpj: p.cnpj || p.cpf || '',
+          category: (p.companyCategory as any) || 'SaaS / B2B',
+          description: p.companyDescription || 'Empresa parceira cadastrada na plataforma LeadsPay.',
+          email: p.companyEmail || p.email || '',
+          whatsapp: p.companyWhatsapp || p.phone || '',
+          ownerId: p.userId || p.id,
+          submittedBy: p.userId || p.id,
+          status: p.verified ? 'approved' : 'approved',
+          verified: Boolean(p.verified),
+          totalPlansCount: 0,
+          totalAffiliatesCount: 0,
+          totalSalesVolume: 0,
+          createdAt: p.createdAt || new Date().toISOString()
+        } as CompanyStartup);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [companies, verifications, registeredProfiles]);
 
   // Helper para verificar status de um registro
   const getStatusOfVerification = (v: VerificationRequest): StatusFilter => {
     if (v.banned) return 'banned';
+    if (v.status === 'rejected') return 'rejected';
+    if (v.status === 'approved') return 'approved';
     return (v.status || 'pending') as StatusFilter;
   };
 
   const getStatusOfCompany = (c: CompanyStartup): StatusFilter => {
     if (c.banned) return 'banned';
-    const s = c.status || (c.verified ? 'approved' : 'pending');
-    return s as StatusFilter;
+    if (c.status === 'rejected') return 'rejected';
+    if (c.status === 'approved' || (c.status as string) === 'active' || c.verified) return 'approved';
+    return (c.status || 'approved') as StatusFilter;
   };
 
   // Afiliados filtrados
-  const filteredAffiliates = affiliateVerifications.filter(v => {
+  const filteredAffiliates = allAffiliates.filter(v => {
     const currentStatus = getStatusOfVerification(v);
     if (statusFilter !== 'all' && currentStatus !== statusFilter) return false;
 
@@ -442,7 +572,7 @@ export const DatabaseManagerView: React.FC = () => {
   });
 
   // Empresas filtradas
-  const filteredCompanies = companies.filter(c => {
+  const filteredCompanies = allCompanies.filter(c => {
     const currentStatus = getStatusOfCompany(c);
     if (statusFilter !== 'all' && currentStatus !== statusFilter) return false;
 
@@ -459,15 +589,15 @@ export const DatabaseManagerView: React.FC = () => {
   });
 
   // Contagens para os badges
-  const pendingAffiliatesCount = affiliateVerifications.filter(v => getStatusOfVerification(v) === 'pending').length;
-  const approvedAffiliatesCount = affiliateVerifications.filter(v => getStatusOfVerification(v) === 'approved').length;
-  const rejectedAffiliatesCount = affiliateVerifications.filter(v => getStatusOfVerification(v) === 'rejected').length;
-  const bannedAffiliatesCount = affiliateVerifications.filter(v => getStatusOfVerification(v) === 'banned').length;
+  const pendingAffiliatesCount = allAffiliates.filter(v => getStatusOfVerification(v) === 'pending').length;
+  const approvedAffiliatesCount = allAffiliates.filter(v => getStatusOfVerification(v) === 'approved').length;
+  const rejectedAffiliatesCount = allAffiliates.filter(v => getStatusOfVerification(v) === 'rejected').length;
+  const bannedAffiliatesCount = allAffiliates.filter(v => getStatusOfVerification(v) === 'banned').length;
 
-  const pendingCompaniesCount = companies.filter(c => getStatusOfCompany(c) === 'pending').length;
-  const approvedCompaniesCount = companies.filter(c => getStatusOfCompany(c) === 'approved').length;
-  const rejectedCompaniesCount = companies.filter(c => getStatusOfCompany(c) === 'rejected').length;
-  const bannedCompaniesCount = companies.filter(c => getStatusOfCompany(c) === 'banned').length;
+  const pendingCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'pending').length;
+  const approvedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'approved').length;
+  const rejectedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'rejected').length;
+  const bannedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'banned').length;
 
   return (
     <div className="flex flex-col gap-6" id="leadspay-database-view">
@@ -753,7 +883,7 @@ export const DatabaseManagerView: React.FC = () => {
               >
                 <span>Todos</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/30 font-mono">
-                  {mainTab === 'affiliates_approval' ? affiliateVerifications.length : companies.length}
+                  {mainTab === 'affiliates_approval' ? allAffiliates.length : allCompanies.length}
                 </span>
               </button>
             </div>

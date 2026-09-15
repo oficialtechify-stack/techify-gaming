@@ -89,14 +89,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Complete Payment Methods list matching Image 3
   const DEFAULT_PAYMENT_ROWS = [
     { method: 'PIX', conversion: '0%', value: 0, icon: '❖', color: 'text-[#D9F22A]' },
+    { method: 'Boleto Bancário', conversion: '0%', value: 0, icon: '📄', color: 'text-amber-400' },
     { method: 'Cartão de Crédito', conversion: '0%', value: 0, icon: '💳', color: 'text-white' },
-    { method: 'PicPay', conversion: '0%', value: 0, icon: 'P', color: 'text-emerald-400' },
-    { method: 'OXXO', conversion: '0%', value: 0, icon: 'OX', color: 'text-orange-400' },
-    { method: 'SPEI', conversion: '0%', value: 0, icon: '⚡', color: 'text-sky-400' },
     { method: 'PIX Automático', conversion: '0%', value: 0, icon: '🔄', color: 'text-[#D9F22A]' },
-    { method: 'Apple Pay', conversion: '0%', value: 0, icon: '', color: 'text-white' },
-    { method: 'Google Pay', conversion: '0%', value: 0, icon: 'G', color: 'text-blue-400' },
-    { method: '3DS', conversion: '0%', value: 0, icon: '🛡️', color: 'text-purple-400' },
   ];
 
   // Merge with real stats if any sales exist
