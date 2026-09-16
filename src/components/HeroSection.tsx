@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActiveModal } from '../types';
-import { ArrowRight, Building2, Users, Zap, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Building2, Users, Zap, ShieldCheck, ChevronDown, UserCheck, Sparkles } from 'lucide-react';
 
 interface HeroSectionProps {
   onOpenModal: (modal: ActiveModal) => void;
@@ -8,6 +8,8 @@ interface HeroSectionProps {
 }
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPlatform }) => {
+  const [registerDropdownOpen, setRegisterDropdownOpen] = useState(false);
+
   return (
     <section id="home" className="relative pt-6 pb-14 md:pt-10 md:pb-20 overflow-hidden">
       {/* Background glow orbs */}
@@ -17,11 +19,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main Hero Headline - Centered, Balanced, Clear */}
         <div className="text-center max-w-4xl mx-auto mb-6 sm:mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#D9F22A]/30 bg-[#080d1a] text-xs font-bold uppercase tracking-wider text-[#D9F22A] shadow-[0_0_15px_rgba(217,242,42,0.15)] mb-4">
-            <Zap className="w-3.5 h-3.5 fill-current" />
-            <span>As Menores Taxas do Mercado</span>
-          </div>
-
           <h1 className="elementor-heading-title text-2xl sm:text-4xl md:text-5xl lg:text-[46px] font-extrabold tracking-tight uppercase leading-[1.14] sm:leading-[1.16] [text-wrap:balance]">
             <span className="cor block drop-shadow-[0_0_25px_rgba(217,242,42,0.3)]">
               A plataforma de pagamentos e afiliação
@@ -38,14 +35,54 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, onOpenPla
         </div>
 
         {/* Central Call-to-Actions */}
-        <div className="flex flex-wrap items-center justify-center gap-3.5 sm:gap-4 mb-10 sm:mb-12">
-          <button
-            onClick={() => onOpenModal('register_affiliate')}
-            className="group flex items-center gap-2.5 sm:gap-3 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-7 sm:py-4 sm:px-9 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider shadow-[0_0_30px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300 cursor-pointer"
-          >
-            <span>Criar Conta Grátis</span>
-            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
+        <div className="flex flex-wrap items-center justify-center gap-3.5 sm:gap-4 mb-10 sm:mb-12 relative">
+          {/* Cadastrar / Criar Conta Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setRegisterDropdownOpen(!registerDropdownOpen)}
+              className="group flex items-center gap-2 sm:gap-2.5 bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-6 sm:py-4 sm:px-8 rounded-2xl text-xs sm:text-sm md:text-base uppercase tracking-wider shadow-[0_0_30px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#060A15]" />
+              <span>Cadastrar</span>
+              <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200" />
+            </button>
+
+            {registerDropdownOpen && (
+              <div className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mt-2 w-64 bg-[#080d1a] border border-white/15 rounded-2xl p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <button
+                  onClick={() => {
+                    setRegisterDropdownOpen(false);
+                    onOpenModal('register_affiliate');
+                  }}
+                  className="w-full p-2.5 rounded-xl hover:bg-white/5 text-left flex items-center gap-2.5 text-xs text-white font-bold cursor-pointer transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center flex-shrink-0">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-white font-bold">Sou Afiliado</div>
+                    <div className="text-[10px] text-white/50 font-normal">Quero vender e lucrar</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setRegisterDropdownOpen(false);
+                    onOpenModal('register_company');
+                  }}
+                  className="w-full p-2.5 rounded-xl hover:bg-white/5 text-left flex items-center gap-2.5 text-xs text-white font-bold cursor-pointer transition-colors mt-1"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-white font-bold">Sou Empresa / Startup</div>
+                    <div className="text-[10px] text-white/50 font-normal">Cadastrar meus produtos</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           {onOpenPlatform ? (
             <button

@@ -932,7 +932,7 @@ export const DatabaseManagerView: React.FC = () => {
                           <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/10 mb-4">
                             <div className="flex items-center gap-3">
                               <img
-                                src={req.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'}
+                                src={req.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(req.userId || req.email || 'affiliate')}`}
                                 alt={req.name}
                                 className="w-12 h-12 rounded-full object-cover border-2 border-white/20"
                               />

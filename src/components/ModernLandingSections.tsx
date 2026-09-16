@@ -98,14 +98,7 @@ export const HeroAiBanner: React.FC<{ onOpenPlatform?: () => void }> = ({ onOpen
    Button: "Veja nossa documentação ->" + "ou veja llms.txt"
    ========================================================================= */
 export const CodeVibeIntegrationsSection: React.FC = () => {
-  const [copiedLLM, setCopiedLLM] = useState(false);
   const [showDocsModal, setShowDocsModal] = useState(false);
-
-  const handleCopyLLM = () => {
-    navigator.clipboard.writeText('https://leadspay.com/llms.txt');
-    setCopiedLLM(true);
-    setTimeout(() => setCopiedLLM(false), 2500);
-  };
 
   return (
     <section className="relative w-full bg-[#060A15] text-white py-20 sm:py-24 md:py-28 overflow-hidden border-b border-white/5">
@@ -138,49 +131,8 @@ export const CodeVibeIntegrationsSection: React.FC = () => {
           Integre facilmente via API REST, Webhooks em tempo real e MCP. Ideal tanto para desenvolvedores quanto para quem programa com IA.
         </p>
 
-        {/* Floating Language Badges with LeadsPay Dark Neon Cards */}
-        <div className="relative my-10 sm:my-12 py-4">
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 max-w-2xl mx-auto">
-            {/* Python Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/50 text-xs sm:text-sm font-bold text-white shadow-lg transition-all hover:scale-105">
-              <span className="text-base">🐍</span>
-              <span>Python</span>
-            </div>
-
-            {/* PHP Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/50 text-xs sm:text-sm font-bold text-white shadow-lg transition-all hover:scale-105">
-              <span className="w-5 h-5 rounded-md bg-white/10 text-[#D9F22A] flex items-center justify-center text-[10px] font-black">php</span>
-              <span>PHP</span>
-            </div>
-
-            {/* Javascript Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/50 text-xs sm:text-sm font-bold text-white shadow-lg transition-all hover:scale-105">
-              <span className="w-4 h-4 rounded bg-[#f7df1e] text-black flex items-center justify-center text-[9px] font-black">JS</span>
-              <span>Javascript</span>
-            </div>
-
-            {/* Ruby Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/50 text-xs sm:text-sm font-bold text-white shadow-lg transition-all hover:scale-105">
-              <span className="text-red-400 text-sm">💎</span>
-              <span>Ruby</span>
-            </div>
-
-            {/* n8n Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/50 text-xs sm:text-sm font-bold text-white shadow-lg transition-all hover:scale-105">
-              <span className="w-4 h-4 rounded bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">n</span>
-              <span>n8n</span>
-            </div>
-
-            {/* Lovable Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/50 text-xs sm:text-sm font-bold text-white shadow-lg transition-all hover:scale-105">
-              <span className="text-pink-400">❤️</span>
-              <span>Lovable</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Button & Link */}
-        <div className="flex flex-col items-center justify-center gap-3">
+        {/* Action Button */}
+        <div className="flex flex-col items-center justify-center gap-3 mt-8">
           <button
             onClick={() => setShowDocsModal(true)}
             className="cursor-pointer inline-flex items-center gap-2.5 px-8 py-3.5 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300"
@@ -189,19 +141,6 @@ export const CodeVibeIntegrationsSection: React.FC = () => {
             <span className="w-5 h-5 rounded-full bg-[#060A15] text-[#D9F22A] flex items-center justify-center">
               <ArrowRight className="w-3 h-3" />
             </span>
-          </button>
-
-          <button
-            onClick={handleCopyLLM}
-            className="cursor-pointer text-xs font-semibold text-[#D9F22A] hover:text-[#e4f849] underline underline-offset-4 flex items-center gap-1 transition-colors mt-2"
-          >
-            {copiedLLM ? (
-              <span className="text-[#D9F22A] flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" /> Link copiado para a área de transferência!
-              </span>
-            ) : (
-              <span>ou veja llms.txt</span>
-            )}
           </button>
         </div>
       </div>

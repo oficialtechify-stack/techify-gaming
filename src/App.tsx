@@ -14,8 +14,6 @@ import { PlatformLayout } from './components/platform/PlatformLayout';
 import { 
   HeroAiBanner, 
   CodeVibeIntegrationsSection, 
-  DocsAndSuiteSection, 
-  IsometricFeatureCardsSection, 
   FaqSection 
 } from './components/ModernLandingSections';
 import { MarketFeeComparisonSection } from './components/MarketFeeComparisonSection';
@@ -31,7 +29,7 @@ import { CookieConsentBanner } from './components/CookieConsentBanner';
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [viewPlatform, setViewPlatform] = useState<boolean>(false);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, currentUser } = useAuth();
 
   // Direct checkout link state
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -215,8 +213,22 @@ function MainApp() {
     );
   }
 
+  const handleOpenPlatform = () => {
+    if (!isAuthenticated || !currentUser) {
+      handleOpenModal('login');
+    } else {
+      setViewPlatform(true);
+    }
+  };
+
   // If user opens platform or is logged in and wants to see platform
   if (viewPlatform) {
+    if (!isAuthenticated || !currentUser) {
+      // Not logged in: under no circumstance show platform or fake profile
+      setViewPlatform(false);
+      handleOpenModal('login');
+      return null;
+    }
     return (
       <ErrorBoundary fallbackTitle="Erro ao carregar o Painel LeadsPay" onReset={() => setViewPlatform(false)}>
         <PlatformLayout onBackToHome={() => setViewPlatform(false)} />
@@ -234,28 +246,22 @@ function MainApp() {
       {/* Main Header / Navigation */}
       <Header 
         onOpenModal={handleOpenModal} 
-        onOpenPlatform={() => setViewPlatform(true)} 
+        onOpenPlatform={handleOpenPlatform} 
       />
 
       {/* Main Content Sections */}
       <main className="flex-grow">
         <HeroSection 
           onOpenModal={handleOpenModal} 
-          onOpenPlatform={() => setViewPlatform(true)} 
+          onOpenPlatform={handleOpenPlatform} 
         />
         <StatsCounter />
 
         {/* Section Image 2: "Construa seu produto. A gente ajuda a vender." */}
-        <HeroAiBanner onOpenPlatform={() => setViewPlatform(true)} />
+        <HeroAiBanner onOpenPlatform={handleOpenPlatform} />
 
         {/* Section Image 3: "Integre como quiser! Code, vibe-code, no-code!" */}
         <CodeVibeIntegrationsSection />
-
-        {/* Section Image 4: "Documentação", "Integrar fácil" & "Uma suite de soluções para o seu negócio." */}
-        <DocsAndSuiteSection />
-
-        {/* Section Image 5: "Proteção antifraude" & "Check-out integrado" */}
-        <IsometricFeatureCardsSection />
 
         <AboutSection />
         <HowItWorksSection onOpenModal={handleOpenModal} />
@@ -263,11 +269,11 @@ function MainApp() {
         {/* Seção 2: Comparativo de Mercado (Quebra de Objeção - LeadsPay vs Kiwify, Cakto, Hotmart) */}
         <MarketFeeComparisonSection 
           onOpenModal={handleOpenModal} 
-          onOpenPlatform={() => setViewPlatform(true)} 
+          onOpenPlatform={handleOpenPlatform} 
         />
 
         <SponsorshipsSection 
-          onOpenPlatform={() => setViewPlatform(true)} 
+          onOpenPlatform={handleOpenPlatform} 
           onOpenRegisterCompany={() => handleOpenModal('register_company')} 
         />
         <CultureBanner />

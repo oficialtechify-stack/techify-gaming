@@ -125,6 +125,19 @@ const ADMIN_EMAILS = [
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
   const { currentUser, userProfile, userRole, setUserRole, logout } = useAuth();
+
+  // Guard: O painel só pode ser acessado se o usuário estiver autenticado em uma conta real.
+  // Nenhum perfil fake pode existir ou ser exibido.
+  useEffect(() => {
+    if (!currentUser) {
+      onBackToHome();
+    }
+  }, [currentUser, onBackToHome]);
+
+  if (!currentUser) {
+    return null;
+  }
+
   const [roleMode, setRoleMode] = useState<UserRoleMode>(userRole || 'afiliado');
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -761,7 +774,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Handle withdrawal
   const handleWithdraw = async (amount: number, pixKey: string, pixKeyType: string) => {
     try {
-      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, userProfile?.name || 'Usuário LeadsPay');
+      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, currentUser?.displayName || userProfile?.name || 'Minha Conta');
       setLiveToast({
         message: 'Saque PIX D+9 processado com sucesso!',
         sub: `Chave ${pixKey} (${pixKeyType})`,
@@ -1133,16 +1146,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {/* Right Top Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 ml-auto flex-shrink-0">
-            {roleMode === 'empresa' && (
-              <button
-                onClick={() => setIsCreateCompanyModalOpen(true)}
-                className="bg-white/10 hover:bg-white/20 text-white font-bold p-1.5 sm:px-3.5 sm:py-1.5 rounded-full text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 border border-white/15 flex-shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5 text-[#D9F22A]" />
-                <span className="hidden sm:inline">Nova Empresa</span>
-              </button>
-            )}
-
             {/* Dark / Light Mode Switcher */}
             <button 
               onClick={() => setIsDarkMode(!isDarkMode)}
@@ -1178,8 +1181,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 title="Menu do Usuário"
               >
                 <img
-                  src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=LeadsPay'}
-                  alt={userProfile?.name || 'Usuário'}
+                  src={userProfile?.avatar || currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUser?.uid || 'user')}`}
+                  alt={userProfile?.name || currentUser?.displayName || 'Usuário'}
                   className="w-8 h-8 rounded-full object-cover border border-white/20"
                 />
               </button>
@@ -1195,16 +1198,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                     {/* Header User Card with Avatar, Name & Email */}
                     <div className="flex items-center gap-3 p-2.5 bg-[#232730] rounded-xl mb-2">
                       <img
-                        src={userProfile?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=LeadsPay'}
-                        alt={userProfile?.name || 'Usuário'}
+                        src={userProfile?.avatar || currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUser?.uid || 'user')}`}
+                        alt={userProfile?.name || currentUser?.displayName || 'Usuário'}
                         className="w-10 h-10 rounded-full object-cover border border-white/20 flex-shrink-0"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-bold text-white truncate">
-                          {userProfile?.name || 'Usuário LeadsPay'}
+                          {userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Minha Conta'}
                         </div>
                         <div className="text-[11px] text-white/50 truncate">
-                          {userProfile?.email || 'contato@leadspay.com'}
+                          {userProfile?.email || currentUser?.email || ''}
                         </div>
                         <div className="mt-1">
                           <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${

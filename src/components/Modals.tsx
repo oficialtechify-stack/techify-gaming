@@ -316,46 +316,42 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
               <span>Acesso ao Ecossistema LeadsPay</span>
             </div>
 
-            {/* Navigation Tabs between Login, Register Affiliate, Register Company */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#050811] border border-white/10">
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('login')}
-                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center truncate ${
-                  modalTab === 'login' || modalTab === 'forgot_password'
-                    ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                Entrar
-              </button>
+            {/* Navigation Tabs when in Login mode: only show options to enter as Afiliado or Empresa */}
+            {modalTab === 'login' && (
+              <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-[#050811] border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginRole('afiliado');
+                    setErrorMessage('');
+                  }}
+                  className={`py-3 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    loginRole === 'afiliado'
+                      ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <UserCheck className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Entrar como Afiliado</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('register_affiliate')}
-                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 truncate ${
-                  modalTab === 'register_affiliate'
-                    ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Sou Afiliado</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('register_company')}
-                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 truncate ${
-                  modalTab === 'register_company'
-                    ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Sou Empresa</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginRole('empresa');
+                    setErrorMessage('');
+                  }}
+                  className={`py-3 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    loginRole === 'empresa'
+                      ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.3)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">Entrar na Empresa</span>
+                </button>
+              </div>
+            )}
 
             {/* Error Message Alert with Quick Action Recovery */}
             {errorMessage && (
@@ -423,48 +419,16 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
               <div>
                 <div className="mb-4">
                   <h3 className="text-2xl font-black text-white font-['Syne']">
-                    Entrar na sua Conta
+                    {loginRole === 'empresa' ? 'Entrar no Painel da Empresa' : 'Entrar no Painel do Afiliado'}
                   </h3>
                   <p className="text-xs text-white/70 mt-1">
-                    Informe seu e-mail e senha cadastrados para acessar seu painel.
+                    {loginRole === 'empresa'
+                      ? 'Informe seu e-mail e senha para gerenciar seus produtos, planos e vendas.'
+                      : 'Informe seu e-mail e senha para acessar suas comissões e links de vendas.'}
                   </p>
                 </div>
 
                 <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
-                  {/* Role preference toggle for quick login */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-1.5">
-                      Perfil Principal
-                    </label>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setLoginRole('afiliado')}
-                        className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
-                          loginRole === 'afiliado'
-                            ? 'bg-[#D9F22A]/10 border-[#D9F22A] text-[#D9F22A]'
-                            : 'bg-[#050811] border-white/10 text-white/60 hover:text-white'
-                        }`}
-                      >
-                        <UserCheck className="w-4 h-4" />
-                        <span>Afiliado</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setLoginRole('empresa')}
-                        className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
-                          loginRole === 'empresa'
-                            ? 'bg-[#D9F22A]/10 border-[#D9F22A] text-[#D9F22A]'
-                            : 'bg-[#050811] border-white/10 text-white/60 hover:text-white'
-                        }`}
-                      >
-                        <Building2 className="w-4 h-4" />
-                        <span>Empresa / Startup</span>
-                      </button>
-                    </div>
-                  </div>
-
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-white/70 mb-1.5">
                       E-mail
@@ -558,10 +522,10 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                     Ainda não possui conta?{' '}
                     <button
                       type="button"
-                      onClick={() => handleSwitchTab('register_affiliate')}
+                      onClick={() => handleSwitchTab(loginRole === 'empresa' ? 'register_company' : 'register_affiliate')}
                       className="text-[#D9F22A] font-bold hover:underline cursor-pointer"
                     >
-                      Cadastre-se Gratuitamente
+                      Cadastre-se como {loginRole === 'empresa' ? 'Empresa / Startup' : 'Afiliado'}
                     </button>
                   </div>
                 </form>

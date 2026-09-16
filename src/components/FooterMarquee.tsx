@@ -187,7 +187,7 @@ export const FooterMarquee: React.FC<FooterMarqueeProps> = ({ onOpenModal }) => 
         {/* Bottom Bar */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-white/50 text-center sm:text-left">
-            LEADSPAY PAGAMENTOS S/A CNPJ: 52.639.845/0001-25 Todos os direitos reservados.
+            LEADSPAY PAGAMENTOS S/A Todos os direitos reservados.
           </p>
 
           <button
