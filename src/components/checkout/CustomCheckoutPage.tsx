@@ -616,53 +616,61 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    setFormError(null);
+    setMinAmountAlert(null);
+
     // 1. VALIDAÇÃO OBRIGATÓRIA NO FRONTEND: Valor mínimo de cobrança R$ 5,00 conforme regra do Asaas
     if (finalTotal < 5.00) {
-      setMinAmountAlert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
-      alert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
+      const msg = "O valor mínimo para cobranças via Asaas é de R$ 5,00";
+      setMinAmountAlert(msg);
+      setFormError(msg);
       return;
     }
 
     if (!fullName.trim() || fullName.trim().split(' ').length < 2) {
-      alert('Por favor, preencha seu nome e sobrenome completos.');
+      setFormError('Por favor, preencha seu nome e sobrenome completos.');
       return;
     }
 
     if (!email.trim() || !email.includes('@')) {
-      alert('Por favor, preencha um endereço de email válido.');
+      setFormError('Por favor, preencha um endereço de email válido.');
       return;
     }
 
     if (!phone || phone.replace(/\D/g, '').length < 10) {
-      alert('Por favor, preencha seu celular com DDD.');
+      setFormError('Por favor, preencha seu celular com DDD.');
       return;
     }
 
     if (!documentNumber || documentNumber.replace(/\D/g, '').length < 11) {
-      alert('Por favor, preencha um CPF ou CNPJ válido.');
+      setFormError('Por favor, preencha um CPF ou CNPJ válido.');
       return;
     }
 
     if (paymentMethod === 'pix' || paymentMethod === 'pix_automatico') {
+      startTransition(() => {
+        setIsGeneratingPix(true);
+      });
       await generateRealPixPayment();
       return;
     }
 
     if (paymentMethod === 'credit_card') {
       if (cardNumber.replace(/\D/g, '').length < 16) {
-        alert('Por favor, informe os 16 dígitos do cartão de crédito.');
+        setFormError('Por favor, informe os 16 dígitos do cartão de crédito.');
         return;
       }
       if (!cardExpiry || cardExpiry.length < 5) {
-        alert('Por favor, informe a data de vencimento (MM/AA).');
+        setFormError('Por favor, informe a data de vencimento (MM/AA).');
         return;
       }
       if (!cardCvv || cardCvv.length < 3) {
-        alert('Por favor, informe o código de segurança (CVV).');
+        setFormError('Por favor, informe o código de segurança (CVV).');
         return;
       }
     }
 
+    // Ativação imediata do estado de loading sem bloquear a thread visual da UI (INP optimization)
     setIsProcessing(true);
 
     try {
@@ -1425,6 +1433,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   </a>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Form Error Banner */}
+          {formError && (
+            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-medium animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <span>{formError}</span>
             </div>
           )}
 

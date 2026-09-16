@@ -591,7 +591,25 @@ export async function purgeEntityInFirebase(id: string, type: 'user' | 'company'
 /**
  * Realtime Companies Listener
  */
-export function subscribeCompanies(callback: (companies: CompanyStartup[]) => void) {
+export function subscribeCompanies(callback: (companies: CompanyStartup[]) => void, companyId?: string) {
+  if (companyId) {
+    const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        callback([{ id: docSnap.id, ...(docSnap.data() as Omit<CompanyStartup, 'id'>) }]);
+      } else {
+        const q = query(collection(db, COLLECTIONS.COMPANIES), where("companyId", "==", companyId));
+        getDocs(q).then((snap) => {
+          const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) }));
+          callback(list);
+        }).catch(() => callback([]));
+      }
+    }, (err) => {
+      console.error('Firestore company listener error:', err);
+      callback([]);
+    });
+  }
+
   const q = collection(db, COLLECTIONS.COMPANIES);
   return onSnapshot(q, (snap) => {
     const list: CompanyStartup[] = [];
@@ -842,8 +860,10 @@ export async function deleteCompanyInFirebase(companyId: string) {
 /**
  * Realtime Plans / Platforms Listener
  */
-export function subscribePlans(callback: (plans: CompanyPlan[]) => void) {
-  const q = collection(db, COLLECTIONS.PLANS);
+export function subscribePlans(callback: (plans: CompanyPlan[]) => void, companyId?: string) {
+  const q = companyId 
+    ? query(collection(db, COLLECTIONS.PLANS), where("companyId", "==", companyId))
+    : collection(db, COLLECTIONS.PLANS);
   return onSnapshot(q, (snap) => {
     const list: CompanyPlan[] = [];
     snap.forEach((d) => {
@@ -1008,14 +1028,12 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
     callback([]);
     return () => {};
   }
-  const q = collection(db, COLLECTIONS.AFFILIATIONS);
+  const q = query(collection(db, COLLECTIONS.AFFILIATIONS), where("userId", "==", userId));
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
       const data = d.data() as UserAffiliation;
-      if (data.userId === userId || data.user_id === userId) {
-        list.push({ id: d.id, ...data });
-      }
+      list.push({ id: d.id, ...data });
     });
     list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     callback(list);
@@ -1028,8 +1046,10 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
 /**
  * Realtime All Affiliations Listener (for Company & Superadmin dashboards)
  */
-export function subscribeAllAffiliations(callback: (affiliations: UserAffiliation[]) => void) {
-  const q = collection(db, COLLECTIONS.AFFILIATIONS);
+export function subscribeAllAffiliations(callback: (affiliations: UserAffiliation[]) => void, companyId?: string) {
+  const q = companyId 
+    ? query(collection(db, COLLECTIONS.AFFILIATIONS), where("companyId", "==", companyId))
+    : collection(db, COLLECTIONS.AFFILIATIONS);
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
@@ -1178,8 +1198,10 @@ export async function deleteAffiliationInFirebase(affiliationId: string, planId?
 /**
  * Realtime Sales Listener
  */
-export function subscribeSales(callback: (sales: SaleTransaction[]) => void) {
-  const q = collection(db, COLLECTIONS.SALES);
+export function subscribeSales(callback: (sales: SaleTransaction[]) => void, companyId?: string) {
+  const q = companyId 
+    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId))
+    : collection(db, COLLECTIONS.SALES);
   return onSnapshot(q, (snap) => {
     const list: SaleTransaction[] = [];
     snap.forEach((d) => {
@@ -1378,19 +1400,29 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
 /**
  * Realtime Withdrawals Listener (Filtered strictly by user unless superadmin)
  */
-export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void, userId?: string) {
-  const q = collection(db, COLLECTIONS.WITHDRAWALS);
-  return onSnapshot(q, (snap) => {
+export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void, userId?: string, companyId?: string) {
+  let q: any = collection(db, COLLECTIONS.WITHDRAWALS);
+  if (companyId) {
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("companyId", "==", companyId));
+  } else if (userId) {
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("userId", "==", userId));
+  }
+
+  return onSnapshot(q, (snap: any) => {
     const list: WithdrawalRequest[] = [];
-    snap.forEach((d) => {
+    snap.forEach((d: any) => {
       const data = d.data() as Omit<WithdrawalRequest, 'id'>;
-      if (!userId || data.userId === userId || (data as any).user_id === userId) {
+      if (companyId) {
+        if ((data as any).companyId === companyId) {
+          list.push({ id: d.id, ...data });
+        }
+      } else if (!userId || data.userId === userId || (data as any).user_id === userId) {
         list.push({ id: d.id, ...data });
       }
     });
     list.sort((a, b) => (b.createdAt || b.completedAt || b.requestedAt || '').localeCompare(a.createdAt || a.completedAt || a.requestedAt || ''));
     callback(list);
-  }, (err) => {
+  }, (err: any) => {
     console.error('Firestore withdrawals listener error:', err);
     callback([]);
   });
@@ -1902,7 +1934,9 @@ export function subscribeClients(
   }
 
   const clientsColl = collection(db, COLLECTIONS.CLIENTS);
-  const q = query(clientsColl, orderBy('created_at', 'desc'));
+  const q = storeId 
+    ? query(clientsColl, where("companyId", "==", storeId))
+    : query(clientsColl, orderBy('created_at', 'desc'));
 
   return onSnapshot(q, (snapshot) => {
     const clients: PlatformClient[] = [];
@@ -1910,8 +1944,9 @@ export function subscribeClients(
       const data = docSnap.data();
       clients.push({
         id: docSnap.id,
-        store_id: data.store_id || data.empresa_id || 'store_default',
-        empresa_id: data.empresa_id || data.store_id || 'store_default',
+        store_id: data.store_id || data.companyId || data.empresa_id || 'store_default',
+        empresa_id: data.empresa_id || data.companyId || data.store_id || 'store_default',
+        companyId: data.companyId || data.store_id || data.empresa_id || 'store_default',
         name: data.name || data.nome_completo || 'Cliente Sem Nome',
         nome_completo: data.nome_completo || data.name || 'Cliente Sem Nome',
         email: data.email || '',
@@ -1938,14 +1973,14 @@ export function subscribeClients(
     } catch (_) {}
 
     if (storeId) {
-      callback(clients.filter(c => c.store_id === storeId || c.empresa_id === storeId));
+      callback(clients.filter(c => c.store_id === storeId || c.companyId === storeId || c.empresa_id === storeId));
     } else {
       callback(clients);
     }
   }, (err) => {
     console.warn('Erro ao escutar coleção clients no Firestore:', err);
     if (local.length > 0) {
-      callback(storeId ? local.filter(c => c.store_id === storeId || c.empresa_id === storeId) : local);
+      callback(storeId ? local.filter(c => c.store_id === storeId || c.companyId === storeId || c.empresa_id === storeId) : local);
     }
   });
 }

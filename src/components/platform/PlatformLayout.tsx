@@ -289,8 +289,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   };
 
   const effectiveUserId = currentUser?.uid || userProfile?.id || userProfile?.userId || '';
+  const userCompanyId = userProfile?.companyId || (roleMode === 'empresa' ? (companies.find(c => c.ownerId === effectiveUserId)?.id) : undefined);
+  const effectiveCompanyId = (isSuperAdmin && roleMode === 'admin') ? undefined : userCompanyId;
 
-  // 1. Global subscriptions (companies, plans, all affiliations for marketplace, and sales)
+  // 1. Company-isolated or Global subscriptions (companies, plans, affiliations, and sales)
   useEffect(() => {
     seedFirestoreIfEmpty().then(() => {
       setDbConnected(true);
@@ -298,19 +300,19 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     const unsubCompanies = subscribeCompanies((compList) => {
       setCompanies(compList);
-    });
+    }, effectiveCompanyId);
 
     const unsubPlans = subscribePlans((planList) => {
       setPlans(planList);
-    });
+    }, effectiveCompanyId);
 
     const unsubAllAffiliations = subscribeAllAffiliations((allAffList) => {
       setAllAffiliations(allAffList);
-    });
+    }, effectiveCompanyId);
 
     const unsubSales = subscribeSales((salesList) => {
       setTransactions(salesList);
-    });
+    }, effectiveCompanyId);
 
     return () => {
       unsubCompanies();
@@ -318,7 +320,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       unsubAllAffiliations();
       unsubSales();
     };
-  }, []);
+  }, [effectiveCompanyId]);
 
   // 2. User-specific subscriptions (user affiliations, user withdrawals strictly isolated to this account)
   useEffect(() => {
@@ -331,13 +333,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     const unsubWith = subscribeWithdrawals((withList) => {
       setWithdrawals(withList);
-    }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId);
+    }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId, effectiveCompanyId);
 
     return () => {
       unsubAffiliations();
       unsubWith();
     };
-  }, [effectiveUserId, isSuperAdmin, roleMode]);
+  }, [effectiveUserId, isSuperAdmin, roleMode, effectiveCompanyId]);
 
   // Affiliate Codes belonging strictly to THIS user
   const userAffiliationCodes = useMemo(() => {

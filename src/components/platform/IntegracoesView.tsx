@@ -101,7 +101,7 @@ export const IntegracoesView: React.FC<IntegracoesViewProps> = ({
           setPlans(loadedPlans);
           setSelectedPlanId(loadedPlans[0].id);
         }
-      });
+      }, userProfile?.companyId);
       return () => unsub();
     }
   }, [initialPlans]);

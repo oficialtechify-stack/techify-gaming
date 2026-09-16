@@ -452,6 +452,7 @@ export interface TeamMember {
 
 export interface PlatformClient {
   id: string;
+  companyId?: string;
   store_id: string;
   empresa_id?: string;
   name: string;
