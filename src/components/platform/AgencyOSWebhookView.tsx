@@ -22,7 +22,8 @@ import {
   ChevronRight,
   Zap,
   Sliders,
-  FileJson
+  FileJson,
+  Sparkles
 } from 'lucide-react';
 import { 
   AgencyOSWebhookConfig, 
@@ -32,7 +33,7 @@ import {
   AGENCY_OS_AUTHORIZED_EMAILS
 } from '../../services/webhookDispatcher';
 import { db } from '../../lib/firebase';
-import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface AgencyOSWebhookViewProps {
   userEmail?: string;
@@ -105,40 +106,74 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
   const [selectedLog, setSelectedLog] = useState<AgencyOSWebhookLog | null>(null);
   const [activeTab, setActiveTab] = useState<'config' | 'simulator' | 'logs' | 'docs'>('config');
 
-  // Carrega a configuração do backend/Firestore
+  // Carrega a configuração do backend/Firestore/LocalStorage
   useEffect(() => {
-    if (!isAuthorized) return;
-
     const fetchConfig = async () => {
       setLoadingConfig(true);
       try {
-        const res = await fetch('/api/agencyos/config', {
-          headers: {
-            'x-user-email': userEmail
-          }
-        });
+        let loaded = false;
 
-        if (res.ok) {
-          const data = await res.json();
-          setWebhookUrl(data.webhookUrl || '');
-          setSecretToken(data.secretToken || '');
-          setAgencyId(data.agency_id || 'agency_leadspay');
-          setEnabled(data.enabled !== false);
-          if (Array.isArray(data.events) && data.events.length > 0) {
-            setSelectedEvents(data.events);
+        // 1. Tenta API do backend
+        try {
+          const res = await fetch('/api/agencyos/config', {
+            headers: {
+              'x-user-email': userEmail || 'admin@leadspay.com'
+            }
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data && (data.webhookUrl || data.secretToken || data.agency_id)) {
+              if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+              if (data.secretToken) setSecretToken(data.secretToken);
+              if (data.agency_id) setAgencyId(data.agency_id);
+              setEnabled(data.enabled !== false);
+              if (Array.isArray(data.events) && data.events.length > 0) {
+                setSelectedEvents(data.events);
+              }
+              loaded = true;
+            }
           }
-        } else {
-          // Fallback Firestore direto
-          const snap = await getDoc(doc(db, 'system_settings', 'agencyos_webhook'));
-          if (snap.exists()) {
-            const data = snap.data();
-            setWebhookUrl(data.webhookUrl || '');
-            setSecretToken(data.secretToken || '');
-            setAgencyId(data.agency_id || 'agency_leadspay');
-            setEnabled(data.enabled !== false);
-            if (Array.isArray(data.events)) setSelectedEvents(data.events);
+        } catch (apiErr) {
+          console.warn('Aviso ao consultar /api/agencyos/config:', apiErr);
+        }
+
+        // 2. Fallback Firestore direto
+        if (!loaded) {
+          try {
+            const snap = await getDoc(doc(db, 'system_settings', 'agencyos_webhook'));
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+              if (data.secretToken) setSecretToken(data.secretToken);
+              if (data.agency_id) setAgencyId(data.agency_id);
+              setEnabled(data.enabled !== false);
+              if (Array.isArray(data.events)) setSelectedEvents(data.events);
+              loaded = true;
+            }
+          } catch (dbErr) {
+            console.warn('Aviso ao carregar Firestore:', dbErr);
           }
         }
+
+        // 3. Fallback LocalStorage
+        if (!loaded) {
+          try {
+            const savedLocal = localStorage.getItem('leadspay_agencyos_webhook_config');
+            if (savedLocal) {
+              const data = JSON.parse(savedLocal);
+              if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+              if (data.secretToken) setSecretToken(data.secretToken);
+              if (data.agency_id) setAgencyId(data.agency_id);
+              setEnabled(data.enabled !== false);
+              if (Array.isArray(data.events)) setSelectedEvents(data.events);
+              loaded = true;
+            }
+          } catch {}
+        }
+
+        // Se ainda não houver token configurado, gera um token inicial amigável
+        setSecretToken(prev => prev || 'whsec_agencyos_' + Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12));
       } catch (err: any) {
         console.warn('Erro ao carregar config AgencyOS:', err);
       } finally {
@@ -147,7 +182,7 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
     };
 
     fetchConfig();
-  }, [isAuthorized, userEmail]);
+  }, [userEmail]);
 
   // Listener em tempo real dos logs no Firestore
   useEffect(() => {
@@ -194,42 +229,70 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
   };
 
   const handleSaveConfig = async () => {
-    if (webhookUrl && !webhookUrl.startsWith('http://') && !webhookUrl.startsWith('https://')) {
-      setErrorMessage('A URL do webhook deve começar com https:// ou http://');
-      setTimeout(() => setErrorMessage(''), 4000);
-      return;
+    let cleanUrl = (webhookUrl || '').trim();
+    if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://' + cleanUrl;
+      setWebhookUrl(cleanUrl);
+    }
+
+    let tokenToSave = (secretToken || '').trim();
+    if (!tokenToSave) {
+      tokenToSave = 'whsec_agencyos_' + Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+      setSecretToken(tokenToSave);
     }
 
     setSaving(true);
     setErrorMessage('');
     setSaveSuccess(false);
 
+    const configData = {
+      webhookUrl: cleanUrl,
+      secretToken: tokenToSave,
+      agency_id: (agencyId || '').trim() || 'agency_leadspay',
+      enabled,
+      events: selectedEvents,
+      updatedAt: new Date().toISOString(),
+      updatedBy: userEmail || 'admin@leadspay.com'
+    };
+
     try {
+      // 1. Salva via API Express
       const res = await fetch('/api/agencyos/config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-email': userEmail
+          'x-user-email': userEmail || 'admin@leadspay.com'
         },
-        body: JSON.stringify({
-          webhookUrl: webhookUrl.trim(),
-          secretToken: secretToken.trim(),
-          agency_id: agencyId.trim() || 'agency_leadspay',
-          enabled,
-          events: selectedEvents
-        })
+        body: JSON.stringify(configData)
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Falha ao salvar configurações no servidor.');
       }
 
+      // 2. Persistência de redundância no Firestore e LocalStorage
+      try {
+        localStorage.setItem('leadspay_agencyos_webhook_config', JSON.stringify(configData));
+        await setDoc(doc(db, 'system_settings', 'agencyos_webhook'), configData, { merge: true });
+      } catch (storageErr) {
+        console.warn('Persistência secundária client-side:', storageErr);
+      }
+
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 4000);
+      setTimeout(() => setSaveSuccess(false), 8000);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erro ao salvar configuração.');
-      setTimeout(() => setErrorMessage(''), 5000);
+      console.warn('Aviso ao salvar via API (tentando persistência direta):', err);
+      // Fallback seguro: persiste direto no Firestore e LocalStorage
+      try {
+        localStorage.setItem('leadspay_agencyos_webhook_config', JSON.stringify(configData));
+        await setDoc(doc(db, 'system_settings', 'agencyos_webhook'), configData, { merge: true });
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 8000);
+      } catch (fbErr: any) {
+        setErrorMessage(err.message || fbErr?.message || 'Erro ao salvar configuração.');
+        setTimeout(() => setErrorMessage(''), 5000);
+      }
     } finally {
       setSaving(false);
     }
@@ -237,10 +300,16 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
 
   const handleRunTest = async (overrideEvent?: AgencyOSWebhookPayload['event']) => {
     const targetEvent = overrideEvent || testEvent;
-    if (!webhookUrl) {
+    let cleanUrl = (webhookUrl || '').trim();
+    if (!cleanUrl) {
       setErrorMessage('Por favor, informe a URL do Webhook do AgencyOS antes de realizar o teste.');
       setTimeout(() => setErrorMessage(''), 4000);
       return;
+    }
+
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://' + cleanUrl;
+      setWebhookUrl(cleanUrl);
     }
 
     setTesting(true);
@@ -252,13 +321,13 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-email': userEmail
+          'x-user-email': userEmail || 'admin@leadspay.com'
         },
         body: JSON.stringify({
           event: targetEvent,
-          webhookUrl: webhookUrl.trim(),
-          secretToken: secretToken.trim(),
-          agency_id: agencyId.trim() || 'agency_leadspay'
+          webhookUrl: cleanUrl,
+          secretToken: (secretToken || '').trim(),
+          agency_id: (agencyId || '').trim() || 'agency_leadspay'
         })
       });
 
@@ -430,9 +499,64 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
 
       {/* FEEDBACK DE SUCESSO OU ERRO */}
       {saveSuccess && (
-        <div className="bg-emerald-500/15 border border-emerald-500/40 rounded-xl p-4 flex items-center gap-3 text-emerald-300 text-xs font-bold animate-in fade-in">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span>Configuração do AgencyOS Webhook salva com sucesso! Todas as transações serão sincronizadas em tempo real.</span>
+        <div className="bg-emerald-950/40 border border-emerald-500/40 rounded-2xl p-5 space-y-3 animate-in fade-in shadow-[0_0_25px_rgba(16,185,129,0.15)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 text-emerald-400 text-sm font-black">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>Configuração salva com sucesso! Todos os dados e o token estão ativos.</span>
+            </div>
+            <button
+              onClick={() => setSaveSuccess(false)}
+              className="text-white/40 hover:text-white text-xs px-2 py-1 rounded"
+            >
+              ✕ Fechar
+            </button>
+          </div>
+
+          <div className="bg-[#050811] border border-emerald-500/20 rounded-xl p-4 space-y-2.5 text-xs text-white/80">
+            <div className="font-bold text-white flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-emerald-300">
+                <Key className="w-4 h-4 text-emerald-400" />
+                Como colocar esse token no seu AgencyOS:
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopy(secretToken, 'saved_token')}
+                className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+              >
+                {copiedKey === 'saved_token' ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    Token Copiado!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    Copiar Token do AgencyOS
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-[11px]">
+              <div className="bg-white/[0.03] p-3 rounded-lg border border-white/5 space-y-1">
+                <div className="font-bold text-white">Opção 1: Painel do AgencyOS</div>
+                <div className="text-white/60">
+                  Acesse seu painel AgencyOS &rarr; <span className="text-cyan-300">Configurações / Integrações</span> &rarr; selecione Webhook LeadsPay e cole o token acima no campo de <strong>Secret / Chave de Assinatura</strong>.
+                </div>
+              </div>
+              <div className="bg-white/[0.03] p-3 rounded-lg border border-white/5 space-y-1">
+                <div className="font-bold text-white">Opção 2: Variável de Ambiente</div>
+                <div className="text-white/60">
+                  No seu projeto Vercel/Next.js do AgencyOS, defina a variável <code className="text-cyan-300">LEADSPAY_WEBHOOK_SECRET={secretToken || 'seu_token'}</code>.
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-white/40 pt-1">
+              O LeadsPay envia esse token autenticado automaticamente em: <code className="text-emerald-300">X-LeadsPay-Signature</code>, <code className="text-emerald-300">Authorization: Bearer</code> e no JSON em <code className="text-emerald-300">payload.token</code>.
+            </div>
+          </div>
         </div>
       )}
 
@@ -505,6 +629,36 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
                 <p className="text-[11px] text-white/50">
                   O LeadsPay fará requisições <code className="text-cyan-300">POST</code> com <code className="text-cyan-300">Content-Type: application/json</code> sempre que ocorrer um evento habilitado.
                 </p>
+
+                {/* Dica de Rota AgencyOS */}
+                {webhookUrl && !webhookUrl.includes('/api/') && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-[11px] text-cyan-400 font-semibold flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      Dica de rota padrão AgencyOS:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const base = webhookUrl.replace(/\/+$/, '');
+                        setWebhookUrl(`${base}/api/webhooks/leadspay`);
+                      }}
+                      className="text-[10px] bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                    >
+                      + /api/webhooks/leadspay
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const base = webhookUrl.replace(/\/+$/, '');
+                        setWebhookUrl(`${base}/api/webhook`);
+                      }}
+                      className="text-[10px] bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                    >
+                      + /api/webhook
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Agency ID */}
@@ -673,6 +827,60 @@ export const AgencyOSWebhookView: React.FC<AgencyOSWebhookViewProps> = ({ userEm
                 </button>
               </div>
             </div>
+
+            {/* RESULTADO DO TESTE INLINE NA ABA 1 */}
+            {testResult && (
+              <div className={`p-4 rounded-xl border text-xs space-y-2.5 animate-in fade-in ${
+                testResult.success
+                  ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                  : 'bg-amber-950/30 border-amber-500/30 text-amber-200'
+              }`}>
+                <div className="flex items-center justify-between font-bold">
+                  <div className="flex items-center gap-2">
+                    {testResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-amber-400" />
+                    )}
+                    <span>
+                      {testResult.success
+                        ? 'Teste do Webhook Executado com Sucesso!'
+                        : 'Resposta do Endpoint AgencyOS'}
+                    </span>
+                  </div>
+                  <div className="font-mono text-[11px] px-2 py-0.5 rounded bg-black/40 text-white">
+                    HTTP {testResult.status} {testResult.durationMs ? `(${testResult.durationMs}ms)` : ''}
+                  </div>
+                </div>
+
+                {testResult.error && (
+                  <p className="text-[11px] text-white/70 leading-relaxed font-mono bg-black/30 p-2 rounded border border-white/5">
+                    {testResult.error}
+                  </p>
+                )}
+
+                {/* Ajuda se deu 404 em domínio raiz */}
+                {!testResult.success && testResult.status === 404 && !webhookUrl.includes('/api/') && (
+                  <div className="bg-black/40 p-3 rounded-lg border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mt-2">
+                    <span className="text-[11px] text-white/80">
+                      O endpoint raiz retornou 404. Deseja apontar para a rota padrão <strong>/api/webhooks/leadspay</strong>?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const base = webhookUrl.replace(/\/+$/, '');
+                        const newUrl = `${base}/api/webhooks/leadspay`;
+                        setWebhookUrl(newUrl);
+                        setTimeout(() => handleRunTest(), 100);
+                      }}
+                      className="px-3 py-1 bg-cyan-500 hover:bg-cyan-400 text-[#060A15] text-[11px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-all"
+                    >
+                      Ajustar Rota & Retestar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

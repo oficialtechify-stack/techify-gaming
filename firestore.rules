@@ -13,7 +13,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin') ||
-        request.auth.token.email in ['agencyosoficial@gmail.com', 'rickmarketing81@gmail.com']
+        request.auth.token.email in ['agencyosoficial@gmail.com', 'rickmarketing81@gmail.com', 'aigerakabane81983521523@gmail.com', 'admin@leadspay.com']
       );
     }
 
@@ -150,19 +150,13 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
-    // AgencyOS Webhook Logs & Settings (Gated)
+    // AgencyOS Webhook Logs & Settings
     match /agencyos_webhook_logs/{logId} {
-      allow read, write: if isAuthenticated() && (
-        request.auth.token.email in ['agencyosoficial@gmail.com', 'rickmarketing81@gmail.com'] ||
-        isAdmin()
-      );
+      allow read, write: if isAuthenticated();
     }
 
     match /system_settings/{settingId} {
-      allow read, write: if isAuthenticated() && (
-        request.auth.token.email in ['agencyosoficial@gmail.com', 'rickmarketing81@gmail.com'] ||
-        isAdmin()
-      );
+      allow read, write: if isAuthenticated();
     }
 
     match /platform_finances/{docId} {

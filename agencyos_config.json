@@ -1,0 +1,14 @@
+{
+  "webhookUrl": "https://agency-os-by-techify.vercel.app/api/webhooks/leadspay",
+  "secretToken": "whsec_agencyos_6i69SodjHACt4XtLRJWN0qDWu2aBgtWG",
+  "agency_id": "agency_leadspay",
+  "enabled": true,
+  "events": [
+    "sale.approved",
+    "company.activated",
+    "affiliate.commission",
+    "balance.updated"
+  ],
+  "updatedAt": "2026-09-16T14:25:48.985Z",
+  "updatedBy": "aigerakabane81983521523@gmail.com"
+}

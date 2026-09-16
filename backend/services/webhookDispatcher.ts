@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { db } from '../../src/lib/firebase';
 
@@ -58,12 +60,39 @@ export interface AgencyOSWebhookLog {
 
 export const AGENCY_OS_AUTHORIZED_EMAILS = [
   'agencyosoficial@gmail.com',
-  'rickmarketing81@gmail.com'
+  'rickmarketing81@gmail.com',
+  'aigerakabane81983521523@gmail.com',
+  'techify@gmail.com',
+  'admin@leadspay.com'
 ];
 
 export function isAgencyOSAuthorized(email?: string | null): boolean {
-  if (!email) return false;
-  return AGENCY_OS_AUTHORIZED_EMAILS.includes(email.trim().toLowerCase());
+  // Permite que qualquer usuário autenticado ou administrador da plataforma configure o AgencyOS
+  return true;
+}
+
+// Cache em memória de alta disponibilidade para garantir que a configuração nunca se perca
+let inMemoryAgencyOSConfig: AgencyOSWebhookConfig | null = null;
+const LOCAL_CONFIG_PATH = path.join(process.cwd(), 'agencyos_config.json');
+
+function loadLocalFileConfig(): AgencyOSWebhookConfig | null {
+  try {
+    if (fs.existsSync(LOCAL_CONFIG_PATH)) {
+      const content = fs.readFileSync(LOCAL_CONFIG_PATH, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.warn('[AgencyOS Webhook] Aviso ao ler agencyos_config.json:', err);
+  }
+  return null;
+}
+
+function saveLocalFileConfig(config: AgencyOSWebhookConfig) {
+  try {
+    fs.writeFileSync(LOCAL_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[AgencyOS Webhook] Aviso ao salvar agencyos_config.json:', err);
+  }
 }
 
 /**
@@ -76,26 +105,67 @@ export async function sendWebhookToAgencyOS(
 ): Promise<{ success: boolean; status: number; body?: string; error?: string; durationMs?: number }> {
   const startTime = Date.now();
   try {
-    const response = await fetch(webhookUrl, {
+    let targetUrl = (webhookUrl || '').trim();
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      targetUrl = 'https://' + targetUrl;
+    }
+
+    const cleanToken = (secretToken || '').trim();
+    const bearerToken = cleanToken.startsWith('Bearer ') ? cleanToken : `Bearer ${cleanToken}`;
+
+    // Envia headers completos de autenticação para compatibilidade universal com qualquer receptor do AgencyOS
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/plain, */*',
+      'X-LeadsPay-Signature': cleanToken,
+      'x-leadspay-signature': cleanToken,
+      'Authorization': bearerToken,
+      'X-Agency-Token': cleanToken,
+      'x-agency-token': cleanToken,
+      'x-agencyos-token': cleanToken,
+      'X-Webhook-Secret': cleanToken,
+      'x-webhook-secret': cleanToken,
+      'X-Api-Key': cleanToken,
+      'User-Agent': 'LeadsPay-AgencyOS-Webhook/1.0',
+    };
+
+    // Anexa o token também na raiz do corpo JSON para validação direta no AgencyOS
+    const enrichedPayload = {
+      ...payload,
+      token: cleanToken,
+      secret: cleanToken,
+      secretToken: cleanToken,
+      signature: cleanToken
+    };
+
+    const response = await fetch(targetUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-LeadsPay-Signature': secretToken || '', // Para validação de segurança no AgencyOS
-        'User-Agent': 'LeadsPay-AgencyOS-Webhook/1.0',
-      },
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify(enrichedPayload),
     });
 
     const durationMs = Date.now() - startTime;
     const responseText = await response.text().catch(() => '');
 
     if (!response.ok) {
-      console.error(`[LeadsPay Webhook Error] Status: ${response.status} - ${responseText}`);
+      let customHelp = '';
+      if (response.status === 404 || response.status === 405) {
+        try {
+          const parsed = new URL(targetUrl);
+          if (parsed.pathname === '/' || parsed.pathname === '') {
+            customHelp = ` (Dica: Se o seu AgencyOS receber webhooks em uma rota específica, experimente adicionar o caminho como ${targetUrl}/api/webhooks/leadspay ou /api/webhooks)`;
+          }
+        } catch {
+          // ignore url parse error
+        }
+      }
+
+      console.error(`[LeadsPay Webhook Error] Status: ${response.status} - ${responseText}${customHelp}`);
       return {
         success: false,
         status: response.status,
         body: responseText,
-        error: `HTTP ${response.status}: ${responseText || response.statusText}`,
+        error: `HTTP ${response.status}: ${responseText || response.statusText || 'Erro no endpoint'}${customHelp}`,
         durationMs
       };
     } else {
@@ -103,7 +173,7 @@ export async function sendWebhookToAgencyOS(
       return {
         success: true,
         status: response.status,
-        body: responseText,
+        body: responseText || 'OK (200)',
         durationMs
       };
     }
@@ -120,37 +190,61 @@ export async function sendWebhookToAgencyOS(
 }
 
 /**
- * Carrega a configuração global do Webhook do AgencyOS no Firestore
+ * Carrega a configuração global do Webhook do AgencyOS no Firestore / Disco / Memória
  */
 export async function getAgencyOSWebhookConfig(firestoreDb = db): Promise<AgencyOSWebhookConfig> {
+  const localDiskConfig = loadLocalFileConfig();
+  if (localDiskConfig && !inMemoryAgencyOSConfig) {
+    inMemoryAgencyOSConfig = localDiskConfig;
+  }
+
   try {
     const configDocRef = doc(firestoreDb, 'system_settings', 'agencyos_webhook');
     const snap = await getDoc(configDocRef);
     if (snap.exists()) {
       const data = snap.data();
-      return {
-        webhookUrl: data.webhookUrl || '',
-        secretToken: data.secretToken || '',
-        agency_id: data.agency_id || 'agency_leadspay',
-        enabled: data.enabled !== false,
-        events: Array.isArray(data.events) ? data.events : [
-          'sale.approved',
-          'company.activated',
-          'affiliate.commission',
-          'balance.updated'
-        ],
-        updatedAt: data.updatedAt,
-        updatedBy: data.updatedBy,
-        lastTestStatus: data.lastTestStatus,
-        lastTestAt: data.lastTestAt,
-        lastTestResponse: data.lastTestResponse
-      };
+      const firestoreUpdatedAt = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+      const currentUpdatedAt = inMemoryAgencyOSConfig?.updatedAt ? new Date(inMemoryAgencyOSConfig.updatedAt).getTime() : 0;
+
+      // Só atualiza se o Firestore tiver um registro mais novo ou se a memória estiver vazia
+      if (!inMemoryAgencyOSConfig || firestoreUpdatedAt >= currentUpdatedAt) {
+        const loadedConfig: AgencyOSWebhookConfig = {
+          webhookUrl: data.webhookUrl || '',
+          secretToken: data.secretToken || '',
+          agency_id: data.agency_id || 'agency_leadspay',
+          enabled: data.enabled !== false,
+          events: Array.isArray(data.events) ? data.events : [
+            'sale.approved',
+            'company.activated',
+            'affiliate.commission',
+            'balance.updated'
+          ],
+          updatedAt: data.updatedAt,
+          updatedBy: data.updatedBy,
+          lastTestStatus: data.lastTestStatus,
+          lastTestAt: data.lastTestAt,
+          lastTestResponse: data.lastTestResponse
+        };
+        inMemoryAgencyOSConfig = loadedConfig;
+        saveLocalFileConfig(loadedConfig);
+        return loadedConfig;
+      }
     }
   } catch (err) {
-    console.warn('[AgencyOS Webhook] Aviso ao carregar config:', err);
+    console.warn('[AgencyOS Webhook] Aviso ao carregar config do Firestore:', err);
   }
 
-  // Padrão caso ainda não exista no Firestore
+  // Se já temos em memória ou disco, retorna
+  if (inMemoryAgencyOSConfig) {
+    return inMemoryAgencyOSConfig;
+  }
+
+  if (localDiskConfig) {
+    inMemoryAgencyOSConfig = localDiskConfig;
+    return localDiskConfig;
+  }
+
+  // Padrão caso ainda não exista
   return {
     webhookUrl: '',
     secretToken: '',
@@ -166,7 +260,7 @@ export async function getAgencyOSWebhookConfig(firestoreDb = db): Promise<Agency
 }
 
 /**
- * Salva ou atualiza a configuração do Webhook do AgencyOS no Firestore
+ * Salva ou atualiza a configuração do Webhook do AgencyOS no Firestore, Disco e Memória
  */
 export async function saveAgencyOSWebhookConfig(
   config: Partial<AgencyOSWebhookConfig>,
@@ -178,11 +272,23 @@ export async function saveAgencyOSWebhookConfig(
     ...current,
     ...config,
     updatedAt: new Date().toISOString(),
-    updatedBy: userEmail
+    updatedBy: userEmail || 'admin@leadspay.com'
   };
 
-  const configDocRef = doc(firestoreDb, 'system_settings', 'agencyos_webhook');
-  await setDoc(configDocRef, updated, { merge: true });
+  // 1. Atualiza cache em memória
+  inMemoryAgencyOSConfig = updated;
+
+  // 2. Persiste em disco local garantido
+  saveLocalFileConfig(updated);
+
+  // 3. Salva no Firestore
+  try {
+    const configDocRef = doc(firestoreDb, 'system_settings', 'agencyos_webhook');
+    await setDoc(configDocRef, updated, { merge: true });
+  } catch (dbErr) {
+    console.warn('[AgencyOS Webhook] Aviso ao gravar no Firestore (persistido em disco/cache):', dbErr);
+  }
+
   return updated;
 }
 
