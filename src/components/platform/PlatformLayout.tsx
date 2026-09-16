@@ -49,6 +49,7 @@ import { EquipeView } from './EquipeView';
 import { RelatoriosView } from './RelatoriosView';
 import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
+import { AdminModalImagesManager } from './AdminModalImagesManager';
 import { MeuPerfilView } from './MeuPerfilView';
 import { AssinaturasView } from './AssinaturasView';
 import { CuponsView } from './CuponsView';
@@ -109,7 +110,8 @@ import {
   Package,
   CreditCard,
   ArrowUpRight,
-  Radio
+  Radio,
+  Image as ImageIcon
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';

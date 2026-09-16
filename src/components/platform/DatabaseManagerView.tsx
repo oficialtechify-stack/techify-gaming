@@ -59,13 +59,14 @@ import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
 import firebaseConfig from '../../../firebase-applet-config.json';
 import { AdminBrandingManager } from './AdminBrandingManager';
+import { AdminModalImagesManager } from './AdminModalImagesManager';
 
 const ADMIN_EMAILS = [
   'rickmarketing81@gmail.com',
   'aigerakabane81983521523@gmail.com'
 ];
 
-type MainAdminTab = 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'database_explorer';
+type MainAdminTab = 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'modal_backgrounds' | 'database_explorer';
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'banned' | 'all';
 
 interface SecurityTarget {
@@ -657,8 +658,8 @@ export const DatabaseManagerView: React.FC = () => {
         </div>
       )}
 
-      {/* NAVEGAÇÃO PRINCIPAL (SEPARAÇÃO CLARA ENTRE AFILIADOS, EMPRESAS E LOGO) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* NAVEGAÇÃO PRINCIPAL (SEPARAÇÃO CLARA ENTRE AFILIADOS, EMPRESAS, LOGO E IMAGENS) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Aba 1: Afiliados */}
         <button
           onClick={() => {
@@ -749,12 +750,39 @@ export const DatabaseManagerView: React.FC = () => {
               Logotipo do Site
             </h3>
             <p className={`text-[11px] mt-0.5 ${mainTab === 'branding_manager' ? 'text-black/80 font-medium' : 'text-white/50'}`}>
-              Upload de imagem personalizada e personalização visual
+              Upload de imagem personalizada e logotipo
             </p>
           </div>
         </button>
 
-        {/* Aba 4: Coleções / Banco de Dados */}
+        {/* Aba 4: Imagens dos Modais (Upload Manual) */}
+        <button
+          onClick={() => setMainTab('modal_backgrounds')}
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+            mainTab === 'modal_backgrounds'
+              ? 'bg-[#D9F22A] text-[#060A15] border-[#D9F22A] shadow-[0_0_25px_rgba(217,242,42,0.3)]'
+              : 'bg-[#080d1a] text-white hover:border-white/30 border-white/10'
+          }`}
+        >
+          <div className="flex items-center justify-between w-full mb-2">
+            <div className={`p-2 rounded-xl ${mainTab === 'modal_backgrounds' ? 'bg-black/20 text-black' : 'bg-white/5 text-cyan-400'}`}>
+              <ImageIcon className="w-5 h-5" />
+            </div>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${mainTab === 'modal_backgrounds' ? 'text-black' : 'text-cyan-400'}`}>
+              Upload Manual
+            </span>
+          </div>
+          <div>
+            <h3 className="font-['Syne'] font-black text-sm uppercase tracking-tight">
+              Imagens dos Modais
+            </h3>
+            <p className={`text-[11px] mt-0.5 ${mainTab === 'modal_backgrounds' ? 'text-black/80 font-medium' : 'text-white/50'}`}>
+              Fundos de Afiliado, Empresa e Login
+            </p>
+          </div>
+        </button>
+
+        {/* Aba 5: Coleções / Banco de Dados */}
         <button
           onClick={() => setMainTab('database_explorer')}
           className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
@@ -786,6 +814,13 @@ export const DatabaseManagerView: React.FC = () => {
       {mainTab === 'branding_manager' && (
         <div className="animate-in fade-in duration-200">
           <AdminBrandingManager />
+        </div>
+      )}
+
+      {/* SE FOR MODAL BACKGROUNDS, EXIBE O GERENCIADOR DE IMAGENS */}
+      {mainTab === 'modal_backgrounds' && (
+        <div className="animate-in fade-in duration-200">
+          <AdminModalImagesManager />
         </div>
       )}
 

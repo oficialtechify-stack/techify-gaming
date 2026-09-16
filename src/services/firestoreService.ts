@@ -1905,6 +1905,88 @@ export async function savePlatformBranding(
   return payload;
 }
 
+// ==========================================
+// 🖼️ AUTH MODAL BACKGROUNDS & SHOWCASE SETTINGS
+// ==========================================
+
+export interface AuthModalSettings {
+  affiliateShowcaseUrl?: string;
+  companyShowcaseUrl?: string;
+  loginShowcaseUrl?: string;
+  forgotPasswordShowcaseUrl?: string;
+  displayMode?: 'side_showcase' | 'modal_background' | 'both';
+  enableRightShowcase?: boolean;
+  showFloatingBadges?: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+const MODAL_IMAGES_DOC_ID = 'modal_backgrounds';
+const LOCAL_MODAL_IMAGES_KEY = 'leadspay_modal_backgrounds';
+
+export function getLocalAuthModalSettings(): AuthModalSettings {
+  try {
+    const saved = localStorage.getItem(LOCAL_MODAL_IMAGES_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    // ignore
+  }
+  return {
+    enableRightShowcase: true,
+    showFloatingBadges: true,
+    displayMode: 'side_showcase'
+  };
+}
+
+export function subscribeAuthModalSettings(callback: (settings: AuthModalSettings) => void) {
+  const local = getLocalAuthModalSettings();
+  callback(local);
+
+  const docRef = doc(db, COLLECTIONS.SETTINGS, MODAL_IMAGES_DOC_ID);
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data() as AuthModalSettings;
+      try {
+        localStorage.setItem(LOCAL_MODAL_IMAGES_KEY, JSON.stringify(data));
+      } catch (_) {}
+      callback(data);
+    } else {
+      callback(local);
+    }
+  }, (err) => {
+    console.warn('Erro ao escutar platform_settings/modal_backgrounds:', err);
+    callback(local);
+  });
+}
+
+export async function saveAuthModalSettings(
+  settings: Partial<AuthModalSettings>,
+  updatedBy?: string
+): Promise<AuthModalSettings> {
+  const docRef = doc(db, COLLECTIONS.SETTINGS, MODAL_IMAGES_DOC_ID);
+  const now = new Date().toISOString();
+
+  const payload: AuthModalSettings = {
+    ...settings,
+    updatedAt: now,
+    updatedBy: updatedBy || 'admin'
+  };
+
+  const cleanPayload = sanitizeForFirestore(payload);
+  await setDoc(docRef, cleanPayload, { merge: true });
+
+  try {
+    const current = getLocalAuthModalSettings();
+    localStorage.setItem(LOCAL_MODAL_IMAGES_KEY, JSON.stringify({ ...current, ...cleanPayload }));
+  } catch (_) {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('leadspay_modal_backgrounds_updated', { detail: cleanPayload }));
+  }
+
+  return payload;
+}
+
 /* ==========================================================================
    MÓDULO DE CLIENTES (ETAPA 2 - LEADSPAY)
    ========================================================================== */
