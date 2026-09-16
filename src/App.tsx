@@ -139,6 +139,17 @@ function MainApp() {
           setIsLoadingCheckout(false);
           setCheckoutError('Por favor, informe um plano cadastrado ou os parâmetros de valor e descrição (ex: ?amount=197.00&description=NomeDoProduto).');
         }
+
+        // 5. Suporte a abertura direta de modais de autenticação via URL (ex: ?auth=login, ?auth=afiliado, #login)
+        const authParam = params.get('auth') || params.get('modal') || '';
+        const hash = window.location.hash.toLowerCase();
+        if (authParam === 'login' || hash === '#login') {
+          setActiveModal('login');
+        } else if (authParam === 'afiliado' || authParam === 'register_affiliate' || hash === '#afiliado' || hash === '#cadastro-afiliado') {
+          setActiveModal('register_affiliate');
+        } else if (authParam === 'empresa' || authParam === 'register_company' || hash === '#empresa' || hash === '#cadastro-empresa') {
+          setActiveModal('register_company');
+        }
       } catch (e) {
         console.warn('Erro ao processar parâmetros da URL:', e);
       }

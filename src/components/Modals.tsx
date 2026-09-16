@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ActiveModal } from '../types';
+import { AuthScreenModal } from './auth/AuthScreenModal';
 import { 
   Building2, 
   UserCheck, 
@@ -289,6 +290,16 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
     activeModal === 'forgot_password';
 
   if (!activeModal) return null;
+
+  if (isAuthModal) {
+    return (
+      <AuthScreenModal
+        activeModal={activeModal as any}
+        onClose={onClose}
+        onLoginSuccess={onLoginSuccess}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
