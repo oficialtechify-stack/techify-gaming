@@ -1,8 +1,173 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin') ||
+        request.auth.token.email in ['agencyosoficial@gmail.com', 'rickmarketing81@gmail.com']
+      );
+    }
+
+    // Isolamento estrito multi-tenant: proibir leitura/escrita caso o request.auth.uid não pertença à empresa solicitante
+    match /companies/{companyId}/{document=**} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
+    }
+
+    // Documento raiz da empresa
+    match /companies/{companyId} {
+      allow read: if (request.auth != null && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == companyId) ||
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      )) || (resource.data.status == 'approved' || resource.data.verified == true);
+
+      allow create: if isAuthenticated() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.submittedBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == companyId) ||
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // Perfis de Usuário
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /user_profiles/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Planos e Produtos com vínculo multi-tenant
+    match /plans/{planId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == request.resource.data.companyId) ||
+        request.resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // Vendas isoladas por empresa/afiliado
+    match /sales/{saleId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+        resource.data.companyOwnerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        resource.data.affiliateId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if true;
+      allow update, delete: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+        isAdmin()
+      );
+    }
+
+    // Clientes isolados por empresa
+    match /clients/{clientId} {
+      allow read: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+          getUserData().companyId == resource.data.companyId ||
+          getUserData().companyId == resource.data.store_id ||
+          getUserData().companyId == resource.data.empresa_id
+        )) ||
+        isAdmin()
+      );
+      allow write: if isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+          getUserData().companyId == request.resource.data.companyId ||
+          getUserData().companyId == request.resource.data.store_id ||
+          getUserData().companyId == request.resource.data.empresa_id
+        )) ||
+        isAdmin()
+      );
+    }
+
+    // Afiliações
+    match /affiliations/{affId} {
+      allow read: if isAuthenticated() && (
+        resource.data.affiliateId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+        resource.data.companyOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        resource.data.affiliateId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+        isAdmin()
+      );
+    }
+
+    // Saques
+    match /withdrawals/{withdrawalId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Solicitações de Verificação KYC
+    match /verification_requests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAuthenticated() && (request.auth.uid == requestId || request.resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Cupons de desconto
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // AgencyOS Webhook Logs & Settings (Gated)
+    match /agencyos_webhook_logs/{logId} {
+      allow read, write: if isAuthenticated() && (
+        request.auth.token.email in ['agencyosoficial@gmail.com', 'rickmarketing81@gmail.com'] ||
+        isAdmin()
+      );
+    }
+
+    match /system_settings/{settingId} {
+      allow read, write: if isAuthenticated() && (
+        request.auth.token.email in ['agencyosoficial@gmail.com', 'rickmarketing81@gmail.com'] ||
+        isAdmin()
+      );
+    }
+
+    match /platform_finances/{docId} {
+      allow read, write: if isAuthenticated();
     }
   }
 }
+

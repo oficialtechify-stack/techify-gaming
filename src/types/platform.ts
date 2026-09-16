@@ -496,4 +496,5 @@ export type PlatformTab =
   | 'integracoes'
   | 'cupons'
   | 'planos'
-  | 'database';
+  | 'database'
+  | 'agencyos_webhook';

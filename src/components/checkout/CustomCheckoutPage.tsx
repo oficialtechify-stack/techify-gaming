@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, startTransition } from 'react';
 import { CompanyPlan, SaleTransaction } from '../../types/platform';
 import { 
   CreditCard, 
@@ -90,6 +90,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 
   // Minimum amount alert inline banner
   const [minAmountAlert, setMinAmountAlert] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Real PIX state from Asaas v3 API
   const [pixData, setPixData] = useState<{
@@ -236,13 +237,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     // 1. Validação no Frontend: Regra de valor mínimo exigida pela API do Asaas (R$ 5,00)
     if (finalTotal < 5.00) {
       setMinAmountAlert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
-      alert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
+      setFormError("O valor mínimo para cobranças via Asaas é de R$ 5,00");
       return;
     }
 
     if (isGeneratingPix) return;
     setIsGeneratingPix(true);
     setPixError(null);
+    setFormError(null);
     setMinAmountAlert(null);
 
     try {

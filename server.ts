@@ -19,8 +19,20 @@ import {
   query,
   where,
   increment,
-  runTransaction
+  runTransaction,
+  orderBy,
+  limit
 } from 'firebase/firestore';
+import { 
+  dispatchAgencyOSWebhook, 
+  sendWebhookToAgencyOS, 
+  getAgencyOSWebhookConfig, 
+  saveAgencyOSWebhookConfig,
+  isAgencyOSAuthorized,
+  AGENCY_OS_AUTHORIZED_EMAILS,
+  AgencyOSWebhookPayload,
+  logAgencyOSWebhookDispatch
+} from './backend/services/webhookDispatcher';
 import { 
   getOrCreateCustomer, 
   createPixPayment, 
@@ -541,6 +553,70 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
 
     await setDoc(saleRef, saleUpdateSnapshot, { merge: true });
     console.log(`🎯 [Credit Commission] Venda sales/${paymentId} marcada como APPROVED com snapshot financeiro e retenção D+9.`);
+
+    // ── DISPARO AUTOMÁTICO DE WEBHOOK GLOBAL PARA O AGENCYOS ──
+    try {
+      const rawMethod = String(sale.billingType || sale.method || paymentData?.billingType || '').toLowerCase();
+      const paymentMethod: 'pix' | 'credit_card' | 'boleto' = 
+        rawMethod.includes('boleto') ? 'boleto' :
+        (rawMethod.includes('cart') || rawMethod.includes('credit') || rawMethod.includes('card')) ? 'credit_card' : 'pix';
+
+      const agencyTargetId = String(companyId || sellerId || 'agency_leadspay');
+      const customerInfo = {
+        name: String(sale.buyerName || paymentData?.customerName || paymentData?.buyerName || 'Cliente LeadsPay'),
+        email: String(sale.buyerEmail || paymentData?.customerEmail || paymentData?.buyerEmail || ''),
+        cpf_cnpj: sale.buyerCpf || paymentData?.buyerCpf || undefined
+      };
+
+      // 1. Dispara evento 'sale.approved'
+      await dispatchAgencyOSWebhook('sale.approved', {
+        transaction_id: String(paymentId),
+        product_id: String(planId || ''),
+        product_name: String(planName || 'Produto LeadsPay'),
+        amount: totalAmount,
+        net_amount: netAmount,
+        payment_method: paymentMethod,
+        customer: customerInfo,
+        affiliate: (affiliateId && affiliateCommission > 0) ? {
+          affiliate_id: String(affiliateId),
+          name: String(sale.affiliateName || paymentData?.affiliateName || 'Afiliado LeadsPay'),
+          commission_amount: affiliateCommission
+        } : undefined,
+        company_plan: {
+          plan_id: String(planId || ''),
+          plan_name: String(planName || 'Plano LeadsPay'),
+          status: 'active'
+        }
+      }, agencyTargetId, db);
+
+      // 2. Dispara evento 'affiliate.commission' (se houver comissão de afiliado registrada)
+      if (affiliateId && affiliateCommission > 0) {
+        await dispatchAgencyOSWebhook('affiliate.commission', {
+          transaction_id: String(paymentId),
+          product_id: String(planId || ''),
+          product_name: String(planName || 'Produto LeadsPay'),
+          amount: totalAmount,
+          net_amount: netAmount,
+          payment_method: paymentMethod,
+          affiliate: {
+            affiliate_id: String(affiliateId),
+            name: String(sale.affiliateName || paymentData?.affiliateName || 'Afiliado LeadsPay'),
+            commission_amount: affiliateCommission
+          }
+        }, agencyTargetId, db);
+      }
+
+      // 3. Dispara evento 'balance.updated' (atualização de saldo da empresa/agência)
+      await dispatchAgencyOSWebhook('balance.updated', {
+        transaction_id: String(paymentId),
+        amount: totalAmount,
+        net_amount: netAmount,
+        payment_method: paymentMethod
+      }, agencyTargetId, db);
+
+    } catch (agencyOsErr) {
+      console.warn('⚠️ [AgencyOS Webhook Dispatch Warning] Erro ao disparar webhook para AgencyOS:', agencyOsErr);
+    }
 
   } catch (err) {
     console.error('Erro ao creditar comissão e persistir saldos da venda:', err);
@@ -2499,6 +2575,25 @@ app.post(['/webhooks/asaas', '/webhook/asaas', '/api/webhooks/asaas', '/api/webh
               } catch (compErr) {
                 console.warn('[Webhook Asaas] Aviso ao sincronizar empresa do usuário:', compErr);
               }
+
+              // Dispara evento 'company.activated' para o AgencyOS
+              try {
+                await dispatchAgencyOSWebhook('company.activated', {
+                  transaction_id: String(paymentId || `comp_act_${Date.now()}`),
+                  product_id: targetPlanId,
+                  product_name: planDisplayName,
+                  amount: Number(payment?.value || 0),
+                  net_amount: Number(payment?.value || 0),
+                  payment_method: 'pix',
+                  company_plan: {
+                    plan_id: targetPlanId,
+                    plan_name: planDisplayName,
+                    status: 'active'
+                  }
+                }, targetUserId, db);
+              } catch (agencyOsCompErr) {
+                console.warn('Aviso ao disparar company.activated para AgencyOS:', agencyOsCompErr);
+              }
             }
 
             console.log(`✅ [Webhook Asaas] Plano '${targetPlanId}' ATIVO com sucesso para o usuário ${targetUserId}!`);
@@ -3012,6 +3107,30 @@ app.post('/api/admin/approve-company', async (req, res) => {
       } catch (uErr) {
         console.warn('[Approve Company] Aviso ao sincronizar perfil do usuário dono:', uErr);
       }
+    }
+
+    // Dispara evento 'company.activated' para o AgencyOS
+    try {
+      await dispatchAgencyOSWebhook('company.activated', {
+        transaction_id: `comp_appr_${cleanCompanyId}_${Date.now()}`,
+        product_id: String(companyData.planTier || 'empresa_pro'),
+        product_name: String(companyData.planName || compName),
+        amount: Number(companyData.planPrice || 0),
+        net_amount: Number(companyData.planPrice || 0),
+        payment_method: 'pix',
+        customer: {
+          name: compName,
+          email: compEmail,
+          cpf_cnpj: cleanDoc
+        },
+        company_plan: {
+          plan_id: String(companyData.planTier || 'empresa_pro'),
+          plan_name: String(companyData.planName || compName),
+          status: 'active'
+        }
+      }, cleanCompanyId, db);
+    } catch (agencyOsCompErr) {
+      console.warn('Aviso ao disparar company.activated na aprovação para AgencyOS:', agencyOsCompErr);
     }
 
     return res.json({
@@ -3671,6 +3790,218 @@ app.get(['/politica-privacidade', '/politica-privacidade.html'], (_req, res) => 
 });
 app.get(['/politica-de-cookies', '/politica-de-cookies.html'], (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'legal.html'));
+});
+
+// =========================================================================
+// 🌐 ROTAS DO WEBHOOK GLOBAL AGENCYOS (Acesso restrito)
+// =========================================================================
+
+// Helper de autorização para rotas AgencyOS
+function requireAgencyOSAuth(req: express.Request, res: express.Response): string | null {
+  const userEmail = (
+    (req.headers['x-user-email'] as string) ||
+    req.body?.userEmail ||
+    (req.query.email as string) ||
+    ''
+  ).trim().toLowerCase();
+
+  if (!isAgencyOSAuthorized(userEmail)) {
+    res.status(403).json({
+      error: 'Acesso negado. Apenas agencyosoficial@gmail.com e rickmarketing81@gmail.com têm permissão para acessar o AgencyOS Webhook.'
+    });
+    return null;
+  }
+  return userEmail;
+}
+
+// GET /api/agencyos/config
+app.get('/api/agencyos/config', async (req, res) => {
+  try {
+    const userEmail = requireAgencyOSAuth(req, res);
+    if (!userEmail) return;
+
+    const config = await getAgencyOSWebhookConfig(db);
+    return res.json(config);
+  } catch (err: any) {
+    console.error('Erro ao consultar config AgencyOS:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao carregar configurações' });
+  }
+});
+
+// POST /api/agencyos/config
+app.post('/api/agencyos/config', async (req, res) => {
+  try {
+    const userEmail = requireAgencyOSAuth(req, res);
+    if (!userEmail) return;
+
+    const { webhookUrl, secretToken, agency_id, enabled, events } = req.body;
+    const updated = await saveAgencyOSWebhookConfig({
+      webhookUrl: String(webhookUrl || '').trim(),
+      secretToken: String(secretToken || '').trim(),
+      agency_id: String(agency_id || 'agency_leadspay').trim(),
+      enabled: enabled !== false,
+      events: Array.isArray(events) ? events : [
+        'sale.approved',
+        'company.activated',
+        'affiliate.commission',
+        'balance.updated'
+      ]
+    }, userEmail, db);
+
+    return res.json({
+      success: true,
+      message: 'Configurações do AgencyOS Webhook salvas com sucesso.',
+      config: updated
+    });
+  } catch (err: any) {
+    console.error('Erro ao salvar config AgencyOS:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao salvar configurações' });
+  }
+});
+
+// POST /api/agencyos/test
+app.post('/api/agencyos/test', async (req, res) => {
+  try {
+    const userEmail = requireAgencyOSAuth(req, res);
+    if (!userEmail) return;
+
+    const { event, webhookUrl, secretToken, agency_id } = req.body;
+    const targetEvent: AgencyOSWebhookPayload['event'] = event || 'sale.approved';
+    const config = await getAgencyOSWebhookConfig(db);
+    const targetUrl = String(webhookUrl || config.webhookUrl || '').trim();
+    const targetSecret = String(secretToken || config.secretToken || '').trim();
+    const targetAgencyId = String(agency_id || config.agency_id || 'agency_leadspay').trim();
+
+    if (!targetUrl || !targetUrl.startsWith('http')) {
+      return res.status(400).json({ error: 'URL do webhook inválida ou não configurada.' });
+    }
+
+    let testData: AgencyOSWebhookPayload['data'];
+
+    if (targetEvent === 'sale.approved') {
+      testData = {
+        transaction_id: `test_pay_${Date.now()}`,
+        product_id: 'prod_ia_automacao',
+        product_name: 'Agente LeadsPay Pro',
+        amount: 297.00,
+        net_amount: 236.61,
+        payment_method: 'pix',
+        customer: {
+          name: 'Cliente Teste AgencyOS',
+          email: 'teste@agencyos.com',
+          cpf_cnpj: '000.000.000-00'
+        },
+        affiliate: {
+          affiliate_id: 'aff_top_partner',
+          name: 'Afiliado Parceiro',
+          commission_amount: 59.40
+        },
+        company_plan: {
+          plan_id: 'scale',
+          plan_name: 'Scale Agency',
+          status: 'active'
+        }
+      };
+    } else if (targetEvent === 'company.activated') {
+      testData = {
+        transaction_id: `test_act_${Date.now()}`,
+        product_id: 'empresa_pro',
+        product_name: 'Plano Pro AgencyOS',
+        amount: 149.90,
+        net_amount: 149.90,
+        payment_method: 'pix',
+        customer: {
+          name: 'Agência Parceira Alpha',
+          email: 'contato@agenciaalpha.com',
+          cpf_cnpj: '12.345.678/0001-90'
+        },
+        company_plan: {
+          plan_id: 'pro',
+          plan_name: 'Pro Agency',
+          status: 'active'
+        }
+      };
+    } else if (targetEvent === 'affiliate.commission') {
+      testData = {
+        transaction_id: `test_comm_${Date.now()}`,
+        product_id: 'prod_checkout',
+        product_name: 'Checkout LeadsPay',
+        amount: 197.00,
+        net_amount: 156.61,
+        payment_method: 'credit_card',
+        affiliate: {
+          affiliate_id: 'usr_afiliado_123',
+          name: 'Afiliado Teste',
+          commission_amount: 39.40
+        }
+      };
+    } else {
+      testData = {
+        transaction_id: `test_bal_${Date.now()}`,
+        amount: 2500.00,
+        net_amount: 2470.00,
+        payment_method: 'pix'
+      };
+    }
+
+    const payload: AgencyOSWebhookPayload = {
+      event: targetEvent,
+      timestamp: new Date().toISOString(),
+      agency_id: targetAgencyId,
+      data: testData
+    };
+
+    console.log(`🧪 [AgencyOS Test Ping] Disparando teste do evento '${targetEvent}' para ${targetUrl}...`);
+    const result = await sendWebhookToAgencyOS(targetUrl, payload, targetSecret);
+
+    // Registra o log no Firestore
+    await logAgencyOSWebhookDispatch(payload, result, db);
+
+    return res.json({
+      ...result,
+      payloadSent: payload
+    });
+  } catch (err: any) {
+    console.error('Erro na rota de teste do AgencyOS:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao disparar teste' });
+  }
+});
+
+// GET /api/agencyos/logs
+app.get('/api/agencyos/logs', async (req, res) => {
+  try {
+    const userEmail = requireAgencyOSAuth(req, res);
+    if (!userEmail) return;
+
+    const logsColl = collection(db, 'agencyos_webhook_logs');
+    const q = query(logsColl, orderBy('createdAt', 'desc'), limit(50));
+    const snaps = await getDocs(q);
+    const logs = snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    return res.json(logs);
+  } catch (err: any) {
+    console.error('Erro ao buscar logs AgencyOS:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao carregar logs' });
+  }
+});
+
+// POST /api/agencyos/logs/clear
+app.post('/api/agencyos/logs/clear', async (req, res) => {
+  try {
+    const userEmail = requireAgencyOSAuth(req, res);
+    if (!userEmail) return;
+
+    const logsColl = collection(db, 'agencyos_webhook_logs');
+    const snaps = await getDocs(logsColl);
+    for (const d of snaps.docs) {
+      await deleteDoc(doc(db, 'agencyos_webhook_logs', d.id));
+    }
+
+    return res.json({ success: true, count: snaps.docs.length });
+  } catch (err: any) {
+    console.error('Erro ao limpar logs AgencyOS:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao limpar logs' });
+  }
 });
 
 // Start Server with Vite Middleware

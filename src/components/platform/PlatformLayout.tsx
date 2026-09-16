@@ -63,6 +63,8 @@ import { CreatePlanModal } from './CreatePlanModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
 import { ProductEditorView } from './ProductEditorView';
+import { AgencyOSWebhookView } from './AgencyOSWebhookView';
+import { isAgencyOSAuthorized } from '../../services/webhookDispatcher';
 import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
 import { Modals } from '../Modals';
 import { ActiveModal } from '../../types';
@@ -106,7 +108,8 @@ import {
   ChevronDown,
   Package,
   CreditCard,
-  ArrowUpRight
+  ArrowUpRight,
+  Radio
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -134,6 +137,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     userEmail.includes('leadspay') ||
     userProfile?.role === 'admin'
   );
+  const isAgencyOSUser = isAgencyOSAuthorized(userEmail);
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -213,12 +217,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   useEffect(() => {
     if (activeTab === 'database' && !isSuperAdmin) {
       setActiveTab('dashboard');
+    } else if (activeTab === 'agencyos_webhook' && !isAgencyOSUser) {
+      setActiveTab('dashboard');
     } else if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
       setActiveTab('dashboard');
     } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios')) {
       setActiveTab('minha_empresa');
     }
-  }, [roleMode, activeTab, isSuperAdmin]);
+  }, [roleMode, activeTab, isSuperAdmin, isAgencyOSUser]);
 
   // Robust Role Switcher with Mandatory Registration
   const handleSwitchRole = (targetRole: UserRoleMode) => {
@@ -822,6 +828,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
+    ...(isAgencyOSUser ? [{ id: 'agencyos_webhook' as PlatformTab, label: 'AgencyOS Webhook', icon: Radio, badge: 'AgencyOS' }] : []),
     ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
   ];
 
@@ -832,6 +839,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
+    ...(isAgencyOSUser ? [{ id: 'agencyos_webhook' as PlatformTab, label: 'AgencyOS Webhook', icon: Radio, badge: 'AgencyOS' }] : []),
     ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
   ];
 
@@ -1533,6 +1541,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
+          {activeTab === 'agencyos_webhook' && isAgencyOSUser && (
+            <AgencyOSWebhookView userEmail={userEmail} />
+          )}
             </>
           )}
         </main>
