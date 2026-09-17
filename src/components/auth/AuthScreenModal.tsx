@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   User, 
   UserCheck, 
@@ -35,6 +35,11 @@ import {
   cleanDigits,
   getAuthErrorMessage 
 } from '../../services/authService';
+import {
+  subscribeAuthModalSettings,
+  AuthModalSettings,
+  getLocalAuthModalSettings
+} from '../../services/firestoreService';
 
 export type AuthModalType = 'login' | 'register_affiliate' | 'register_company' | 'forgot_password';
 
@@ -109,6 +114,43 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
       setCurrentTab(activeModal);
     }
   }, [activeModal]);
+
+  // Real-time custom modal images & showcase settings from Admin
+  const [modalSettings, setModalSettings] = useState<AuthModalSettings>(getLocalAuthModalSettings());
+
+  useEffect(() => {
+    const unsub = subscribeAuthModalSettings((settings) => {
+      if (settings) {
+        setModalSettings(settings);
+      }
+    });
+
+    const handleCustomEvent = (e: any) => {
+      if (e.detail) setModalSettings(e.detail);
+    };
+    window.addEventListener('leadspay_modal_backgrounds_updated', handleCustomEvent);
+
+    return () => {
+      unsub();
+      window.removeEventListener('leadspay_modal_backgrounds_updated', handleCustomEvent);
+    };
+  }, []);
+
+  const activeImageUrl = useMemo(() => {
+    if (currentTab === 'register_affiliate') {
+      return modalSettings.affiliateShowcaseUrl || '';
+    }
+    if (currentTab === 'register_company') {
+      return modalSettings.companyShowcaseUrl || '';
+    }
+    if (currentTab === 'login') {
+      return modalSettings.loginShowcaseUrl || '';
+    }
+    if (currentTab === 'forgot_password') {
+      return modalSettings.forgotPasswordShowcaseUrl || modalSettings.loginShowcaseUrl || '';
+    }
+    return '';
+  }, [currentTab, modalSettings]);
 
   // Loading and Feedback
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -340,6 +382,14 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#03060c]/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-6 lg:p-10 select-none">
+      {/* Dynamic Background Image if configured by admin */}
+      {activeImageUrl && (modalSettings.displayMode === 'modal_background' || modalSettings.displayMode === 'both') && (
+        <div 
+          className="fixed inset-0 bg-cover bg-center pointer-events-none opacity-20 filter blur-sm -z-10 transition-all duration-700"
+          style={{ backgroundImage: `url(${activeImageUrl})` }}
+        />
+      )}
+
       {/* Background Volumetric Neon Light Spots matching screenshots */}
       <div className="fixed top-1/4 right-5 w-[650px] h-[650px] bg-[#84cc16]/10 rounded-full blur-[160px] pointer-events-none -z-10" />
       <div className="fixed bottom-10 left-10 w-[450px] h-[450px] bg-[#10b981]/10 rounded-full blur-[140px] pointer-events-none -z-10" />
@@ -1103,116 +1153,111 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         </div>
 
         {/* ================================================================= */}
-        {/* RIGHT COLUMN: 3D DEVICE & LUXURY SHOWCASE (IDENTICAL TO IMAGES)   */}
+        {/* RIGHT COLUMN: DYNAMIC SHOWCASE UPLOADED/SET BY ADMIN             */}
         {/* ================================================================= */}
-        <div className="hidden lg:flex flex-1 items-center justify-center relative min-h-[560px] max-w-[620px]">
-          {/* Volumetric Glowing Aura */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-[#84cc16]/20 via-[#a3e635]/10 to-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        {modalSettings.enableRightShowcase !== false && (
+          <div className="hidden lg:flex flex-1 items-center justify-center relative min-h-[560px] max-w-[620px]">
+            {/* Volumetric Glowing Aura */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-[#84cc16]/20 via-[#a3e635]/10 to-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          {/* SHOWCASE 1: AFFILIATE (Phone, Card & 3 Badges) */}
-          {currentTab === 'register_affiliate' && (
-            <div className="relative w-full h-full flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
-              <div className="relative w-[500px] h-[500px] rounded-3xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.9)] group">
-                <img
-                  src="/affiliate_3d_showcase.jpg"
-                  alt="LeadsPay Afiliado 3D Showcase"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#04070c] via-transparent to-transparent opacity-60" />
+            {activeImageUrl ? (
+              <div className="relative w-full h-full flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
+                <div className="relative w-[500px] h-[500px] rounded-3xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.9)] group bg-[#040810]">
+                  <img
+                    src={activeImageUrl}
+                    alt="LeadsPay Showcase"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#04070c] via-transparent to-transparent opacity-50" />
+                </div>
+
+                {/* Floating Badges according to screen and admin toggle */}
+                {modalSettings.showFloatingBadges !== false && (
+                  <>
+                    {/* Badges for Affiliate Screen */}
+                    {currentTab === 'register_affiliate' && (
+                      <>
+                        <div className="absolute top-10 -left-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1.5 animate-bounce [animation-duration:4s]">
+                          <ShieldCheck className="w-6 h-6 text-[#a3e635]" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-wider text-center">
+                            MAIS<br />SEGURANÇA
+                          </span>
+                        </div>
+                        <div className="absolute top-12 -right-4 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1.5 animate-bounce [animation-duration:4.8s]">
+                          <Zap className="w-6 h-6 text-[#a3e635]" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-wider text-center">
+                            PAGAMENTOS<br />RÁPIDOS
+                          </span>
+                        </div>
+                        <div className="absolute bottom-12 -right-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1.5 animate-bounce [animation-duration:5.2s]">
+                          <TrendingUp className="w-6 h-6 text-[#a3e635]" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-wider text-center">
+                            MAIS<br />RESULTADOS
+                          </span>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Badges for Company Screen */}
+                    {currentTab === 'register_company' && (
+                      <>
+                        <div className="absolute top-6 left-12 px-4 py-2.5 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex items-center gap-2 animate-bounce [animation-duration:4.2s]">
+                          <Users className="w-5 h-5 text-[#a3e635]" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-wider">
+                            PARCERIAS ESTRATÉGICAS
+                          </span>
+                        </div>
+                        <div className="absolute top-36 -left-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1 animate-bounce [animation-duration:4.6s]">
+                          <ShieldCheck className="w-6 h-6 text-[#a3e635]" />
+                          <span className="text-[9px] font-black text-white uppercase tracking-wider text-center">
+                            SEGURANÇA<br />DE DADOS
+                          </span>
+                        </div>
+                        <div className="absolute top-16 -right-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1 animate-bounce [animation-duration:5s]">
+                          <Rocket className="w-6 h-6 text-[#a3e635]" />
+                          <span className="text-[9px] font-black text-white uppercase tracking-wider text-center">
+                            ESCALA<br />SEU NEGÓCIO
+                          </span>
+                        </div>
+                        <div className="absolute bottom-10 -right-4 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1 animate-bounce [animation-duration:5.4s]">
+                          <TrendingUp className="w-6 h-6 text-[#a3e635]" />
+                          <span className="text-[9px] font-black text-white uppercase tracking-wider text-center">
+                            MAIS<br />RESULTADOS
+                          </span>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Badges for Login & Forgot Password */}
+                    {(currentTab === 'login' || currentTab === 'forgot_password') && (
+                      <div className="absolute top-1/3 -right-6 w-40 h-40 bg-[#a3e635]/25 rounded-full blur-2xl pointer-events-none animate-pulse" />
+                    )}
+                  </>
+                )}
               </div>
-
-              {/* Floating Badge 1: Mais Segurança (Top Left) */}
-              <div className="absolute top-10 -left-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1.5 animate-bounce [animation-duration:4s]">
-                <ShieldCheck className="w-6 h-6 text-[#a3e635]" />
-                <span className="text-[10px] font-black text-white uppercase tracking-wider text-center">
-                  MAIS<br />SEGURANÇA
-                </span>
+            ) : (
+              /* Clean, luxury glass card placeholder when no custom image has been uploaded yet */
+              <div className="relative w-full h-full flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-[460px] h-[460px] rounded-3xl bg-[#060c14]/90 border border-white/10 p-8 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-2xl backdrop-blur-xl">
+                  <div className="w-20 h-20 rounded-2xl bg-[#a3e635]/10 border border-[#a3e635]/30 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(163,230,53,0.2)]">
+                    <Sparkles className="w-10 h-10 text-[#a3e635]" />
+                  </div>
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 font-['Syne']">
+                    LeadsPay Ecosystem
+                  </h3>
+                  <p className="text-xs text-white/60 max-w-xs leading-relaxed mb-6">
+                    A infraestrutura definitiva de pagamentos e afiliação para startups e produtores digitais.
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] text-white/60">
+                    <span className="w-2 h-2 rounded-full bg-[#a3e635] animate-pulse" />
+                    <span>Upload de imagem disponível no Painel Admin</span>
+                  </div>
+                </div>
               </div>
-
-              {/* Floating Badge 2: Pagamentos Rápidos (Top Right) */}
-              <div className="absolute top-12 -right-4 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1.5 animate-bounce [animation-duration:4.8s]">
-                <Zap className="w-6 h-6 text-[#a3e635]" />
-                <span className="text-[10px] font-black text-white uppercase tracking-wider text-center">
-                  PAGAMENTOS<br />RÁPIDOS
-                </span>
-              </div>
-
-              {/* Floating Badge 3: Mais Resultados (Bottom Right) */}
-              <div className="absolute bottom-12 -right-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1.5 animate-bounce [animation-duration:5.2s]">
-                <TrendingUp className="w-6 h-6 text-[#a3e635]" />
-                <span className="text-[10px] font-black text-white uppercase tracking-wider text-center">
-                  MAIS<br />RESULTADOS
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* SHOWCASE 2: COMPANY (Laptop Dashboard, Phone, Plant & 4 Badges) */}
-          {currentTab === 'register_company' && (
-            <div className="relative w-full h-full flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
-              <div className="relative w-[520px] h-[500px] rounded-3xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.9)] group">
-                <img
-                  src="/company_3d_showcase.jpg"
-                  alt="LeadsPay Empresa 3D Showcase"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#04070c] via-transparent to-transparent opacity-60" />
-              </div>
-
-              {/* Floating Badge 1: Parcerias Estratégicas (Top Center-Left) */}
-              <div className="absolute top-6 left-12 px-4 py-2.5 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex items-center gap-2 animate-bounce [animation-duration:4.2s]">
-                <Users className="w-5 h-5 text-[#a3e635]" />
-                <span className="text-[10px] font-black text-white uppercase tracking-wider">
-                  PARCERIAS ESTRATÉGICAS
-                </span>
-              </div>
-
-              {/* Floating Badge 2: Segurança de Dados (Far Left) */}
-              <div className="absolute top-36 -left-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1 animate-bounce [animation-duration:4.6s]">
-                <ShieldCheck className="w-6 h-6 text-[#a3e635]" />
-                <span className="text-[9px] font-black text-white uppercase tracking-wider text-center">
-                  SEGURANÇA<br />DE DADOS
-                </span>
-              </div>
-
-              {/* Floating Badge 3: Escala seu Negócio (Far Right Top) */}
-              <div className="absolute top-16 -right-6 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1 animate-bounce [animation-duration:5s]">
-                <Rocket className="w-6 h-6 text-[#a3e635]" />
-                <span className="text-[9px] font-black text-white uppercase tracking-wider text-center">
-                  ESCALA<br />SEU NEGÓCIO
-                </span>
-              </div>
-
-              {/* Floating Badge 4: Mais Resultados (Bottom Right) */}
-              <div className="absolute bottom-10 -right-4 px-4 py-3 rounded-2xl bg-[#060c14]/90 border border-[#a3e635]/50 shadow-[0_0_20px_rgba(163,230,53,0.3)] backdrop-blur-md flex flex-col items-center justify-center gap-1 animate-bounce [animation-duration:5.4s]">
-                <TrendingUp className="w-6 h-6 text-[#a3e635]" />
-                <span className="text-[9px] font-black text-white uppercase tracking-wider text-center">
-                  MAIS<br />RESULTADOS
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* SHOWCASE 3: LOGIN / FORGOT PASSWORD (OLED Phone, LeadsPay Titanium Card) */}
-          {(currentTab === 'login' || currentTab === 'forgot_password') && (
-            <div className="relative w-full h-full flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
-              <div className="relative w-[500px] h-[500px] rounded-3xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.9)] group">
-                <img
-                  src="/login_3d_showcase.jpg"
-                  alt="LeadsPay Login 3D Showcase"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#04070c] via-transparent to-transparent opacity-60" />
-              </div>
-
-              {/* Ambient Glowing Ring Behind Card */}
-              <div className="absolute top-1/3 -right-6 w-40 h-40 bg-[#a3e635]/25 rounded-full blur-2xl pointer-events-none animate-pulse" />
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

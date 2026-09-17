@@ -53,7 +53,8 @@ import {
   XCircle,
   AlertOctagon,
   Unlock,
-  Eye
+  Eye,
+  Image as ImageIcon
 } from 'lucide-react';
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';

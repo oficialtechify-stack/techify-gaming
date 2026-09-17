@@ -846,7 +846,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
     ...(isAgencyOSUser ? [{ id: 'agencyos_webhook' as PlatformTab, label: 'AgencyOS Webhook', icon: Radio, badge: 'AgencyOS' }] : []),
-    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
+    ...(isSuperAdmin ? [
+      { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
+      { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
+    ] : [])
   ];
 
   const companyNavItems = [
@@ -857,7 +860,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
     ...(isAgencyOSUser ? [{ id: 'agencyos_webhook' as PlatformTab, label: 'AgencyOS Webhook', icon: Radio, badge: 'AgencyOS' }] : []),
-    ...(isSuperAdmin ? [{ id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' }] : [])
+    ...(isSuperAdmin ? [
+      { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
+      { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
+    ] : [])
   ];
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
@@ -1548,6 +1554,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
+          {activeTab === 'modal_backgrounds' && isSuperAdmin && <AdminModalImagesManager />}
           {activeTab === 'agencyos_webhook' && isAgencyOSUser && (
             <AgencyOSWebhookView userEmail={userEmail} />
           )}
