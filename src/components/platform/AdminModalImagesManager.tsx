@@ -8,14 +8,11 @@ import {
   Eye, 
   RefreshCw, 
   Save, 
-  ShieldCheck, 
   Sliders, 
-  Layers, 
-  Sparkles,
-  ExternalLink,
   AlertCircle,
-  HelpCircle,
-  X
+  Sparkles,
+  Info,
+  Check
 } from 'lucide-react';
 import { 
   subscribeAuthModalSettings, 
@@ -29,54 +26,47 @@ export const AdminModalImagesManager: React.FC = () => {
   const { currentUser } = useAuth();
 
   const [settings, setSettings] = useState<AuthModalSettings>({
-    affiliateShowcaseUrl: '',
-    companyShowcaseUrl: '',
-    loginShowcaseUrl: '',
-    forgotPasswordShowcaseUrl: '',
-    displayMode: 'side_showcase',
-    enableRightShowcase: true,
-    showFloatingBadges: true
+    loginBgUrl: '',
+    affiliateBgUrl: '',
+    companyBgUrl: '',
+    overlayDarkness: 78
   });
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [activePreviewModal, setActivePreviewModal] = useState<AuthModalType | null>(null);
 
-  // Subscribe to real-time settings
+  // Inscreve-se nas configurações em tempo real do Firestore
   useEffect(() => {
     const unsub = subscribeAuthModalSettings((data) => {
       if (data) {
         setSettings({
-          affiliateShowcaseUrl: data.affiliateShowcaseUrl || '',
-          companyShowcaseUrl: data.companyShowcaseUrl || '',
-          loginShowcaseUrl: data.loginShowcaseUrl || '',
-          forgotPasswordShowcaseUrl: data.forgotPasswordShowcaseUrl || '',
-          displayMode: data.displayMode || 'side_showcase',
-          enableRightShowcase: data.enableRightShowcase !== false,
-          showFloatingBadges: data.showFloatingBadges !== false
+          loginBgUrl: data.loginBgUrl || data.loginShowcaseUrl || data.forgotPasswordShowcaseUrl || '',
+          affiliateBgUrl: data.affiliateBgUrl || data.affiliateShowcaseUrl || '',
+          companyBgUrl: data.companyBgUrl || data.companyShowcaseUrl || '',
+          overlayDarkness: typeof data.overlayDarkness === 'number' ? data.overlayDarkness : 78
         });
       }
     });
     return () => unsub();
   }, []);
 
-  // Handle file reader to Base64
-  const handleFileSlotUpload = (slot: keyof AuthModalSettings, file?: File) => {
+  // Leitor de arquivo de imagem local para base64
+  const handleFileSlotUpload = (slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl', file?: File) => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       setFeedback({
         type: 'error',
-        message: 'Por favor, selecione um arquivo de imagem válido (PNG, JPG, WebP, SVG).'
+        message: 'Por favor, selecione um arquivo de imagem válido (PNG, JPG, WebP).'
       });
       return;
     }
 
-    // Limit 3MB to guarantee fast loading
-    if (file.size > 3.5 * 1024 * 1024) {
+    if (file.size > 4 * 1024 * 1024) {
       setFeedback({
         type: 'error',
-        message: 'A imagem deve ter no máximo 3.5MB para não sobrecarregar o carregamento.'
+        message: 'A imagem deve ter no máximo 4MB para garantir carregamento instantâneo.'
       });
       return;
     }
@@ -90,43 +80,55 @@ export const AdminModalImagesManager: React.FC = () => {
       }));
       setFeedback({
         type: 'success',
-        message: `Imagem carregada para o campo! Clique em "Salvar Alterações" para confirmar no banco.`
+        message: `Imagem carregada! Clique no botão "Salvar Imagens no Banco" para confirmar.`
       });
       setTimeout(() => setFeedback(null), 4000);
     };
     reader.onerror = () => {
       setFeedback({
         type: 'error',
-        message: 'Erro ao converter a imagem selecionada.'
+        message: 'Falha ao processar o arquivo de imagem.'
       });
     };
     reader.readAsDataURL(file);
   };
 
-  // Handle Save
+  // Salvar no Firestore e localStorage
   const handleSaveAll = async () => {
     setIsSaving(true);
     setFeedback(null);
     try {
-      await saveAuthModalSettings(settings, currentUser?.email || 'admin');
+      const payload: Partial<AuthModalSettings> = {
+        loginBgUrl: settings.loginBgUrl || '',
+        affiliateBgUrl: settings.affiliateBgUrl || '',
+        companyBgUrl: settings.companyBgUrl || '',
+        // chaves legadas sincronizadas
+        loginShowcaseUrl: settings.loginBgUrl || '',
+        affiliateShowcaseUrl: settings.affiliateBgUrl || '',
+        companyShowcaseUrl: settings.companyBgUrl || '',
+        forgotPasswordShowcaseUrl: settings.loginBgUrl || '',
+        overlayDarkness: settings.overlayDarkness ?? 78
+      };
+
+      await saveAuthModalSettings(payload, currentUser?.email || 'admin');
       setFeedback({
         type: 'success',
-        message: 'Imagens e configurações dos modais salvas com sucesso no banco de dados!'
+        message: 'Imagens de fundo salvas com sucesso no banco de dados! Elas já estão ativas nos modais.'
       });
       setTimeout(() => setFeedback(null), 5000);
     } catch (err: any) {
       console.error('Erro ao salvar imagens dos modais:', err);
       setFeedback({
         type: 'error',
-        message: `Falha ao salvar: ${err.message || 'Verifique as permissões'}`
+        message: `Falha ao salvar: ${err.message || 'Verifique sua conexão'}`
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Slot cleaner
-  const handleClearSlot = (slot: keyof AuthModalSettings) => {
+  // Limpar slot
+  const handleClearSlot = (slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl') => {
     setSettings(prev => ({
       ...prev,
       [slot]: ''
@@ -135,7 +137,7 @@ export const AdminModalImagesManager: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      {/* Top Banner & Title */}
+      {/* Top Banner */}
       <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#D9F22A]/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
@@ -143,13 +145,13 @@ export const AdminModalImagesManager: React.FC = () => {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/20 text-[#D9F22A] text-xs font-bold uppercase tracking-wider">
               <ImageIcon className="w-3.5 h-3.5" />
-              <span>Painel de Customização Visual</span>
+              <span>Personalização de Fundo</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-white font-['Syne'] tracking-tight">
-              Imagens & Fundos dos Modais
+              Imagens de Fundo das Telas
             </h2>
             <p className="text-sm text-white/60 max-w-2xl leading-relaxed">
-              Faça o upload manual ou cole a URL de qualquer imagem para preencher o visual dos modais de Afiliado, Empresa e Login. Tudo funciona em tempo real com persistência no Firestore.
+              Defina as 3 imagens de fundo para a plataforma: 1 para a tela de <strong>Login</strong>, 1 para o <strong>Cadastro de Afiliado</strong> e 1 para o <strong>Cadastro de Empresa</strong>. A imagem preenche o fundo de tela inteira com alta resolução e legibilidade preservada.
             </p>
           </div>
 
@@ -167,7 +169,7 @@ export const AdminModalImagesManager: React.FC = () => {
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  <span>Salvar Alterações</span>
+                  <span>Salvar Imagens no Banco</span>
                 </>
               )}
             </button>
@@ -191,115 +193,95 @@ export const AdminModalImagesManager: React.FC = () => {
         )}
       </div>
 
-      {/* Global Display Controls */}
-      <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 shadow-xl space-y-5">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D9F22A]">
-          <Sliders className="w-4 h-4" />
-          <span>Preferências de Exibição</span>
+      {/* Ajuste de Contraste e Opacidade do Fundo */}
+      <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D9F22A]">
+            <Sliders className="w-4 h-4" />
+            <span>Opacidade do Filtro Escuro sobre o Fundo</span>
+          </div>
+          <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/10 text-white border border-white/10">
+            {settings.overlayDarkness ?? 78}% Escurecimento
+          </span>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Toggle Right Showcase */}
-          <div className="p-4 rounded-2xl bg-[#050811] border border-white/5 flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <span className="text-xs font-bold text-white block">Coluna Lateral com Imagem</span>
-              <span className="text-[11px] text-white/50 block">Exibe a imagem ao lado do formulário em telas médias/grandes</span>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.enableRightShowcase}
-                onChange={(e) => setSettings(prev => ({ ...prev, enableRightShowcase: e.target.checked }))}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D9F22A]"></div>
-            </label>
-          </div>
-
-          {/* Toggle Floating Badges */}
-          <div className="p-4 rounded-2xl bg-[#050811] border border-white/5 flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <span className="text-xs font-bold text-white block">Selos Flutuantes (Badges)</span>
-              <span className="text-[11px] text-white/50 block">Exibir badges como "Mais Segurança" e "Pagamentos Rápidos"</span>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.showFloatingBadges}
-                onChange={(e) => setSettings(prev => ({ ...prev, showFloatingBadges: e.target.checked }))}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D9F22A]"></div>
-            </label>
-          </div>
-
-          {/* Display Mode */}
-          <div className="p-4 rounded-2xl bg-[#050811] border border-white/5 flex flex-col justify-between gap-2">
-            <span className="text-xs font-bold text-white">Modo de Exibição</span>
-            <select
-              value={settings.displayMode}
-              onChange={(e) => setSettings(prev => ({ ...prev, displayMode: e.target.value as any }))}
-              className="bg-[#0a1122] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none cursor-pointer focus:border-[#D9F22A]"
-            >
-              <option value="side_showcase">Showcase Lateral (Padrão)</option>
-              <option value="modal_background">Fundo Completo do Modal</option>
-              <option value="both">Ambos (Lateral + Fundo translúcido)</option>
-            </select>
-          </div>
+        <p className="text-xs text-white/50">
+          Ajuste a intensidade do filtro escuro sobre as imagens de fundo para garantir que o formulário, textos e botões continuem 100% nítidos e fáceis de ler.
+        </p>
+        <div className="flex items-center gap-4 pt-2">
+          <span className="text-xs text-white/40">Mais Claro (50%)</span>
+          <input
+            type="range"
+            min="50"
+            max="95"
+            step="1"
+            value={settings.overlayDarkness ?? 78}
+            onChange={(e) => setSettings(prev => ({ ...prev, overlayDarkness: Number(e.target.value) }))}
+            className="flex-1 accent-[#D9F22A] cursor-pointer h-2 bg-white/10 rounded-lg"
+          />
+          <span className="text-xs text-white/40">Mais Escuro (95%)</span>
         </div>
       </div>
 
-      {/* Grid of 4 Image Slots */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* As 3 Imagens Oficiais: 1 pra cada tela */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* SLOT 1: MODAL DE LOGIN */}
+        {/* ============================================================== */}
+        {/* 1. IMAGEM DE FUNDO - LOGIN                                      */}
+        {/* ============================================================== */}
         <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 shadow-xl flex flex-col justify-between gap-5 relative overflow-hidden">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-lime-500/10 text-[#a3e635] flex items-center justify-center font-bold text-xs">
                   1
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">Tela de Login / Acesso</h3>
-                  <span className="text-[10px] text-white/50">Exibida quando o usuário clica em "Entrar"</span>
+                  <h3 className="font-bold text-white text-sm">Fundo: Tela de Login</h3>
+                  <span className="text-[10px] text-white/50">Login & Recuperação de Senha</span>
                 </div>
               </div>
 
-              {settings.loginShowcaseUrl ? (
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
-                  Imagem Ativa
+              {settings.loginBgUrl ? (
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Ativa
                 </span>
               ) : (
                 <span className="px-2.5 py-1 rounded-full bg-white/5 text-white/40 text-[10px] font-medium">
-                  Sem Imagem (Padrão)
+                  Padrão Escuro
                 </span>
               )}
             </div>
 
-            {/* Preview Box */}
-            <div className="w-full h-48 rounded-2xl bg-[#040810] border border-white/10 relative overflow-hidden flex items-center justify-center group">
-              {settings.loginShowcaseUrl ? (
+            {/* Preview da Imagem de Fundo (Widescreen Mockup) */}
+            <div className="w-full h-44 rounded-2xl bg-[#040810] border border-white/10 relative overflow-hidden flex items-center justify-center group">
+              {settings.loginBgUrl ? (
                 <>
                   <img
-                    src={settings.loginShowcaseUrl}
-                    alt="Preview Login"
+                    src={settings.loginBgUrl}
+                    alt="Fundo Login"
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  {/* Overlay Mockup para simular o formulário por cima */}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                    <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/20 backdrop-blur-md text-[11px] font-bold text-white/90">
+                      Formulário de Login
+                    </div>
+                  </div>
+                  {/* Botões de Ação sobre a imagem */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-10">
                     <button
                       type="button"
                       onClick={() => setActivePreviewModal('login')}
-                      className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-[#D9F22A] text-[#060A15] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-105"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      Visualizar
+                      Testar na Tela
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleClearSlot('loginShowcaseUrl')}
-                      className="px-3 py-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      onClick={() => handleClearSlot('loginBgUrl')}
+                      className="px-3 py-1.5 rounded-xl bg-rose-500/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-rose-500"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Remover
@@ -309,60 +291,60 @@ export const AdminModalImagesManager: React.FC = () => {
               ) : (
                 <div className="text-center p-4">
                   <ImageIcon className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                  <span className="text-xs text-white/40 block">Nenhuma imagem customizada</span>
-                  <span className="text-[10px] text-white/30 block mt-0.5">Faça upload ou cole um link abaixo</span>
+                  <span className="text-xs text-white/40 block font-medium">Sem imagem de fundo</span>
+                  <span className="text-[10px] text-white/30 block mt-0.5">Faça upload da imagem abaixo</span>
                 </div>
               )}
             </div>
 
-            {/* Upload & URL Inputs */}
-            <div className="space-y-2">
+            {/* Inputs de Upload & Link */}
+            <div className="space-y-2.5">
               <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block">
-                Arquivo de Imagem (Local)
+                1. Upload da Imagem do Computador
               </label>
-              <label className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl border border-dashed border-white/20 hover:border-[#D9F22A] bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/80 cursor-pointer transition-all">
+              <label className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl border border-dashed border-white/20 hover:border-[#D9F22A] bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/80 cursor-pointer transition-all">
                 <Upload className="w-4 h-4 text-[#D9F22A]" />
-                <span>Escolher arquivo de imagem (PNG, JPG, WebP)</span>
+                <span className="truncate">Escolher Imagem (PNG, JPG, WebP)</span>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => handleFileSlotUpload('loginShowcaseUrl', e.target.files?.[0])}
+                  onChange={(e) => handleFileSlotUpload('loginBgUrl', e.target.files?.[0])}
                   className="hidden"
                 />
               </label>
 
               <div className="pt-1">
                 <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
-                  Ou Cole a URL Direta da Imagem
+                  2. Ou Cole a URL da Imagem
                 </label>
                 <div className="relative flex items-center">
                   <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
                   <input
                     type="url"
-                    value={settings.loginShowcaseUrl || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, loginShowcaseUrl: e.target.value }))}
-                    placeholder="https://exemplo.com/imagem-login.png"
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#050811] border border-white/10 focus:border-[#D9F22A] text-xs text-white placeholder-white/30 outline-none"
+                    value={settings.loginBgUrl || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, loginBgUrl: e.target.value }))}
+                    placeholder="https://exemplo.com/fundo-login.jpg"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050811] border border-white/10 focus:border-[#D9F22A] text-xs text-white placeholder-white/30 outline-none"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+          <div className="pt-3 border-t border-white/5 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setActivePreviewModal('login')}
-              className="text-xs text-[#D9F22A] hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+              className="text-xs text-[#D9F22A] hover:underline flex items-center gap-1.5 font-bold cursor-pointer"
             >
               <Eye className="w-3.5 h-3.5" />
-              Testar Modal de Login Agora
+              Testar Fundo de Login ao Vivo
             </button>
-            {settings.loginShowcaseUrl && (
+            {settings.loginBgUrl && (
               <button
                 type="button"
-                onClick={() => handleClearSlot('loginShowcaseUrl')}
-                className="text-xs text-rose-400/80 hover:text-rose-400 font-medium cursor-pointer"
+                onClick={() => handleClearSlot('loginBgUrl')}
+                className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
               >
                 Limpar
               </button>
@@ -370,54 +352,63 @@ export const AdminModalImagesManager: React.FC = () => {
           </div>
         </div>
 
-        {/* SLOT 2: MODAL DE AFILIADO */}
+        {/* ============================================================== */}
+        {/* 2. IMAGEM DE FUNDO - CADASTRO DE AFILIADO                      */}
+        {/* ============================================================== */}
         <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 shadow-xl flex flex-col justify-between gap-5 relative overflow-hidden">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-lime-500/10 text-[#a3e635] flex items-center justify-center font-bold text-xs">
                   2
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">Tela de Cadastro de Afiliado</h3>
-                  <span className="text-[10px] text-white/50">Exibida ao clicar em "Criar Conta de Afiliado"</span>
+                  <h3 className="font-bold text-white text-sm">Fundo: Cadastro Afiliado</h3>
+                  <span className="text-[10px] text-white/50">Tela de Registro de Afiliado</span>
                 </div>
               </div>
 
-              {settings.affiliateShowcaseUrl ? (
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
-                  Imagem Ativa
+              {settings.affiliateBgUrl ? (
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Ativa
                 </span>
               ) : (
                 <span className="px-2.5 py-1 rounded-full bg-white/5 text-white/40 text-[10px] font-medium">
-                  Sem Imagem (Padrão)
+                  Padrão Escuro
                 </span>
               )}
             </div>
 
-            {/* Preview Box */}
-            <div className="w-full h-48 rounded-2xl bg-[#040810] border border-white/10 relative overflow-hidden flex items-center justify-center group">
-              {settings.affiliateShowcaseUrl ? (
+            {/* Preview da Imagem de Fundo */}
+            <div className="w-full h-44 rounded-2xl bg-[#040810] border border-white/10 relative overflow-hidden flex items-center justify-center group">
+              {settings.affiliateBgUrl ? (
                 <>
                   <img
-                    src={settings.affiliateShowcaseUrl}
-                    alt="Preview Afiliado"
+                    src={settings.affiliateBgUrl}
+                    alt="Fundo Afiliado"
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  {/* Overlay Mockup */}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                    <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/20 backdrop-blur-md text-[11px] font-bold text-white/90">
+                      Cadastro de Afiliado
+                    </div>
+                  </div>
+                  {/* Botões de Ação */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-10">
                     <button
                       type="button"
                       onClick={() => setActivePreviewModal('register_affiliate')}
-                      className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-[#D9F22A] text-[#060A15] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-105"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      Visualizar
+                      Testar na Tela
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleClearSlot('affiliateShowcaseUrl')}
-                      className="px-3 py-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      onClick={() => handleClearSlot('affiliateBgUrl')}
+                      className="px-3 py-1.5 rounded-xl bg-rose-500/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-rose-500"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Remover
@@ -427,60 +418,60 @@ export const AdminModalImagesManager: React.FC = () => {
               ) : (
                 <div className="text-center p-4">
                   <ImageIcon className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                  <span className="text-xs text-white/40 block">Nenhuma imagem customizada</span>
-                  <span className="text-[10px] text-white/30 block mt-0.5">Faça upload ou cole um link abaixo</span>
+                  <span className="text-xs text-white/40 block font-medium">Sem imagem de fundo</span>
+                  <span className="text-[10px] text-white/30 block mt-0.5">Faça upload da imagem abaixo</span>
                 </div>
               )}
             </div>
 
-            {/* Upload & URL Inputs */}
-            <div className="space-y-2">
+            {/* Inputs de Upload & Link */}
+            <div className="space-y-2.5">
               <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block">
-                Arquivo de Imagem (Local)
+                1. Upload da Imagem do Computador
               </label>
-              <label className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl border border-dashed border-white/20 hover:border-[#D9F22A] bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/80 cursor-pointer transition-all">
+              <label className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl border border-dashed border-white/20 hover:border-[#D9F22A] bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/80 cursor-pointer transition-all">
                 <Upload className="w-4 h-4 text-[#D9F22A]" />
-                <span>Escolher arquivo de imagem (PNG, JPG, WebP)</span>
+                <span className="truncate">Escolher Imagem (PNG, JPG, WebP)</span>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => handleFileSlotUpload('affiliateShowcaseUrl', e.target.files?.[0])}
+                  onChange={(e) => handleFileSlotUpload('affiliateBgUrl', e.target.files?.[0])}
                   className="hidden"
                 />
               </label>
 
               <div className="pt-1">
                 <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
-                  Ou Cole a URL Direta da Imagem
+                  2. Ou Cole a URL da Imagem
                 </label>
                 <div className="relative flex items-center">
                   <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
                   <input
                     type="url"
-                    value={settings.affiliateShowcaseUrl || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, affiliateShowcaseUrl: e.target.value }))}
-                    placeholder="https://exemplo.com/imagem-afiliado.png"
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#050811] border border-white/10 focus:border-[#D9F22A] text-xs text-white placeholder-white/30 outline-none"
+                    value={settings.affiliateBgUrl || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, affiliateBgUrl: e.target.value }))}
+                    placeholder="https://exemplo.com/fundo-afiliado.jpg"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050811] border border-white/10 focus:border-[#D9F22A] text-xs text-white placeholder-white/30 outline-none"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+          <div className="pt-3 border-t border-white/5 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setActivePreviewModal('register_affiliate')}
-              className="text-xs text-[#D9F22A] hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+              className="text-xs text-[#D9F22A] hover:underline flex items-center gap-1.5 font-bold cursor-pointer"
             >
               <Eye className="w-3.5 h-3.5" />
-              Testar Modal de Afiliado Agora
+              Testar Fundo Afiliado ao Vivo
             </button>
-            {settings.affiliateShowcaseUrl && (
+            {settings.affiliateBgUrl && (
               <button
                 type="button"
-                onClick={() => handleClearSlot('affiliateShowcaseUrl')}
-                className="text-xs text-rose-400/80 hover:text-rose-400 font-medium cursor-pointer"
+                onClick={() => handleClearSlot('affiliateBgUrl')}
+                className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
               >
                 Limpar
               </button>
@@ -488,54 +479,63 @@ export const AdminModalImagesManager: React.FC = () => {
           </div>
         </div>
 
-        {/* SLOT 3: MODAL DE EMPRESA / STARTUP */}
+        {/* ============================================================== */}
+        {/* 3. IMAGEM DE FUNDO - CADASTRO DE EMPRESA                       */}
+        {/* ============================================================== */}
         <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 shadow-xl flex flex-col justify-between gap-5 relative overflow-hidden">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-lime-500/10 text-[#a3e635] flex items-center justify-center font-bold text-xs">
                   3
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">Tela de Cadastro de Empresa</h3>
-                  <span className="text-[10px] text-white/50">Exibida ao clicar em "Cadastrar Empresa / Startup"</span>
+                  <h3 className="font-bold text-white text-sm">Fundo: Cadastro Empresa</h3>
+                  <span className="text-[10px] text-white/50">Tela de Registro de Startup/Empresa</span>
                 </div>
               </div>
 
-              {settings.companyShowcaseUrl ? (
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
-                  Imagem Ativa
+              {settings.companyBgUrl ? (
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Ativa
                 </span>
               ) : (
                 <span className="px-2.5 py-1 rounded-full bg-white/5 text-white/40 text-[10px] font-medium">
-                  Sem Imagem (Padrão)
+                  Padrão Escuro
                 </span>
               )}
             </div>
 
-            {/* Preview Box */}
-            <div className="w-full h-48 rounded-2xl bg-[#040810] border border-white/10 relative overflow-hidden flex items-center justify-center group">
-              {settings.companyShowcaseUrl ? (
+            {/* Preview da Imagem de Fundo */}
+            <div className="w-full h-44 rounded-2xl bg-[#040810] border border-white/10 relative overflow-hidden flex items-center justify-center group">
+              {settings.companyBgUrl ? (
                 <>
                   <img
-                    src={settings.companyShowcaseUrl}
-                    alt="Preview Empresa"
+                    src={settings.companyBgUrl}
+                    alt="Fundo Empresa"
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  {/* Overlay Mockup */}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                    <div className="px-4 py-2 rounded-xl bg-black/70 border border-white/20 backdrop-blur-md text-[11px] font-bold text-white/90">
+                      Cadastro de Empresa
+                    </div>
+                  </div>
+                  {/* Botões de Ação */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-10">
                     <button
                       type="button"
                       onClick={() => setActivePreviewModal('register_company')}
-                      className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-[#D9F22A] text-[#060A15] text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg hover:brightness-105"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      Visualizar
+                      Testar na Tela
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleClearSlot('companyShowcaseUrl')}
-                      className="px-3 py-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      onClick={() => handleClearSlot('companyBgUrl')}
+                      className="px-3 py-1.5 rounded-xl bg-rose-500/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg hover:bg-rose-500"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Remover
@@ -545,178 +545,60 @@ export const AdminModalImagesManager: React.FC = () => {
               ) : (
                 <div className="text-center p-4">
                   <ImageIcon className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                  <span className="text-xs text-white/40 block">Nenhuma imagem customizada</span>
-                  <span className="text-[10px] text-white/30 block mt-0.5">Faça upload ou cole um link abaixo</span>
+                  <span className="text-xs text-white/40 block font-medium">Sem imagem de fundo</span>
+                  <span className="text-[10px] text-white/30 block mt-0.5">Faça upload da imagem abaixo</span>
                 </div>
               )}
             </div>
 
-            {/* Upload & URL Inputs */}
-            <div className="space-y-2">
+            {/* Inputs de Upload & Link */}
+            <div className="space-y-2.5">
               <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block">
-                Arquivo de Imagem (Local)
+                1. Upload da Imagem do Computador
               </label>
-              <label className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl border border-dashed border-white/20 hover:border-[#D9F22A] bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/80 cursor-pointer transition-all">
+              <label className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl border border-dashed border-white/20 hover:border-[#D9F22A] bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/80 cursor-pointer transition-all">
                 <Upload className="w-4 h-4 text-[#D9F22A]" />
-                <span>Escolher arquivo de imagem (PNG, JPG, WebP)</span>
+                <span className="truncate">Escolher Imagem (PNG, JPG, WebP)</span>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => handleFileSlotUpload('companyShowcaseUrl', e.target.files?.[0])}
+                  onChange={(e) => handleFileSlotUpload('companyBgUrl', e.target.files?.[0])}
                   className="hidden"
                 />
               </label>
 
               <div className="pt-1">
                 <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
-                  Ou Cole a URL Direta da Imagem
+                  2. Ou Cole a URL da Imagem
                 </label>
                 <div className="relative flex items-center">
                   <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
                   <input
                     type="url"
-                    value={settings.companyShowcaseUrl || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, companyShowcaseUrl: e.target.value }))}
-                    placeholder="https://exemplo.com/imagem-empresa.png"
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#050811] border border-white/10 focus:border-[#D9F22A] text-xs text-white placeholder-white/30 outline-none"
+                    value={settings.companyBgUrl || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, companyBgUrl: e.target.value }))}
+                    placeholder="https://exemplo.com/fundo-empresa.jpg"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#050811] border border-white/10 focus:border-[#D9F22A] text-xs text-white placeholder-white/30 outline-none"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+          <div className="pt-3 border-t border-white/5 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setActivePreviewModal('register_company')}
-              className="text-xs text-[#D9F22A] hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+              className="text-xs text-[#D9F22A] hover:underline flex items-center gap-1.5 font-bold cursor-pointer"
             >
               <Eye className="w-3.5 h-3.5" />
-              Testar Modal de Empresa Agora
+              Testar Fundo Empresa ao Vivo
             </button>
-            {settings.companyShowcaseUrl && (
+            {settings.companyBgUrl && (
               <button
                 type="button"
-                onClick={() => handleClearSlot('companyShowcaseUrl')}
-                className="text-xs text-rose-400/80 hover:text-rose-400 font-medium cursor-pointer"
-              >
-                Limpar
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* SLOT 4: MODAL DE RECUPERAÇÃO DE SENHA */}
-        <div className="bg-[#080d1a] border border-white/10 rounded-3xl p-6 shadow-xl flex flex-col justify-between gap-5 relative overflow-hidden">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-lime-500/10 text-[#a3e635] flex items-center justify-center font-bold text-xs">
-                  4
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-sm">Tela de Recuperação de Senha</h3>
-                  <span className="text-[10px] text-white/50">Exibida ao clicar em "Esqueceu a senha?"</span>
-                </div>
-              </div>
-
-              {settings.forgotPasswordShowcaseUrl ? (
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
-                  Imagem Ativa
-                </span>
-              ) : (
-                <span className="px-2.5 py-1 rounded-full bg-white/5 text-white/40 text-[10px] font-medium">
-                  Sem Imagem (Padrão)
-                </span>
-              )}
-            </div>
-
-            {/* Preview Box */}
-            <div className="w-full h-48 rounded-2xl bg-[#040810] border border-white/10 relative overflow-hidden flex items-center justify-center group">
-              {settings.forgotPasswordShowcaseUrl ? (
-                <>
-                  <img
-                    src={settings.forgotPasswordShowcaseUrl}
-                    alt="Preview Reset"
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActivePreviewModal('forgot_password')}
-                      className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      Visualizar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleClearSlot('forgotPasswordShowcaseUrl')}
-                      className="px-3 py-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Remover
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center p-4">
-                  <ImageIcon className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                  <span className="text-xs text-white/40 block">Nenhuma imagem customizada</span>
-                  <span className="text-[10px] text-white/30 block mt-0.5">Faça upload ou cole um link abaixo</span>
-                </div>
-              )}
-            </div>
-
-            {/* Upload & URL Inputs */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block">
-                Arquivo de Imagem (Local)
-              </label>
-              <label className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl border border-dashed border-white/20 hover:border-[#D9F22A] bg-white/[0.02] hover:bg-white/[0.05] text-xs text-white/80 cursor-pointer transition-all">
-                <Upload className="w-4 h-4 text-[#D9F22A]" />
-                <span>Escolher arquivo de imagem (PNG, JPG, WebP)</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileSlotUpload('forgotPasswordShowcaseUrl', e.target.files?.[0])}
-                  className="hidden"
-                />
-              </label>
-
-              <div className="pt-1">
-                <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
-                  Ou Cole a URL Direta da Imagem
-                </label>
-                <div className="relative flex items-center">
-                  <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
-                  <input
-                    type="url"
-                    value={settings.forgotPasswordShowcaseUrl || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, forgotPasswordShowcaseUrl: e.target.value }))}
-                    placeholder="https://exemplo.com/imagem-recuperacao.png"
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#050811] border border-white/10 focus:border-[#D9F22A] text-xs text-white placeholder-white/30 outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setActivePreviewModal('forgot_password')}
-              className="text-xs text-[#D9F22A] hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              Testar Modal de Recuperação Agora
-            </button>
-            {settings.forgotPasswordShowcaseUrl && (
-              <button
-                type="button"
-                onClick={() => handleClearSlot('forgotPasswordShowcaseUrl')}
-                className="text-xs text-rose-400/80 hover:text-rose-400 font-medium cursor-pointer"
+                onClick={() => handleClearSlot('companyBgUrl')}
+                className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
               >
                 Limpar
               </button>
@@ -726,7 +608,18 @@ export const AdminModalImagesManager: React.FC = () => {
 
       </div>
 
-      {/* Floating Modal Preview */}
+      {/* Dica de Boas Práticas */}
+      <div className="bg-[#050811] border border-white/10 rounded-2xl p-4 flex items-start gap-3">
+        <Info className="w-5 h-5 text-[#D9F22A] shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <span className="text-xs font-bold text-white block">Dica para melhores resultados visuais:</span>
+          <p className="text-xs text-white/60 leading-relaxed">
+            Recomendamos imagens panorâmicas de alta resolução (1920x1080 ou 2560x1440) em tons escuros ou tecnológicos (3D render, fintech, dashboard, texturas escuras). Como as imagens preenchem o fundo de tela inteira em qualquer monitor ou celular, elas darão um visual ultra moderno e imersivo a cada uma das 3 telas.
+          </p>
+        </div>
+      </div>
+
+      {/* Modal de Teste em Tempo Real */}
       {activePreviewModal && (
         <AuthScreenModal
           activeModal={activePreviewModal}

@@ -1910,13 +1910,16 @@ export async function savePlatformBranding(
 // ==========================================
 
 export interface AuthModalSettings {
+  // As 3 imagens de fundo oficiais: 1 para cada tela
+  loginBgUrl?: string; // Fundo da tela de Login / Recuperação
+  affiliateBgUrl?: string; // Fundo do Cadastro de Afiliado
+  companyBgUrl?: string; // Fundo do Cadastro de Empresa
+  // Chaves legadas para compatibilidade retroativa
+  loginShowcaseUrl?: string;
   affiliateShowcaseUrl?: string;
   companyShowcaseUrl?: string;
-  loginShowcaseUrl?: string;
   forgotPasswordShowcaseUrl?: string;
-  displayMode?: 'side_showcase' | 'modal_background' | 'both';
-  enableRightShowcase?: boolean;
-  showFloatingBadges?: boolean;
+  overlayDarkness?: number; // Opacidade do overlay (ex: 75 = 75% escuro)
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -1932,9 +1935,10 @@ export function getLocalAuthModalSettings(): AuthModalSettings {
     // ignore
   }
   return {
-    enableRightShowcase: true,
-    showFloatingBadges: true,
-    displayMode: 'side_showcase'
+    loginBgUrl: '',
+    affiliateBgUrl: '',
+    companyBgUrl: '',
+    overlayDarkness: 75
   };
 }
 
