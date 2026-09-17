@@ -129,6 +129,14 @@ export interface ProductReview {
   verifiedBuyer?: boolean;
 }
 
+export type ProductDeliveryType = 
+  | 'redirect' 
+  | 'whatsapp' 
+  | 'membership' 
+  | 'download' 
+  | 'api_key' 
+  | 'webhook';
+
 export interface CompanyPlan {
   id: string;
   companyId: string;
@@ -157,7 +165,14 @@ export interface CompanyPlan {
   supportEmail?: string;
   warrantyDays?: number;
   thankYouPageUrl?: string;
+  deliveryType?: ProductDeliveryType;
+  deliveryUrl?: string;
+  deliveryInstructions?: string;
+  deliveryFileUrl?: string;
+  deliveryWebhookUrl?: string;
+  deliveryApiKeySecret?: string;
   orderBumps?: ProductOrderBump[];
+
   upsells?: ProductUpsell[];
   coupons?: ProductCoupon[];
   customCheckouts?: ProductCustomCheckout[];
@@ -495,6 +510,8 @@ export type PlatformTab =
   | 'equipe' 
   | 'relatorios' 
   | 'integracoes'
+  | 'configuracoes'
+  | 'seguranca'
   | 'cupons'
   | 'planos'
   | 'database'

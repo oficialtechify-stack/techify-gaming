@@ -45,6 +45,7 @@ import {
   getHeaders
 } from './lib/asaas';
 import { validateApiKey } from './lib/auth-partner';
+import { sendFulfillmentEmail } from './lib/email';
 
 const app = express();
 const PORT = 3000;
@@ -2715,8 +2716,73 @@ app.post(['/webhooks/asaas', '/webhook/asaas', '/api/webhooks/asaas', '/api/webh
             console.error(`❌ [Webhook Postback Error] Falha ao enviar postback para ${targetWebhookUrl}:`, pbErr?.message || pbErr);
           });
         }
+
+        // ── AUTOMAÇÃO DE ENTREGA DO PRODUTO (E-mail de Fulfillment e Webhook Próprio) ──
+        if (saleData.buyerEmail) {
+          try {
+            let planDeliveryType = 'redirect';
+            let planDeliveryUrl = saleData.thankYouPageUrl || '';
+            let planDeliveryInstructions = '';
+            let planDeliveryWebhook = null;
+
+            if (saleData.planId) {
+              try {
+                const planDoc = await getDoc(doc(db, 'company_plans', String(saleData.planId)));
+                if (planDoc.exists()) {
+                  const pData = planDoc.data();
+                  planDeliveryType = pData.deliveryType || planDeliveryType;
+                  planDeliveryUrl = pData.deliveryUrl || pData.thankYouPageUrl || planDeliveryUrl;
+                  planDeliveryInstructions = pData.deliveryInstructions || '';
+                  planDeliveryWebhook = pData.deliveryWebhookUrl || null;
+                }
+              } catch (_) {}
+            }
+
+            console.log(`📦 [Webhook Fulfillment] Disparando entrega para ${saleData.buyerEmail} - Método: ${planDeliveryType}`);
+
+            // Envia o e-mail automático de liberação
+            sendFulfillmentEmail({
+              to: saleData.buyerEmail,
+              customerName: saleData.buyerName || 'Cliente',
+              planName: saleData.platformName || saleData.planName || 'Produto LeadsPay',
+              accessUrl: planDeliveryUrl,
+              deliveryType: planDeliveryType,
+              instructions: planDeliveryInstructions
+            }).catch(mErr => console.warn('[Webhook Fulfillment] Aviso no envio de e-mail:', mErr?.message));
+
+            // Se for do tipo Webhook Customizado, dispara para o sistema da empresa
+            if (planDeliveryType === 'webhook' && planDeliveryWebhook && typeof planDeliveryWebhook === 'string' && planDeliveryWebhook.startsWith('http')) {
+              console.log(`⚡ [Webhook Fulfillment] Disparando webhook customizado da empresa para: ${planDeliveryWebhook}`);
+              fetch(planDeliveryWebhook, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'LeadsPay-Delivery-Engine/1.0'
+                },
+                body: JSON.stringify({
+                  event: 'payment.success',
+                  data: {
+                    transaction_id: String(paymentId),
+                    customer_email: saleData.buyerEmail,
+                    customer_name: saleData.buyerName,
+                    customer_phone: saleData.buyerPhone || '',
+                    plan_id: saleData.planId || '',
+                    plan_name: saleData.platformName || saleData.planName || '',
+                    amount: Number(amountPaid || saleData.amount || 0),
+                    paid_at: nowIso
+                  }
+                }),
+                signal: AbortSignal.timeout(10000)
+              }).then(wRes => console.log(`✅ [Webhook Fulfillment] Sistema da empresa respondeu com status ${wRes.status}`))
+                .catch(wErr => console.warn('[Webhook Fulfillment Error] Falha ao notificar sistema da empresa:', wErr?.message));
+            }
+          } catch (fulfillErr: any) {
+            console.warn('[Webhook Fulfillment] Erro no fluxo de entrega do produto:', fulfillErr?.message);
+          }
+        }
       }
     } 
+
     // 3. Intercepta eventos de estorno e cancelamento (PAYMENT_REFUNDED / PAYMENT_DELETED)
     else if (eventType === 'PAYMENT_REFUNDED' || eventType === 'PAYMENT_DELETED') {
       console.log(`Pagamento ${paymentId} estornado/cancelado. Iniciando revogação...`);
@@ -2787,7 +2853,94 @@ app.post(['/webhooks/asaas', '/webhook/asaas', '/api/webhooks/asaas', '/api/webh
 });
 
 /**
+ * POST /api/fulfillment/send
+ * Dispara e-mail de entrega e webhook personalizado para o comprador após confirmação do checkout
+ */
+app.post('/api/fulfillment/send', async (req, res) => {
+  try {
+    const { 
+      to, 
+      customerName, 
+      planName, 
+      accessUrl, 
+      deliveryType, 
+      instructions, 
+      webhookUrl, 
+      transactionId, 
+      amount, 
+      planId 
+    } = req.body || {};
+
+    if (!to) {
+      return res.status(400).json({ error: 'Destinatário (to) é obrigatório' });
+    }
+
+    console.log(`[Fulfillment API] Disparando entrega para ${to} - Plano: ${planName} (Tipo: ${deliveryType || 'redirect'})`);
+
+    // 1. Envio de e-mail de fulfillment
+    let emailResult = null;
+    try {
+      emailResult = await sendFulfillmentEmail({
+        to,
+        customerName: customerName || 'Cliente',
+        planName: planName || 'Produto Digital LeadsPay',
+        accessUrl,
+        deliveryType: deliveryType || 'redirect',
+        instructions
+      });
+    } catch (mailErr: any) {
+      console.warn('[Fulfillment API] Aviso ao enviar e-mail:', mailErr?.message);
+    }
+
+    // 2. Disparo de webhook personalizado da empresa se configurado
+    let webhookResult = null;
+    if (webhookUrl && typeof webhookUrl === 'string' && webhookUrl.startsWith('http')) {
+      try {
+        const customPayload = {
+          event: 'payment.success',
+          data: {
+            transaction_id: transactionId || `TX-${Date.now()}`,
+            customer_email: to,
+            customer_name: customerName,
+            plan_id: planId,
+            plan_name: planName,
+            amount: Number(amount || 0),
+            paid_at: new Date().toISOString()
+          }
+        };
+
+        const whResponse = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'LeadsPay-Delivery-Engine/1.0'
+          },
+          body: JSON.stringify(customPayload),
+          signal: AbortSignal.timeout(10000)
+        });
+
+        webhookResult = { status: whResponse.status, sent: true };
+        console.log(`[Fulfillment API] Webhook customizado enviado para ${webhookUrl} com status ${whResponse.status}`);
+      } catch (whErr: any) {
+        console.warn(`[Fulfillment API] Aviso ao disparar webhook customizado para ${webhookUrl}:`, whErr?.message);
+        webhookResult = { error: whErr?.message, sent: false };
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      emailResult, 
+      webhookResult 
+    });
+  } catch (error: any) {
+    console.error('[Fulfillment API Error] Falha geral:', error);
+    return res.status(500).json({ error: 'Erro ao processar entrega' });
+  }
+});
+
+/**
  * POST /api/partner/settings
+
  * Permite salvar URL de postback / webhook e configurações do parceiro no Firestore
  */
 app.post('/api/partner/settings', async (req, res) => {

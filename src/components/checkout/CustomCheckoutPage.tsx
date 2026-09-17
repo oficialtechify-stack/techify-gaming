@@ -22,11 +22,14 @@ import {
   createSaleTransactionInFirebase, 
   fetchSellerSubaccountId,
   createOrUpdateClientInFirebase,
-  findCouponByCodeInFirebase
+  findCouponByCodeInFirebase,
+  findAffiliationByCode
 } from '../../services/firestoreService';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
+import { ThankYouPage } from './ThankYouPage';
 
 interface CustomCheckoutPageProps {
+
   plan: CompanyPlan;
   checkoutSlug?: string;
   affiliateRef?: string;
@@ -402,20 +405,40 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const finalizeApprovedPayment = async (methodName: string, transactionReference?: string) => {
     if (isPaid) return;
 
-    const activeAffiliate = getActiveAffiliateCode();
+    const activeAffiliateCode = getActiveAffiliateCode();
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     let commissionEarned = 0;
-    const planCommissionPct = plan.commissionPercentage || (plan as any).affiliateCommission;
-    if (activeAffiliate && planCommissionPct) {
-      commissionEarned = (finalTotal * planCommissionPct) / 100;
+    let resolvedAffiliateId: string | undefined = undefined;
+    let resolvedAffiliateName: string | undefined = undefined;
+
+    if (activeAffiliateCode) {
+      try {
+        const affDoc = await findAffiliationByCode(activeAffiliateCode);
+        if (affDoc) {
+          resolvedAffiliateId = affDoc.userId || affDoc.user_id;
+          resolvedAffiliateName = affDoc.userName;
+          const commPct = affDoc.commissionPercentage || plan.commissionPercentage || (plan as any).affiliateCommission || 0;
+          commissionEarned = Number(((finalTotal * commPct) / 100).toFixed(2));
+        } else {
+          const planCommissionPct = plan.commissionPercentage || (plan as any).affiliateCommission;
+          if (planCommissionPct) {
+            commissionEarned = Number(((finalTotal * planCommissionPct) / 100).toFixed(2));
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao resolver afiliação no checkout:', e);
+      }
     }
 
     const salePayload: Omit<SaleTransaction, 'id'> = {
       platformId: plan.id,
       platformName: plan.name,
+      plan_id: plan.id,
+      companyId: plan.companyId || (plan as any).store_id || undefined,
+      companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
       buyerName: fullName.trim() || 'Cliente LeadsPay',
       buyerEmail: email.trim() || 'cliente@leadspay.com',
       buyerCompany: plan.companyName,
@@ -425,7 +448,11 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       status: 'Aprovado',
       is_test: false,
       environment: 'production',
-      utmSource: affiliateRef ? `ref_${affiliateRef}` : 'checkout_direto_empresa',
+      affiliateCode: activeAffiliateCode || undefined,
+      affiliateId: resolvedAffiliateId,
+      affiliateName: resolvedAffiliateName,
+      sellerId: resolvedAffiliateId,
+      utmSource: activeAffiliateCode ? `ref_${activeAffiliateCode}` : (affiliateRef ? `ref_${affiliateRef}` : 'checkout_direto_empresa'),
       date: dateStr,
       time: timeStr
     };
@@ -457,6 +484,26 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       });
       setIsPaid(true);
 
+      // Disparo em tempo real do e-mail de entrega (Fulfillment) e Webhook Customizado da Empresa
+      try {
+        fetch('/api/fulfillment/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: email.trim(),
+            customerName: fullName.trim() || 'Cliente',
+            planName: plan.name,
+            accessUrl: plan.deliveryUrl || plan.thankYouPageUrl || '',
+            deliveryType: plan.deliveryType || 'redirect',
+            instructions: plan.deliveryInstructions || '',
+            webhookUrl: plan.deliveryWebhookUrl || '',
+            transactionId: transactionReference || savedSale.id || `TX-${Date.now().toString().slice(-6)}`,
+            amount: finalTotal,
+            planId: plan.id
+          })
+        }).catch((err) => console.warn('[Fulfillment Dispatch] Aviso ao disparar entrega:', err));
+      } catch (_) {}
+
       if (onPaymentSuccess) {
         onPaymentSuccess({
           ...salePayload,
@@ -468,6 +515,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       console.error('Erro ao salvar transação real:', err);
     }
   };
+
 
   // Core Coupon Application with Product & Affiliate Linkage Validation
   const executeApplyCoupon = async (rawCode: string) => {
@@ -814,56 +862,21 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // If payment is completed, show the Success Order Receipt
+  // If payment is completed, show the Success Thank You & Delivery Page
   if (isPaid && completedTransaction) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] text-gray-900 flex flex-col items-center justify-center p-4 sm:p-6 font-sans">
-        <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-xl text-center">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mx-auto mb-4">
-            <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
-          </div>
-
-          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 mb-3 inline-block">
-            ✓ Pagamento Aprovado com Sucesso
-          </span>
-
-          <h2 className="text-2xl font-black text-gray-900 mb-2">
-            Parabéns pela sua compra!
-          </h2>
-
-          <p className="text-xs text-gray-600 mb-6 leading-relaxed">
-            Seu acesso ao <strong>{plan.name}</strong> já foi liberado com sucesso. Enviamos os detalhes para <strong>{email || 'seu e-mail'}</strong>.
-          </p>
-
-          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-left space-y-2 mb-6 text-xs text-gray-700">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Transação ID:</span>
-              <span className="font-mono font-bold text-gray-800">{completedTransaction.id}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Método:</span>
-              <span className="font-semibold text-gray-800">{completedTransaction.method}</span>
-            </div>
-            <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-sm font-bold">
-              <span>Valor Pago:</span>
-              <span className="text-[#205a46] text-base">
-                R$ {completedTransaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-          </div>
-
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="w-full bg-[#205a46] hover:bg-[#194939] text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md"
-            >
-              Voltar para a Plataforma
-            </button>
-          )}
-        </div>
-      </div>
+      <ThankYouPage
+        plan={plan}
+        planId={plan.id}
+        transactionId={completedTransaction.id}
+        amount={completedTransaction.amount}
+        customerName={fullName}
+        customerEmail={email}
+        onBackToHome={onBack}
+      />
     );
   }
+
 
   return (
     <div className="min-h-screen bg-white text-[#111827] flex flex-col items-center justify-start py-8 px-4 sm:px-6 font-sans selection:bg-[#205a46] selection:text-white">

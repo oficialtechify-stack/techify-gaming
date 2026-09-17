@@ -164,6 +164,40 @@ export const PlanLinksModal: React.FC<PlanLinksModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Integração no Site Próprio da Empresa */}
+          <div className="p-4 rounded-2xl bg-[#080d1a] border border-lime-500/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-lime-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-lime-400" /> Botão de Compra para o seu Site Próprio (HTML)
+              </span>
+              <span className="text-[10px] bg-lime-500/10 text-lime-400 border border-lime-500/30 px-2 py-0.5 rounded-full font-bold">
+                Taxa R$ 0,99
+              </span>
+            </div>
+
+            <p className="text-xs text-white/70">
+              Cole este botão no seu HTML, landing page ou WordPress para vender direto com o checkout LeadsPay:
+            </p>
+
+            <div className="flex items-center gap-2">
+              <textarea
+                readOnly
+                rows={2}
+                value={`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`}
+                className="flex-1 bg-[#050811] border border-white/10 rounded-xl p-2.5 text-[11px] text-white/90 font-mono select-all resize-none"
+              />
+              <button
+                type="button"
+                onClick={() => copyToClipboard(`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`, 'embed-btn')}
+                className="bg-lime-500 hover:bg-lime-400 text-black font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 self-stretch"
+              >
+                {copiedLink === 'embed-btn' ? <Check className="w-4 h-4 stroke-[3] text-black" /> : <Copy className="w-4 h-4" />}
+                {copiedLink === 'embed-btn' ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
+          </div>
+
         </div>
 
         <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">

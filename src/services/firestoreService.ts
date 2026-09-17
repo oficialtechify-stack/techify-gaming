@@ -1191,6 +1191,32 @@ export async function deleteAffiliationInFirebase(affiliationId: string, planId?
   }
 }
 
+/**
+ * Find an affiliation by affiliate code
+ */
+export async function findAffiliationByCode(code: string): Promise<UserAffiliation | null> {
+  try {
+    const clean = code.trim();
+    if (!clean) return null;
+    const q1 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliateCode", "==", clean));
+    const snap1 = await getDocs(q1);
+    if (!snap1.empty) {
+      const docData = snap1.docs[0].data() as UserAffiliation;
+      return { id: snap1.docs[0].id, ...docData };
+    }
+    const q2 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliate_code", "==", clean));
+    const snap2 = await getDocs(q2);
+    if (!snap2.empty) {
+      const docData = snap2.docs[0].data() as UserAffiliation;
+      return { id: snap2.docs[0].id, ...docData };
+    }
+    return null;
+  } catch (err) {
+    console.warn('Erro ao buscar afiliação por código:', err);
+    return null;
+  }
+}
+
 // ==========================================
 // 💰 VENDAS & COMISSÕES (SALES)
 // ==========================================
@@ -1268,9 +1294,23 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
   const isTest = saleData.is_test ?? (saleData.environment === 'development' || !saleData.environment);
   const env = saleData.environment || (isTest ? 'development' : 'production');
 
+  // Resolve company owner if not provided
+  let resolvedCompanyOwnerId = saleData.companyOwnerId || null;
+  if (!resolvedCompanyOwnerId && saleData.companyId) {
+    try {
+      const compSnap = await getDoc(doc(db, COLLECTIONS.COMPANIES, saleData.companyId));
+      if (compSnap.exists()) {
+        resolvedCompanyOwnerId = compSnap.data().ownerId || compSnap.data().submittedBy || null;
+      }
+    } catch (e) {
+      console.warn('Erro ao resolver companyOwnerId:', e);
+    }
+  }
+
   const fullSale: SaleTransaction = {
     ...saleData,
     id,
+    companyOwnerId: resolvedCompanyOwnerId || undefined,
     checkoutFee,
     netCompanyAmount,
     releaseStatus: 'pendente',
@@ -1322,15 +1362,7 @@ export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransac
   }
 
   // Credit company owner with net amount
-  let companyOwnerId = saleData.companyOwnerId || null;
-  if (!companyOwnerId && fullSale.companyId) {
-    try {
-      const compSnap = await getDoc(doc(db, COLLECTIONS.COMPANIES, fullSale.companyId));
-      if (compSnap.exists()) {
-        companyOwnerId = compSnap.data().ownerId || compSnap.data().submittedBy || null;
-      }
-    } catch (e) {}
-  }
+  const companyOwnerId = resolvedCompanyOwnerId;
 
   if (companyOwnerId) {
     try {

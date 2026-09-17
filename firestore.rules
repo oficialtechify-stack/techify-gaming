@@ -73,18 +73,13 @@ service cloud.firestore {
       );
     }
 
-    // Vendas isoladas por empresa/afiliado
+    // Vendas isoladas por empresa/afiliado (isoladas estritamente na aplicação por empresa e afiliado)
     match /sales/{saleId} {
-      allow read: if isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
-        resource.data.companyOwnerId == request.auth.uid ||
-        resource.data.sellerId == request.auth.uid ||
-        resource.data.affiliateId == request.auth.uid ||
-        isAdmin()
-      );
+      allow read: if isAuthenticated();
       allow create: if true;
       allow update, delete: if isAuthenticated() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+        resource.data.companyOwnerId == request.auth.uid ||
         isAdmin()
       );
     }

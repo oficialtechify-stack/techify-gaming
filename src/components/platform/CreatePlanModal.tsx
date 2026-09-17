@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CompanyPlan, CompanyStartup } from '../../types/platform';
+import { CompanyPlan, CompanyStartup, ProductDeliveryType } from '../../types/platform';
 import { 
   Layers, 
   Sparkles, 
@@ -12,8 +12,16 @@ import {
   Link as LinkIcon, 
   Image as ImageIcon, 
   Edit3,
-  Check
+  Check,
+  Globe,
+  MessageSquare,
+  Users,
+  Download,
+  Key,
+  Webhook,
+  Send
 } from 'lucide-react';
+
 
 interface CreatePlanModalProps {
   isOpen: boolean;
@@ -60,6 +68,10 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   const [checkoutUrl, setCheckoutUrl] = useState<string>('');
   const [features, setFeatures] = useState<string[]>([]);
   const [newFeatureText, setNewFeatureText] = useState<string>('');
+  const [deliveryType, setDeliveryType] = useState<ProductDeliveryType>('redirect');
+  const [deliveryUrl, setDeliveryUrl] = useState<string>('');
+  const [deliveryInstructions, setDeliveryInstructions] = useState<string>('');
+  const [deliveryWebhookUrl, setDeliveryWebhookUrl] = useState<string>('');
   const [imageTab, setImageTab] = useState<'upload' | 'url' | 'presets'>('upload');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +96,10 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       setBannerImage(initialData.bannerImage || '');
       setCheckoutUrl(initialData.checkoutUrl || '');
       setFeatures(initialData.features ? [...initialData.features] : []);
+      setDeliveryType(initialData.deliveryType || 'redirect');
+      setDeliveryUrl(initialData.deliveryUrl || initialData.thankYouPageUrl || '');
+      setDeliveryInstructions(initialData.deliveryInstructions || '');
+      setDeliveryWebhookUrl(initialData.deliveryWebhookUrl || '');
     } else {
       // Create mode - start clean and empty
       const targetComp = (defaultCompanyId && companies.find(c => c.id === defaultCompanyId)?.id) || (companies.length > 0 ? companies[0].id : '');
@@ -100,8 +116,13 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       setBannerImage('');
       setCheckoutUrl('');
       setFeatures([]);
+      setDeliveryType('redirect');
+      setDeliveryUrl('');
+      setDeliveryInstructions('');
+      setDeliveryWebhookUrl('');
     }
   }, [isOpen, initialData, defaultCompanyId, companies]);
+
 
   if (!isOpen) return null;
 
@@ -226,8 +247,14 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         totalSales: initialData?.totalSales || 0,
         badge: badge.trim() || 'Destaque',
         checkoutUrl: checkoutUrl.trim() || 'https://pay.leadspay.com/checkout',
+        deliveryType: deliveryType,
+        deliveryUrl: deliveryUrl.trim() || undefined,
+        deliveryInstructions: deliveryInstructions.trim() || undefined,
+        deliveryWebhookUrl: deliveryType === 'webhook' ? deliveryWebhookUrl.trim() : undefined,
+        thankYouPageUrl: deliveryUrl.trim() || undefined,
         status: initialData?.status || 'Ativo'
       };
+
 
       if (isEditMode && initialData && onPlanUpdated) {
         await onPlanUpdated(initialData.id, planPayload);
@@ -605,6 +632,164 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* 🚀 OPÇÕES DE ENTREGA DO PRODUTO / PLANO */}
+          <div className="p-4 rounded-2xl bg-[#050811] border border-[#84CC16]/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-[#84CC16] flex items-center gap-1.5">
+                <Send className="w-3.5 h-3.5" /> Método de Entrega do Produto / Plano *
+              </label>
+              <span className="text-[10px] text-white/50 bg-white/5 px-2 py-0.5 rounded-full">
+                Pós-pagamento automático
+              </span>
+            </div>
+
+            <p className="text-[11px] text-white/70">
+              Escolha como o comprador receberá o acesso imediatamente após a aprovação do pagamento no checkout:
+            </p>
+
+            <select 
+              value={deliveryType} 
+              onChange={(e) => setDeliveryType(e.target.value as any)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-lime-500 cursor-pointer"
+            >
+              <option value="redirect">Redirecionar para Site / URL Externa</option>
+              <option value="whatsapp">Grupo / Suporte VIP no WhatsApp</option>
+              <option value="membership">Liberação Automática por E-mail (Área de Membros / App)</option>
+              <option value="download">Download de Arquivo Digital / Guia (Drive, Notion, PDF)</option>
+              <option value="api_key">Geração de Chave de API / Token</option>
+              <option value="webhook">Webhook Personalizado para Sistema Próprio</option>
+            </select>
+
+            {/* Contextual Input according to deliveryType */}
+            {deliveryType === 'redirect' && (
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  URL de Redirecionamento (Site / Aplicação Externa) *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://seusite.com/obrigado ou https://seusite.com/acesso"
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
+                />
+                <span className="text-[10px] text-white/50 block">
+                  O cliente será redirecionado para este endereço assim que o pagamento for aprovado.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'whatsapp' && (
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  Link do Grupo VIP ou Atendimento no WhatsApp *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://chat.whatsapp.com/ExemploGrupoVip ou https://wa.me/55..."
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
+                />
+                <span className="text-[10px] text-white/50 block">
+                  O comprador verá um botão direto para entrar no seu Grupo VIP ou conversar com o suporte.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'membership' && (
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  URL de Acesso / Login da Área de Membros *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://membros.seusite.com/login"
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
+                />
+                <span className="text-[10px] text-white/50 block">
+                  O cliente receberá instruções para acessar sua plataforma ou área de membros com o e-mail de compra.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'download' && (
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  Link para Download do Arquivo / Material Digital (PDF, Google Drive, Notion) *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://drive.google.com/... ou https://notion.so/..."
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
+                />
+                <span className="text-[10px] text-white/50 block">
+                  Link direto onde o comprador poderá baixar ou visualizar o conteúdo digital.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'api_key' && (
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  URL da Documentação ou Dashboard da API (Opcional)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://api.seusite.com/docs"
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
+                />
+                <span className="text-[10px] text-white/50 block">
+                  Uma chave de acesso exclusiva será gerada e enviada para o comprador por e-mail e na tela pós-venda.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'webhook' && (
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  URL do Webhook do seu Sistema (POST) *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://seusite.com/api/webhooks/leadspay-custom"
+                  value={deliveryWebhookUrl}
+                  onChange={(e) => setDeliveryWebhookUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
+                />
+                <span className="text-[10px] text-white/50 block">
+                  Enviaremos um evento POST com os dados da compra e do cliente para o seu servidor liberar o acesso automaticamente.
+                </span>
+              </div>
+            )}
+
+            {/* Instructions for all delivery types */}
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
+                Instruções de Acesso ao Comprador (Exibidas na tela e enviadas no e-mail)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Ex: Seu login é o seu e-mail cadastrado. Clique no botão para acessar seu grupo VIP ou baixar seu material..."
+                value={deliveryInstructions}
+                onChange={(e) => setDeliveryInstructions(e.target.value)}
+                className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none resize-none"
+              />
+            </div>
+          </div>
+
 
           {/* 🖼️ IMAGE UPLOAD / URL / PRESET SELECTION */}
           <div className="p-4 rounded-2xl bg-[#050811] border border-white/10 space-y-3">

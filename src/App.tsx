@@ -20,6 +20,7 @@ import { MarketFeeComparisonSection } from './components/MarketFeeComparisonSect
 import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
+import { ThankYouPage } from './components/checkout/ThankYouPage';
 import { getCompanyPlanByIdOrSlug } from './services/firestoreService';
 import { CompanyPlan } from './types/platform';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -35,6 +36,7 @@ function MainApp() {
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState<boolean>(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [isThankYouPage, setIsThankYouPage] = useState<boolean>(false);
   const [affiliateRef, setAffiliateRef] = useState<string>('');
   const [checkoutApiKey, setCheckoutApiKey] = useState<string>('');
 
@@ -43,7 +45,18 @@ function MainApp() {
       try {
         const params = new URLSearchParams(window.location.search);
 
+        // Check if on Thank You Page
+        const isThankYouPath = window.location.pathname.includes('/thank-you') || 
+                               params.get('thank-you') === 'true' || 
+                               params.get('obrigado') === 'true' ||
+                               params.get('status') === 'success';
+        if (isThankYouPath) {
+          setIsThankYouPage(true);
+          return;
+        }
+
         const rawKey = params.get('apiKey') || params.get('x-api-key') || params.get('key');
+
         if (rawKey) setCheckoutApiKey(rawKey);
         
         // 1. Capturar código do afiliado via Cookie de 15 dias e localStorage
@@ -179,8 +192,25 @@ function MainApp() {
     );
   }
 
+  // Se for a Thank You Page pós-checkout
+  if (isThankYouPage) {
+    return (
+      <div className="min-h-screen bg-[#060A15] text-white">
+        <ThankYouPage
+          onBackToHome={() => {
+            setIsThankYouPage(false);
+            if (typeof window !== 'undefined' && window.history) {
+              window.history.replaceState({}, '', '/');
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
   // Se abriu link direto de checkout e a oferta foi encontrada
   if (checkoutPlan) {
+
     return (
       <div className="min-h-screen bg-[#060A15] text-white">
         <CustomCheckoutPage

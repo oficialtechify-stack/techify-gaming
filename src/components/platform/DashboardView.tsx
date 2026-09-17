@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   UserSellerProfile, 
@@ -29,7 +29,14 @@ import {
   RotateCcw,
   Shield,
   Landmark,
-  Layers
+  Layers,
+  User,
+  ArrowRightLeft,
+  LogOut,
+  Settings,
+  ShieldCheck,
+  CheckCircle2,
+  HelpCircle
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -41,6 +48,8 @@ interface DashboardViewProps {
   setActiveTab: (tab: PlatformTab) => void;
   onOpenWithdraw: () => void;
   onSelectProductDetail: (product: CompanyPlan) => void;
+  onSwitchRole?: (role: UserRoleMode) => void;
+  onLogout?: () => void;
   selectedPeriod: string;
   setSelectedPeriod: (p: string) => void;
   selectedProductFilter: string;
@@ -49,6 +58,7 @@ interface DashboardViewProps {
   setSelectedTypeFilter: (t: string) => void;
   userName?: string;
   userAvatar?: string;
+  userEmail?: string;
 }
 
 // 3D Glowing Green Wallet Illustration matching the reference screenshot
@@ -168,6 +178,70 @@ const GlowingWallet3D: React.FC = () => {
   );
 };
 
+// Helper to parse dates safely from transactions
+function parseTxDate(t: SaleTransaction): Date {
+  if (t.createdAt) {
+    const d = new Date(t.createdAt);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (t.date) {
+    const parts = t.date.split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      let h = 12, min = 0;
+      if (t.time) {
+        const [th, tm] = t.time.split(':').map(Number);
+        if (!isNaN(th)) h = th;
+        if (!isNaN(tm)) min = tm;
+      }
+      return new Date(y, m, day, h, min);
+    }
+  }
+  return new Date();
+}
+
+// Helper to format currency for Y axis ticks
+function formatYAxis(val: number): string {
+  if (val >= 1000000) {
+    return `R$ ${(val / 1000000).toFixed(val % 1000000 === 0 ? 0 : 1).replace('.', ',')} mi`;
+  }
+  if (val >= 1000) {
+    return `R$ ${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1).replace('.', ',')} mil`;
+  }
+  if (val === 0) return 'R$ 0';
+  return `R$ ${Math.round(val)}`;
+}
+
+// Smooth cubic Bézier SVG path generator
+function generateSmoothSvgPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return 'M 20,150 L 1000,150';
+  if (points.length === 1) return `M ${points[0].x},${points[0].y}`;
+
+  const firstY = points[0].y;
+  const isFlat = points.every(p => Math.abs(p.y - firstY) < 0.5);
+  if (isFlat) {
+    return `M ${points[0].x},${firstY} L ${points[points.length - 1].x},${firstY}`;
+  }
+
+  let d = `M ${points[0].x},${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? 0 : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${Math.round(cp1x)},${Math.round(cp1y)} ${Math.round(cp2x)},${Math.round(cp2y)} ${Math.round(p2.x)},${Math.round(p2.y)}`;
+  }
+  return d;
+}
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   roleMode = 'empresa',
   userProfile,
@@ -177,6 +251,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   setActiveTab,
   onOpenWithdraw,
   onSelectProductDetail,
+  onSwitchRole,
+  onLogout,
   selectedPeriod = 'Hoje',
   setSelectedPeriod,
   selectedProductFilter = 'all',
@@ -184,13 +260,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   selectedTypeFilter = 'all',
   setSelectedTypeFilter,
   userName,
-  userAvatar
+  userAvatar,
+  userEmail
 }) => {
   // Eye visibility state (masks financial values)
   const [showValues, setShowValues] = useState<boolean>(true);
 
-  // Timeframe selector for the chart (1D, 1S, 1M, 6M, 1A)
-  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1A');
+  // Timeframe selector for the chart (1D, 1S, 1M, 6M, 1A) - default 1D matching reference
+  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1D');
 
   // Search filter query
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -199,22 +276,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState<boolean>(false);
   const [isProductMenuOpen, setIsProductMenuOpen] = useState<boolean>(false);
 
+  // Profile dropdown menu state
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isProfileMenuOpen]);
+
   // Selected chart point for interactive hover
-  const [hoveredPointIndex, setHoveredPointIndex] = useState<number>(5); // Default Jun 2026
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   // Safe user display name
-  const displayName = userName || userProfile?.name || 'usuário';
-  const userInitial = displayName.trim().charAt(0).toUpperCase() || 'L';
+  const displayName = userName || userProfile?.name || 'Marcos Henrique';
+  const userInitial = displayName.trim().charAt(0).toUpperCase() || 'M';
 
-  // Real filtered sales calculation based on props
+  // Real filtered sales calculation based on props and selected period
   const filteredSales = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toDateString();
+
     return transactions.filter(t => {
+      // Product filter
       if (selectedProductFilter !== 'all' && t.platformId !== selectedProductFilter && t.plan_id !== selectedProductFilter) {
         return false;
       }
+      // Status filter
       if (selectedTypeFilter !== 'all' && t.status !== selectedTypeFilter) {
         return false;
       }
+      // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesClient = (t.buyerName || t.customerName || '').toLowerCase().includes(q);
@@ -225,9 +327,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           return false;
         }
       }
+      // Period filter
+      if (selectedPeriod && selectedPeriod !== 'Todo o período') {
+        const d = parseTxDate(t);
+        if (selectedPeriod === 'Hoje') {
+          if (d.toDateString() !== todayStr) return false;
+        } else if (selectedPeriod === 'Ontem') {
+          const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          if (d.toDateString() !== yesterday.toDateString()) return false;
+        } else if (selectedPeriod === 'Últimos 7 dias') {
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (d < sevenDaysAgo) return false;
+        } else if (selectedPeriod === 'Últimos 30 dias') {
+          const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          if (d < thirtyDaysAgo) return false;
+        } else if (selectedPeriod === 'Este mês') {
+          if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return false;
+        }
+      }
       return true;
     });
-  }, [transactions, selectedProductFilter, selectedTypeFilter, searchQuery]);
+  }, [transactions, selectedProductFilter, selectedTypeFilter, searchQuery, selectedPeriod]);
 
   const totalFilteredSalesAmount = useMemo(() => {
     return filteredSales.reduce((acc, curr) => {
@@ -237,7 +357,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [filteredSales, roleMode]);
 
   const approvedSalesCount = useMemo(() => {
-    return filteredSales.filter(s => s.status === 'Aprovado').length;
+    return filteredSales.filter(s => s.status === 'Aprovado' || s.status === 'Liberado').length;
   }, [filteredSales]);
 
   const averageTicket = useMemo(() => {
@@ -313,25 +433,210 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const pendingPercent = totalCount > 0 ? Math.round((pendingCount / totalCount) * 100) : 0;
   const rejectedPercent = totalCount > 0 ? Math.round((rejectedCount / totalCount) * 100) : 0;
 
-  // Monthly Sales Chart Data (Jan - Dez)
-  // Replicating the exact wave from the reference image
-  // Y-Scale: 0 to 20 mil
-  const monthlyChartPoints = useMemo(() => [
-    { month: 'Jan', label: 'Jan 2026', value: 'R$ 15.800', num: 15.8, x: 20, y: 44, growth: '+5,4%' },
-    { month: 'Fev', label: 'Fev 2026', value: 'R$ 12.200', num: 12.2, x: 105, y: 78, growth: '-2,1%' },
-    { month: 'Mar', label: 'Mar 2026', value: 'R$ 11.000', num: 11.0, x: 195, y: 90, growth: '+1,8%' },
-    { month: 'Abr', label: 'Abr 2026', value: 'R$ 13.400', num: 13.4, x: 285, y: 68, growth: '+4,2%' },
-    { month: 'Mai', label: 'Mai 2026', value: 'R$ 14.800', num: 14.8, x: 375, y: 54, growth: '+6,1%' },
-    { month: 'Jun', label: 'Jun 2026', value: 'R$ 16.500', num: 16.5, x: 465, y: 38, growth: '+8,2%' }, // Peak in screenshot
-    { month: 'Jul', label: 'Jul 2026', value: 'R$ 15.100', num: 15.1, x: 555, y: 50, growth: '-1,4%' },
-    { month: 'Ago', label: 'Ago 2026', value: 'R$ 14.000', num: 14.0, x: 645, y: 62, growth: '-0,8%' },
-    { month: 'Set', label: 'Set 2026', value: 'R$ 11.500', num: 11.5, x: 735, y: 86, growth: '-3,2%' },
-    { month: 'Out', label: 'Out 2026', value: 'R$ 12.400', num: 12.4, x: 825, y: 76, growth: '+2,0%' },
-    { month: 'Nov', label: 'Nov 2026', value: 'R$ 8.200', num: 8.2, x: 915, y: 118, growth: '-4,5%' },
-    { month: 'Dez', label: 'Dez 2026', value: 'R$ 10.100', num: 10.1, x: 1000, y: 98, growth: '+3,1%' }
-  ], []);
+  // Dynamic Chart Points based on selectedTimeframe and real filtered sales
+  // "nessa outra parte ele vem zerado em linha reta e so sobe e desce assim comforme as vendas dos usuarios"
+  const { 
+    monthlyChartPoints, 
+    chartHasSales, 
+    chartCeiling, 
+    chartLinePath, 
+    chartAreaPath,
+    yLabels 
+  } = useMemo(() => {
+    let intervals: { key: string; label: string; fullLabel: string; filterFn: (d: Date) => boolean }[] = [];
+    const now = new Date();
+    const currentYear = now.getFullYear();
 
-  const activePoint = monthlyChartPoints[hoveredPointIndex] || monthlyChartPoints[5];
+    if (selectedTimeframe === '1D') {
+      // 7 slots across 24h: 00h, 04h, 08h, 12h, 16h, 20h, 23h
+      const slots = [
+        { hStart: 0, hEnd: 4, label: '00h', full: '00:00 - 04:00' },
+        { hStart: 4, hEnd: 8, label: '04h', full: '04:00 - 08:00' },
+        { hStart: 8, hEnd: 12, label: '08h', full: '08:00 - 12:00' },
+        { hStart: 12, hEnd: 16, label: '12h', full: '12:00 - 16:00' },
+        { hStart: 16, hEnd: 20, label: '16h', full: '16:00 - 20:00' },
+        { hStart: 20, hEnd: 23, label: '20h', full: '20:00 - 23:00' },
+        { hStart: 23, hEnd: 24, label: '23h', full: '23:00 - 23:59' }
+      ];
+      intervals = slots.map(s => ({
+        key: s.label,
+        label: s.label,
+        fullLabel: `Hoje às ${s.full}`,
+        filterFn: (d: Date) => {
+          const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+          const h = d.getHours();
+          return isToday && h >= s.hStart && h < s.hEnd;
+        }
+      }));
+    } else if (selectedTimeframe === '1S') {
+      // Last 7 days
+      const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      for (let i = 6; i >= 0; i--) {
+        const target = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dayLabel = i === 0 ? 'Hoje' : dayNames[target.getDay()];
+        const dateStr = target.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        intervals.push({
+          key: `day_${i}`,
+          label: dayLabel,
+          fullLabel: `${dayLabel} (${dateStr})`,
+          filterFn: (d: Date) => d.getDate() === target.getDate() && d.getMonth() === target.getMonth() && d.getFullYear() === target.getFullYear()
+        });
+      }
+    } else if (selectedTimeframe === '1M') {
+      // 7 interval steps across current month
+      const steps = [1, 5, 10, 15, 20, 25, 30];
+      intervals = steps.map((dayNum, idx) => {
+        const nextDay = steps[idx + 1] || 32;
+        return {
+          key: `d_${dayNum}`,
+          label: `Dia ${dayNum}`,
+          fullLabel: `Dia ${dayNum} ao ${nextDay - 1} deste mês`,
+          filterFn: (d: Date) => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && d.getDate() >= dayNum && d.getDate() < nextDay
+        };
+      });
+    } else if (selectedTimeframe === '6M') {
+      // Last 6 months
+      const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      for (let i = 5; i >= 0; i--) {
+        const target = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const mIdx = target.getMonth();
+        const mYear = target.getFullYear();
+        intervals.push({
+          key: `m6_${mIdx}_${mYear}`,
+          label: monthNames[mIdx],
+          fullLabel: `${monthNames[mIdx]} ${mYear}`,
+          filterFn: (d: Date) => d.getMonth() === mIdx && d.getFullYear() === mYear
+        });
+      }
+    } else {
+      // '1A': 12 months Jan - Dez
+      const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      intervals = monthNames.map((mName, mIdx) => ({
+        key: `m_${mIdx}`,
+        label: mName,
+        fullLabel: `${mName} ${currentYear}`,
+        filterFn: (d: Date) => d.getMonth() === mIdx && d.getFullYear() === currentYear
+      }));
+    }
+
+    // Coordinates mapping
+    const n = intervals.length;
+    const xStart = 20;
+    const xEnd = 1000;
+    const xStep = (xEnd - xStart) / Math.max(1, n - 1);
+
+    const pointsRaw = intervals.map((inv, idx) => {
+      let sum = 0;
+      filteredSales.forEach((s) => {
+        if (s.status !== 'Aprovado' && s.status !== 'Liberado') return;
+        const d = parseTxDate(s);
+        if (inv.filterFn(d)) {
+          const val = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
+          sum += val;
+        }
+      });
+      return {
+        ...inv,
+        rawAmount: sum,
+        x: Math.round(xStart + idx * xStep)
+      };
+    });
+
+    const totalSalesInPeriod = pointsRaw.reduce((acc, p) => acc + p.rawAmount, 0);
+    const hasSales = totalSalesInPeriod > 0;
+    const maxVal = Math.max(...pointsRaw.map(p => p.rawAmount), 0);
+
+    // Dynamic round ceiling for Y scale
+    let ceiling = 20000;
+    if (hasSales) {
+      if (maxVal <= 100) ceiling = 100;
+      else if (maxVal <= 500) ceiling = 500;
+      else if (maxVal <= 1000) ceiling = 1000;
+      else if (maxVal <= 5000) ceiling = 5000;
+      else if (maxVal <= 10000) ceiling = 10000;
+      else if (maxVal <= 20000) ceiling = 20000;
+      else if (maxVal <= 50000) ceiling = 50000;
+      else if (maxVal <= 100000) ceiling = 100000;
+      else ceiling = Math.ceil(maxVal * 1.25);
+    }
+
+    const calculatedPoints = pointsRaw.map((p, idx) => {
+      // When there are no sales, y = 150 (baseline line at R$ 0)
+      // When sales exist, y scales between 35 and 150
+      const y = hasSales && ceiling > 0
+        ? Math.round(150 - (p.rawAmount / ceiling) * 115)
+        : 150;
+
+      let growth = '+0,0%';
+      if (idx > 0) {
+        const prev = pointsRaw[idx - 1].rawAmount;
+        if (prev > 0) {
+          const diff = ((p.rawAmount - prev) / prev) * 100;
+          growth = `${diff >= 0 ? '+' : ''}${diff.toFixed(1).replace('.', ',')}%`;
+        } else if (p.rawAmount > 0) {
+          growth = '+100,0%';
+        }
+      }
+
+      const formattedVal = p.rawAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      return {
+        month: p.label,
+        label: p.fullLabel,
+        value: formattedVal,
+        num: p.rawAmount,
+        rawAmount: p.rawAmount,
+        growth,
+        x: p.x,
+        y: Math.max(35, Math.min(150, y))
+      };
+    });
+
+    const linePath = generateSmoothSvgPath(calculatedPoints);
+    const lastX = calculatedPoints[calculatedPoints.length - 1]?.x || 1000;
+    const firstX = calculatedPoints[0]?.x || 20;
+    const areaPath = `${linePath} L ${lastX},155 L ${firstX},155 Z`;
+
+    const labels = hasSales
+      ? [
+          formatYAxis(ceiling),
+          formatYAxis(ceiling * 0.75),
+          formatYAxis(ceiling * 0.5),
+          formatYAxis(ceiling * 0.25),
+          'R$ 0'
+        ]
+      : ['R$ 20 mil', 'R$ 15 mil', 'R$ 10 mil', 'R$ 5 mil', 'R$ 0'];
+
+    return {
+      monthlyChartPoints: calculatedPoints,
+      chartHasSales: hasSales,
+      chartCeiling: ceiling,
+      chartLinePath: linePath,
+      chartAreaPath: areaPath,
+      yLabels: labels
+    };
+  }, [selectedTimeframe, filteredSales, roleMode]);
+
+  // Active point: hovered point or highest sales point, or middle point if all zero
+  const activePoint = useMemo(() => {
+    if (hoveredPointIndex !== null && hoveredPointIndex < monthlyChartPoints.length) {
+      return monthlyChartPoints[hoveredPointIndex];
+    }
+    if (chartHasSales) {
+      let maxIdx = 0;
+      let maxVal = -1;
+      monthlyChartPoints.forEach((p, idx) => {
+        if (p.rawAmount > maxVal) {
+          maxVal = p.rawAmount;
+          maxIdx = idx;
+        }
+      });
+      return monthlyChartPoints[maxIdx] || monthlyChartPoints[0];
+    }
+    // Middle point default when flat
+    const midIdx = Math.floor(monthlyChartPoints.length / 2);
+    return monthlyChartPoints[midIdx] || monthlyChartPoints[0];
+  }, [hoveredPointIndex, monthlyChartPoints, chartHasSales]);
 
   // Available balance
   const availableBalance = Number(userProfile?.availableBalance) || 0;
@@ -459,12 +764,158 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#a3e635] animate-pulse" />
           </button>
 
-          {/* User Profile Avatar with Letter Initial */}
-          <div 
-            className="w-9 h-9 rounded-full bg-[#3b82f6] text-white font-black text-sm flex items-center justify-center shadow-lg border border-white/20 select-none flex-shrink-0"
-            title={displayName}
-          >
-            {userInitial}
+          {/* User Profile Avatar with Clickable Dropdown Menu */}
+          <div className="relative" ref={profileMenuRef}>
+            <button 
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="flex items-center gap-2 p-1 pr-2.5 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 hover:border-white/20 transition-all cursor-pointer select-none group"
+              title="Opções do Perfil"
+              id="user-profile-menu-button"
+            >
+              {userAvatar && !userAvatar.includes('dicebear') ? (
+                <img 
+                  src={userAvatar} 
+                  alt={displayName}
+                  className="w-9 h-9 rounded-full object-cover border border-white/20 shadow-md"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div 
+                  className="w-9 h-9 rounded-full bg-[#3b82f6] text-white font-black text-sm flex items-center justify-center shadow-lg border border-white/20 select-none flex-shrink-0 group-hover:scale-105 transition-transform"
+                >
+                  {userInitial}
+                </div>
+              )}
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="text-xs font-bold text-white leading-tight truncate max-w-[120px]">{displayName}</span>
+                <span className="text-[10px] text-[#a3e635] font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#a3e635] animate-pulse"></span>
+                  {roleMode === 'empresa' ? 'Empresa' : 'Afiliado'}
+                </span>
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-white/50 group-hover:text-white transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Profile Dropdown Menu */}
+            {isProfileMenuOpen && (
+              <div 
+                className="absolute right-0 mt-2 w-72 bg-[#080d1a] border border-white/15 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] p-2 z-50 backdrop-blur-2xl animate-in fade-in slide-in-from-top-2 duration-150"
+                id="user-profile-dropdown-menu"
+              >
+                {/* Header with user info */}
+                <div className="p-3 pb-3 flex items-center gap-3 border-b border-white/10 bg-white/[0.02] rounded-xl mb-1">
+                  {userAvatar && !userAvatar.includes('dicebear') ? (
+                    <img 
+                      src={userAvatar} 
+                      alt={displayName}
+                      className="w-11 h-11 rounded-full object-cover border border-white/20 shadow-md"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full bg-[#3b82f6] text-white font-black text-base flex items-center justify-center shadow-lg border border-white/20 flex-shrink-0">
+                      {userInitial}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{displayName}</p>
+                    <p className="text-xs text-white/50 truncate">{userEmail || userProfile?.email || 'marcos.henrique@leadspay.com'}</p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#a3e635]/15 text-[#a3e635] border border-[#a3e635]/25 text-[10px] font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#a3e635]"></span>
+                        {roleMode === 'empresa' ? 'Modo Empresa' : 'Modo Afiliado'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Navigation & Action Options */}
+                <div className="py-1 flex flex-col gap-0.5">
+                  <button
+                    onClick={() => {
+                      setActiveTab('meu_perfil');
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer text-left"
+                  >
+                    <User className="w-4 h-4 text-[#3b82f6]" />
+                    <span>Meu Perfil</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (onSwitchRole) {
+                        onSwitchRole(roleMode === 'empresa' ? 'afiliado' : 'empresa');
+                      }
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#a3e635] hover:bg-[#a3e635]/10 rounded-xl transition-colors cursor-pointer text-left"
+                  >
+                    <ArrowRightLeft className="w-4 h-4 text-[#a3e635]" />
+                    <span>Alternar para {roleMode === 'empresa' ? 'Modo Afiliado' : 'Modo Empresa'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onOpenWithdraw();
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer text-left"
+                  >
+                    <CreditCard className="w-4 h-4 text-[#22c55e]" />
+                    <span>Minha Carteira & Saques PIX</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab(roleMode === 'empresa' ? 'minha_empresa' : 'minhas_afiliacoes');
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer text-left"
+                  >
+                    <Package className="w-4 h-4 text-[#f59e0b]" />
+                    <span>{roleMode === 'empresa' ? 'Minha Empresa & Produtos' : 'Minhas Afiliações'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('configuracoes');
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer text-left"
+                  >
+                    <Settings className="w-4 h-4 text-white/60" />
+                    <span>Configurações da Conta</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('seguranca');
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer text-left"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-[#a855f7]" />
+                    <span>Segurança & Acesso</span>
+                  </button>
+                </div>
+
+                {/* Footer: Logout */}
+                {onLogout && (
+                  <div className="pt-1.5 mt-1 border-t border-white/10">
+                    <button
+                      onClick={() => {
+                        onLogout();
+                        setIsProfileMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer text-left"
+                    >
+                      <LogOut className="w-4 h-4 text-red-400" />
+                      <span>Sair da Conta</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -584,13 +1035,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {/* Glowing Green Curve Chart Container */}
               <div className="relative w-full pt-1 pb-2">
                 <div className="flex items-start">
-                  {/* Y-Axis Labels matching screenshot */}
+                  {/* Y-Axis Labels dynamically scaled with real sales values */}
                   <div className="flex flex-col justify-between h-44 text-[10px] text-white/40 pr-3 font-medium text-right select-none flex-shrink-0 w-16">
-                    <span>R$ 20 mil</span>
-                    <span>R$ 15 mil</span>
-                    <span>R$ 10 mil</span>
-                    <span>R$ 5 mil</span>
-                    <span>R$ 0</span>
+                    {yLabels.map((lbl, idx) => (
+                      <span key={idx}>{lbl}</span>
+                    ))}
                   </div>
 
                   {/* Main SVG Area */}
@@ -621,42 +1070,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <line x1="0" y1="118" x2="1020" y2="118" stroke="rgba(255,255,255,0.05)" strokeDasharray="3 3" />
                       <line x1="0" y1="155" x2="1020" y2="155" stroke="rgba(255,255,255,0.05)" />
 
-                      {/* Area Fill under smooth bezier curve */}
+                      {/* Area Fill under smooth bezier curve or flat baseline */}
                       <path
-                        d={`
-                          M 20,44 
-                          C 60,60 80,75 105,78 
-                          C 150,84 170,90 195,90 
-                          C 240,90 260,70 285,68 
-                          C 330,65 350,56 375,54 
-                          C 420,50 440,38 465,38 
-                          C 510,38 530,48 555,50 
-                          C 600,53 620,60 645,62 
-                          C 690,66 710,84 735,86 
-                          C 780,90 800,78 825,76 
-                          C 870,72 890,116 915,118 
-                          C 955,120 975,102 1000,98 
-                          L 1000,155 L 20,155 Z
-                        `}
+                        d={chartAreaPath}
                         fill="url(#neonGreenCurveGrad)"
                       />
 
                       {/* Glowing Line Stroke */}
                       <path
-                        d={`
-                          M 20,44 
-                          C 60,60 80,75 105,78 
-                          C 150,84 170,90 195,90 
-                          C 240,90 260,70 285,68 
-                          C 330,65 350,56 375,54 
-                          C 420,50 440,38 465,38 
-                          C 510,38 530,48 555,50 
-                          C 600,53 620,60 645,62 
-                          C 690,66 710,84 735,86 
-                          C 780,90 800,78 825,76 
-                          C 870,72 890,116 915,118 
-                          C 955,120 975,102 1000,98
-                        `}
+                        d={chartLinePath}
                         fill="none"
                         stroke="#D9F22A"
                         strokeWidth="2.5"

@@ -1342,14 +1342,17 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setActiveTab={setActiveTab}
                   onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
                   onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
+                  onSwitchRole={handleSwitchRole}
+                  onLogout={logout}
                   selectedPeriod={selectedPeriod}
                   setSelectedPeriod={setSelectedPeriod}
                   selectedProductFilter={selectedProductFilter}
                   setSelectedProductFilter={setSelectedProductFilter}
                   selectedTypeFilter={selectedTypeFilter}
                   setSelectedTypeFilter={setSelectedTypeFilter}
-                  userName={userProfile?.name || currentUser?.displayName || 'usuário'}
+                  userName={userProfile?.name || currentUser?.displayName || 'Marcos Henrique'}
                   userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
+                  userEmail={userEmail || currentUser?.email || undefined}
                 />
               )}
 

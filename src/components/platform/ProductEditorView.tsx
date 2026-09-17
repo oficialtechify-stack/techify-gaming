@@ -4,7 +4,8 @@ import {
   ProductOrderBump, 
   ProductUpsell, 
   ProductCoupon, 
-  ProductCustomCheckout 
+  ProductCustomCheckout,
+  ProductDeliveryType
 } from '../../types/platform';
 import { 
   ArrowLeft, 
@@ -30,8 +31,16 @@ import {
   Percent,
   CheckCircle2,
   X,
-  CreditCard
+  CreditCard,
+  Send,
+  Globe,
+  MessageSquare,
+  Download,
+  Key,
+  Webhook,
+  Code
 } from 'lucide-react';
+
 import { PLATFORM_CHECKOUT_FEE } from '../checkout/CustomCheckoutPage';
 
 interface ProductEditorViewProps {
@@ -51,7 +60,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
 }) => {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<
-    'geral' | 'configuracoes' | 'order_bump' | 'upsell' | 'checkout' | 'coproducao' | 'cupons' | 'afiliados' | 'links'
+    'geral' | 'configuracoes' | 'entrega' | 'order_bump' | 'upsell' | 'checkout' | 'coproducao' | 'cupons' | 'afiliados' | 'links'
   >('geral');
 
   // Form states (Geral)
@@ -61,7 +70,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
   const [paymentType, setPaymentType] = useState<'Único' | 'Recorrente' | 'Assinatura'>(plan.paymentType || 'Único');
   const [bannerImage, setBannerImage] = useState<string>(plan.bannerImage || 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1000&q=80');
 
-  // Form states (Configurações)
+  // Form states (Configurações & Entrega)
   const [priceSetup, setPriceSetup] = useState<number>(plan.priceSetup || 197.00);
   const [priceMonthly, setPriceMonthly] = useState<number>(plan.priceMonthly || 0);
   const [commissionPercentage, setCommissionPercentage] = useState<number>(plan.commissionPercentage || 30);
@@ -69,6 +78,13 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
   const [warrantyDays, setWarrantyDays] = useState<number>(plan.warrantyDays || 7);
   const [thankYouPageUrl, setThankYouPageUrl] = useState<string>(plan.thankYouPageUrl || '');
   const [badge, setBadge] = useState<string>(plan.badge || 'Mais Vendido');
+
+  // Novas Opções de Entrega do Produto/Plano
+  const [deliveryType, setDeliveryType] = useState<ProductDeliveryType>(plan.deliveryType || 'redirect');
+  const [deliveryUrl, setDeliveryUrl] = useState<string>(plan.deliveryUrl || plan.thankYouPageUrl || '');
+  const [deliveryInstructions, setDeliveryInstructions] = useState<string>(plan.deliveryInstructions || '');
+  const [deliveryWebhookUrl, setDeliveryWebhookUrl] = useState<string>(plan.deliveryWebhookUrl || '');
+
 
   // Checkout list
   const defaultCheckout: ProductCustomCheckout = {
@@ -137,13 +153,18 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
       commissionValue,
       supportEmail,
       warrantyDays,
-      thankYouPageUrl,
+      thankYouPageUrl: deliveryUrl.trim() || thankYouPageUrl,
+      deliveryType,
+      deliveryUrl: deliveryUrl.trim() || undefined,
+      deliveryInstructions: deliveryInstructions.trim() || undefined,
+      deliveryWebhookUrl: deliveryType === 'webhook' ? deliveryWebhookUrl.trim() : undefined,
       badge,
       customCheckouts: checkouts,
       coupons,
       orderBumps
     });
   };
+
 
   const handleAddCheckout = (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,6 +238,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
         {[
           { id: 'geral', label: 'Geral' },
           { id: 'configuracoes', label: 'Configurações' },
+          { id: 'entrega', label: 'Entrega & Site Próprio' },
           { id: 'order_bump', label: 'Order Bump' },
           { id: 'upsell', label: 'Upsell / Downsell' },
           { id: 'checkout', label: 'Checkout' },
@@ -225,6 +247,7 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
           { id: 'afiliados', label: 'Afiliados' },
           { id: 'links', label: 'Links' },
         ].map((tab) => (
+
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
@@ -447,7 +470,10 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
               <input
                 type="url"
                 value={thankYouPageUrl}
-                onChange={(e) => setThankYouPageUrl(e.target.value)}
+                onChange={(e) => {
+                  setThankYouPageUrl(e.target.value);
+                  setDeliveryUrl(e.target.value);
+                }}
                 placeholder="https://suaempresa.com/obrigado"
                 className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white"
               />
@@ -455,6 +481,300 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* TAB: ENTREGA & SITE PRÓPRIO */}
+      {activeTab === 'entrega' && (
+        <div className="space-y-6 max-w-4xl">
+          {/* Header Callout */}
+          <div className="p-4 rounded-2xl bg-[#0b1322] border border-[#84CC16]/30 flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2 h-2 rounded-full bg-[#84CC16]" />
+                <h3 className="text-sm font-black text-white font-['Syne']">
+                  Entrega do Produto & Integração com Site Próprio
+                </h3>
+              </div>
+              <p className="text-xs text-white/60">
+                Configure como o comprador recebe o acesso ao produto logo após o pagamento e integre o checkout direto no seu site.
+              </p>
+            </div>
+            <span className="text-[10px] uppercase font-bold text-[#84CC16] bg-[#84CC16]/10 border border-[#84CC16]/30 px-2.5 py-1 rounded-full whitespace-nowrap">
+              Automação Ativa
+            </span>
+          </div>
+
+          {/* 1. SELETOR DE ENTREGA */}
+          <div className="p-5 rounded-2xl bg-[#0b1322] border border-white/10 space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#84CC16] mb-1.5 flex items-center gap-1.5">
+                <Send className="w-4 h-4" /> Método de Entrega do Produto / Plano *
+              </label>
+              <p className="text-xs text-white/60 mb-3">
+                Selecione o formato que será disparado automaticamente assim que o pagamento for aprovado:
+              </p>
+              
+              <select 
+                value={deliveryType} 
+                onChange={(e) => setDeliveryType(e.target.value as any)}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-lime-500 cursor-pointer"
+              >
+                <option value="redirect">Redirecionar para Site / URL Externa</option>
+                <option value="whatsapp">Grupo / Suporte VIP no WhatsApp</option>
+                <option value="membership">Liberação Automática por E-mail (Área de Membros / App)</option>
+                <option value="download">Download de Arquivo Digital / Guia (Drive, Notion, PDF)</option>
+                <option value="api_key">Geração de Chave de API / Token</option>
+                <option value="webhook">Webhook Personalizado para Sistema Próprio</option>
+              </select>
+            </div>
+
+            {/* Contextual Input Fields */}
+            {deliveryType === 'redirect' && (
+              <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[#84CC16]" /> URL de Redirecionamento Direto *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://seusite.com/obrigado ou https://seusite.com/acesso"
+                  value={deliveryUrl}
+                  onChange={(e) => {
+                    setDeliveryUrl(e.target.value);
+                    setThankYouPageUrl(e.target.value);
+                  }}
+                  className="w-full bg-[#080d1a] border border-white/15 focus:border-[#84CC16] rounded-xl px-3.5 py-2.5 text-xs text-white"
+                />
+                <span className="text-[11px] text-white/50 block">
+                  Após o pagamento, o cliente é automaticamente redirecionado para esta página em 8 segundos (ou clicando no botão).
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'whatsapp' && (
+              <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-[#84CC16]" /> Link do Grupo VIP ou Suporte WhatsApp *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://chat.whatsapp.com/... ou https://wa.me/55..."
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 focus:border-[#84CC16] rounded-xl px-3.5 py-2.5 text-xs text-white"
+                />
+                <span className="text-[11px] text-white/50 block">
+                  O cliente receberá o botão verde para entrar direto no WhatsApp na tela de confirmação e no e-mail.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'membership' && (
+              <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-[#84CC16]" /> URL da Área de Membros / Plataforma *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://membros.seusite.com/login"
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 focus:border-[#84CC16] rounded-xl px-3.5 py-2.5 text-xs text-white"
+                />
+                <span className="text-[11px] text-white/50 block">
+                  O cliente receberá instruções detalhadas para fazer login com o e-mail informado na compra.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'download' && (
+              <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                  <Download className="w-3.5 h-3.5 text-[#84CC16]" /> Link do Arquivo / Guia Digital (Drive, Notion, PDF) *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://drive.google.com/... ou https://notion.so/..."
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 focus:border-[#84CC16] rounded-xl px-3.5 py-2.5 text-xs text-white"
+                />
+                <span className="text-[11px] text-white/50 block">
+                  Link direto para download imediato do infoproduto ou material digital.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'api_key' && (
+              <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-[#84CC16]" /> URL da Documentação / Console de Desenvolvedores
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://api.seusite.com/docs"
+                  value={deliveryUrl}
+                  onChange={(e) => setDeliveryUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 focus:border-[#84CC16] rounded-xl px-3.5 py-2.5 text-xs text-white"
+                />
+                <span className="text-[11px] text-white/50 block">
+                  Uma chave de API exclusiva é gerada para a transação e enviada ao cliente com instruções.
+                </span>
+              </div>
+            )}
+
+            {deliveryType === 'webhook' && (
+              <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                  <Webhook className="w-3.5 h-3.5 text-[#84CC16]" /> Endpoint de Webhook do seu Sistema (POST) *
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://seusite.com/api/webhooks/leadspay-custom"
+                  value={deliveryWebhookUrl}
+                  onChange={(e) => setDeliveryWebhookUrl(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 focus:border-[#84CC16] rounded-xl px-3.5 py-2.5 text-xs text-white"
+                />
+                <span className="text-[11px] text-white/50 block">
+                  Assim que o pagamento for aprovado, dispararemos uma requisição HTTP POST para este endereço para seu backend liberar o usuário.
+                </span>
+              </div>
+            )}
+
+            {/* Custom Instructions */}
+            <div className="pt-2">
+              <label className="block text-xs font-bold text-white/80 mb-1.5">
+                Instruções de Acesso ao Comprador (Exibidas na tela pós-venda e no e-mail automático)
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Ex: Seu acesso foi liberado! Acesse com o mesmo e-mail utilizado na compra. Para dúvidas, nosso suporte está disponível via WhatsApp..."
+                value={deliveryInstructions}
+                onChange={(e) => setDeliveryInstructions(e.target.value)}
+                className="w-full bg-[#050811] border border-white/15 focus:border-[#84CC16] rounded-xl px-3.5 py-2.5 text-xs text-white resize-none"
+              />
+            </div>
+          </div>
+
+          {/* 2. INTEGRAÇÃO NO SITE PRÓPRIO DA EMPRESA */}
+          <div className="p-5 rounded-2xl bg-[#0b1322] border border-white/10 space-y-4">
+            <div className="flex items-center gap-2">
+              <Code className="w-4 h-4 text-[#84CC16]" />
+              <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                Integração no Site Próprio da Empresa
+              </h4>
+            </div>
+            <p className="text-xs text-white/60 leading-relaxed">
+              Você pode colocar o botão de compra diretamente na landing page ou página de vendas do seu próprio site. Assim que o cliente pagar, o LeadsPay liquida os valores, cobra apenas a taxa de R$ 0,99 e aciona a liberação.
+            </p>
+
+            {/* A. Link do Checkout */}
+            <div className="p-4 bg-zinc-800/50 border border-zinc-700 rounded-xl space-y-3 text-xs">
+              <p className="font-semibold text-white">Link do Checkout para o seu Site Próprio:</p>
+              <div className="flex items-center gap-2">
+                <input 
+                  readOnly 
+                  value={`https://leadspay.app/pay/${plan.id}`} 
+                  className="w-full bg-zinc-900 border border-zinc-700 p-2 rounded text-zinc-300 font-mono text-xs"
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleCopy(`https://leadspay.app/pay/${plan.id}`, 'site-link')}
+                  className="bg-lime-500 text-black px-3 py-2 rounded font-bold hover:bg-lime-400 whitespace-nowrap text-xs cursor-pointer"
+                >
+                  {copiedLink === 'site-link' ? 'Copiado!' : 'Copiar Link'}
+                </button>
+              </div>
+            </div>
+
+            {/* B. Botão HTML Pronto */}
+            <div className="p-4 bg-zinc-800/50 border border-zinc-700 rounded-xl space-y-3 text-xs">
+              <p className="font-semibold text-white">Botão HTML de Compra para o seu Site (Cole direto no seu HTML/WordPress):</p>
+              <div className="flex items-center gap-2">
+                <textarea 
+                  readOnly 
+                  rows={2}
+                  value={`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`} 
+                  className="w-full bg-zinc-900 border border-zinc-700 p-2 rounded text-zinc-300 font-mono text-[11px] resize-none"
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleCopy(`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`, 'btn-html')}
+                  className="bg-lime-500 text-black px-3 py-2 rounded font-bold hover:bg-lime-400 whitespace-nowrap text-xs cursor-pointer self-stretch flex items-center"
+                >
+                  {copiedLink === 'btn-html' ? 'Copiado!' : 'Copiar HTML'}
+                </button>
+              </div>
+            </div>
+
+            {/* C. Rota de Backend Webhook */}
+            <div className="p-4 bg-zinc-800/50 border border-zinc-700 rounded-xl space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-white">Código de Webhook para o Backend do seu Site:</p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(`// Exemplo de rota no site próprio da empresa:
+// /api/webhooks/leadspay-custom/route.ts (Next.js / Node.js)
+import { NextResponse } from 'next/server';
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { event, data } = body;
+
+    if (event === 'payment.success') {
+      const customerEmail = data.customer_email;
+      const planId = data.plan_id;
+
+      // 1. Libere o acesso no seu próprio banco de dados
+      // await db.users.update({ where: { email: customerEmail }, data: { plan: planId, active: true } });
+
+      console.log(\`✅ Plano \${planId} liberado com sucesso para \${customerEmail}\`);
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    return NextResponse.json({ error: 'Falha no webhook' }, { status: 500 });
+  }
+}`, 'code-webhook')}
+                  className="bg-zinc-700 hover:bg-zinc-600 text-white px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer"
+                >
+                  {copiedLink === 'code-webhook' ? 'Copiado!' : 'Copiar Código'}
+                </button>
+              </div>
+              <pre className="p-3 bg-zinc-950 rounded-lg text-zinc-400 font-mono text-[10px] overflow-x-auto leading-relaxed border border-zinc-800">
+{`// /api/webhooks/leadspay-custom/route.ts (No site próprio da empresa)
+import { NextResponse } from 'next/server';
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { event, data } = body;
+
+    if (event === 'payment.success') {
+      const customerEmail = data.customer_email;
+      const planId = data.plan_id;
+
+      // 1. Libere o acesso no seu próprio banco de dados
+      // await db.users.update({ where: { email: customerEmail }, data: { plan: planId, active: true } });
+
+      console.log(\`✅ Plano \${planId} liberado com sucesso para \${customerEmail}\`);
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    return NextResponse.json({ error: 'Falha no webhook' }, { status: 500 });
+  }
+}`}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* TAB 3: ORDER BUMP */}
       {activeTab === 'order_bump' && (
@@ -846,9 +1166,37 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
                 </button>
               </div>
             </div>
+
+            <div className="p-4 rounded-2xl bg-[#080d1a] border border-[#84CC16]/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#84CC16] flex items-center gap-1.5">
+                  <Code className="w-3.5 h-3.5" /> Botão de Compra para o seu Site Próprio (HTML)
+                </span>
+                <span className="text-[10px] text-white/40 font-mono">Taxa R$ 0,99</span>
+              </div>
+              <p className="text-[11px] text-white/60">
+                Cole este botão no seu HTML, WordPress ou landing page externa para vender com o checkout LeadsPay:
+              </p>
+              <div className="flex gap-2">
+                <textarea
+                  readOnly
+                  rows={2}
+                  value={`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`}
+                  className="flex-1 bg-[#050811] border border-white/15 rounded-xl p-2.5 text-[11px] font-mono text-white/80 resize-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCopy(`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`, 'links-btn-html')}
+                  className="bg-[#84CC16] hover:bg-[#74b816] text-black font-bold px-3 py-2 rounded-xl text-xs uppercase self-stretch flex items-center"
+                >
+                  {copiedLink === 'links-btn-html' ? 'Copiado!' : 'Copiar HTML'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
+
 
       {/* Bottom Action Buttons (Image 4 & 5) */}
       <div className="mt-10 pt-6 border-t border-white/10 flex items-center justify-between max-w-4xl">
