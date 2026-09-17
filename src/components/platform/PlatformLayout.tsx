@@ -925,14 +925,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {/* Balance / Sales Milestone Box */}
           {!sidebarCollapsed && (
-            <div className="p-4 m-3 rounded-xl bg-gradient-to-b from-[#0a1222] to-[#060a15] border border-white/10 shadow-md">
+            <div className="p-3.5 m-3 rounded-2xl bg-[#080d1a] border border-white/10 shadow-lg">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-white/60">
-                  {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'Carteira Empresa (PIX)'}
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
+                  {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'CARTEIRA EMPRESA (PIX)'}
                 </span>
                 <span className="text-[10px] text-[#D9F22A] font-black">D+9</span>
               </div>
-              <div className="text-base font-black text-[#D9F22A] font-['Syne']">
+              <div className="text-xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
                 {`R$ ${(userProfile?.availableBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
               </div>
 
@@ -941,11 +941,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setIsWithdrawModalOpen(true);
                   setIsMobileMenuOpen(false);
                 }}
-                disabled={(userProfile?.availableBalance ?? 0) <= 0}
-                className="w-full mt-2.5 bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white py-1.5 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-40 disabled:pointer-events-none"
+                className="w-full mt-2.5 bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 py-2 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
               >
-                <Wallet className="w-3 h-3" />
-                Sacar via PIX
+                <Wallet className="w-3 h-3 text-[#D9F22A]" />
+                SACAR VIA PIX
               </button>
             </div>
           )}
@@ -1129,7 +1128,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         } ml-0`}
       >
         {/* TOPBAR */}
-        <header className="h-16 sticky top-0 z-30 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-4 min-w-0">
+        <header className={`h-16 sticky top-0 z-30 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-4 min-w-0 ${activeTab === 'dashboard' ? 'lg:hidden' : ''}`}>
           {/* Left Header: Mobile Menu Hamburger + Current Panel Indicator */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
             {/* Hamburger Button on Mobile */}
@@ -1310,7 +1309,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         </header>
 
         {/* VIEW CONTAINER */}
-        <main className="flex-1 p-3 sm:p-5 md:p-6 lg:p-8 pb-24 lg:pb-8 max-w-7xl w-full mx-auto min-w-0">
+        <main className={`flex-1 w-full mx-auto min-w-0 pb-24 lg:pb-8 ${
+          activeTab === 'dashboard' 
+            ? 'max-w-[1440px] p-4 sm:p-6 lg:p-8' 
+            : 'max-w-7xl p-3 sm:p-5 md:p-6 lg:p-8'
+        }`}>
           {detailedEditingPlan ? (
             <ProductEditorView
               plan={detailedEditingPlan}
@@ -1345,6 +1348,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setSelectedProductFilter={setSelectedProductFilter}
                   selectedTypeFilter={selectedTypeFilter}
                   setSelectedTypeFilter={setSelectedTypeFilter}
+                  userName={userProfile?.name || currentUser?.displayName || 'usuário'}
+                  userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
                 />
               )}
 

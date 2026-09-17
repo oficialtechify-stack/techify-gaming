@@ -95,70 +95,26 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
               alt={logoText} 
               className="h-full w-auto max-w-[200px] object-contain relative z-10 drop-shadow-[0_2px_10px_rgba(217,242,42,0.4)] rounded-md transition-all"
               onError={(e) => {
-                // Fallback gracioso se a imagem quebrar
                 (e.target as HTMLImageElement).style.display = 'none';
               }}
             />
-          ) : branding.logoType === 'preset_3d_star' ? (
-            /* 2. Preset: Emblema 3D Real com Estrela de 4 Pontas (Imagem 1 do usuário) */
-            <div className="w-full h-full relative z-10 flex items-center justify-center">
-              <img 
-                src="/logo_3d.jpg" 
-                alt="Logo 3D LeadsPay" 
-                className="w-full h-full object-contain rounded-lg drop-shadow-[0_4px_14px_rgba(217,242,42,0.55)] transition-transform hover:scale-105"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/leadspay_3d_logo.jpg';
-                }}
-              />
-            </div>
           ) : (
-            /* 3. Preset Padrão & Neon Circle: O Raio Circular Oficial LeadsPay (Imagens 1 e 2 do usuário) */
+            /* Official LeadsPay 4-Petal Clover / Pinwheel (Matching user screenshot) */
             <svg 
               viewBox="0 0 100 100" 
-              fill="none" 
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-full relative z-10 drop-shadow-[0_2px_12px_rgba(217,242,42,0.6)]"
+              className="w-full h-full relative z-10 drop-shadow-[0_0_12px_rgba(163,230,53,0.6)]" 
+              fill="none"
             >
-              <defs>
-                <linearGradient id="neonCircleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#F9FF75" />
-                  <stop offset="40%" stopColor="#D9F22A" />
-                  <stop offset="85%" stopColor="#A4D104" />
-                  <stop offset="100%" stopColor="#6C9300" />
-                </linearGradient>
-                <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#FFFFFF" />
-                  <stop offset="40%" stopColor="#F5FF7A" />
-                  <stop offset="100%" stopColor="#D9F22A" />
-                </linearGradient>
-              </defs>
-
-              {/* Arco Circular Superior com chanfro */}
-              <path 
-                d="M 28 50 C 28 34, 40 22, 56 22 C 70 22, 80 30, 84 42" 
-                fill="none" 
-                stroke="url(#neonCircleGrad)" 
-                strokeWidth="11" 
-                strokeLinecap="round" 
-              />
-
-              {/* Arco Circular Inferior com chanfro */}
-              <path 
-                d="M 72 50 C 72 66, 60 78, 44 78 C 30 78, 20 70, 16 58" 
-                fill="none" 
-                stroke="url(#neonCircleGrad)" 
-                strokeWidth="11" 
-                strokeLinecap="round" 
-              />
-
-              {/* Raio Diagonal Neon Cruzando o Centro */}
-              <path 
-                d="M 12 88 L 36 64 L 52 64 L 46 52 L 62 52 L 56 40 L 70 40 L 92 12 L 66 38 L 52 38 L 58 48 L 42 48 L 48 60 L 32 60 Z" 
-                fill="url(#boltGrad)" 
-                stroke="#FFFFFF" 
-                strokeWidth="0.8" 
-                className="drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]"
-              />
+              {/* Top left petal */}
+              <path d="M50 48 C50 25 35 15 22 24 C10 33 18 52 42 50 Z" fill="#84cc16" />
+              {/* Top right petal */}
+              <path d="M52 48 C75 48 85 33 76 20 C67 8 48 16 50 40 Z" fill="#a3e635" />
+              {/* Bottom right petal */}
+              <path d="M50 52 C50 75 65 85 78 76 C90 67 82 48 58 50 Z" fill="#84cc16" />
+              {/* Bottom left petal */}
+              <path d="M48 52 C25 52 15 67 24 80 C33 92 52 84 50 60 Z" fill="#65a30d" />
+              {/* Center core */}
+              <circle cx="50" cy="50" r="7" fill="#bef264" />
             </svg>
           )}
         </div>
