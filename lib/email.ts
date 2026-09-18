@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
-let cachedTransporter: nodemailer.Transporter | null = null;
+let cachedTransporter: Transporter | null = null;
 
-function getTransporter(): nodemailer.Transporter {
+function getTransporter(): Transporter {
   if (!cachedTransporter) {
     cachedTransporter = nodemailer.createTransport({
       host: process.env.EMAIL_SERVER_HOST || 'smtp.mailtrap.io',

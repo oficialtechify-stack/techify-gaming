@@ -275,25 +275,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Dropdown open states
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState<boolean>(false);
   const [isProductMenuOpen, setIsProductMenuOpen] = useState<boolean>(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
 
   // Profile dropdown menu state
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const notificationsMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close profile dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (profileMenuRef.current && !profileMenuRef.current.contains(target)) {
         setIsProfileMenuOpen(false);
       }
+      if (notificationsMenuRef.current && !notificationsMenuRef.current.contains(target)) {
+        setIsNotificationsOpen(false);
+      }
     };
-    if (isProfileMenuOpen) {
+    if (isProfileMenuOpen || isNotificationsOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isProfileMenuOpen]);
+  }, [isProfileMenuOpen, isNotificationsOpen]);
 
   // Selected chart point for interactive hover
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -327,21 +333,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           return false;
         }
       }
-      // Period filter
-      if (selectedPeriod && selectedPeriod !== 'Todo o período') {
+      // Period filter (normalized lowercase for robust matching)
+      if (selectedPeriod && selectedPeriod.toLowerCase() !== 'todo o período') {
         const d = parseTxDate(t);
-        if (selectedPeriod === 'Hoje') {
+        const pNorm = selectedPeriod.toLowerCase();
+        if (pNorm === 'hoje') {
           if (d.toDateString() !== todayStr) return false;
-        } else if (selectedPeriod === 'Ontem') {
+        } else if (pNorm === 'ontem') {
           const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
           if (d.toDateString() !== yesterday.toDateString()) return false;
-        } else if (selectedPeriod === 'Últimos 7 dias') {
+        } else if (pNorm === 'últimos 7 dias') {
           const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           if (d < sevenDaysAgo) return false;
-        } else if (selectedPeriod === 'Últimos 30 dias') {
+        } else if (pNorm === 'últimos 30 dias') {
           const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           if (d < thirtyDaysAgo) return false;
-        } else if (selectedPeriod === 'Este mês') {
+        } else if (pNorm === 'este mês') {
           if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return false;
         }
       }
@@ -646,26 +653,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 1. TOP HEADER ROW: GREETING & SEARCH & DROPDOWNS & BELL & AVATAR          */}
       {/* ========================================================================= */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 pb-1">
         {/* Left: Greeting */}
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2 font-['Syne'] tracking-tight">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2 font-['Syne'] tracking-tight truncate">
             <span>Olá, {displayName}</span>
-            <span className="text-2xl sm:text-3xl inline-block origin-bottom-right hover:rotate-12 transition-transform">👋</span>
+            <span className="text-2xl sm:text-3xl inline-block origin-bottom-right hover:rotate-12 transition-transform flex-shrink-0">👋</span>
           </h1>
-          <p className="text-xs sm:text-sm text-white/50 mt-1 font-medium">
+          <p className="text-xs sm:text-sm text-white/50 mt-0.5 font-medium truncate">
             Aqui está o resumo da sua operação hoje.
           </p>
         </div>
 
-        {/* Right: Search + Filter Dropdowns + Bell + User Avatar */}
-        <div className="flex items-center flex-wrap gap-2.5 sm:gap-3">
+        {/* Right: Search, Filter Dropdowns, and Bell + Profile Cluster */}
+        <div className="flex items-center flex-wrap lg:flex-nowrap gap-2 sm:gap-2.5 justify-end">
           {/* Search bar with pill shape */}
-          <div className="relative min-w-[220px] sm:min-w-[280px] flex-1 sm:flex-initial">
-            <Search className="w-3.5 h-3.5 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <div className="relative w-full sm:w-48 md:w-56 lg:w-44 xl:w-56 flex-shrink min-w-[170px]">
+            <Search className="w-3.5 h-3.5 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar vendas, produtos ou afiliados"
+              placeholder="Buscar vendas, produtos..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-[#070d18] hover:bg-[#0a1222] focus:bg-[#0a1222] border border-white/10 focus:border-[#a3e635]/50 rounded-full pl-9 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all shadow-inner"
@@ -673,15 +680,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Period Filter Dropdown (📅 Hoje v) */}
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <button
               onClick={() => {
                 setIsPeriodMenuOpen(!isPeriodMenuOpen);
                 setIsProductMenuOpen(false);
+                setIsNotificationsOpen(false);
               }}
-              className="flex items-center gap-2 bg-[#070d18] hover:bg-[#0c1626] border border-white/10 px-3.5 py-2 rounded-full text-xs font-semibold text-white transition-colors cursor-pointer shadow-sm"
+              className="flex items-center gap-1.5 bg-[#070d18] hover:bg-[#0c1626] border border-white/10 px-3 py-2 rounded-full text-xs font-semibold text-white transition-colors cursor-pointer shadow-sm whitespace-nowrap"
             >
-              <Calendar className="w-3.5 h-3.5 text-white/60" />
+              <Calendar className="w-3.5 h-3.5 text-white/60 flex-shrink-0" />
               <span>{selectedPeriod}</span>
               <ChevronDown className={`w-3.5 h-3.5 text-white/40 transition-transform ${isPeriodMenuOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -696,7 +704,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       setIsPeriodMenuOpen(false);
                     }}
                     className={`w-full text-left px-3 py-1.5 text-xs rounded-xl font-medium transition-colors cursor-pointer ${
-                      selectedPeriod === p ? 'bg-[#a3e635] text-[#060A15] font-black' : 'text-white/80 hover:text-white hover:bg-white/5'
+                      selectedPeriod.toLowerCase() === p.toLowerCase() ? 'bg-[#a3e635] text-[#060A15] font-black' : 'text-white/80 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     {p}
@@ -707,13 +715,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Product Filter Dropdown (📦 Todos os produtos v) */}
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <button
               onClick={() => {
                 setIsProductMenuOpen(!isProductMenuOpen);
                 setIsPeriodMenuOpen(false);
+                setIsNotificationsOpen(false);
               }}
-              className="flex items-center gap-2 bg-[#070d18] hover:bg-[#0c1626] border border-white/10 px-3.5 py-2 rounded-full text-xs font-semibold text-white transition-colors cursor-pointer shadow-sm max-w-[210px]"
+              className="flex items-center gap-1.5 bg-[#070d18] hover:bg-[#0c1626] border border-white/10 px-3 py-2 rounded-full text-xs font-semibold text-white transition-colors cursor-pointer shadow-sm max-w-[170px] sm:max-w-[200px]"
             >
               <Package className="w-3.5 h-3.5 text-white/60 flex-shrink-0" />
               <span className="truncate">
@@ -755,46 +764,111 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
 
-          {/* Notification Bell */}
-          <button 
-            className="relative w-9 h-9 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer"
-            title="Notificações"
-          >
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#a3e635] animate-pulse" />
-          </button>
+          {/* DEDICATED CLUSTER: Bell + Profile ALWAYS SIDE BY SIDE */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Notification Bell */}
+            <div className="relative" ref={notificationsMenuRef}>
+              <button 
+                onClick={() => {
+                  setIsNotificationsOpen(!isNotificationsOpen);
+                  setIsProfileMenuOpen(false);
+                  setIsPeriodMenuOpen(false);
+                  setIsProductMenuOpen(false);
+                }}
+                className="relative w-9 h-9 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer"
+                title="Notificações"
+                id="dashboard-bell-button"
+              >
+                <Bell className="w-4 h-4" />
+                <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#a3e635] animate-pulse" />
+              </button>
 
-          {/* User Profile Avatar with Clickable Dropdown Menu */}
-          <div className="relative" ref={profileMenuRef}>
-            <button 
-              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="flex items-center gap-2 p-1 pr-2.5 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 hover:border-white/20 transition-all cursor-pointer select-none group"
-              title="Opções do Perfil"
-              id="user-profile-menu-button"
-            >
-              {userAvatar && !userAvatar.includes('dicebear') ? (
-                <img 
-                  src={userAvatar} 
-                  alt={displayName}
-                  className="w-9 h-9 rounded-full object-cover border border-white/20 shadow-md"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
+              {/* Notification Popup Dropdown */}
+              {isNotificationsOpen && (
                 <div 
-                  className="w-9 h-9 rounded-full bg-[#3b82f6] text-white font-black text-sm flex items-center justify-center shadow-lg border border-white/20 select-none flex-shrink-0 group-hover:scale-105 transition-transform"
+                  className="absolute right-0 mt-2 w-72 sm:w-80 bg-[#080d1a] border border-white/15 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] p-3 z-50 backdrop-blur-2xl animate-in fade-in slide-in-from-top-2 duration-150"
+                  id="dashboard-notifications-dropdown"
                 >
-                  {userInitial}
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-3.5 h-3.5 text-[#a3e635]" />
+                      <span className="text-xs font-bold text-white">Notificações da Operação</span>
+                    </div>
+                    <span className="text-[10px] bg-[#a3e635]/20 text-[#a3e635] px-2 py-0.5 rounded-full font-bold">
+                      Ativo D+9
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-0.5">
+                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">Webhook & Integração PIX</span>
+                        <span className="text-[9px] text-[#a3e635] font-semibold">Online</span>
+                      </div>
+                      <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">
+                        Pagamentos recebidos via Asaas são processados e liberados conforme política da sua conta.
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">Entrega Automática</span>
+                        <span className="text-[9px] text-[#a3e635] font-semibold">Ativa</span>
+                      </div>
+                      <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">
+                        Envio imediato de e-mail com instruções de acesso e Thank You Page para seus compradores.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 mt-2 border-t border-white/10 flex justify-end">
+                    <button 
+                      onClick={() => setIsNotificationsOpen(false)}
+                      className="text-[11px] text-[#a3e635] hover:underline font-semibold cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  </div>
                 </div>
               )}
-              <div className="hidden sm:flex flex-col text-left">
-                <span className="text-xs font-bold text-white leading-tight truncate max-w-[120px]">{displayName}</span>
-                <span className="text-[10px] text-[#a3e635] font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#a3e635] animate-pulse"></span>
-                  {roleMode === 'empresa' ? 'Empresa' : 'Afiliado'}
-                </span>
-              </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-white/50 group-hover:text-white transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
+            </div>
+
+            {/* User Profile Avatar with Clickable Dropdown Menu (Directly next to Bell) */}
+            <div className="relative flex-shrink-0" ref={profileMenuRef}>
+              <button 
+                onClick={() => {
+                  setIsProfileMenuOpen(!isProfileMenuOpen);
+                  setIsNotificationsOpen(false);
+                  setIsPeriodMenuOpen(false);
+                  setIsProductMenuOpen(false);
+                }}
+                className="flex items-center gap-2 p-1 pr-2.5 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 hover:border-white/20 transition-all cursor-pointer select-none group"
+                title="Opções do Perfil"
+                id="user-profile-menu-button"
+              >
+                {userAvatar && !userAvatar.includes('dicebear') ? (
+                  <img 
+                    src={userAvatar} 
+                    alt={displayName}
+                    className="w-8 h-8 rounded-full object-cover border border-white/20 shadow-md"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div 
+                    className="w-8 h-8 rounded-full bg-[#3b82f6] text-white font-black text-xs flex items-center justify-center shadow-lg border border-white/20 select-none flex-shrink-0 group-hover:scale-105 transition-transform"
+                  >
+                    {userInitial}
+                  </div>
+                )}
+                <div className="flex flex-col text-left">
+                  <span className="text-xs font-bold text-white leading-tight truncate max-w-[110px] sm:max-w-[130px]">{displayName}</span>
+                  <span className="text-[10px] text-[#a3e635] font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#a3e635] animate-pulse"></span>
+                    {roleMode === 'empresa' ? 'Empresa' : 'Afiliado'}
+                  </span>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-white/50 group-hover:text-white transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
 
             {/* Profile Dropdown Menu */}
             {isProfileMenuOpen && (
@@ -916,6 +990,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 )}
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>
