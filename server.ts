@@ -3812,11 +3812,11 @@ app.post('/api/withdrawals/request', async (req, res) => {
 
     const requestedAmount = Number(reqAmountParam !== undefined ? reqAmountParam : amountParam);
 
-    // 1. Regra de Validação: Valor Mínimo (R$ 50,00)
-    if (isNaN(requestedAmount) || requestedAmount < 50) {
+    // 1. Regra de Validação: Valor Mínimo (R$ 10,00)
+    if (isNaN(requestedAmount) || requestedAmount < 10) {
       return res.status(400).json({ 
         error: true, 
-        message: "O valor mínimo para solicitação de saque é de R$ 50,00." 
+        message: "O valor mínimo para solicitação de saque é de R$ 10,00." 
       });
     }
 

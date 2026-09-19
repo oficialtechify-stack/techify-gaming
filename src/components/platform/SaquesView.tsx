@@ -58,9 +58,9 @@ export const SaquesView: React.FC<SaquesViewProps> = ({
     setErrorMessage('');
     setSuccessMessage('');
 
-    // Validação de valor mínimo de saque de R$ 50,00
-    if (numAmount < 50.00) {
-      setErrorMessage('O valor mínimo para solicitação de saque na LeadsPay é de R$ 50,00.');
+    // Validação de valor mínimo de saque de R$ 10,00
+    if (numAmount < 10.00) {
+      setErrorMessage('O valor mínimo para solicitação de saque na LeadsPay é de R$ 10,00.');
       return;
     }
 
@@ -216,9 +216,9 @@ export const SaquesView: React.FC<SaquesViewProps> = ({
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-[#D9F22A] font-bold">
-                    Mínimo: R$ 50,00
+                    Mínimo: R$ 10,00
                   </span>
-                  {availableBalance >= 50 && (
+                  {availableBalance >= 10 && (
                     <button
                       type="button"
                       onClick={() => setAmount(availableBalance.toFixed(2))}
@@ -233,15 +233,15 @@ export const SaquesView: React.FC<SaquesViewProps> = ({
               <input
                 type="number"
                 step="0.01"
-                min="50.00"
+                min="10.00"
                 required
-                placeholder="50.00"
+                placeholder="10.00"
                 value={amount}
                 onChange={(e) => {
                   setAmount(e.target.value);
                   const v = parseFloat(e.target.value) || 0;
-                  if (v > 0 && v < 50.00) {
-                    setErrorMessage('O valor mínimo para solicitação de saque na LeadsPay é de R$ 50,00.');
+                  if (v > 0 && v < 10.00) {
+                    setErrorMessage('O valor mínimo para solicitação de saque na LeadsPay é de R$ 10,00.');
                   } else {
                     setErrorMessage('');
                   }
@@ -303,7 +303,7 @@ export const SaquesView: React.FC<SaquesViewProps> = ({
 
             <button
               type="submit"
-              disabled={isProcessing || availableBalance < 50 || numAmount < 50}
+              disabled={isProcessing || availableBalance < 10 || numAmount < 10}
               className="w-full py-3.5 px-6 rounded-xl bg-[#D9F22A] hover:bg-[#cbe327] disabled:opacity-40 disabled:cursor-not-allowed text-[#060A15] font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(217,242,42,0.2)] cursor-pointer flex items-center justify-center gap-2"
               id="btn-submit-withdrawal"
             >
@@ -335,7 +335,7 @@ export const SaquesView: React.FC<SaquesViewProps> = ({
             <li className="flex items-start gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#D9F22A] mt-1.5 flex-shrink-0" />
               <div>
-                <strong className="text-white">Valor Mínimo:</strong> O valor mínimo exigido para qualquer saque é de <strong>R$ 50,00</strong>.
+                <strong className="text-white">Valor Mínimo:</strong> O valor mínimo exigido para qualquer saque é de <strong>R$ 10,00</strong>.
               </div>
             </li>
             <li className="flex items-start gap-2">

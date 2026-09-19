@@ -16,14 +16,16 @@ import {
   Zap,
   Sparkles,
   ChevronDown,
-  FileText
+  FileText,
+  XCircle
 } from 'lucide-react';
 import { 
   createSaleTransactionInFirebase, 
   fetchSellerSubaccountId,
   createOrUpdateClientInFirebase,
   findCouponByCodeInFirebase,
-  findAffiliationByCode
+  findAffiliationByCode,
+  updateSaleStatusInFirebase
 } from '../../services/firestoreService';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
 import { ThankYouPage } from './ThankYouPage';
@@ -106,7 +108,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [isGeneratingPix, setIsGeneratingPix] = useState<boolean>(false);
   const [isCheckingPixStatus, setIsCheckingPixStatus] = useState<boolean>(false);
   const [pixCopied, setPixCopied] = useState<boolean>(false);
-  const [pixSecondsLeft, setPixSecondsLeft] = useState<number>(900); // 15:00 min real timer
+  const [pixSecondsLeft, setPixSecondsLeft] = useState<number>(300); // 5:00 min timer estrito
+  const [isPixExpired, setIsPixExpired] = useState<boolean>(false);
+  const [activePendingTxId, setActivePendingTxId] = useState<string | null>(null);
   const [pixError, setPixError] = useState<string | null>(null);
   const [subaccountId, setSubaccountId] = useState<string | null>(
     (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null
@@ -198,14 +202,54 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     }
   };
 
-  // Live 15-minute countdown timer
+  // Live 5-minute countdown timer & auto-transição de Pendente para Recusado
   useEffect(() => {
-    if (isPaid) return;
+    if (isPaid || !pixData) return;
     const timer = setInterval(() => {
-      setPixSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      setPixSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(timer);
-  }, [isPaid]);
+  }, [isPaid, pixData]);
+
+  // Quando o tempo de 5 minutos acaba, sai de Pendente para Recusado
+  useEffect(() => {
+    if (pixSecondsLeft === 0 && pixData && !isPaid && !isPixExpired) {
+      setIsPixExpired(true);
+      // Para o polling de verificação
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+
+      const txIdToRefuse = activePendingTxId || pixData.id;
+      if (txIdToRefuse) {
+        updateSaleStatusInFirebase(
+          txIdToRefuse, 
+          'Recusado', 
+          'Tempo limite de 5 minutos esgotado no QR Code Pix.'
+        ).catch((err) => console.warn('Aviso ao recusar transação após 5 minutos:', err));
+      }
+
+      if (email.trim()) {
+        createOrUpdateClientInFirebase({
+          store_id: plan.companyId || (plan as any).store_id || 'store_default',
+          name: fullName.trim() || 'Cliente LeadsPay',
+          email: email.trim().toLowerCase(),
+          phone: phone.trim(),
+          document: documentNumber.trim(),
+          status_compra: 'RECUSADO',
+          status: 'RECUSADO',
+          is_test: false,
+          environment: 'production'
+        }).catch((err) => console.warn('Aviso ao atualizar cliente para recusado:', err));
+      }
+    }
+  }, [pixSecondsLeft, pixData, isPaid, isPixExpired, activePendingTxId, email, fullName, phone, documentNumber, plan]);
 
   // Affiliate tracking & auto-coupon from URL
   useEffect(() => {
@@ -345,7 +389,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           status: data.status || 'pending'
         });
         setPixError(null);
-        setPixSecondsLeft(900);
+        setPixSecondsLeft(300); // 5 minutos exatos
+        setIsPixExpired(false);
+        setActivePendingTxId(String(activePaymentId));
 
         // Auto-captura imediata do Lead e Cobrança Pendente no momento que aperta Gerar Pix
         const now = new Date();
@@ -1464,64 +1510,92 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           {/* QR Code PIX Display (quando gerado via Asaas) */}
           {(paymentMethod === 'pix' || paymentMethod === 'pix_automatico') && pixData && (
             <div className="p-4 bg-gray-50 border border-emerald-200 rounded-xl space-y-3 text-center animate-in fade-in">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-bold">
-                <Clock className="w-3.5 h-3.5" />
-                <span>Pague em até {formatCountdown(pixSecondsLeft)}</span>
-              </div>
-
-              {pixData.qrCodeBase64 && (
-                <div className="w-44 h-44 mx-auto bg-white p-2 border border-gray-200 rounded-xl shadow-xs flex items-center justify-center">
-                  <img
-                    src={
-                      pixData.qrCodeBase64.startsWith('data:')
-                        ? pixData.qrCodeBase64
-                        : `data:image/png;base64,${pixData.qrCodeBase64}`
-                    }
-                    alt="QR Code Pix"
-                    className="w-full h-full object-contain"
-                  />
+              {isPixExpired ? (
+                <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-3 text-center animate-in fade-in">
+                  <div className="w-10 h-10 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 mx-auto">
+                    <XCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-rose-800 text-sm">QR Code Pix Expirado (5 min)</h4>
+                    <p className="text-xs text-rose-600 mt-1">
+                      O tempo limite de 5 minutos esgotou e o status deste pagamento foi alterado de <strong>Pendente</strong> para <strong>Recusado</strong>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPixExpired(false);
+                      setPixData(null);
+                      generateRealPixPayment();
+                    }}
+                    className="w-full py-2.5 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Gerar Novo QR Code Pix (5 min)
+                  </button>
                 </div>
-              )}
+              ) : (
+                <>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-bold">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Pague em até {formatCountdown(pixSecondsLeft)}</span>
+                  </div>
 
-              {pixData.copyAndPaste && (
-                <div className="space-y-1 text-left">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-                    Pix Copia e Cola:
-                  </label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      readOnly
-                      value={pixData.copyAndPaste}
-                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[10px] text-gray-700 font-mono truncate"
-                    />
+                  {pixData.qrCodeBase64 && (
+                    <div className="w-44 h-44 mx-auto bg-white p-2 border border-gray-200 rounded-xl shadow-xs flex items-center justify-center">
+                      <img
+                        src={
+                          pixData.qrCodeBase64.startsWith('data:')
+                            ? pixData.qrCodeBase64
+                            : `data:image/png;base64,${pixData.qrCodeBase64}`
+                        }
+                        alt="QR Code Pix"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  )}
+
+                  {pixData.copyAndPaste && (
+                    <div className="space-y-1 text-left">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                        Pix Copia e Cola:
+                      </label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          readOnly
+                          value={pixData.copyAndPaste}
+                          className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[10px] text-gray-700 font-mono truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyPix}
+                          className="bg-[#205a46] hover:bg-[#194939] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                        >
+                          {pixCopied ? 'Copiado!' : 'Copiar'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-[11px]">
+                    <span className="text-gray-500 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
+                      Aguardando confirmação...
+                    </span>
+
                     <button
                       type="button"
-                      onClick={handleCopyPix}
-                      className="bg-[#205a46] hover:bg-[#194939] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                      onClick={() => checkPaymentStatus(pixData.id)}
+                      disabled={isCheckingPixStatus}
+                      className="text-emerald-700 hover:text-emerald-800 font-bold transition-colors cursor-pointer flex items-center gap-1"
                     >
-                      {pixCopied ? 'Copiado!' : 'Copiar'}
+                      <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
+                      Verificar Pagamento
                     </button>
                   </div>
-                </div>
+                </>
               )}
-
-              <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-[11px]">
-                <span className="text-gray-500 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-                  Aguardando confirmação...
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => checkPaymentStatus(pixData.id)}
-                  disabled={isCheckingPixStatus}
-                  className="text-emerald-700 hover:text-emerald-800 font-bold transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
-                  Verificar Pagamento
-                </button>
-              </div>
             </div>
           )}
 

@@ -2304,6 +2304,92 @@ export async function deleteClientInFirebase(clientId: string): Promise<void> {
   } catch (_) {}
 }
 
+/**
+ * Atualizar status de uma transação no Firestore (ex: de Pendente para Recusado ao expirar QR Code)
+ */
+export async function updateSaleStatusInFirebase(
+  saleId: string,
+  status: 'Aprovado' | 'Pendente' | 'Recusado' | 'Cancelado',
+  reason?: string
+): Promise<void> {
+  try {
+    const saleRef = doc(db, COLLECTIONS.SALES, saleId);
+    await updateDoc(saleRef, sanitizeForFirestore({
+      status,
+      updatedAt: new Date().toISOString(),
+      ...(reason ? { failureReason: reason } : {})
+    }));
+  } catch (err) {
+    console.warn(`Erro ao atualizar status da transação ${saleId}:`, err);
+  }
+}
+
+/**
+ * Deletar transação de venda no Firestore
+ */
+export async function deleteSaleTransactionInFirebase(saleId: string): Promise<void> {
+  try {
+    const saleRef = doc(db, COLLECTIONS.SALES, saleId);
+    await deleteDoc(saleRef);
+  } catch (err) {
+    console.warn(`Erro ao excluir transação ${saleId}:`, err);
+  }
+}
+
+/**
+ * Deletar cobrança e o cliente associado no Firestore e localStorage
+ */
+export async function deleteChargeAndClientInFirebase(
+  saleId: string,
+  clientEmail?: string,
+  clientDocument?: string
+): Promise<{ success: boolean }> {
+  try {
+    // 1. Excluir transação de venda
+    if (saleId) {
+      await deleteSaleTransactionInFirebase(saleId);
+    }
+
+    // 2. Excluir cliente correspondente por e-mail ou documento
+    const cleanEmail = (clientEmail || '').trim().toLowerCase();
+    const cleanDoc = (clientDocument || '').replace(/\D/g, '');
+
+    if (cleanEmail || cleanDoc) {
+      try {
+        const clientsRef = collection(db, COLLECTIONS.CLIENTS);
+        const snap = await getDocs(clientsRef);
+        for (const d of snap.docs) {
+          const cData = d.data();
+          const cEmail = (cData.email || '').trim().toLowerCase();
+          const cDoc = (cData.document || cData.cpf_cnpj || '').replace(/\D/g, '');
+          if ((cleanEmail && cEmail === cleanEmail) || (cleanDoc && cDoc === cleanDoc)) {
+            await deleteDoc(d.ref);
+          }
+        }
+      } catch (clientErr) {
+        console.warn('Aviso ao deletar cliente no Firestore:', clientErr);
+      }
+
+      // Limpar também do localStorage de clientes
+      try {
+        const local = getLocalClients().filter(c => {
+          const cEmail = (c.email || '').trim().toLowerCase();
+          const cDoc = (c.document || c.cpf_cnpj || '').replace(/\D/g, '');
+          if (cleanEmail && cEmail === cleanEmail) return false;
+          if (cleanDoc && cDoc === cleanDoc) return false;
+          return true;
+        });
+        localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(local));
+      } catch (_) {}
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Erro ao deletar cobrança e cliente:', err);
+    return { success: false };
+  }
+}
+
 export interface CouponItem {
   id: string;
   code: string;

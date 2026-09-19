@@ -460,6 +460,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     let cryptoVal = 0, cryptoCount = 0;
 
     userVisibleTransactions.forEach((s) => {
+      // Apenas transações aprovadas contabilizam valor e faturamento no painel
+      const isApproved = s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED';
+      if (!isApproved) return;
       const amount = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
       if (s.method === 'PIX') { pixVal += amount; pixCount++; }
       else if (s.method === 'Cartão de Crédito') { cardVal += amount; cardCount++; }
@@ -1525,6 +1528,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
               onRefresh={() => {}}
               onAddSale={(newTx) => setTransactions(prev => [newTx, ...prev])}
+              onDeleteSale={(saleId) => setTransactions(prev => prev.filter(t => t.id !== saleId))}
             />
           )}
           {activeTab === 'links_pagamento' && (

@@ -358,13 +358,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const totalFilteredSalesAmount = useMemo(() => {
     return filteredSales.reduce((acc, curr) => {
+      // Regra de negócio: O valor só aparece no dashboard se for Aprovado ou Liberado.
+      // Se for Pendente, Recusado ou Cancelado, não aparece no faturamento.
+      const isApproved = curr.status === 'Aprovado' || curr.status === 'Liberado' || (curr as any).status === 'RECEIVED' || (curr as any).status === 'CONFIRMED';
+      if (!isApproved) return acc;
       const val = roleMode === 'afiliado' ? (curr.commissionEarned || 0) : (curr.amount || 0);
       return acc + val;
     }, 0);
   }, [filteredSales, roleMode]);
 
   const approvedSalesCount = useMemo(() => {
-    return filteredSales.filter(s => s.status === 'Aprovado' || s.status === 'Liberado').length;
+    return filteredSales.filter(s => s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED').length;
   }, [filteredSales]);
 
   const averageTicket = useMemo(() => {
@@ -378,10 +382,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // 3. Cartão de crédito
   // 4. PIX automático
   const paymentMethodRows = useMemo(() => {
-    const pixData = paymentStats.find(p => p.method.includes('PIX Instantâneo') || p.method === 'PIX') || { totalValue: 0, percentage: 0 };
-    const boletoData = paymentStats.find(p => p.method.includes('Boleto')) || { totalValue: 0, percentage: 0 };
-    const cardData = paymentStats.find(p => p.method.includes('Cartão')) || { totalValue: 0, percentage: 0 };
-    const pixAutoData = paymentStats.find(p => p.method.includes('PIX Automático')) || { totalValue: 0, percentage: 0 };
+    const approvedTransactions = filteredSales.filter(s => 
+      s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED'
+    );
+
+    let pixVal = 0, pixCount = 0;
+    let boletoVal = 0, boletoCount = 0;
+    let cardVal = 0, cardCount = 0;
+    let pixAutoVal = 0, pixAutoCount = 0;
+
+    approvedTransactions.forEach(s => {
+      const val = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
+      const m = (s.method || '').toLowerCase();
+      if (m.includes('automático') || m.includes('auto')) {
+        pixAutoVal += val;
+        pixAutoCount++;
+      } else if (m.includes('pix')) {
+        pixVal += val;
+        pixCount++;
+      } else if (m.includes('boleto')) {
+        boletoVal += val;
+        boletoCount++;
+      } else if (m.includes('cartão') || m.includes('cartao') || m.includes('credit')) {
+        cardVal += val;
+        cardCount++;
+      }
+    });
+
+    const totalApprovedCount = pixCount + boletoCount + cardCount + pixAutoCount;
 
     return [
       {
@@ -392,8 +420,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <path d="M12 2L6 8l6 6 6-6-6-6zm0 8l-6 6 6 6 6-6-6-6z" />
           </svg>
         ),
-        conversion: `${pixData.percentage || 0}%`,
-        value: pixData.totalValue || 0
+        conversion: totalApprovedCount > 0 ? `${Math.round((pixCount / totalApprovedCount) * 100)}%` : '0%',
+        value: pixVal
       },
       {
         id: 'boleto',
@@ -406,8 +434,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <line x1="8" y1="16" x2="12" y2="16" />
           </svg>
         ),
-        conversion: `${boletoData.percentage || 0}%`,
-        value: boletoData.totalValue || 0
+        conversion: totalApprovedCount > 0 ? `${Math.round((boletoCount / totalApprovedCount) * 100)}%` : '0%',
+        value: boletoVal
       },
       {
         id: 'cartao',
@@ -415,8 +443,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         icon: (
           <CreditCard className="w-4 h-4 text-amber-400" />
         ),
-        conversion: `${cardData.percentage || 0}%`,
-        value: cardData.totalValue || 0
+        conversion: totalApprovedCount > 0 ? `${Math.round((cardCount / totalApprovedCount) * 100)}%` : '0%',
+        value: cardVal
       },
       {
         id: 'pix_auto',
@@ -424,11 +452,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         icon: (
           <RotateCcw className="w-4 h-4 text-[#22d3ee]" />
         ),
-        conversion: `${pixAutoData.percentage || 0}%`,
-        value: pixAutoData.totalValue || 0
+        conversion: totalApprovedCount > 0 ? `${Math.round((pixAutoCount / totalApprovedCount) * 100)}%` : '0%',
+        value: pixAutoVal
       }
     ];
-  }, [paymentStats]);
+  }, [filteredSales, roleMode]);
 
   // Transaction Statuses for Donut Chart
   const approvedCount = useMemo(() => transactions.filter(t => t.status === 'Aprovado').length, [transactions]);

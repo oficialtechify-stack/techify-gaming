@@ -21,12 +21,14 @@ import {
   Send, 
   MessageCircle, 
   Phone,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import { SaleTransaction, CompanyStartup, CompanyPlan } from '../../types/platform';
 import { 
   createSaleTransactionInFirebase, 
-  createOrUpdateClientInFirebase 
+  createOrUpdateClientInFirebase,
+  deleteChargeAndClientInFirebase
 } from '../../services/firestoreService';
 
 interface CobrancasViewProps {
@@ -36,6 +38,7 @@ interface CobrancasViewProps {
   plans?: CompanyPlan[];
   onRefresh?: () => void;
   onAddSale?: (sale: SaleTransaction) => void;
+  onDeleteSale?: (saleId: string) => void;
 }
 
 export const CobrancasView: React.FC<CobrancasViewProps> = ({
@@ -44,13 +47,16 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
   activeCompanyId,
   plans = [],
   onRefresh,
-  onAddSale
+  onAddSale,
+  onDeleteSale
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Aprovado' | 'Pendente' | 'Cancelado' | 'Recusado'>('all');
   const [methodFilter, setMethodFilter] = useState<'all' | 'PIX' | 'Cartão' | 'Boleto'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedCharge, setSelectedCharge] = useState<SaleTransaction | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<SaleTransaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Manual Billing Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -85,6 +91,40 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Confirmar exclusão da cobrança e do cliente
+  const handleConfirmDelete = async () => {
+    if (!clientToDelete) return;
+    setIsDeleting(true);
+    try {
+      const result = await deleteChargeAndClientInFirebase(
+        clientToDelete.id,
+        clientToDelete.buyerEmail,
+        (clientToDelete as any).buyerDocument || (clientToDelete as any).buyerCpf
+      );
+
+      if (result.success) {
+        showToast(`Cliente ${clientToDelete.buyerName || ''} e cobrança apagados com sucesso!`);
+        if (onDeleteSale) {
+          onDeleteSale(clientToDelete.id);
+        }
+        if (onRefresh) {
+          onRefresh();
+        }
+        if (selectedCharge?.id === clientToDelete.id) {
+          setSelectedCharge(null);
+        }
+        setClientToDelete(null);
+      } else {
+        alert('Não foi possível excluir a cobrança. Tente novamente.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao excluir cliente:', err);
+      alert(err.message || 'Erro ao excluir cobrança.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Enviar cobrança por e-mail para o cliente/devedor
@@ -611,6 +651,15 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* Delete Client & Charge Button */}
+                          <button
+                            onClick={() => setClientToDelete(sale)}
+                            className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer border border-red-500/20"
+                            title="Apagar cliente e cobrança"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -912,14 +961,14 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2">
+              <div className="grid grid-cols-3 gap-2 pt-2">
                 <button
                   onClick={() => handleSendChargeEmail(selectedCharge)}
                   disabled={sendingEmailId === selectedCharge.id}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-white/10 hover:bg-[#D9F22A]/20 text-white hover:text-[#D9F22A] font-bold text-xs transition-all cursor-pointer border border-white/10"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-2 rounded-xl bg-white/10 hover:bg-[#D9F22A]/20 text-white hover:text-[#D9F22A] font-bold text-xs transition-all cursor-pointer border border-white/10"
                 >
                   <Mail className="w-4 h-4" />
-                  Enviar por E-mail
+                  E-mail
                 </button>
 
                 {(selectedCharge as any).buyerPhone ? (
@@ -927,21 +976,90 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                     href={`https://wa.me/55${(selectedCharge as any).buyerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${selectedCharge.buyerName}! Segue o link da sua fatura pendente de R$ ${Number(selectedCharge.amount).toFixed(2)}.`)}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-bold text-xs transition-all border border-emerald-500/30"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-bold text-xs transition-all border border-emerald-500/30"
                   >
                     <MessageCircle className="w-4 h-4" />
-                    Cobrar no WhatsApp
+                    WhatsApp
                   </a>
                 ) : (
                   <button
                     onClick={() => handleCopy(`${window.location.origin}`, selectedCharge.id)}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all cursor-pointer"
                   >
                     <Copy className="w-4 h-4" />
-                    Copiar Link
+                    Link
                   </button>
                 )}
+
+                <button
+                  onClick={() => setClientToDelete(selectedCharge)}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 font-bold text-xs transition-all cursor-pointer border border-red-500/30"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Apagar
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal to Delete Client & Charge */}
+      {clientToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-[#080d1a] border border-red-500/40 rounded-3xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.25)]">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 mb-4 mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-lg font-black text-white text-center font-['Syne'] mb-2">
+              Apagar Cliente e Cobrança?
+            </h3>
+
+            <p className="text-xs text-white/60 text-center mb-5 leading-relaxed">
+              Você está prestes a apagar o cliente <strong className="text-white">{clientToDelete.buyerName}</strong> ({clientToDelete.buyerEmail}) e remover esta cobrança de <strong className="text-[#D9F22A]">R$ {Number(clientToDelete.amount).toFixed(2)}</strong>. Esta ação não poderá ser desfeita.
+            </p>
+
+            <div className="p-3 bg-[#050811] rounded-xl border border-white/5 text-[11px] text-white/70 space-y-1 mb-5">
+              <div className="flex justify-between">
+                <span>Fatura ID:</span>
+                <span className="font-mono text-white/50">{clientToDelete.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Status Atual:</span>
+                <span className="font-bold text-amber-400">{clientToDelete.status}</span>
+              </div>
+              {((clientToDelete as any).buyerDocument || (clientToDelete as any).buyerCpf) && (
+                <div className="flex justify-between">
+                  <span>Documento:</span>
+                  <span className="font-mono text-white/80">{(clientToDelete as any).buyerDocument || (clientToDelete as any).buyerCpf}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setClientToDelete(null)}
+                disabled={isDeleting}
+                className="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors cursor-pointer border border-white/10 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="w-full py-3 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs transition-all cursor-pointer shadow-[0_0_20px_rgba(239,68,68,0.4)] disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                {isDeleting ? 'Apagando...' : 'Sim, Apagar'}
+              </button>
             </div>
           </div>
         </div>
