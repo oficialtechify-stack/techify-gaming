@@ -42,18 +42,29 @@ interface ModalsProps {
 }
 
 export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuccess }) => {
-  const { registerAffiliateUser, registerCompanyUser, login, loginWithGoogle, sendPasswordReset } = useAuth();
+  const { currentUser, userProfile, registerAffiliateUser, registerCompanyUser, login, loginWithGoogle, sendPasswordReset } = useAuth();
 
   // Internal tab navigation inside modal: 'login' | 'register_affiliate' | 'register_company' | 'forgot_password'
   const [modalTab, setModalTab] = useState<'login' | 'register_affiliate' | 'register_company' | 'forgot_password'>('login');
 
-  // Synchronize modalTab when activeModal changes
+  // Synchronize modalTab when activeModal changes and pre-fill user info if logged in
   useEffect(() => {
     if (activeModal === 'login') setModalTab('login');
     else if (activeModal === 'register_affiliate') setModalTab('register_affiliate');
-    else if (activeModal === 'register_company') setModalTab('register_company');
+    else if (activeModal === 'register_company') {
+      setModalTab('register_company');
+      if (currentUser?.email && !compEmail) {
+        setCompEmail(currentUser.email);
+      }
+      if (userProfile?.name && !compOwnerName) {
+        setCompOwnerName(userProfile.name);
+      }
+      if (userProfile?.whatsapp && !compWhatsapp) {
+        setCompWhatsapp(userProfile.whatsapp);
+      }
+    }
     else if (activeModal === 'forgot_password') setModalTab('forgot_password');
-  }, [activeModal]);
+  }, [activeModal, currentUser, userProfile]);
 
   // Loading & Feedback states
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -235,7 +246,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
     setIsSubmitting(true);
 
     try {
-      await registerCompanyUser({
+      const res = await registerCompanyUser({
         companyName: compName,
         ownerName: compOwnerName,
         email: compEmail,
@@ -251,7 +262,11 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
         logo: compLogo
       });
 
-      setSuccessMessage('Empresa cadastrada com sucesso! Redirecionando para o painel corporativo...');
+      const isExisting = res.company?.id && res.company.name !== compName;
+      setSuccessMessage(isExisting 
+        ? `Conta conectada com sucesso! Acessando ${res.company?.name || 'sua empresa'}...`
+        : 'Acesso corporativo liberado com sucesso! Redirecionando para o painel...'
+      );
       setTimeout(() => {
         setIsSubmitting(false);
         onClose();

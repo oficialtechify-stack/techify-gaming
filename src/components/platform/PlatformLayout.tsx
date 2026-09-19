@@ -36,7 +36,8 @@ import {
   updateUserProfileInFirebase,
   submitVerificationRequestInFirebase,
   updateCompanyEnvironmentInFirebase,
-  approveVerificationInFirebase
+  approveVerificationInFirebase,
+  findCompanyByOwnerId
 } from '../../services/firestoreService';
 import { DashboardView } from './DashboardView';
 import { VitrineView } from './VitrineView';
@@ -281,7 +282,31 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     } else if (targetRole === 'empresa') {
       const userOwnedCompanies = companies.filter(c => c.ownerId === currentUser?.uid || c.id === userProfile?.companyId);
       const hasCompany = userProfile?.hasCompanyProfile || userOwnedCompanies.length > 0 || !!userProfile?.companyId;
+      
       if (!hasCompany) {
+        // Se ainda não consta no estado local, checa diretamente no Firestore antes de abrir o modal
+        if (currentUser?.uid) {
+          findCompanyByOwnerId(currentUser.uid, userProfile?.companyId).then((existingComp) => {
+            if (existingComp) {
+              setRoleMode('empresa');
+              setUserRole('empresa');
+              if (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios') {
+                setActiveTab('dashboard');
+              }
+              setLiveToast({
+                message: 'Modo Empresa Ativado',
+                sub: `Acessando ${existingComp.name}`,
+                amount: 'Empresa'
+              });
+              setTimeout(() => setLiveToast(null), 3000);
+            } else {
+              setCompanyAuthModal('register_company');
+            }
+          }).catch(() => {
+            setCompanyAuthModal('register_company');
+          });
+          return;
+        }
         setCompanyAuthModal('register_company');
         return;
       }

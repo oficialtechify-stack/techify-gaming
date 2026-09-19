@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { TrendingUp, ShieldCheck, Zap, Layers, Wallet, Users, Building2, CheckCircle2, ArrowUpRight } from 'lucide-react';
 import { subscribeGlobalPlatformMetrics, GlobalPlatformMetrics } from '../services/firestoreService';
 
@@ -86,22 +87,35 @@ export const StatsCounter: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-14">
+        <motion.div 
+          initial={{ opacity: 0, y: 25 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.6 }}
+          className="text-center max-w-2xl mx-auto mb-14"
+        >
           <h2 className="text-2xl sm:text-4xl font-black text-white font-['Syne']">
             Métricas Reais do Ecossistema LeadsPay
           </h2>
           <p className="mt-2 text-xs sm:text-sm text-white/60">
             Números sincronizados diretamente da nossa base de dados ativa.
           </p>
-        </div>
+        </motion.div>
 
         {/* 3 Main Highlighted Circles */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 justify-items-center mb-14">
           {/* Circle 1: Usuários & Afiliados Cadastrados */}
-          <div className="relative w-[270px] h-[270px] sm:w-[290px] sm:h-[290px] rounded-full border border-white/10 hover:border-[#D9F22A]/50 bg-[#060a15]/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 transition-all duration-500 group shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            whileInView={{ opacity: 1, scale: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            whileHover={{ scale: 1.04, transition: { duration: 0.25 } }}
+            className="relative w-[270px] h-[270px] sm:w-[290px] sm:h-[290px] rounded-full border border-white/10 hover:border-[#D9F22A]/50 bg-[#060a15]/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 transition-all duration-500 group shadow-[0_0_30px_rgba(0,0,0,0.5)] cursor-default"
+          >
             <div className="absolute inset-2 rounded-full border border-white/[0.04] group-hover:border-[#D9F22A]/20 transition-colors" />
             
-            <div className="w-10 h-10 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/20 flex items-center justify-center text-[#D9F22A] mb-3">
+            <div className="w-10 h-10 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/20 flex items-center justify-center text-[#D9F22A] mb-3 group-hover:scale-110 transition-transform">
               <Users className="w-5 h-5" />
             </div>
 
@@ -116,13 +130,20 @@ export const StatsCounter: React.FC = () => {
             <span className="mt-2 text-[10px] text-[#D9F22A] font-bold uppercase tracking-wider bg-[#D9F22A]/10 px-2.5 py-0.5 rounded-full border border-[#D9F22A]/20">
               {metrics.totalRegisteredUsers} Perfis Ativos
             </span>
-          </div>
+          </motion.div>
 
           {/* Circle 2: Startups & Planos no Catálogo */}
-          <div className="relative w-[270px] h-[270px] sm:w-[290px] sm:h-[290px] rounded-full border border-white/10 hover:border-[#D9F22A]/50 bg-[#060a15]/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 transition-all duration-500 group shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            whileInView={{ opacity: 1, scale: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            whileHover={{ scale: 1.04, transition: { duration: 0.25 } }}
+            className="relative w-[270px] h-[270px] sm:w-[290px] sm:h-[290px] rounded-full border border-white/10 hover:border-[#D9F22A]/50 bg-[#060a15]/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 transition-all duration-500 group shadow-[0_0_30px_rgba(0,0,0,0.5)] cursor-default"
+          >
             <div className="absolute inset-2 rounded-full border border-white/[0.04] group-hover:border-[#D9F22A]/20 transition-colors" />
 
-            <div className="w-10 h-10 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/20 flex items-center justify-center text-[#D9F22A] mb-3">
+            <div className="w-10 h-10 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/20 flex items-center justify-center text-[#D9F22A] mb-3 group-hover:scale-110 transition-transform">
               <Building2 className="w-5 h-5" />
             </div>
 
@@ -137,13 +158,20 @@ export const StatsCounter: React.FC = () => {
             <span className="mt-2 text-[10px] text-white/60 font-medium">
               {metrics.totalStartups} Empresas • {metrics.totalPlans} Planos
             </span>
-          </div>
+          </motion.div>
 
           {/* Circle 3: Comissões Geradas & Pagas */}
-          <div className="relative w-[270px] h-[270px] sm:w-[290px] sm:h-[290px] rounded-full border border-[#D9F22A]/30 hover:border-[#D9F22A] bg-[#060a15]/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 transition-all duration-500 group shadow-[0_0_40px_rgba(217,242,42,0.1)]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            whileInView={{ opacity: 1, scale: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            whileHover={{ scale: 1.04, transition: { duration: 0.25 } }}
+            className="relative w-[270px] h-[270px] sm:w-[290px] sm:h-[290px] rounded-full border border-[#D9F22A]/30 hover:border-[#D9F22A] bg-[#060a15]/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 transition-all duration-500 group shadow-[0_0_40px_rgba(217,242,42,0.1)] cursor-default"
+          >
             <div className="absolute inset-2 rounded-full border border-[#D9F22A]/10 group-hover:border-[#D9F22A]/30 transition-colors" />
 
-            <div className="w-10 h-10 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] mb-3">
+            <div className="w-10 h-10 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] mb-3 group-hover:scale-110 transition-transform">
               <Wallet className="w-5 h-5" />
             </div>
 
@@ -154,12 +182,19 @@ export const StatsCounter: React.FC = () => {
             <div className="text-xs tracking-[0.15em] font-bold text-white uppercase max-w-[200px] leading-snug">
               COMISSÕES GERADAS & PAGAS
             </div>
-          </div>
+          </motion.div>
         </div>
 
-        {/* Real Detailed Cards Grid */}
+        {/* Real Detailed Cards Grid with Staggered Entrance */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-all">
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-colors shadow-md"
+          >
             <div className="flex items-center justify-between text-xs text-white/50">
               <span>Usuários Cadastrados</span>
               <Users className="w-4 h-4 text-[#D9F22A]" />
@@ -170,9 +205,16 @@ export const StatsCounter: React.FC = () => {
             <p className="text-[11px] text-white/60">
               Afiliados e produtores ativos registrados na plataforma.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-all">
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-colors shadow-md"
+          >
             <div className="flex items-center justify-between text-xs text-white/50">
               <span>Startups & Empresas</span>
               <Building2 className="w-4 h-4 text-[#D9F22A]" />
@@ -183,9 +225,16 @@ export const StatsCounter: React.FC = () => {
             <p className="text-[11px] text-white/60">
               {metrics.totalPlans} ofertas e planos comerciais disponíveis.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-all">
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-colors shadow-md"
+          >
             <div className="flex items-center justify-between text-xs text-white/50">
               <span>Comissões Geradas</span>
               <Zap className="w-4 h-4 text-[#D9F22A]" />
@@ -196,9 +245,16 @@ export const StatsCounter: React.FC = () => {
             <p className="text-[11px] text-white/60">
               Total acumulado em vendas geradas por afiliados.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-all">
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.4 }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-colors shadow-md"
+          >
             <div className="flex items-center justify-between text-xs text-white/50">
               <span>Comissões Pagas via PIX</span>
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -209,9 +265,10 @@ export const StatsCounter: React.FC = () => {
             <p className="text-[11px] text-white/60">
               Saques processados e liquidados com sucesso.
             </p>
-          </div>
+          </motion.div>
         </div>
       </div>
+
     </section>
   );
 };

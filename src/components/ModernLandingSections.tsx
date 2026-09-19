@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowRight, 
   Copy, 
@@ -21,12 +22,18 @@ export const HeroAiBanner: React.FC<{ onOpenPlatform?: () => void }> = ({ onOpen
   return (
     <section className="relative w-full bg-[#060A15] text-white py-16 sm:py-20 md:py-24 border-y border-white/5 overflow-hidden">
       {/* Background neon ambient blur spots matching LeadsPay */}
-      <div className="absolute top-1/2 -left-20 w-[450px] h-[450px] bg-[#D9F22A]/[0.07] rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute top-10 right-10 w-[400px] h-[400px] bg-[#1e3a8a]/[0.10] rounded-full blur-[150px] pointer-events-none -z-10" />
+      <div className="absolute top-1/2 -left-20 w-[450px] h-[450px] bg-[#D9F22A]/[0.07] rounded-full blur-[140px] pointer-events-none -z-10 animate-float-orb" />
+      <div className="absolute top-10 right-10 w-[400px] h-[400px] bg-[#1e3a8a]/[0.10] rounded-full blur-[150px] pointer-events-none -z-10 animate-float-slow" />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Top AI Badge */}
-        <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[#080d1a] border border-[#D9F22A]/30 shadow-[0_0_20px_rgba(217,242,42,0.15)] text-xs sm:text-sm font-medium text-white mb-8 hover:border-[#D9F22A]/60 transition-all backdrop-blur-md">
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[#080d1a] border border-[#D9F22A]/30 shadow-[0_0_20px_rgba(217,242,42,0.15)] text-xs sm:text-sm font-medium text-white mb-8 hover:border-[#D9F22A]/60 transition-all backdrop-blur-md"
+        >
           {/* AI Platform Mini Icons */}
           <div className="flex items-center gap-1.5">
             {/* Claude Sparkle */}
@@ -57,10 +64,16 @@ export const HeroAiBanner: React.FC<{ onOpenPlatform?: () => void }> = ({ onOpen
           </div>
           <span className="font-bold text-[#D9F22A]">Integre com IA:</span>
           <span className="text-white/80">Claude, ChatGPT, Lovable e mais.</span>
-        </div>
+        </motion.div>
 
         {/* Large Typography Headlines */}
-        <div className="max-w-4xl">
+        <motion.div 
+          initial={{ opacity: 0, y: 25 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.7 }}
+          className="max-w-4xl"
+        >
           <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.08] text-white font-['Syne']">
             Construa seu produto.
             <br />
@@ -75,16 +88,18 @@ export const HeroAiBanner: React.FC<{ onOpenPlatform?: () => void }> = ({ onOpen
 
           {onOpenPlatform && (
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={onOpenPlatform}
-                className="cursor-pointer inline-flex items-center gap-2.5 px-7 py-3.5 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300"
+                className="cursor-pointer inline-flex items-center gap-2.5 px-7 py-3.5 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] transition-all duration-300"
               >
                 <span>Conhecer a Vitrine</span>
                 <ArrowRight className="w-4 h-4" />
-              </button>
+              </motion.button>
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
     </section>
   );
@@ -113,35 +128,55 @@ export const CodeVibeIntegrationsSection: React.FC = () => {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
         {/* Centered Pill Badge */}
-        <div className="inline-flex items-center px-4 py-1.5 rounded-full border border-[#D9F22A]/30 bg-[#080d1a] text-xs font-bold uppercase tracking-wider text-[#D9F22A] shadow-[0_0_15px_rgba(217,242,42,0.15)] mb-6">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="inline-flex items-center px-4 py-1.5 rounded-full border border-[#D9F22A]/30 bg-[#080d1a] text-xs font-bold uppercase tracking-wider text-[#D9F22A] shadow-[0_0_15px_rgba(217,242,42,0.15)] mb-6"
+        >
           Integrações
-        </div>
+        </motion.div>
 
         {/* Main Headline */}
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white font-['Syne'] leading-tight">
+        <motion.h2 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white font-['Syne'] leading-tight"
+        >
           Integre como quiser!
           <br className="hidden sm:inline" />{' '}
           <span className="text-[#D9F22A] drop-shadow-[0_0_20px_rgba(217,242,42,0.3)]">
             Code, vibe-code, no-code!
           </span>
-        </h2>
+        </motion.h2>
 
         {/* Subtitle */}
-        <p className="mt-4 text-sm sm:text-base md:text-lg text-white/70 max-w-xl mx-auto leading-relaxed">
+        <motion.p 
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="mt-4 text-sm sm:text-base md:text-lg text-white/70 max-w-xl mx-auto leading-relaxed"
+        >
           Integre facilmente via API REST, Webhooks em tempo real e MCP. Ideal tanto para desenvolvedores quanto para quem programa com IA.
-        </p>
+        </motion.p>
 
         {/* Action Button */}
         <div className="flex flex-col items-center justify-center gap-3 mt-8">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.97 }}
             onClick={() => setShowDocsModal(true)}
-            className="cursor-pointer inline-flex items-center gap-2.5 px-8 py-3.5 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300"
+            className="cursor-pointer inline-flex items-center gap-2.5 px-8 py-3.5 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] transition-all duration-300"
           >
             <span>Veja nossa documentação</span>
             <span className="w-5 h-5 rounded-full bg-[#060A15] text-[#D9F22A] flex items-center justify-center">
               <ArrowRight className="w-3 h-3" />
             </span>
-          </button>
+          </motion.button>
         </div>
       </div>
 
@@ -357,7 +392,14 @@ export const IsometricFeatureCardsSection: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Card 1: Proteção antifraude */}
-          <div className="rounded-3xl border border-white/10 bg-[#080d1a] overflow-hidden shadow-xl hover:border-[#D9F22A]/40 transition-all duration-300 flex flex-col group">
+          <motion.div 
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.6 }}
+            whileHover={{ y: -6, transition: { duration: 0.25 } }}
+            className="rounded-3xl border border-white/10 bg-[#080d1a] overflow-hidden shadow-xl hover:border-[#D9F22A]/40 transition-all duration-300 flex flex-col group"
+          >
             {/* Top Graphic Area with Cyber Dot Pattern and Isometric Shield */}
             <div 
               className="relative h-64 sm:h-72 w-full flex items-center justify-center overflow-hidden bg-[#050811]"
@@ -434,10 +476,17 @@ export const IsometricFeatureCardsSection: React.FC = () => {
                 Detecte e previna fraudes automaticamente, garantindo segurança para você e seus clientes e principalmente seu negócio.
               </p>
             </div>
-          </div>
+          </motion.div>
 
           {/* Card 2: Check-out integrado */}
-          <div className="rounded-3xl border border-white/10 bg-[#080d1a] overflow-hidden shadow-xl hover:border-[#D9F22A]/40 transition-all duration-300 flex flex-col group">
+          <motion.div 
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            whileHover={{ y: -6, transition: { duration: 0.25 } }}
+            className="rounded-3xl border border-white/10 bg-[#080d1a] overflow-hidden shadow-xl hover:border-[#D9F22A]/40 transition-all duration-300 flex flex-col group"
+          >
             {/* Top Graphic Area with Dot Pattern and 3D Isometric Coin */}
             <div 
               className="relative h-64 sm:h-72 w-full flex items-center justify-center overflow-hidden bg-[#050811]"
@@ -496,7 +545,7 @@ export const IsometricFeatureCardsSection: React.FC = () => {
                 Ofereça um processo de pagamento rápido e intuitivo, totalmente integrado à sua plataforma ou site totalmente customizável.
               </p>
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>
@@ -534,7 +583,13 @@ export const FeeCalculatorSection: React.FC = () => {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Title */}
-        <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
+        <motion.div 
+          initial={{ opacity: 0, y: 25 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.6 }}
+          className="text-center max-w-2xl mx-auto mb-8 sm:mb-10"
+        >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white font-['Syne'] leading-tight">
             Simule e veja quanto você{' '}
             <span className="text-[#D9F22A] drop-shadow-[0_0_25px_rgba(217,242,42,0.4)]">
@@ -550,15 +605,19 @@ export const FeeCalculatorSection: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setIsFullCalcOpen(true)}
-              className="cursor-pointer inline-flex items-center gap-2 px-7 py-3 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] hover:scale-105 transition-all duration-300"
+              className="cursor-pointer inline-flex items-center gap-2 px-7 py-3 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all duration-300"
             >
               <span>Abrir calculadora completa</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </motion.button>
 
-            <a
+            <motion.a
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               href="https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20consultar%20taxas%20personalizadas%20na%20LeadsPay"
               target="_blank"
               rel="noopener noreferrer"
@@ -566,12 +625,18 @@ export const FeeCalculatorSection: React.FC = () => {
             >
               <MessageCircle className="w-4 h-4 text-[#D9F22A]" />
               <span>Taxas personalizadas</span>
-            </a>
+            </motion.a>
           </div>
-        </div>
+        </motion.div>
 
         {/* Central Calculator Card */}
-        <div className="max-w-xl mx-auto rounded-3xl bg-[#080d1a] border border-[#D9F22A]/30 p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.6)] backdrop-blur-md">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.7 }}
+          className="max-w-xl mx-auto rounded-3xl bg-[#080d1a] border border-[#D9F22A]/30 p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.6)] backdrop-blur-md"
+        >
           {/* Tabs: Pix / Boleto */}
           <div className="grid grid-cols-2 p-1 rounded-2xl bg-[#050811] mb-6 border border-white/10">
             <button
@@ -664,7 +729,7 @@ export const FeeCalculatorSection: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Modal: Full Comparison Calculator */}
@@ -774,7 +839,13 @@ export const FaqSection: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
           {/* Left Column: Heading & Subtitle */}
-          <div className="lg:col-span-5">
+          <motion.div 
+            initial={{ opacity: 0, x: -25 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.6 }}
+            className="lg:col-span-5"
+          >
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white font-['Syne'] leading-[1.15]">
               Tem dúvidas? Relaxa, nós temos as{' '}
               <span className="text-[#D9F22A] drop-shadow-[0_0_20px_rgba(217,242,42,0.3)]">
@@ -784,10 +855,16 @@ export const FaqSection: React.FC = () => {
             <p className="mt-4 text-sm sm:text-base text-white/70 leading-relaxed max-w-md">
               Selecionamos algumas dúvidas que recebemos com frequência sobre nossos serviços, elas podem ser úteis para você!
             </p>
-          </div>
+          </motion.div>
 
           {/* Right Column: Accordion List with LeadsPay Neon Accents */}
-          <div className="lg:col-span-7 divide-y divide-white/10 border-y border-white/10">
+          <motion.div 
+            initial={{ opacity: 0, x: 25 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.6 }}
+            className="lg:col-span-7 divide-y divide-white/10 border-y border-white/10"
+          >
             {faqItems.map((item, idx) => {
               const isOpen = openIndex === idx;
               return (
@@ -806,15 +883,25 @@ export const FaqSection: React.FC = () => {
                     </div>
                   </button>
 
-                  {isOpen && (
-                    <div className="mt-3 pl-9 pr-4 text-xs sm:text-sm text-white/75 leading-relaxed animate-fadeIn">
-                      {item.answer}
-                    </div>
-                  )}
+                  <AnimatePresence>
+                    {isOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-3 pl-9 pr-4 text-xs sm:text-sm text-white/75 leading-relaxed">
+                          {item.answer}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               );
             })}
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>

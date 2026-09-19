@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { Zap, CheckCircle, ArrowRight, ShieldCheck, TrendingDown, Sparkles } from 'lucide-react';
 import { ActiveModal } from '../types';
 
@@ -69,7 +70,13 @@ export const MarketFeeComparisonSection: React.FC<MarketFeeComparisonSectionProp
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Header Pill & Headlines */}
-        <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
+        <motion.div 
+          initial={{ opacity: 0, y: 25 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.6 }}
+          className="text-center max-w-3xl mx-auto mb-12 sm:mb-16"
+        >
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#D9F22A]/30 bg-[#080d1a] text-xs font-bold uppercase tracking-wider text-[#D9F22A] shadow-[0_0_15px_rgba(217,242,42,0.15)] mb-4">
             <TrendingDown className="w-3.5 h-3.5" />
             <span>Comparativo de Mercado</span>
@@ -86,10 +93,16 @@ export const MarketFeeComparisonSection: React.FC<MarketFeeComparisonSectionProp
           <p className="mt-4 text-sm sm:text-base md:text-lg text-white/75 leading-relaxed max-w-2xl mx-auto">
             Transparência total no seu bolso. Veja como a LeadsPay se compara aos principais gateways do mercado:
           </p>
-        </div>
+        </motion.div>
 
         {/* Comparison Table Card */}
-        <div className="rounded-3xl bg-[#080d1a]/95 border border-white/10 p-4 sm:p-7 shadow-[0_0_50px_rgba(0,0,0,0.6)] backdrop-blur-md overflow-hidden relative">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.7 }}
+          className="rounded-3xl bg-[#080d1a]/95 border border-white/10 p-4 sm:p-7 shadow-[0_0_50px_rgba(0,0,0,0.6)] backdrop-blur-md overflow-hidden relative"
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[650px]">
               <thead>
@@ -174,28 +187,43 @@ export const MarketFeeComparisonSection: React.FC<MarketFeeComparisonSectionProp
 
           {/* Quick Summary Highlights below Table */}
           <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-            <div className="p-4 rounded-2xl bg-[#050811] border border-white/5">
+            <motion.div 
+              whileHover={{ y: -3, transition: { duration: 0.2 } }}
+              className="p-4 rounded-2xl bg-[#050811] border border-white/5"
+            >
               <div className="text-xs font-bold text-white/50 uppercase">Saque PIX LeadsPay</div>
               <div className="text-xl sm:text-2xl font-black text-[#D9F22A] mt-1">Apenas R$ 2,50</div>
               <p className="text-[11px] text-white/60 mt-1">O menor custo de transferência do ecossistema</p>
-            </div>
+            </motion.div>
 
-            <div className="p-4 rounded-2xl bg-[#050811] border border-white/5">
+            <motion.div 
+              whileHover={{ y: -3, transition: { duration: 0.2 } }}
+              className="p-4 rounded-2xl bg-[#050811] border border-white/5"
+            >
               <div className="text-xs font-bold text-white/50 uppercase">Saque Mínimo Acessível</div>
               <div className="text-xl sm:text-2xl font-black text-white mt-1">R$ 10,00</div>
               <p className="text-[11px] text-white/60 mt-1">Sem travar seu fluxo de caixa ou retenções abusivas</p>
-            </div>
+            </motion.div>
 
-            <div className="p-4 rounded-2xl bg-[#050811] border border-white/5">
+            <motion.div 
+              whileHover={{ y: -3, transition: { duration: 0.2 } }}
+              className="p-4 rounded-2xl bg-[#050811] border border-white/5"
+            >
               <div className="text-xs font-bold text-white/50 uppercase">Taxa Fixa por Checkout</div>
               <div className="text-xl sm:text-2xl font-black text-[#D9F22A] mt-1">R$ 0,99</div>
               <p className="text-[11px] text-white/60 mt-1">Economia real em cada carrinho aprovado</p>
-            </div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
 
         {/* CTA Action Banner */}
-        <div className="mt-10 sm:mt-12 flex flex-col sm:flex-row items-center justify-between gap-6 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#080d1a] via-[#0c1324] to-[#080d1a] border border-[#D9F22A]/30 shadow-[0_0_30px_rgba(217,242,42,0.15)]">
+        <motion.div 
+          initial={{ opacity: 0, y: 25 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mt-10 sm:mt-12 flex flex-col sm:flex-row items-center justify-between gap-6 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#080d1a] via-[#0c1324] to-[#080d1a] border border-[#D9F22A]/30 shadow-[0_0_30px_rgba(217,242,42,0.15)]"
+        >
           <div className="text-center sm:text-left">
             <div className="flex items-center justify-center sm:justify-start gap-2 text-xs font-bold uppercase tracking-wider text-[#D9F22A] mb-1">
               <ShieldCheck className="w-4 h-4" />
@@ -211,24 +239,28 @@ export const MarketFeeComparisonSection: React.FC<MarketFeeComparisonSectionProp
 
           <div className="flex items-center gap-3 flex-shrink-0">
             {onOpenModal ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => onOpenModal('register_affiliate')}
-                className="cursor-pointer inline-flex items-center gap-2.5 px-7 py-3.5 sm:px-8 sm:py-4 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300"
+                className="cursor-pointer inline-flex items-center gap-2.5 px-7 py-3.5 sm:px-8 sm:py-4 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] transition-all duration-300"
               >
                 <span>Criar Conta Grátis</span>
                 <ArrowRight className="w-4 h-4" />
-              </button>
+              </motion.button>
             ) : onOpenPlatform ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={onOpenPlatform}
-                className="cursor-pointer inline-flex items-center gap-2.5 px-7 py-3.5 sm:px-8 sm:py-4 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] hover:scale-105 transition-all duration-300"
+                className="cursor-pointer inline-flex items-center gap-2.5 px-7 py-3.5 sm:px-8 sm:py-4 rounded-2xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] transition-all duration-300"
               >
                 <span>Começar Agora</span>
                 <ArrowRight className="w-4 h-4" />
-              </button>
+              </motion.button>
             ) : null}
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

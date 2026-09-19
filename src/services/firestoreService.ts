@@ -626,6 +626,34 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
 }
 
 /**
+ * Busca empresa existente de um usuário pelo ownerId ou ID direto
+ */
+export async function findCompanyByOwnerId(userId: string, companyId?: string): Promise<CompanyStartup | null> {
+  if (companyId) {
+    try {
+      const cRef = doc(db, COLLECTIONS.COMPANIES, companyId);
+      const cSnap = await getDoc(cRef);
+      if (cSnap.exists()) {
+        return { id: cSnap.id, ...(cSnap.data() as Omit<CompanyStartup, 'id'>) };
+      }
+    } catch (e) {}
+  }
+
+  if (userId) {
+    try {
+      const q = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const d = snap.docs[0];
+        return { id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) };
+      }
+    } catch (e) {}
+  }
+
+  return null;
+}
+
+/**
  * Create a new Company / Startup in Firestore (Sent to Admin for approval)
  */
 export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 'id' | 'createdAt'>) {

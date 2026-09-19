@@ -456,7 +456,71 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     }
   }
 
-  // 2. Verificar se CNPJ já existe em outra empresa (se aplicável)
+  // 2. Verificar se o usuário já possui empresa cadastrada no Firestore
+  // Se já possui, NÃO cria uma nova empresa duplicada; apenas conecta a conta existente
+  // mantendo os planos, perfil, produtos e configurações intactos!
+  const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
+  const existingSnap = await getDoc(profileRef);
+  const existingData = existingSnap.exists() ? (existingSnap.data() as UserSellerProfile) : null;
+
+  // Buscar empresa existente por ownerId ou submittedBy ou existingData.companyId
+  let existingCompany: CompanyStartup | null = null;
+  const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
+  const compSnap = await getDocs(compQ);
+
+  if (!compSnap.empty) {
+    const d = compSnap.docs[0];
+    existingCompany = { id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) };
+  } else if (existingData?.companyId) {
+    const cDoc = await getDoc(doc(db, COLLECTIONS.COMPANIES, existingData.companyId));
+    if (cDoc.exists()) {
+      existingCompany = { id: cDoc.id, ...(cDoc.data() as Omit<CompanyStartup, 'id'>) };
+    }
+  }
+
+  // Se já existe empresa cadastrada para este usuário / conta:
+  if (existingCompany) {
+    const updatedProfile: UserSellerProfile = {
+      ...existingData,
+      userId: user.uid,
+      name: existingData?.name || data.ownerName.trim() || user.displayName || normalizedEmail.split('@')[0],
+      email: normalizedEmail,
+      role: existingData?.role || 'Fundador / Startup',
+      avatar: existingCompany.logo || existingData?.avatar || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(existingCompany.name)}`,
+      pixKey: existingData?.pixKey || '',
+      pixKeyType: existingData?.pixKeyType || 'Chave Aleatória',
+      availableBalance: existingData?.availableBalance ?? 0,
+      pendingBalance: existingData?.pendingBalance ?? 0,
+      totalEarned: existingData?.totalEarned ?? 0,
+      totalSalesCount: existingData?.totalSalesCount ?? 0,
+      partnerLevel: existingData?.partnerLevel || 'Empresa Parceira',
+      targetGoal: existingData?.targetGoal || 500000,
+      currentSalesProgress: existingData?.currentSalesProgress || 0,
+      hasAffiliateProfile: existingData?.hasAffiliateProfile || false,
+      hasCompanyProfile: true,
+      activeRoleMode: 'empresa',
+      companyId: existingCompany.id,
+      companyName: existingCompany.name,
+      whatsapp: existingData?.whatsapp || (data.whatsapp ? formatPhone(data.whatsapp) : ''),
+      cpf: existingData?.cpf || (docType === 'CPF' ? formattedCpf : ''),
+      cleanCpf: existingData?.cleanCpf || (docType === 'CPF' ? cleanCpf : ''),
+      cnpj: existingCompany.cnpj || existingData?.cnpj || (docType === 'CNPJ' ? formattedCnpj : ''),
+      cleanCnpj: existingCompany.cleanCnpj || existingData?.cleanCnpj || (docType === 'CNPJ' ? cleanCnpj : ''),
+      verified: existingCompany.verified ?? existingData?.verified ?? false,
+      verificationStatus: existingCompany.status === 'approved' ? 'approved' : (existingData?.verificationStatus || 'pending'),
+      updatedAt: new Date().toISOString()
+    };
+
+    await setDoc(profileRef, sanitizeForFirestore(updatedProfile), { merge: true });
+
+    return {
+      user,
+      profile: updatedProfile,
+      company: existingCompany
+    };
+  }
+
+  // 3. Verificar se CNPJ já existe em outra empresa (se aplicável)
   if (docType === 'CNPJ' && cleanCnpj && cleanCnpj.length === 14) {
     const cnpjExists = await checkCnpjAlreadyExists(cleanCnpj, user.uid);
     if (cnpjExists) {
@@ -466,7 +530,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     }
   }
 
-  // 3. Atualizar Display Name no Firebase Auth
+  // 4. Atualizar Display Name no Firebase Auth
   try {
     await updateProfile(user, { displayName: data.ownerName.trim() });
   } catch (err) {
@@ -518,10 +582,6 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
   await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), sanitizeForFirestore(company), { merge: true });
 
   // 2. Criar/Atualizar Perfil de Usuário
-  const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
-  const existingSnap = await getDoc(profileRef);
-  const existingData = existingSnap.exists() ? (existingSnap.data() as UserSellerProfile) : null;
-
   const profile: UserSellerProfile = {
     userId: user.uid,
     name: data.ownerName.trim(),

@@ -70,7 +70,13 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
     <section id="como-funciona" className="py-20 md:py-28 relative overflow-hidden bg-[#060A15]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-12">
+        <motion.div 
+          initial={{ opacity: 0, y: 25 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.6 }}
+          className="text-center max-w-3xl mx-auto mb-12"
+        >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white font-['Syne']">
             Como Funciona a Plataforma LeadsPay
           </h2>
@@ -103,16 +109,18 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
               <span>Para Afiliados & Vendedores</span>
             </button>
           </div>
-        </div>
+        </motion.div>
 
         {/* 4 Steps Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {currentSteps.map((item, index) => (
             <motion.div
               key={`${activeWorkflow}-${item.step}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.45, delay: index * 0.1 }}
+              whileHover={{ y: -6, transition: { duration: 0.25 } }}
               className="bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 relative overflow-hidden"
             >
               {/* Step Number Backdrop Watermark */}
@@ -142,7 +150,13 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
 
         {/* CTA Bar */}
         {onOpenModal && (
-          <div className="mt-12 p-6 sm:p-8 rounded-3xl bg-[#080d1a] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="mt-12 p-6 sm:p-8 rounded-3xl bg-[#080d1a] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6"
+          >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-6 h-6" />
@@ -161,14 +175,16 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
               </div>
             </div>
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => onOpenModal(activeWorkflow === 'startups' ? 'register_company' : 'register_affiliate')}
               className="bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 shadow-[0_0_20px_rgba(217,242,42,0.3)] cursor-pointer flex items-center gap-2 whitespace-nowrap"
             >
               <span>{activeWorkflow === 'startups' ? 'Cadastrar Minha Empresa' : 'Criar Conta de Afiliado'}</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         )}
       </div>
     </section>

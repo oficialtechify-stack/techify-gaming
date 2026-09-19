@@ -53,35 +53,56 @@ export const CultureBanner: React.FC = () => {
 
         {/* 3 Tech Feature Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="p-6 rounded-2xl bg-[#080d1a] border border-white/10 flex flex-col gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
+          <motion.div 
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0 }}
+            whileHover={{ y: -5, transition: { duration: 0.2 } }}
+            className="p-6 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 transition-all duration-300 flex flex-col gap-3 group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] group-hover:scale-110 transition-transform">
               <Shield className="w-5 h-5" />
             </div>
-            <h4 className="text-base font-bold text-white font-['Syne']">Rastreamento Anti-Perda de Comissões</h4>
+            <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">Rastreamento Anti-Perda de Comissões</h4>
             <p className="text-xs text-white/70 leading-relaxed">
               Cookies persistentes de 90 dias, captura de parâmetros UTM e associação multi-touch para garantir a correta atribuição do afiliado.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="p-6 rounded-2xl bg-[#080d1a] border border-white/10 flex flex-col gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
+          <motion.div 
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            whileHover={{ y: -5, transition: { duration: 0.2 } }}
+            className="p-6 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 transition-all duration-300 flex flex-col gap-3 group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] group-hover:scale-110 transition-transform">
               <Zap className="w-5 h-5" />
             </div>
-            <h4 className="text-base font-bold text-white font-['Syne']">Motor de Split Instantâneo</h4>
+            <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">Motor de Split Instantâneo</h4>
             <p className="text-xs text-white/70 leading-relaxed">
               O comprador paga o plano via PIX ou cartão, e o sistema divide a receita instantaneamente entre a startup parceira e o afiliado.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="p-6 rounded-2xl bg-[#080d1a] border border-white/10 flex flex-col gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
+          <motion.div 
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            whileHover={{ y: -5, transition: { duration: 0.2 } }}
+            className="p-6 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 transition-all duration-300 flex flex-col gap-3 group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] group-hover:scale-110 transition-transform">
               <TrendingUp className="w-5 h-5" />
             </div>
-            <h4 className="text-base font-bold text-white font-['Syne']">Checkout Otimizado de Alta Conversão</h4>
+            <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">Checkout Otimizado de Alta Conversão</h4>
             <p className="text-xs text-white/70 leading-relaxed">
               Páginas de pagamento leves com carregamento em milissegundos e suporte a múltiplos métodos (PIX, Boleto e Cartão de Crédito).
             </p>
-          </div>
+          </motion.div>
         </div>
 
         {/* Banner with ecosystem performance & real-time metrics */}

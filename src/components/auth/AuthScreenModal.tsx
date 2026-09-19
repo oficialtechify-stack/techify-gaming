@@ -104,7 +104,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   onClose,
   onLoginSuccess
 }) => {
-  const { registerAffiliateUser, registerCompanyUser, login, loginWithGoogle, sendPasswordReset } = useAuth();
+  const { currentUser, userProfile, registerAffiliateUser, registerCompanyUser, login, loginWithGoogle, sendPasswordReset } = useAuth();
 
   // Active view: 'login' | 'register_affiliate' | 'register_company' | 'forgot_password'
   const [currentTab, setCurrentTab] = useState<AuthModalType>('login');
@@ -112,8 +112,19 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   useEffect(() => {
     if (activeModal) {
       setCurrentTab(activeModal);
+      if (activeModal === 'register_company') {
+        if (currentUser?.email && !compEmail) {
+          setCompEmail(currentUser.email);
+        }
+        if (userProfile?.name && !compOwnerName) {
+          setCompOwnerName(userProfile.name);
+        }
+        if (userProfile?.whatsapp && !compWhatsapp) {
+          setCompWhatsapp(userProfile.whatsapp);
+        }
+      }
     }
-  }, [activeModal]);
+  }, [activeModal, currentUser, userProfile]);
 
   // Real-time custom modal images & showcase settings from Admin
   const [modalSettings, setModalSettings] = useState<AuthModalSettings>(getLocalAuthModalSettings());
@@ -335,7 +346,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      await registerCompanyUser({
+      const res = await registerCompanyUser({
         companyName: compName,
         ownerName: compOwnerName || compName,
         email: compEmail,
@@ -347,7 +358,11 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         category: compCategory
       });
 
-      setSuccessMessage('Empresa cadastrada com sucesso! Redirecionando para o painel corporativo...');
+      const isExisting = res.company?.id && res.company.name !== compName;
+      setSuccessMessage(isExisting
+        ? `Conta conectada com sucesso! Acessando ${res.company?.name || 'sua empresa'}...`
+        : 'Acesso corporativo liberado com sucesso! Redirecionando para o painel...'
+      );
       setTimeout(() => {
         setIsSubmitting(false);
         onClose();
