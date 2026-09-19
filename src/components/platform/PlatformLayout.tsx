@@ -115,6 +115,7 @@ import {
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
+import { requestNotificationPermission } from '../../lib/push';
 
 interface PlatformLayoutProps {
   onBackToHome: () => void;
@@ -228,6 +229,21 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setRoleMode(userRole);
     }
   }, [userRole]);
+
+  // Solicita permissão e registra subscrição Web Push no arranque do dashboard (Afiliado ou Empresa)
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const effectiveRole: 'affiliate' | 'company' = roleMode === 'empresa' ? 'company' : 'affiliate';
+    
+    // Pequeno atraso para carregar a interface antes do prompt nativo
+    const timeoutId = setTimeout(() => {
+      requestNotificationPermission(currentUser.uid, effectiveRole).catch((err) => {
+        console.warn('Aviso na solicitação de notificações push:', err);
+      });
+    }, 1500);
+
+    return () => clearTimeout(timeoutId);
+  }, [currentUser?.uid, roleMode]);
 
   useEffect(() => {
     if (activeTab === 'database' && !isSuperAdmin) {
@@ -1171,17 +1187,50 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               </div>
             </button>
 
-            {/* Notification Bell with animated badge */}
+            {/* Notification Bell with animated badge & click to trigger / test Web Push */}
             <div className="relative flex-shrink-0">
               <button 
-                onClick={() => setLiveToast({ message: 'Notificações Ativas', sub: 'Nenhuma pendência recente no sistema.', amount: 'D+9' })}
+                onClick={async () => {
+                  if (currentUser?.uid) {
+                    const effectiveRole: 'affiliate' | 'company' = roleMode === 'empresa' ? 'company' : 'affiliate';
+                    const granted = await requestNotificationPermission(currentUser.uid, effectiveRole);
+                    if (granted) {
+                      // Dispara um teste push direto pelo backend
+                      fetch('/api/notifications/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          userId: currentUser.uid,
+                          title: '🔔 Notificações LeadsPay Ativas!',
+                          body: `Você receberá avisos em tempo real de novas vendas e comissões para ${effectiveRole === 'affiliate' ? 'Afiliado' : 'Empresa'}.`
+                        })
+                      }).catch(() => null);
+
+                      setLiveToast({ 
+                        message: 'Notificações Ativadas', 
+                        sub: 'Notificação de teste enviada com sucesso ao seu navegador!', 
+                        amount: 'Push' 
+                      });
+                    } else {
+                      setLiveToast({ 
+                        message: 'Permissão de Notificação', 
+                        sub: 'Ative as notificações nas permissões do navegador.', 
+                        amount: 'Aviso' 
+                      });
+                    }
+                  } else {
+                    setLiveToast({ message: 'Notificações Ativas', sub: 'Nenhuma pendência recente no sistema.', amount: 'D+9' });
+                  }
+                  setTimeout(() => setLiveToast(null), 4000);
+                }}
                 className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white cursor-pointer transition-colors"
-                title="Notificações"
+                title="Ativar e Testar Notificações Web Push"
               >
                 <Bell className="w-4 h-4" />
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D9F22A] animate-pulse" />
               </button>
             </div>
+
 
             {/* User Profile Avatar & Dropdown Menu */}
             <div className="relative flex-shrink-0">
