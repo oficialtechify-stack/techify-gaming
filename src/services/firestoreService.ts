@@ -1284,8 +1284,8 @@ export async function creditPlatformFinances(type: 'checkout' | 'withdrawal', fe
 /**
  * Record a New Sale in Firebase Firestore & apply 9 days release hold + R$ 0.99 platform fee
  */
-export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransaction, 'id' | 'createdAt'>) {
-  const id = `TX-${Math.floor(100000 + Math.random() * 900000)}`;
+export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransaction, 'id' | 'createdAt'> & { id?: string }) {
+  const id = saleData.id || `TX-${Math.floor(100000 + Math.random() * 900000)}`;
   const now = new Date();
   const checkoutFee = 0.99; // Taxa de checkout retida pela plataforma LeadsPay
   const netCompanyAmount = Number(Math.max(0, saleData.amount - saleData.commissionEarned - checkoutFee).toFixed(2));
@@ -2110,6 +2110,7 @@ export async function createOrUpdateClientInFirebase(clientData: {
   phone?: string;
   document?: string;
   total_spent?: number;
+  valor_pedido?: number;
   last_plan_name?: string;
   status_compra?: string;
   status?: string;
@@ -2271,7 +2272,9 @@ export async function createManualClientInFirebase(
     total_spent: Number(clientData.total_spent) || 0,
     orders_count: Number(clientData.orders_count) || 0,
     last_order_at: now,
-    last_plan_name: clientData.last_plan_name || 'Cadastro Manual'
+    last_plan_name: clientData.last_plan_name || 'Cadastro Manual',
+    status_compra: clientData.status_compra || clientData.status || 'PENDENTE',
+    status: clientData.status || clientData.status_compra || 'PENDENTE'
   };
 
   try {

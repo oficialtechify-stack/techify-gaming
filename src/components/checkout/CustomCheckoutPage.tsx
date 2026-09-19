@@ -346,6 +346,53 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         });
         setPixError(null);
         setPixSecondsLeft(900);
+
+        // Auto-captura imediata do Lead e Cobrança Pendente no momento que aperta Gerar Pix
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        try {
+          await createOrUpdateClientInFirebase({
+            store_id: plan.companyId || (plan as any).store_id || 'store_default',
+            name: cleanName || 'Cliente LeadsPay',
+            email: cleanEmail,
+            phone: cleanPhone,
+            document: cleanDoc,
+            total_spent: cleanTotal,
+            valor_pedido: cleanTotal,
+            last_plan_name: plan.name,
+            status_compra: 'PENDENTE',
+            status: 'PENDENTE',
+            is_test: false,
+            environment: 'production'
+          });
+
+          await createSaleTransactionInFirebase({
+            id: String(activePaymentId) || `PIX-${Date.now().toString().slice(-6)}`,
+            platformId: plan.id,
+            platformName: plan.name,
+            companyId: plan.companyId || (plan as any).store_id || undefined,
+            companyName: plan.companyName,
+            companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
+            buyerName: cleanName || 'Cliente LeadsPay',
+            buyerEmail: cleanEmail || 'cliente@leadspay.com',
+            buyerPhone: cleanPhone,
+            buyerDocument: cleanDoc,
+            buyerCompany: plan.companyName,
+            amount: cleanTotal,
+            commissionEarned: 0,
+            method: 'PIX',
+            status: 'Pendente',
+            is_test: false,
+            environment: 'production',
+            affiliateCode: activeAffiliate || undefined,
+            date: dateStr,
+            time: timeStr
+          });
+        } catch (leadErr) {
+          console.warn('Aviso ao capturar lead pendente no Pix:', leadErr);
+        }
       } else {
         const asaasDescription = data?.errors?.[0]?.description;
         const asaasMessage = typeof data?.message === 'string' && data.message ? data.message : null;
@@ -441,6 +488,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
       buyerName: fullName.trim() || 'Cliente LeadsPay',
       buyerEmail: email.trim() || 'cliente@leadspay.com',
+      buyerPhone: phone.trim() || undefined,
+      buyerDocument: documentNumber.replace(/\D/g, '') || undefined,
       buyerCompany: plan.companyName,
       amount: finalTotal,
       commissionEarned: commissionEarned,
@@ -460,7 +509,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     try {
       const savedSale = await createSaleTransactionInFirebase(salePayload);
       
-      // Auto-cadastro do cliente na coleção 'clients' da empresa correspondente (ETAPA 2)
+      // Auto-cadastro do cliente na coleção 'clients' da empresa correspondente com status PAGO
       try {
         await createOrUpdateClientInFirebase({
           store_id: plan.companyId || 'store_default',
@@ -469,7 +518,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           phone: phone.trim(),
           document: documentNumber.replace(/\D/g, ''),
           total_spent: finalTotal,
+          valor_pedido: finalTotal,
           last_plan_name: plan.name,
+          status_compra: 'PAGO',
+          status: 'PAGO',
           is_test: false,
           environment: 'production'
         });
@@ -788,6 +840,53 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           return;
         } else {
           const errMsg = data?.errors?.[0]?.description || data?.message || (typeof data?.error === 'string' ? data.error : null) || 'Cartão não autorizado pela operadora. Verifique os dados e tente novamente.';
+          
+          // Registra lead e cobrança com status RECUSADO para remarketing
+          const now = new Date();
+          const dateStr = now.toISOString().split('T')[0];
+          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          try {
+            await createOrUpdateClientInFirebase({
+              store_id: plan.companyId || (plan as any).store_id || 'store_default',
+              name: cleanName || 'Cliente LeadsPay',
+              email: cleanEmail,
+              phone: cleanPhone,
+              document: cleanDoc,
+              total_spent: cleanTotal,
+              valor_pedido: cleanTotal,
+              last_plan_name: plan.name,
+              status_compra: 'RECUSADO',
+              status: 'RECUSADO',
+              is_test: false,
+              environment: 'production'
+            });
+
+            await createSaleTransactionInFirebase({
+              id: `REC-${Date.now().toString().slice(-6)}`,
+              platformId: plan.id,
+              platformName: plan.name,
+              companyId: plan.companyId || (plan as any).store_id || undefined,
+              companyName: plan.companyName,
+              companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
+              buyerName: cleanName || 'Cliente LeadsPay',
+              buyerEmail: cleanEmail || 'cliente@leadspay.com',
+              buyerPhone: cleanPhone,
+              buyerDocument: cleanDoc,
+              buyerCompany: plan.companyName,
+              amount: cleanTotal,
+              commissionEarned: 0,
+              method: 'Cartão de Crédito',
+              status: 'Cancelado',
+              is_test: false,
+              environment: 'production',
+              affiliateCode: activeAffiliate || undefined,
+              date: dateStr,
+              time: timeStr
+            });
+          } catch (e) {
+            console.warn('Aviso ao registrar status recusado no cartão:', e);
+          }
+
           alert(errMsg);
           return;
         }
@@ -847,6 +946,53 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             dueDate: data.dueDate,
             paymentId: data.paymentId || data.id
           });
+
+          // Registra lead e cobrança PENDENTE para boleto
+          const now = new Date();
+          const dateStr = now.toISOString().split('T')[0];
+          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          try {
+            await createOrUpdateClientInFirebase({
+              store_id: plan.companyId || (plan as any).store_id || 'store_default',
+              name: cleanName || 'Cliente LeadsPay',
+              email: cleanEmail,
+              phone: cleanPhone,
+              document: cleanDoc,
+              total_spent: cleanTotal,
+              valor_pedido: cleanTotal,
+              last_plan_name: plan.name,
+              status_compra: 'PENDENTE',
+              status: 'PENDENTE',
+              is_test: false,
+              environment: 'production'
+            });
+
+            await createSaleTransactionInFirebase({
+              id: String(data.paymentId || data.id) || `BOL-${Date.now().toString().slice(-6)}`,
+              platformId: plan.id,
+              platformName: plan.name,
+              companyId: plan.companyId || (plan as any).store_id || undefined,
+              companyName: plan.companyName,
+              companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
+              buyerName: cleanName || 'Cliente LeadsPay',
+              buyerEmail: cleanEmail || 'cliente@leadspay.com',
+              buyerPhone: cleanPhone,
+              buyerDocument: cleanDoc,
+              buyerCompany: plan.companyName,
+              amount: cleanTotal,
+              commissionEarned: 0,
+              method: 'Boleto Bancário',
+              status: 'Pendente',
+              is_test: false,
+              environment: 'production',
+              affiliateCode: activeAffiliate || undefined,
+              date: dateStr,
+              time: timeStr
+            });
+          } catch (e) {
+            console.warn('Aviso ao registrar boleto pendente:', e);
+          }
+
           return;
         } else {
           const errMsg = data?.errors?.[0]?.description || data?.message || 'Falha ao gerar boleto. Verifique os dados informados.';

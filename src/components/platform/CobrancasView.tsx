@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   CreditCard, 
   Search, 
-  Filter, 
   CheckCircle2, 
   Clock, 
   XCircle, 
@@ -13,32 +12,74 @@ import {
   Calendar, 
   DollarSign, 
   Eye, 
-  X,
-  FileText,
-  Building2,
-  UserCheck,
-  RefreshCw
+  X, 
+  FileText, 
+  Building2, 
+  RefreshCw, 
+  Mail, 
+  Plus, 
+  Send, 
+  MessageCircle, 
+  Phone,
+  AlertCircle
 } from 'lucide-react';
-import { SaleTransaction, CompanyStartup } from '../../types/platform';
+import { SaleTransaction, CompanyStartup, CompanyPlan } from '../../types/platform';
+import { 
+  createSaleTransactionInFirebase, 
+  createOrUpdateClientInFirebase 
+} from '../../services/firestoreService';
 
 interface CobrancasViewProps {
   sales?: SaleTransaction[];
   companies?: CompanyStartup[];
   activeCompanyId?: string;
+  plans?: CompanyPlan[];
   onRefresh?: () => void;
+  onAddSale?: (sale: SaleTransaction) => void;
 }
 
 export const CobrancasView: React.FC<CobrancasViewProps> = ({
   sales = [],
   companies = [],
   activeCompanyId,
-  onRefresh
+  plans = [],
+  onRefresh,
+  onAddSale
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Aprovado' | 'Pendente' | 'Cancelado'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Aprovado' | 'Pendente' | 'Cancelado' | 'Recusado'>('all');
   const [methodFilter, setMethodFilter] = useState<'all' | 'PIX' | 'Cartão' | 'Boleto'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedCharge, setSelectedCharge] = useState<SaleTransaction | null>(null);
+
+  // Manual Billing Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Form Fields
+  const [formName, setFormName] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formCpf, setFormCpf] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formPlanId, setFormPlanId] = useState(plans[0]?.id || 'custom');
+  const [formPlanName, setFormPlanName] = useState(plans[0]?.name || 'Plano de Assinatura');
+  const [formAmount, setFormAmount] = useState(plans[0]?.price ? String(plans[0].price) : '97.00');
+  const [formDueDate, setFormDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return d.toISOString().split('T')[0];
+  });
+  const [formMethod, setFormMethod] = useState<'PIX' | 'Cartão de Crédito' | 'Boleto Bancário'>('PIX');
+  const [formSendEmail, setFormSendEmail] = useState(true);
+  const [formCompanyId, setFormCompanyId] = useState(activeCompanyId || companies[0]?.id || 'store_default');
+  const [formDescription, setFormDescription] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -46,8 +87,169 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Enviar cobrança por e-mail para o cliente/devedor
+  const handleSendChargeEmail = async (charge: SaleTransaction) => {
+    const targetEmail = charge.buyerEmail;
+    if (!targetEmail || !targetEmail.includes('@')) {
+      alert('Esta cobrança não possui um endereço de e-mail válido.');
+      return;
+    }
+
+    setSendingEmailId(charge.id);
+    try {
+      const response = await fetch('/api/cobranca/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: targetEmail,
+          customerName: charge.buyerName || 'Cliente',
+          planName: charge.platformName || 'Cobrança',
+          amount: charge.amount || 0,
+          paymentUrl: (charge as any).paymentUrl || (charge as any).ticket_url || window.location.origin,
+          dueDate: (charge as any).dueDate || charge.date,
+          companyName: charge.companyName || 'LeadsPay',
+          description: `Cobrança referente ao plano ${charge.platformName || ''}. ID: ${charge.id}`
+        })
+      });
+
+      const resJson = await response.json().catch(() => ({}));
+      if (response.ok && resJson.success) {
+        showToast(`Cobrança enviada com sucesso para ${targetEmail}!`);
+      } else {
+        alert(resJson.error || 'Não foi possível enviar o e-mail no momento.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao enviar e-mail de cobrança:', err);
+      alert('Erro de conexão ao enviar o e-mail.');
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
+
+  // Criar nova cobrança manualmente
+  const handleCreateManualCharge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim() || !formEmail.trim() || !formAmount) {
+      alert('Preencha ao menos Nome, E-mail e Valor da cobrança.');
+      return;
+    }
+
+    const cleanAmount = parseFloat(formAmount.replace(',', '.')) || 0;
+    if (cleanAmount <= 0) {
+      alert('Informe um valor válido maior que zero.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const newTxId = `COB-${Date.now().toString().slice(-6)}`;
+    const cleanDoc = formCpf.replace(/\D/g, '');
+    const cleanPhone = formPhone.replace(/\D/g, '');
+
+    const selectedCompany = companies.find(c => c.id === formCompanyId);
+    const companyTitle = selectedCompany?.name || 'LeadsPay';
+
+    const newSale: SaleTransaction = {
+      id: newTxId,
+      platformId: formPlanId,
+      platformName: formPlanName,
+      companyId: formCompanyId,
+      companyName: companyTitle,
+      buyerName: formName.trim(),
+      buyerEmail: formEmail.trim(),
+      buyerCompany: companyTitle,
+      amount: cleanAmount,
+      commissionEarned: 0,
+      method: formMethod,
+      status: 'Pendente',
+      is_test: false,
+      environment: 'production',
+      date: dateStr,
+      time: timeStr
+    };
+
+    // Attach extra metadata
+    (newSale as any).buyerPhone = cleanPhone;
+    (newSale as any).buyerDocument = cleanDoc;
+    (newSale as any).dueDate = formDueDate;
+    (newSale as any).description = formDescription;
+
+    try {
+      // 1. Gravar transação no Firestore
+      await createSaleTransactionInFirebase(newSale);
+
+      // 2. Gravar cliente na coleção 'clients' para remarketing imediato
+      await createOrUpdateClientInFirebase({
+        store_id: formCompanyId,
+        name: formName.trim(),
+        email: formEmail.trim(),
+        phone: cleanPhone,
+        document: cleanDoc,
+        total_spent: cleanAmount,
+        valor_pedido: cleanAmount,
+        last_plan_name: formPlanName,
+        status_compra: 'PENDENTE',
+        status: 'PENDENTE',
+        is_test: false,
+        environment: 'production'
+      });
+
+      // 3. Atualizar estado local
+      if (onAddSale) {
+        onAddSale(newSale);
+      }
+
+      // 4. Se marcado para enviar e-mail imediatamente
+      if (formSendEmail) {
+        try {
+          await fetch('/api/cobranca/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: formEmail.trim(),
+              customerName: formName.trim(),
+              planName: formPlanName,
+              amount: cleanAmount,
+              dueDate: formDueDate,
+              companyName: companyTitle,
+              description: formDescription || `Fatura gerada para ${formPlanName}.`
+            })
+          });
+          showToast(`Cobrança criada e enviada com sucesso para ${formEmail}!`);
+        } catch (e) {
+          console.warn('Falha no envio do e-mail da cobrança:', e);
+          showToast('Cobrança cadastrada com sucesso! (Aviso: e-mail pendente)');
+        }
+      } else {
+        showToast('Cobrança cadastrada com sucesso!');
+      }
+
+      // Reset form and close modal
+      setIsModalOpen(false);
+      setFormName('');
+      setFormEmail('');
+      setFormCpf('');
+      setFormPhone('');
+      setFormDescription('');
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      console.error('Erro ao cadastrar cobrança:', err);
+      alert(`Erro ao cadastrar cobrança: ${err.message || 'Tente novamente.'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const filteredSales = sales.filter((sale) => {
-    if (statusFilter !== 'all' && sale.status !== statusFilter) return false;
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'Recusado' || statusFilter === 'Cancelado') {
+        if (sale.status !== 'Recusado' && sale.status !== 'Cancelado') return false;
+      } else if (sale.status !== statusFilter) {
+        return false;
+      }
+    }
     if (methodFilter !== 'all') {
       const m = (sale.method || '').toLowerCase();
       if (methodFilter === 'PIX' && !m.includes('pix')) return false;
@@ -56,11 +258,15 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
     }
     if (!searchTerm.trim()) return true;
     const q = searchTerm.toLowerCase();
+    const doc = (sale as any).buyerDocument || (sale as any).buyerCpf || '';
+    const phone = (sale as any).buyerPhone || '';
     return (
       (sale.id && sale.id.toLowerCase().includes(q)) ||
       (sale.buyerName && sale.buyerName.toLowerCase().includes(q)) ||
       (sale.buyerEmail && sale.buyerEmail.toLowerCase().includes(q)) ||
       (sale.platformName && sale.platformName.toLowerCase().includes(q)) ||
+      (doc && doc.includes(q)) ||
+      (phone && phone.includes(q)) ||
       (sale.amount && String(sale.amount).includes(q))
     );
   });
@@ -68,34 +274,54 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
   const totalVolume = sales.reduce((acc, s) => acc + (s.status === 'Aprovado' ? s.amount : 0), 0);
   const paidCount = sales.filter(s => s.status === 'Aprovado').length;
   const pendingCount = sales.filter(s => s.status === 'Pendente').length;
-  const conversionRate = sales.length > 0 ? (paidCount / sales.length) * 100 : 0;
+  const refusedCount = sales.filter(s => s.status === 'Recusado' || s.status === 'Cancelado').length;
 
   return (
     <div className="space-y-6 animate-fadeIn" id="leadspay-cobrancas-view">
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 bg-[#10B981] text-[#060A15] px-5 py-3 rounded-2xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-[#060A15]" />
+          {toastMessage}
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
             <CreditCard className="w-4 h-4" />
-            Histórico & Gateway Oficial Asaas v3
+            Gestão Financeira & Cobranças
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-            Cobranças & Transações
+            Cobranças dos Clientes & Planos
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-xl">
-            Acompanhe em tempo real todas as cobranças emitidas pelos seus checkouts com status, métodos de pagamento e links de 2ª via.
+            Visualize clientes que assinaram planos, cobranças automáticas de checkouts e cadastre novas cobranças manuais com disparo para o e-mail do devedor.
           </p>
         </div>
 
-        {onRefresh && (
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white font-bold text-xs transition-colors cursor-pointer border border-white/10"
+              title="Atualizar transações"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Atualizar
+            </button>
+          )}
+
           <button
-            onClick={onRefresh}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors cursor-pointer"
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cbe327] text-[#060A15] font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(217,242,42,0.25)] cursor-pointer"
+            id="btn-nova-cobranca"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Atualizar
+            <Plus className="w-4 h-4 stroke-[3]" />
+            + Nova Cobrança
           </button>
-        )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -119,19 +345,19 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
         </div>
 
         <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 block">Taxa de Conversão</span>
-          <div className="text-2xl font-black text-[#D9F22A] font-['Syne'] mt-1">
-            {conversionRate.toFixed(1)}%
+          <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 block">Recusadas / Canceladas</span>
+          <div className="text-2xl font-black text-rose-400 font-['Syne'] mt-1">
+            {refusedCount}
           </div>
-          <span className="text-[11px] text-emerald-400 mt-1 block">Eficiência do checkout</span>
+          <span className="text-[11px] text-white/40 mt-1 block">Prontas para recuperação</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
           <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 block">Total de Cobranças</span>
-          <div className="text-2xl font-black text-white font-['Syne'] mt-1">
+          <div className="text-2xl font-black text-[#D9F22A] font-['Syne'] mt-1">
             {sales.length}
           </div>
-          <span className="text-[11px] text-white/40 mt-1 block">Emitidas na plataforma</span>
+          <span className="text-[11px] text-emerald-400 mt-1 block">Base ativa LeadsPay</span>
         </div>
       </div>
 
@@ -141,7 +367,7 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
           <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar por ID, comprador, produto ou valor..."
+            placeholder="Buscar por ID, nome, e-mail, celular, CPF ou plano..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A]"
@@ -173,7 +399,7 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                 statusFilter === 'Aprovado' ? 'bg-emerald-500 text-black' : 'text-white/60 hover:text-white'
               }`}
             >
-              Aprovadas
+              Pagas
             </button>
             <button
               onClick={() => setStatusFilter('Pendente')}
@@ -182,6 +408,14 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
               }`}
             >
               Pendentes
+            </button>
+            <button
+              onClick={() => setStatusFilter('Recusado')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                statusFilter === 'Recusado' ? 'bg-rose-500 text-white' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Recusadas
             </button>
           </div>
 
@@ -210,29 +444,42 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
               Nenhuma cobrança encontrada
             </h3>
             <p className="text-xs text-white/50 max-w-md mt-1.5">
-              Todas as cobranças geradas via PIX, Cartão ou Boleto aparecerão aqui com status atualizado.
+              Todas as cobranças dos clientes que assinaram planos e cobranças manuais emitidas aparecerão aqui.
             </p>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="mt-4 px-4 py-2 rounded-xl bg-[#D9F22A] text-[#060A15] font-black text-xs uppercase tracking-wider"
+            >
+              + Criar Primeira Cobrança
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[760px]">
+            <table className="w-full text-left text-xs min-w-[920px]">
               <thead>
                 <tr className="border-b border-white/10 bg-white/[0.02] text-white/50 uppercase tracking-wider font-bold">
-                  <th className="p-4">ID da Cobrança</th>
-                  <th className="p-4">Comprador</th>
-                  <th className="p-4">Produto / Plano</th>
+                  <th className="p-4">ID / Fatura</th>
+                  <th className="p-4">Cliente / Devedor</th>
+                  <th className="p-4">Plano / Produto</th>
                   <th className="p-4">Valor</th>
                   <th className="p-4">Método</th>
                   <th className="p-4">Status</th>
-                  <th className="p-4">Data / Hora</th>
-                  <th className="p-4 text-right">Detalhes</th>
+                  <th className="p-4">Data</th>
+                  <th className="p-4 text-right">Ações & Disparo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filteredSales.map((sale) => {
                   const isApproved = sale.status === 'Aprovado' || (sale as any).status === 'RECEIVED' || (sale as any).status === 'CONFIRMED';
                   const isPending = sale.status === 'Pendente' || (sale as any).status === 'PENDING';
+                  const isRefused = sale.status === 'Recusado' || sale.status === 'Cancelado';
                   const isPix = (sale.method || '').toLowerCase().includes('pix');
+                  const buyerDoc = (sale as any).buyerDocument || (sale as any).buyerCpf || '';
+                  const buyerPhone = (sale as any).buyerPhone || '';
+                  const cleanPhone = buyerPhone.replace(/\D/g, '');
+                  const whatsappLink = cleanPhone 
+                    ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(`Olá ${sale.buyerName || 'Cliente'}! Segue sua cobrança do plano ${sale.platformName || 'LeadsPay'} no valor de R$ ${Number(sale.amount || 0).toFixed(2)}. Acesse para efetuar o pagamento: ${window.location.origin}`)}`
+                    : null;
 
                   return (
                     <tr key={sale.id} className="hover:bg-white/[0.02] transition-colors">
@@ -255,15 +502,22 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                         <div className="font-bold text-white text-sm">
                           {sale.buyerName || 'Cliente LeadsPay'}
                         </div>
-                        <div className="text-[11px] text-white/50 truncate max-w-[180px]">
-                          {sale.buyerEmail || 'cliente@email.com'}
+                        <div className="text-[11px] text-white/50 truncate max-w-[180px] flex items-center gap-1 mt-0.5">
+                          <Mail className="w-3 h-3 text-white/30" />
+                          <span>{sale.buyerEmail || 'Sem e-mail'}</span>
                         </div>
+                        {(buyerDoc || buyerPhone) && (
+                          <div className="text-[10px] text-white/40 font-mono flex items-center gap-2 mt-0.5">
+                            {buyerDoc && <span>CPF: {buyerDoc}</span>}
+                            {buyerPhone && <span>Tel: {buyerPhone}</span>}
+                          </div>
+                        )}
                       </td>
 
                       {/* Product */}
                       <td className="p-4">
                         <span className="font-bold text-white">
-                          {sale.platformName || 'Plano'}
+                          {sale.platformName || 'Plano de Assinatura'}
                         </span>
                         {sale.buyerCompany && (
                           <span className="text-[10px] text-white/40 block">
@@ -277,11 +531,11 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                         <div className="font-black text-white font-mono text-sm">
                           R$ {Number(sale.amount || 0).toFixed(2)}
                         </div>
-                        {sale.commissionEarned && sale.commissionEarned > 0 && (
+                        {sale.commissionEarned && sale.commissionEarned > 0 ? (
                           <div className="text-[10px] text-[#D9F22A] font-mono">
                             Comissão: R$ {sale.commissionEarned.toFixed(2)}
                           </div>
-                        )}
+                        ) : null}
                       </td>
 
                       {/* Method */}
@@ -296,19 +550,19 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                       {/* Status */}
                       <td className="p-4">
                         {isApproved ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                             <CheckCircle2 className="w-3 h-3" />
-                            Aprovado
+                            Aprovado / Pago
                           </span>
                         ) : isPending ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            <Clock className="w-3 h-3" />
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                             Pendente
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
                             <XCircle className="w-3 h-3" />
-                            Cancelado
+                            {isRefused ? 'Recusado' : 'Cancelado'}
                           </span>
                         )}
                       </td>
@@ -319,15 +573,45 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                         <div className="text-[10px] text-white/40">{sale.time || ''}</div>
                       </td>
 
-                      {/* Action */}
+                      {/* Actions */}
                       <td className="p-4 text-right">
-                        <button
-                          onClick={() => setSelectedCharge(sale)}
-                          className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
-                          title="Ver detalhes da cobrança"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Send by Email Button */}
+                          <button
+                            onClick={() => handleSendChargeEmail(sale)}
+                            disabled={sendingEmailId === sale.id}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-[#D9F22A]/15 text-white/70 hover:text-[#D9F22A] transition-colors cursor-pointer border border-white/10"
+                            title="Enviar fatura para o e-mail do devedor"
+                          >
+                            {sendingEmailId === sale.id ? (
+                              <div className="w-3.5 h-3.5 border-2 border-[#D9F22A] border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Mail className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                          {/* Charge on WhatsApp Button */}
+                          {whatsappLink && (
+                            <a
+                              href={whatsappLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/25 text-emerald-400 transition-colors border border-emerald-500/20"
+                              title="Cobrar cliente no WhatsApp"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+
+                          {/* Details Button */}
+                          <button
+                            onClick={() => setSelectedCharge(sale)}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+                            title="Ver detalhes da cobrança"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -337,6 +621,219 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Manual Charge Creation Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-xl bg-[#080d1a] border border-[#D9F22A]/40 rounded-3xl p-6 sm:p-7 shadow-[0_0_60px_rgba(217,242,42,0.2)] max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-5 right-5 text-white/50 hover:text-white transition-colors cursor-pointer w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/15 text-[#D9F22A] flex items-center justify-center font-bold">
+                <Plus className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-white font-['Syne']">
+                  Cadastrar Nova Cobrança
+                </h2>
+                <p className="text-xs text-white/50">
+                  Preencha os dados do cliente devedor para emitir a cobrança e enviar por e-mail.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateManualCharge} className="space-y-4 text-xs">
+              {/* Client Name & Document */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">Nome Completo do Cliente *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: João da Silva"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">CPF ou CNPJ</label>
+                  <input
+                    type="text"
+                    placeholder="000.000.000-00"
+                    value={formCpf}
+                    onChange={(e) => setFormCpf(e.target.value)}
+                    className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                  />
+                </div>
+              </div>
+
+              {/* Email & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">E-mail do Devedor *</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="cliente@exemplo.com"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">Número de Celular / WhatsApp</label>
+                  <input
+                    type="text"
+                    placeholder="(11) 99999-9999"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                  />
+                </div>
+              </div>
+
+              {/* Plan & Amount */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">Plano ou Produto</label>
+                  {plans.length > 0 ? (
+                    <select
+                      value={formPlanId}
+                      onChange={(e) => {
+                        const pid = e.target.value;
+                        setFormPlanId(pid);
+                        const sel = plans.find(p => p.id === pid);
+                        if (sel) {
+                          setFormPlanName(sel.name);
+                          if (sel.price) setFormAmount(String(sel.price));
+                        }
+                      }}
+                      className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#D9F22A]"
+                    >
+                      {plans.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} - R$ {Number(p.price || 0).toFixed(2)}
+                        </option>
+                      ))}
+                      <option value="custom">Outro (digitar manual)</option>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Nome do Plano / Serviço"
+                      value={formPlanName}
+                      onChange={(e) => setFormPlanName(e.target.value)}
+                      className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">Valor da Cobrança (R$) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    required
+                    value={formAmount}
+                    onChange={(e) => setFormAmount(e.target.value)}
+                    className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-white placeholder-white/30 font-mono font-bold focus:outline-none focus:border-[#D9F22A]"
+                  />
+                </div>
+              </div>
+
+              {/* Due date & Payment method */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">Data de Vencimento</label>
+                  <input
+                    type="date"
+                    value={formDueDate}
+                    onChange={(e) => setFormDueDate(e.target.value)}
+                    className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-[#D9F22A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white/70 font-bold mb-1">Método de Pagamento</label>
+                  <select
+                    value={formMethod}
+                    onChange={(e) => setFormMethod(e.target.value as any)}
+                    className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#D9F22A]"
+                  >
+                    <option value="PIX">PIX</option>
+                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                    <option value="Boleto Bancário">Boleto Bancário</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Description / Instructions */}
+              <div>
+                <label className="block text-white/70 font-bold mb-1">Instruções / Observações (opcional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Informações adicionais para o cliente..."
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full bg-[#050811] border border-white/15 rounded-xl p-3 text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+
+              {/* Checkbox Send Email */}
+              <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="chk-send-email"
+                  checked={formSendEmail}
+                  onChange={(e) => setFormSendEmail(e.target.checked)}
+                  className="mt-0.5 accent-[#D9F22A] w-4 h-4 cursor-pointer"
+                />
+                <label htmlFor="chk-send-email" className="text-white/80 cursor-pointer">
+                  <strong className="text-white block">Enviar fatura imediatamente para o e-mail do devedor</strong>
+                  <span className="text-[11px] text-white/50 block">
+                    O cliente receberá uma notificação formatada com detalhes do valor e instruções de pagamento.
+                  </span>
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white font-bold transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cbe327] text-[#060A15] font-black uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(217,242,42,0.2)] flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-[#060A15] border-t-transparent rounded-full animate-spin" />
+                      Emitindo...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      Emitir Cobrança
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Charge Details Modal */}
       {selectedCharge && (
@@ -376,6 +873,10 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                   <span className="font-bold text-white">{selectedCharge.status}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-white/50">Plano / Produto:</span>
+                  <span className="font-bold text-white">{selectedCharge.platformName}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-white/50">Método de Pagamento:</span>
                   <span className="font-bold text-white">{selectedCharge.method || 'PIX'}</span>
                 </div>
@@ -387,7 +888,7 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
 
               <div className="p-4 rounded-2xl bg-[#050811] border border-white/5 space-y-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 block mb-1">
-                  Dados do Comprador
+                  Dados do Cliente / Devedor
                 </span>
                 <div className="flex justify-between">
                   <span className="text-white/50">Nome:</span>
@@ -397,27 +898,50 @@ export const CobrancasView: React.FC<CobrancasViewProps> = ({
                   <span className="text-white/50">E-mail:</span>
                   <span className="text-white/80">{selectedCharge.buyerEmail || 'Não informado'}</span>
                 </div>
-                {(selectedCharge as any).buyerCpf && (
+                {((selectedCharge as any).buyerDocument || (selectedCharge as any).buyerCpf) && (
                   <div className="flex justify-between">
-                    <span className="text-white/50">Documento:</span>
-                    <span className="font-mono text-white/80">{(selectedCharge as any).buyerCpf}</span>
+                    <span className="text-white/50">CPF / CNPJ:</span>
+                    <span className="font-mono text-white/80">{(selectedCharge as any).buyerDocument || (selectedCharge as any).buyerCpf}</span>
+                  </div>
+                )}
+                {(selectedCharge as any).buyerPhone && (
+                  <div className="flex justify-between">
+                    <span className="text-white/50">Celular / WhatsApp:</span>
+                    <span className="font-mono text-white/80">{(selectedCharge as any).buyerPhone}</span>
                   </div>
                 )}
               </div>
 
-              {(selectedCharge as any).ticket_url && (
-                <div className="pt-2">
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button
+                  onClick={() => handleSendChargeEmail(selectedCharge)}
+                  disabled={sendingEmailId === selectedCharge.id}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-white/10 hover:bg-[#D9F22A]/20 text-white hover:text-[#D9F22A] font-bold text-xs transition-all cursor-pointer border border-white/10"
+                >
+                  <Mail className="w-4 h-4" />
+                  Enviar por E-mail
+                </button>
+
+                {(selectedCharge as any).buyerPhone ? (
                   <a
-                    href={(selectedCharge as any).ticket_url}
+                    href={`https://wa.me/55${(selectedCharge as any).buyerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${selectedCharge.buyerName}! Segue o link da sua fatura pendente de R$ ${Number(selectedCharge.amount).toFixed(2)}.`)}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#D9F22A] hover:bg-[#cbe327] text-[#060A15] font-black text-xs uppercase tracking-wider transition-all"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-bold text-xs transition-all border border-emerald-500/30"
                   >
-                    <ExternalLink className="w-4 h-4" />
-                    Visualizar Fatura / 2ª Via no Asaas
+                    <MessageCircle className="w-4 h-4" />
+                    Cobrar no WhatsApp
                   </a>
-                </div>
-              )}
+                ) : (
+                  <button
+                    onClick={() => handleCopy(`${window.location.origin}`, selectedCharge.id)}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all cursor-pointer"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copiar Link
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

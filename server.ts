@@ -45,7 +45,7 @@ import {
   getHeaders
 } from './lib/asaas';
 import { validateApiKey } from './lib/auth-partner';
-import { sendFulfillmentEmail } from './lib/email';
+import { sendFulfillmentEmail, sendBillingEmail, sendRemarketingEmail } from './lib/email';
 
 const app = express();
 const PORT = 3000;
@@ -2935,6 +2935,86 @@ app.post('/api/fulfillment/send', async (req, res) => {
   } catch (error: any) {
     console.error('[Fulfillment API Error] Falha geral:', error);
     return res.status(500).json({ error: 'Erro ao processar entrega' });
+  }
+});
+
+/**
+ * POST /api/cobranca/send-email
+ * Envia notificação de cobrança/fatura para o e-mail do devedor/cliente
+ */
+app.post('/api/cobranca/send-email', async (req, res) => {
+  try {
+    const {
+      to,
+      customerName,
+      planName,
+      amount,
+      paymentUrl,
+      dueDate,
+      companyName,
+      pixCopyPaste,
+      description
+    } = req.body || {};
+
+    if (!to || !to.includes('@')) {
+      return res.status(400).json({ error: 'E-mail do destinatário inválido ou não informado.' });
+    }
+
+    console.log(`[Cobranca Email] Disparando fatura para ${to} - ${planName} (R$ ${amount})`);
+    const emailResult = await sendBillingEmail({
+      to,
+      customerName: customerName || 'Cliente',
+      planName: planName || 'Cobrança',
+      amount: Number(amount || 0),
+      paymentUrl,
+      dueDate,
+      companyName: companyName || 'LeadsPay',
+      pixCopyPaste,
+      description
+    });
+
+    return res.json({ success: true, emailResult, message: 'Cobrança enviada para o e-mail do cliente com sucesso!' });
+  } catch (error: any) {
+    console.error('[Cobranca Email Error]:', error);
+    return res.status(500).json({ error: error?.message || 'Erro ao enviar e-mail de cobrança' });
+  }
+});
+
+/**
+ * POST /api/remarketing/send-email
+ * Dispara e-mail de remarketing com cupom de desconto para cliente/lead com pagamento pendente ou recusado
+ */
+app.post('/api/remarketing/send-email', async (req, res) => {
+  try {
+    const {
+      to,
+      customerName,
+      planName,
+      couponCode,
+      discountText,
+      checkoutUrl,
+      companyName
+    } = req.body || {};
+
+    if (!to || !to.includes('@')) {
+      return res.status(400).json({ error: 'E-mail do destinatário inválido ou não informado.' });
+    }
+
+    console.log(`[Remarketing Email] Disparando cupom ${couponCode} para ${to}`);
+    const emailResult = await sendRemarketingEmail({
+      to,
+      customerName: customerName || 'Cliente',
+      planName: planName || 'Oferta Especial',
+      couponCode: couponCode || 'DESCONTO10',
+      discountText: discountText || '10% de desconto',
+      checkoutUrl: checkoutUrl || 'https://leadspay.app/checkout',
+      companyName: companyName || 'LeadsPay'
+    });
+
+    return res.json({ success: true, emailResult, message: 'E-mail de remarketing com cupom enviado com sucesso!' });
+  } catch (error: any) {
+    console.error('[Remarketing Email Error]:', error);
+    return res.status(500).json({ error: error?.message || 'Erro ao enviar e-mail de remarketing' });
   }
 });
 

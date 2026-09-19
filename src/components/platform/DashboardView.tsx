@@ -1522,16 +1522,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {/* 2x2 Metric Grid matching screenshot */}
             <div className="grid grid-cols-2 gap-3.5">
-              {/* Box 1: Abandono de checkout */}
-              <div className="bg-[#070e1c] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-between">
+              {/* Box 1: Leads & Pendentes / Remarketing */}
+              <div 
+                onClick={() => setActiveTab('clientes')}
+                className="bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-[#D9F22A]/30 rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer transition-all"
+                title="Ver leads e fazer remarketing"
+              >
                 <div className="flex items-center gap-1.5 text-white/60 mb-2">
                   <ShoppingCart className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span className="text-[11px] font-medium truncate">Abandono de checkout</span>
+                  <span className="text-[11px] font-medium truncate">Leads & Pendentes</span>
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-[#38bdf8] font-['Syne']">
-                  {showValues ? '0' : '•'}
+                  {showValues ? pendingCount : '•'}
                 </div>
-                <span className="text-[10px] text-white/40 mt-1 truncate">Checkouts abandonados</span>
+                <span className="text-[10px] text-[#D9F22A] mt-1 truncate hover:underline">Fazer Remarketing →</span>
               </div>
 
               {/* Box 2: Reembolso */}

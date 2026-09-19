@@ -1514,6 +1514,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               companies={myCompanies.length > 0 ? myCompanies : companies}
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               userRole={roleMode}
+              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
             />
           )}
           {activeTab === 'cobrancas' && (
@@ -1521,7 +1522,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               sales={userVisibleTransactions}
               companies={myCompanies.length > 0 ? myCompanies : companies}
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
+              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
               onRefresh={() => {}}
+              onAddSale={(newTx) => setTransactions(prev => [newTx, ...prev])}
             />
           )}
           {activeTab === 'links_pagamento' && (

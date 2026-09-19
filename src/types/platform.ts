@@ -149,6 +149,7 @@ export interface CompanyPlan {
   name: string;
   tagline?: string;
   description: string;
+  price?: number;
   priceSetup: number;
   priceMonthly: number;
   commissionPercentage: number;
@@ -255,6 +256,13 @@ export interface SaleTransaction {
   customerName?: string;
   buyerEmail: string;
   buyerCompany: string;
+  buyerPhone?: string;
+  buyerDocument?: string;
+  buyerCpf?: string;
+  dueDate?: string;
+  paymentUrl?: string;
+  ticket_url?: string;
+  description?: string;
   amount: number;
   commissionEarned: number;
   checkoutFee?: number; // R$ 0.99 taxa da plataforma LeadsPay
