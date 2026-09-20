@@ -61,47 +61,53 @@ interface DashboardViewProps {
   userEmail?: string;
 }
 
-// 3D Glowing Green Wallet Illustration matching the reference screenshot
-const GlowingWallet3D: React.FC = () => {
-  return (
-    <div className="relative w-28 h-24 sm:w-32 sm:h-28 flex items-center justify-center flex-shrink-0 select-none">
-      {/* Background Volumetric Green Glow Aura */}
-      <div className="absolute inset-0 bg-[#a3e635]/25 rounded-full blur-2xl pointer-events-none transform scale-110" />
-      <div className="absolute w-20 h-20 bg-emerald-500/20 rounded-full blur-xl pointer-events-none" />
+// 3D Glowing Wallet Illustration matching the reference screenshots (Green & Purple variants)
+interface GlowingWallet3DProps {
+  variant?: 'green' | 'purple';
+  compact?: boolean;
+}
 
-      {/* 3D Isometric Green Leather Wallet SVG */}
-      <svg viewBox="0 0 160 140" className="w-full h-full relative z-10 drop-shadow-[0_12px_24px_rgba(0,0,0,0.6)]" fill="none">
+const GlowingWallet3D: React.FC<GlowingWallet3DProps> = ({ variant = 'green', compact = false }) => {
+  const isPurple = variant === 'purple';
+  return (
+    <div className={`relative ${compact ? 'w-11 h-9 sm:w-24 sm:h-20' : 'w-14 h-12 sm:w-32 sm:h-28'} flex items-center justify-center flex-shrink-0 select-none`}>
+      {/* Background Volumetric Glow Aura */}
+      <div className={`absolute inset-0 ${isPurple ? 'bg-purple-500/25' : 'bg-[#a3e635]/25'} rounded-full blur-xl sm:blur-2xl pointer-events-none transform scale-110`} />
+      <div className={`absolute w-12 h-12 sm:w-20 sm:h-20 ${isPurple ? 'bg-fuchsia-500/20' : 'bg-emerald-500/20'} rounded-full blur-lg sm:blur-xl pointer-events-none`} />
+
+      {/* 3D Isometric Leather Wallet SVG */}
+      <svg viewBox="0 0 160 140" className="w-full h-full relative z-10 drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]" fill="none">
         <defs>
           {/* Gradients for leather depth */}
-          <linearGradient id="walletBodyGrad" x1="20%" y1="0%" x2="80%" y2="100%">
-            <stop offset="0%" stopColor="#166534" />
-            <stop offset="40%" stopColor="#14532d" />
-            <stop offset="100%" stopColor="#052e16" />
+          <linearGradient id={`walletBodyGrad_${variant}`} x1="20%" y1="0%" x2="80%" y2="100%">
+            <stop offset="0%" stopColor={isPurple ? '#4c1d95' : '#166534'} />
+            <stop offset="40%" stopColor={isPurple ? '#581c87' : '#14532d'} />
+            <stop offset="100%" stopColor={isPurple ? '#2e1065' : '#052e16'} />
           </linearGradient>
 
-          <linearGradient id="walletFlapGrad" x1="0%" y1="20%" x2="100%" y2="80%">
-            <stop offset="0%" stopColor="#22c55e" />
-            <stop offset="50%" stopColor="#15803d" />
-            <stop offset="100%" stopColor="#052e16" />
+          <linearGradient id={`walletFlapGrad_${variant}`} x1="0%" y1="20%" x2="100%" y2="80%">
+            <stop offset="0%" stopColor={isPurple ? '#9333ea' : '#22c55e'} />
+            <stop offset="50%" stopColor={isPurple ? '#7e22ce' : '#15803d'} />
+            <stop offset="100%" stopColor={isPurple ? '#2e1065' : '#052e16'} />
           </linearGradient>
 
-          <linearGradient id="walletHighlightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#bef264" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="#84cc16" stopOpacity="0.1" />
+          <linearGradient id={`walletHighlightGrad_${variant}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={isPurple ? '#e9d5ff' : '#bef264'} stopOpacity="0.8" />
+            <stop offset="100%" stopColor={isPurple ? '#c084fc' : '#84cc16'} stopOpacity="0.1" />
           </linearGradient>
 
-          <linearGradient id="goldClaspGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={`goldClaspGrad_${variant}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#fef08a" />
             <stop offset="50%" stopColor="#eab308" />
             <stop offset="100%" stopColor="#ca8a04" />
           </linearGradient>
 
-          <linearGradient id="strapGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#4ade80" />
-            <stop offset="100%" stopColor="#15803d" />
+          <linearGradient id={`strapGrad_${variant}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={isPurple ? '#c084fc' : '#4ade80'} />
+            <stop offset="100%" stopColor={isPurple ? '#7e22ce' : '#15803d'} />
           </linearGradient>
 
-          <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <filter id={`neonGlow_${variant}`} x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="3" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
@@ -110,8 +116,8 @@ const GlowingWallet3D: React.FC = () => {
         {/* Back Wallet Layer / Cash Slot Depth */}
         <path
           d="M 38 48 C 38 38, 48 30, 60 30 L 122 34 C 132 35, 140 43, 140 54 L 138 92 C 138 102, 130 110, 118 108 L 48 98 C 42 97, 38 92, 38 84 Z"
-          fill="#052e16"
-          stroke="#14532d"
+          fill={isPurple ? '#2e1065' : '#052e16'}
+          stroke={isPurple ? '#581c87' : '#14532d'}
           strokeWidth="1.5"
         />
 
@@ -122,36 +128,36 @@ const GlowingWallet3D: React.FC = () => {
           stroke="#64748b"
           strokeWidth="1"
         />
-        <line x1="56" y1="46" x2="90" y2="48" stroke="#a3e635" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
+        <line x1="56" y1="46" x2="90" y2="48" stroke={isPurple ? '#c084fc' : '#a3e635'} strokeWidth="2" strokeLinecap="round" opacity="0.8" />
 
         {/* Main Front Fold of Wallet (Isometric Perspective) */}
         <path
           d="M 24 56 C 24 44, 34 36, 48 36 L 114 42 C 126 43, 134 52, 134 64 L 130 108 C 130 118, 120 126, 108 126 L 42 120 C 30 119, 22 110, 22 98 Z"
-          fill="url(#walletBodyGrad)"
-          stroke="#22c55e"
+          fill={`url(#walletBodyGrad_${variant})`}
+          stroke={isPurple ? '#a855f7' : '#22c55e'}
           strokeWidth="1"
         />
 
         {/* Wallet Glossy Front Flap with Rounded Bevel */}
         <path
           d="M 24 56 C 24 44, 34 36, 48 36 L 114 42 C 124 43, 132 50, 132 60 L 130 84 C 130 94, 122 102, 110 102 L 36 94 C 28 93, 24 88, 24 80 Z"
-          fill="url(#walletFlapGrad)"
+          fill={`url(#walletFlapGrad_${variant})`}
           opacity="0.9"
         />
 
         {/* Glowing Top-Edge Highlight */}
         <path
           d="M 32 42 L 112 47"
-          stroke="url(#walletHighlightGrad)"
+          stroke={`url(#walletHighlightGrad_${variant})`}
           strokeWidth="2.5"
           strokeLinecap="round"
-          filter="url(#neonGlow)"
+          filter={`url(#neonGlow_${variant})`}
         />
 
         {/* Leather Stitching Details */}
         <path
           d="M 30 60 L 30 94 C 30 104, 36 110, 46 112 L 106 118 C 114 118, 122 112, 122 104 L 124 70"
-          stroke="#4ade80"
+          stroke={isPurple ? '#c084fc' : '#4ade80'}
           strokeWidth="1"
           strokeDasharray="3 3"
           opacity="0.45"
@@ -160,19 +166,19 @@ const GlowingWallet3D: React.FC = () => {
         {/* Closing Leather Strap / Clasp Tab */}
         <path
           d="M 104 68 L 140 70 C 146 70, 150 76, 149 82 L 148 88 C 147 94, 142 98, 136 98 L 102 94 Z"
-          fill="url(#strapGrad)"
-          stroke="#a3e635"
+          fill={`url(#strapGrad_${variant})`}
+          stroke={isPurple ? '#d8b4fe' : '#a3e635'}
           strokeWidth="1"
         />
 
         {/* Gold Metal Snap Button with Glow */}
-        <circle cx="138" cy="84" r="6.5" fill="url(#goldClaspGrad)" stroke="#fef08a" strokeWidth="1" />
+        <circle cx="138" cy="84" r="6.5" fill={`url(#goldClaspGrad_${variant})`} stroke="#fef08a" strokeWidth="1" />
         <circle cx="138" cy="84" r="3" fill="#ca8a04" opacity="0.6" />
         <circle cx="136.5" cy="82.5" r="1.5" fill="#ffffff" opacity="0.9" />
 
         {/* Ambient Sparkles */}
-        <circle cx="146" cy="40" r="1.5" fill="#bef264" opacity="0.8" />
-        <circle cx="20" cy="85" r="1.2" fill="#bef264" opacity="0.7" />
+        <circle cx="146" cy="40" r="1.5" fill={isPurple ? '#d8b4fe' : '#bef264'} opacity="0.8" />
+        <circle cx="20" cy="85" r="1.2" fill={isPurple ? '#d8b4fe' : '#bef264'} opacity="0.7" />
       </svg>
     </div>
   );
@@ -673,28 +679,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return monthlyChartPoints[midIdx] || monthlyChartPoints[0];
   }, [hoveredPointIndex, monthlyChartPoints, chartHasSales]);
 
-  // Available balance
+  // Available balance and Pending balance
   const availableBalance = Number(userProfile?.availableBalance) || 0;
+  const pendingBalance = userProfile?.pendingBalance !== undefined
+    ? Number(userProfile.pendingBalance)
+    : filteredSales.filter(s => s.status === 'pending').reduce((acc, s) => acc + (s.amount || 0), 0);
 
   return (
-    <div className="flex flex-col gap-6 text-white min-w-0" id="leadspay-dashboard-exact">
+    <div className="flex flex-col gap-2.5 sm:gap-6 text-white min-w-0" id="leadspay-dashboard-exact">
       {/* ========================================================================= */}
       {/* 1. TOP HEADER ROW: GREETING & SEARCH & DROPDOWNS & BELL & AVATAR          */}
       {/* ========================================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 pb-1">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3.5 pb-0.5 sm:pb-1">
         {/* Left: Greeting */}
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2 font-['Syne'] tracking-tight truncate">
+          <h1 className="text-xl sm:text-3xl font-bold sm:font-black text-white flex items-center gap-1.5 sm:gap-2 font-['Syne'] tracking-tight truncate">
             <span>Olá, {displayName}</span>
-            <span className="text-2xl sm:text-3xl inline-block origin-bottom-right hover:rotate-12 transition-transform flex-shrink-0">👋</span>
+            <span className="text-xl sm:text-3xl inline-block origin-bottom-right hover:rotate-12 transition-transform flex-shrink-0">👋</span>
           </h1>
-          <p className="text-xs sm:text-sm text-white/50 mt-0.5 font-medium truncate">
+          <p className="text-[11px] sm:text-sm text-gray-400 mt-0.5 font-medium truncate">
             Aqui está o resumo da sua operação hoje.
           </p>
         </div>
 
         {/* Right: Search, Filter Dropdowns, and Bell + Profile Cluster */}
-        <div className="flex items-center flex-wrap lg:flex-nowrap gap-2 sm:gap-2.5 justify-end">
+        <div className="flex items-center flex-wrap lg:flex-nowrap gap-1.5 sm:gap-2.5 justify-end">
           {/* Search bar with pill shape */}
           <div className="relative w-full sm:w-48 md:w-56 lg:w-44 xl:w-56 flex-shrink min-w-[170px]">
             <Search className="w-3.5 h-3.5 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -703,7 +712,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               placeholder="Buscar vendas, produtos..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#070d18] hover:bg-[#0a1222] focus:bg-[#0a1222] border border-white/10 focus:border-[#a3e635]/50 rounded-full pl-9 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all shadow-inner"
+              className="w-full bg-[#070d18] hover:bg-[#0a1222] focus:bg-[#0a1222] border border-white/10 focus:border-[#a3e635]/50 rounded-full pl-9 pr-4 py-1.5 sm:py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all shadow-inner"
             />
           </div>
 
@@ -1026,103 +1035,112 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 2. MAIN GRID (LEFT: 68% / RIGHT: 32%)                                     */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-6 min-w-0">
         
         {/* --------------------------------------------------------------------- */}
         {/* LEFT COLUMN: HERO SALES + MONTHLY PERFORMANCE + PAYMENT METHODS       */}
         {/* --------------------------------------------------------------------- */}
-        <div className="lg:col-span-8 flex flex-col gap-5 sm:gap-6 min-w-0">
+        <div className="lg:col-span-8 flex flex-col gap-2.5 sm:gap-6 min-w-0">
           
           {/* CARD 1: COMBINED "Visão geral de vendas" + "Desempenho mensal de vendas" */}
           <motion.div 
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-[#050b14] border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl relative overflow-hidden backdrop-blur-xl"
+            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-7 shadow-2xl relative overflow-hidden backdrop-blur-xl"
           >
             {/* Upper Section: Visão geral de vendas */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
-                  <BarChart2 className="w-3.5 h-3.5" />
+            <div className="mb-3 sm:mb-6">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
+                    <BarChart2 className="w-3.5 h-3.5" />
+                  </div>
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-white/90">
+                    Visão geral de vendas
+                  </h2>
                 </div>
-                <h2 className="text-xs sm:text-sm font-bold text-white/90">
-                  Visão geral de vendas
-                </h2>
+                <button
+                  onClick={() => setShowValues(!showValues)}
+                  className="text-white/40 hover:text-white transition-colors cursor-pointer p-1"
+                  title={showValues ? "Ocultar valores" : "Mostrar valores"}
+                >
+                  {showValues ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                </button>
               </div>
 
               {/* Three horizontal stats row */}
-              <div className="flex flex-wrap items-baseline gap-6 sm:gap-12 mt-2">
+              <div className="flex flex-wrap items-baseline justify-between sm:justify-start gap-3 sm:gap-12 mt-1 sm:mt-2">
                 {/* Stat 1: Total Sales */}
                 <div>
-                  <div className="text-3xl sm:text-4xl font-black text-white font-['Syne'] tracking-tight">
+                  <div className="text-lg sm:text-4xl font-bold sm:font-black text-white font-['Syne'] tracking-tight">
                     {showValues ? `R$ ${(totalFilteredSalesAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-[#a3e635] font-semibold mt-1">
-                    <TrendingUp className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-1 text-[10px] sm:text-xs text-[#a3e635] font-semibold mt-0.5 sm:mt-1">
+                    <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     <span>
                       {approvedSalesCount > 0 
                         ? `${approvedSalesCount} vendas liquidadas` 
-                        : 'Nenhuma venda no período selecionado'}
+                        : 'Nenhuma venda no período'}
                     </span>
                   </div>
                 </div>
 
                 {/* Stat 2: Vendas Count */}
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-white/50">
-                    <ShoppingCart className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white/5 flex items-center justify-center text-white/50">
+                    <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </div>
                   <div>
-                    <div className="text-xl sm:text-2xl font-bold text-white leading-tight">
+                    <div className="text-sm sm:text-2xl font-bold text-white leading-tight">
                       {showValues ? approvedSalesCount : '••'}
                     </div>
-                    <span className="text-xs text-white/50 block">vendas</span>
+                    <span className="text-[10px] sm:text-xs text-gray-400 block">vendas</span>
                   </div>
                 </div>
 
                 {/* Stat 3: Ticket Médio */}
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-white/50">
-                    <Coins className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white/5 flex items-center justify-center text-white/50">
+                    <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </div>
                   <div>
-                    <div className="text-xl sm:text-2xl font-bold text-white leading-tight">
+                    <div className="text-sm sm:text-2xl font-bold text-white leading-tight">
                       {showValues ? `R$ ${(averageTicket).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••'}
                     </div>
-                    <span className="text-xs text-white/50 block">Ticket médio</span>
+                    <span className="text-[10px] sm:text-xs text-gray-400 block">Ticket médio</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Subtle Divider Line */}
-            <div className="h-px bg-white/5 my-5" />
+            <div className="h-px bg-white/5 my-2 sm:my-5" />
 
             {/* Lower Section: Desempenho mensal de vendas */}
             <div>
               {/* Header row with Title and Period Switcher (1D, 1S, 1M, 6M, 1A) */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-5">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
                     <BarChart3 className="w-3.5 h-3.5" />
                   </div>
-                  <h3 className="text-xs sm:text-sm font-bold text-white">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
                     Desempenho mensal de vendas
                   </h3>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span className="text-[11px] text-white/40 hidden md:inline">
-                    Evolução das vendas ao longo do ano
+                    Evolução ao longo do ano
                   </span>
 
                   {/* Pills 1D, 1S, 1M, 6M, 1A */}
-                  <div className="flex items-center gap-1 bg-[#040810] border border-white/10 p-1 rounded-xl">
+                  <div className="flex items-center gap-0.5 sm:gap-1 bg-[#040810] border border-white/10 p-0.5 sm:p-1 rounded-lg sm:rounded-xl">
                     {['1D', '1S', '1M', '6M', '1A'].map((horizon) => (
                       <button
                         key={horizon}
                         onClick={() => setSelectedTimeframe(horizon)}
-                        className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-1.5 sm:px-2.5 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer ${
                           selectedTimeframe === horizon
                             ? 'bg-[#D9F22A] text-[#060A15] shadow-sm font-black'
                             : 'text-white/60 hover:text-white'
@@ -1135,18 +1153,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Glowing Green Curve Chart Container */}
-              <div className="relative w-full pt-1 pb-2">
+              {/* Glowing Green Curve Chart Container (max-h-[120px] on mobile to preserve vertical space) */}
+              <div className="relative w-full pt-0.5 pb-1 sm:pb-2">
                 <div className="flex items-start">
-                  {/* Y-Axis Labels dynamically scaled with real sales values */}
-                  <div className="flex flex-col justify-between h-44 text-[10px] text-white/40 pr-3 font-medium text-right select-none flex-shrink-0 w-16">
+                  {/* Y-Axis Labels dynamically scaled */}
+                  <div className="flex flex-col justify-between h-[120px] max-h-[120px] sm:h-44 sm:max-h-none text-[9px] sm:text-[10px] text-gray-400 font-mono text-right pr-1.5 sm:pr-3 select-none flex-shrink-0 w-12 sm:w-16">
                     {yLabels.map((lbl, idx) => (
                       <span key={idx}>{lbl}</span>
                     ))}
                   </div>
 
-                  {/* Main SVG Area */}
-                  <div className="relative flex-1 h-44">
+                  {/* Main SVG Area with max-h-[120px] */}
+                  <div className="relative flex-1 h-[120px] max-h-[120px] sm:h-44 sm:max-h-none select-none touch-pan-x">
                     <svg
                       className="w-full h-full overflow-visible"
                       viewBox="0 0 1020 160"
@@ -1189,7 +1207,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         filter="url(#glowPath)"
                       />
 
-                      {/* Active / Highlighted Peak at Jun 2026 (or selected point) */}
+                      {/* Active / Highlighted Peak point */}
                       {activePoint && (
                         <>
                           {/* Vertical dashed guideline to axis */}
@@ -1208,7 +1226,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           <circle
                             cx={activePoint.x}
                             cy={activePoint.y}
-                            r="7"
+                            r="6"
                             fill="#D9F22A"
                             fillOpacity="0.25"
                           />
@@ -1217,7 +1235,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           <circle
                             cx={activePoint.x}
                             cy={activePoint.y}
-                            r="4.5"
+                            r="4"
                             fill="#D9F22A"
                             stroke="#060A15"
                             strokeWidth="2"
@@ -1240,7 +1258,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       ))}
                     </svg>
 
-                    {/* Floating Tooltip Box matching screenshot position (over active point) */}
+                    {/* Floating Tooltip Box matching active point */}
                     {activePoint && (
                       <div
                         className="absolute pointer-events-none transition-all duration-200 z-30"
@@ -1250,15 +1268,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           transform: 'translate(-50%, -125%)'
                         }}
                       >
-                        <div className="bg-[#070c18] border border-white/20 rounded-xl px-3 py-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.8)] backdrop-blur-md flex flex-col gap-0.5 whitespace-nowrap">
-                          <span className="text-[10px] text-white/50 font-medium">
+                        <div className="bg-[#070c18] border border-white/20 rounded-xl px-2 sm:px-3 py-1 sm:py-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.8)] backdrop-blur-md flex flex-col gap-0.5 whitespace-nowrap">
+                          <span className="text-[9px] sm:text-[10px] text-white/50 font-medium">
                             {activePoint.label}
                           </span>
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-black text-white font-['Syne']">
                               {activePoint.value}
                             </span>
-                            <span className="text-[10px] font-bold text-[#a3e635] bg-[#a3e635]/15 px-1 rounded">
+                            <span className="text-[9px] sm:text-[10px] font-bold text-[#a3e635] bg-[#a3e635]/15 px-1 rounded">
                               {activePoint.growth}
                             </span>
                           </div>
@@ -1269,7 +1287,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
 
                 {/* X-Axis Months Row (Jan - Dez) */}
-                <div className="flex items-center justify-between text-[11px] text-white/40 pl-16 pr-2 pt-2 select-none">
+                <div className="flex items-center justify-between text-[9px] sm:text-[11px] text-gray-400 pl-12 sm:pl-16 pr-1 sm:pr-2 pt-1.5 sm:pt-2 select-none">
                   {monthlyChartPoints.map((pt, idx) => (
                     <button
                       key={pt.month}
@@ -1291,53 +1309,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="bg-[#050b14] border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl backdrop-blur-xl"
+            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-7 shadow-2xl backdrop-blur-xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-2.5 sm:mb-5">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
                   <CreditCard className="w-3.5 h-3.5" />
                 </div>
-                <h3 className="text-xs sm:text-sm font-bold text-white">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
                   Meios de pagamento
                 </h3>
               </div>
-              <span className="text-[11px] text-white/40 font-medium">
+              <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
                 Taxas e conversão em tempo real
               </span>
             </div>
 
-            {/* Table */}
+            {/* Table with compact py-1.5 px-2 on mobile */}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="text-white/40 uppercase tracking-wider text-[10px] border-b border-white/5">
-                    <th className="pb-3 font-semibold">Meio de pagamento</th>
-                    <th className="pb-3 font-semibold text-center">Conversão</th>
-                    <th className="pb-3 font-semibold text-right">Valor</th>
+                  <tr className="text-gray-400 uppercase tracking-wider text-[10px] border-b border-white/5">
+                    <th className="pb-1.5 sm:pb-3 font-semibold">Meio de pagamento</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-center">Conversão</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">Valor</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {paymentMethodRows.map((row) => (
                     <tr key={row.id} className="hover:bg-white/[0.02] transition-colors group">
                       {/* Name with Icon */}
-                      <td className="py-3.5 flex items-center gap-3 font-medium text-white/90 group-hover:text-white">
-                        <div className="w-7 h-7 rounded-lg bg-[#080f1e] border border-white/10 flex items-center justify-center flex-shrink-0">
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 flex items-center gap-2 sm:gap-3 font-medium text-white/90 group-hover:text-white">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#080f1e] border border-white/10 flex items-center justify-center flex-shrink-0">
                           {row.icon}
                         </div>
                         <span className="text-xs sm:text-sm">{row.name}</span>
                       </td>
 
                       {/* Conversion percentage pill */}
-                      <td className="py-3.5 text-center">
-                        <span className="inline-block px-3 py-1 rounded-full bg-[#080f1e] border border-white/10 text-white/80 font-bold text-[11px]">
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-center">
+                        <span className="inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#080f1e] border border-white/10 text-white/80 font-bold text-[10px] sm:text-[11px]">
                           {row.conversion}
                         </span>
                       </td>
 
                       {/* Value formatted */}
-                      <td className="py-3.5 text-right font-bold text-white sm:text-sm">
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-right font-bold text-white text-xs sm:text-sm">
                         {showValues ? `R$ ${(row.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
                       </td>
                     </tr>
@@ -1350,78 +1368,136 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* --------------------------------------------------------------------- */}
-        {/* RIGHT COLUMN: DISPONÍVEL PARA SAQUE + STATUS DAS TRANSAÇÕES + SAÚDE    */}
+        {/* RIGHT COLUMN: REESTRUTURAÇÃO EM GRID DENSA (2 COLS NO MOBILE)         */}
         {/* --------------------------------------------------------------------- */}
-        <div className="lg:col-span-4 flex flex-col gap-5 sm:gap-6 min-w-0">
+        <div className="lg:col-span-4 flex flex-col gap-2.5 sm:gap-6 min-w-0">
 
-          {/* CARD 1: "Disponível para saque" with 3D Glowing Wallet */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-[#050b14] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden backdrop-blur-xl flex flex-col justify-between"
-          >
-            <div>
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
-                    <Wallet className="w-3.5 h-3.5" />
-                  </div>
-                  <h3 className="text-xs sm:text-sm font-bold text-white">
-                    Disponível para saque
-                  </h3>
-                </div>
-
-                <button
-                  onClick={() => setShowValues(!showValues)}
-                  className="text-white/40 hover:text-white transition-colors cursor-pointer p-1"
-                  title={showValues ? "Ocultar valores" : "Mostrar valores"}
-                >
-                  {showValues ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                </button>
-              </div>
-
-              {/* Main Content: Balance on Left, 3D Glowing Wallet on Right */}
-              <div className="flex items-center justify-between gap-2 mt-1">
-                <div>
-                  <div className="text-3xl sm:text-4xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-                    {showValues ? `R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
-                  </div>
-                  <div className="text-xs text-white/50 font-medium mt-1.5 flex items-center gap-1.5">
-                    <span>Liquidação PIX D+9</span>
-                  </div>
-                </div>
-
-                {/* 3D Glowing Green Wallet */}
-                <GlowingWallet3D />
-              </div>
-            </div>
-
-            {/* Bottom Button: SACAR VIA PIX D+9 in Solid Lime Yellow-Green */}
-            <button
-              onClick={onOpenWithdraw}
-              className="mt-6 w-full bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black py-3.5 px-4 rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(217,242,42,0.35)] transition-all cursor-pointer active:scale-[0.99]"
+          {/* DENSE 2-COLUMN GRID ON MOBILE: "Disponível para saque" & "Saldo Futuro" lado a lado */}
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-6">
+            
+            {/* CARD 1: "Disponível para saque" */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 shadow-2xl relative overflow-hidden backdrop-blur-xl flex flex-col justify-between"
             >
-              <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
-              <span>SACAR VIA PIX D+9</span>
-            </button>
-          </motion.div>
+              <div>
+                {/* Header */}
+                <div className="flex items-center justify-between mb-1.5 sm:mb-4">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635] flex-shrink-0">
+                      <Wallet className="w-3.5 h-3.5" />
+                    </div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-white truncate">
+                      Disponível
+                    </h3>
+                  </div>
 
-          {/* CARD 2: "Status das transações" with Donut Chart */}
+                  <button
+                    onClick={() => setShowValues(!showValues)}
+                    className="text-white/40 hover:text-white transition-colors cursor-pointer p-0.5 sm:p-1"
+                    title={showValues ? "Ocultar valores" : "Mostrar valores"}
+                  >
+                    {showValues ? <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                  </button>
+                </div>
+
+                {/* Main Content: Balance on Left, 3D Glowing Wallet on Right */}
+                <div className="flex items-center justify-between gap-1 sm:gap-2 mt-0.5 sm:mt-1">
+                  <div className="min-w-0">
+                    <div className="text-base sm:text-3xl font-bold sm:font-black text-[#D9F22A] font-['Syne'] tracking-tight truncate">
+                      {showValues ? `R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
+                    </div>
+                    <div className="text-[9px] sm:text-xs text-gray-400 font-medium mt-0.5 sm:mt-1.5 truncate">
+                      <span>Liquidação D+9</span>
+                    </div>
+                  </div>
+
+                  {/* 3D Glowing Green Wallet */}
+                  <GlowingWallet3D variant="green" compact={true} />
+                </div>
+              </div>
+
+              {/* Button: SACAR VIA PIX (Slim py-2 with text-xs font-bold in neon green) */}
+              <button
+                onClick={onOpenWithdraw}
+                className="mt-2.5 sm:mt-6 w-full bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-bold py-2 sm:py-3.5 px-2.5 sm:px-4 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(217,242,42,0.3)] transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] flex-shrink-0" />
+                <span className="truncate">SACAR VIA PIX</span>
+              </button>
+            </motion.div>
+
+            {/* CARD 2: "Saldo Futuro" (Matching reference layout with Purple Wallet) */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12 }}
+              className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 shadow-2xl relative overflow-hidden backdrop-blur-xl flex flex-col justify-between"
+            >
+              <div>
+                {/* Header */}
+                <div className="flex items-center justify-between mb-1.5 sm:mb-4">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-md bg-purple-500/15 flex items-center justify-center text-[#c084fc] flex-shrink-0">
+                      <Clock className="w-3.5 h-3.5" />
+                    </div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-white truncate">
+                      Saldo Futuro
+                    </h3>
+                  </div>
+
+                  <button
+                    onClick={() => setShowValues(!showValues)}
+                    className="text-white/40 hover:text-white transition-colors cursor-pointer p-0.5 sm:p-1"
+                    title={showValues ? "Ocultar valores" : "Mostrar valores"}
+                  >
+                    {showValues ? <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                  </button>
+                </div>
+
+                {/* Main Content: Future Balance on Left, Purple Wallet on Right */}
+                <div className="flex items-center justify-between gap-1 sm:gap-2 mt-0.5 sm:mt-1">
+                  <div className="min-w-0">
+                    <div className="text-base sm:text-3xl font-bold sm:font-black text-[#c084fc] font-['Syne'] tracking-tight truncate">
+                      {showValues ? `R$ ${pendingBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
+                    </div>
+                    <div className="text-[9px] sm:text-xs text-gray-400 font-medium mt-0.5 sm:mt-1.5 truncate">
+                      <span>A liberar em D+30</span>
+                    </div>
+                  </div>
+
+                  {/* 3D Glowing Purple Wallet */}
+                  <GlowingWallet3D variant="purple" compact={true} />
+                </div>
+              </div>
+
+              {/* Secondary button: Ver Carteira / Extrato */}
+              <button
+                onClick={() => setActiveTab(roleMode === 'empresa' ? 'carteira' : 'vendas')}
+                className="mt-2.5 sm:mt-6 w-full bg-white/5 hover:bg-white/10 text-white/90 border border-white/10 font-bold py-2 sm:py-3.5 px-2.5 sm:px-4 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+              >
+                <span className="truncate">VER EXTRATO</span>
+              </button>
+            </motion.div>
+
+          </div>
+
+          {/* CARD 3: "Status das transações" with Compact Donut Chart */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="bg-[#050b14] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl"
+            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 shadow-2xl backdrop-blur-xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-2.5 sm:mb-5">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
                   <Clock className="w-3.5 h-3.5" />
                 </div>
-                <h3 className="text-xs sm:text-sm font-bold text-white">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
                   Status das transações
                 </h3>
               </div>
@@ -1436,9 +1512,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             {/* Donut Chart & Legend */}
-            <div className="flex items-center justify-around gap-4">
-              {/* Donut SVG */}
-              <div className="relative w-28 h-28 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center justify-around gap-2 sm:gap-4">
+              {/* Donut SVG (compact w-20 h-20 on mobile) */}
+              <div className="relative w-20 h-20 sm:w-28 sm:h-28 flex items-center justify-center flex-shrink-0">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                   {/* Background Track */}
                   <circle
@@ -1482,37 +1558,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                 {/* Donut Center: Total & Count */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <span className="text-[10px] text-white/40 font-medium">Total</span>
-                  <span className="text-xl font-black text-white font-['Syne'] leading-tight">
+                  <span className="text-[9px] text-gray-400 font-medium">Total</span>
+                  <span className="text-base sm:text-xl font-bold sm:font-black text-white font-['Syne'] leading-tight">
                     {showValues ? totalCount : '••'}
                   </span>
                 </div>
               </div>
 
               {/* Status Legend Breakdown */}
-              <div className="flex flex-col gap-2.5 flex-1 max-w-[150px]">
+              <div className="flex flex-col gap-1.5 sm:gap-2.5 flex-1 max-w-[150px]">
                 {/* Aprovadas (Lime-Yellow) */}
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#D9F22A] flex-shrink-0" />
+                <div className="flex items-center justify-between text-[11px] sm:text-xs">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#D9F22A] flex-shrink-0" />
                     <span className="text-white/80 font-medium">Aprovadas</span>
                   </div>
                   <span className="font-bold text-white">{approvedPercent}%</span>
                 </div>
 
                 {/* Pendentes (Lavender) */}
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#c084fc] flex-shrink-0" />
+                <div className="flex items-center justify-between text-[11px] sm:text-xs">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#c084fc] flex-shrink-0" />
                     <span className="text-white/80 font-medium">Pendentes</span>
                   </div>
                   <span className="font-bold text-white">{pendingPercent}%</span>
                 </div>
 
                 {/* Recusadas (Slate-Blue) */}
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#64748b] flex-shrink-0" />
+                <div className="flex items-center justify-between text-[11px] sm:text-xs">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#64748b] flex-shrink-0" />
                     <span className="text-white/80 font-medium">Recusadas</span>
                   </div>
                   <span className="font-bold text-white">{rejectedPercent}%</span>
@@ -1521,20 +1597,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </motion.div>
 
-          {/* CARD 3: "Saúde da operação" with 2x2 Metric Grid */}
+          {/* CARD 4: "Saúde da operação" with 2x2 Metric Grid */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-[#050b14] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl"
+            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 shadow-2xl backdrop-blur-xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-2.5 sm:mb-5">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
                   <Activity className="w-3.5 h-3.5" />
                 </div>
-                <h3 className="text-xs sm:text-sm font-bold text-white">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
                   Saúde da operação
                 </h3>
               </div>
@@ -1548,58 +1624,58 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
-            {/* 2x2 Metric Grid matching screenshot */}
-            <div className="grid grid-cols-2 gap-3.5">
+            {/* 2x2 Metric Grid */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-3.5">
               {/* Box 1: Leads & Pendentes / Remarketing */}
               <div 
                 onClick={() => setActiveTab('clientes')}
-                className="bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-[#D9F22A]/30 rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer transition-all"
+                className="bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-[#D9F22A]/30 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between cursor-pointer transition-all"
                 title="Ver leads e fazer remarketing"
               >
-                <div className="flex items-center gap-1.5 text-white/60 mb-2">
-                  <ShoppingCart className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span className="text-[11px] font-medium truncate">Leads & Pendentes</span>
+                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
+                  <ShoppingCart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#38bdf8]" />
+                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Leads & Pendentes</span>
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-[#38bdf8] font-['Syne']">
+                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
                   {showValues ? pendingCount : '•'}
                 </div>
-                <span className="text-[10px] text-[#D9F22A] mt-1 truncate hover:underline">Fazer Remarketing →</span>
+                <span className="text-[9px] sm:text-[10px] text-[#D9F22A] mt-0.5 sm:mt-1 truncate hover:underline">Remarketing →</span>
               </div>
 
               {/* Box 2: Reembolso */}
-              <div className="bg-[#070e1c] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 text-white/60 mb-2">
-                  <RotateCcw className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span className="text-[11px] font-medium truncate">Reembolso</span>
+              <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
+                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
+                  <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#38bdf8]" />
+                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Reembolso</span>
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-[#38bdf8] font-['Syne']">
+                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
                   {showValues ? '0%' : '•'}
                 </div>
-                <span className="text-[10px] text-white/40 mt-1 truncate">Taxa de estornos</span>
+                <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Taxa de estornos</span>
               </div>
 
               {/* Box 3: Chargeback */}
-              <div className="bg-[#070e1c] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 text-white/60 mb-2">
+              <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
+                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
                   <Shield className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span className="text-[11px] font-medium truncate">Chargeback</span>
+                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Chargeback</span>
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-[#38bdf8] font-['Syne']">
+                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
                   {showValues ? '0%' : '•'}
                 </div>
-                <span className="text-[10px] text-white/40 mt-1 truncate">Contestações bancárias</span>
+                <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Contestações</span>
               </div>
 
               {/* Box 4: MED */}
-              <div className="bg-[#070e1c] border border-white/5 rounded-2xl p-3.5 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 text-white/60 mb-2">
+              <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
+                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
                   <Landmark className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span className="text-[11px] font-medium truncate">MED</span>
+                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">MED</span>
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-[#38bdf8] font-['Syne']">
+                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
                   {showValues ? '0%' : '•'}
                 </div>
-                <span className="text-[10px] text-white/40 mt-1 truncate">Mecanismo BACEN</span>
+                <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">BACEN</span>
               </div>
             </div>
           </motion.div>

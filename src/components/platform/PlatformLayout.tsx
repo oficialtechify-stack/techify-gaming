@@ -222,6 +222,31 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
+  // Travar completamente o scroll do fundo quando modais, popups ou drawers estiverem abertos
+  const isAnyModalOrDrawerOpen = Boolean(
+    isMobileMenuOpen ||
+    isWithdrawModalOpen ||
+    isRegisterAffiliateModalOpen ||
+    isCreateCompanyModalOpen ||
+    isCreatePlanModalOpen ||
+    editingPlan ||
+    liveCheckoutPlan ||
+    selectedDetailProduct ||
+    companyAuthModal
+  );
+
+  useEffect(() => {
+    if (isAnyModalOrDrawerOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow || '';
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [isAnyModalOrDrawerOpen]);
+
   // Role Security & Tab Guard
   useEffect(() => {
     if (userRole && userRole !== roleMode) {
@@ -940,7 +965,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const currentMobileTabs = roleMode === 'afiliado' ? mobileAffiliateTabs : mobileCompanyTabs;
 
   return (
-    <div className="min-h-screen bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]">
+    <div className="min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]">
       {/* Background Ambience */}
       <div className="fixed top-0 right-1/4 w-[600px] h-[600px] bg-[#D9F22A]/[0.03] rounded-full blur-[180px] pointer-events-none -z-10" />
 
@@ -1258,7 +1283,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
       {/* ===================== 2. MAIN CONTENT WRAPPER ===================== */}
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 min-w-0 max-w-full overflow-x-hidden ${
+        className={`flex-1 flex flex-col min-h-[100dvh] h-[100dvh] transition-all duration-300 min-w-0 max-w-full overflow-y-auto overflow-x-hidden overscroll-y-contain ${
           sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
         } ml-0`}
       >
@@ -1511,10 +1536,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         </div>
 
         {/* VIEW CONTAINER */}
-        <main className={`flex-1 w-full mx-auto min-w-0 pb-24 lg:pb-8 ${
+        <main className={`flex-1 w-full mx-auto min-w-0 pb-16 lg:pb-8 ${
           activeTab === 'dashboard' 
-            ? 'max-w-[1440px] p-4 sm:p-6 lg:p-8' 
-            : 'max-w-7xl p-3 sm:p-5 md:p-6 lg:p-8'
+            ? 'max-w-[1440px] p-2.5 sm:p-6 lg:p-8' 
+            : 'max-w-7xl p-2.5 sm:p-5 md:p-6 lg:p-8'
         }`}>
           {detailedEditingPlan ? (
             <ProductEditorView
@@ -1774,36 +1799,36 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         </main>
 
         {/* MOBILE BOTTOM NAVIGATION BAR */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#060A15]/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 flex items-center justify-around shadow-2xl safe-area-inset-bottom">
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#060A15]/95 backdrop-blur-xl border-t border-white/10 px-1.5 flex items-center justify-around shadow-2xl safe-area-inset-bottom">
           <button
             onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
               activeTab === 'dashboard' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
             <LayoutDashboard className="w-5 h-5" />
-            <span className="text-[10px] font-bold mt-1">Início</span>
+            <span className="text-[10px] font-semibold mt-0.5">Início</span>
           </button>
 
           {roleMode === 'afiliado' ? (
             <button
               onClick={() => { setActiveTab('afiliados'); setIsMobileMenuOpen(false); }}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+              className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
                 activeTab === 'afiliados' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
               <Share2 className="w-5 h-5" />
-              <span className="text-[10px] font-bold mt-1">Links</span>
+              <span className="text-[10px] font-semibold mt-0.5">Links</span>
             </button>
           ) : (
             <button
               onClick={() => { setActiveTab('minha_empresa'); setIsMobileMenuOpen(false); }}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+              className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
                 activeTab === 'minha_empresa' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
               <Building2 className="w-5 h-5" />
-              <span className="text-[10px] font-bold mt-1">Startup</span>
+              <span className="text-[10px] font-semibold mt-0.5">Startup</span>
             </button>
           )}
 
@@ -1812,12 +1837,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               setActiveTab(roleMode === 'empresa' ? 'cobrancas' : 'vitrine');
               setIsMobileMenuOpen(false);
             }}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
               activeTab === 'vitrine' || activeTab === 'cobrancas' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
             {roleMode === 'empresa' ? <CreditCard className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
-            <span className="text-[10px] font-bold mt-1">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
+            <span className="text-[10px] font-semibold mt-0.5">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
           </button>
 
           <button
@@ -1825,20 +1850,20 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               setActiveTab(roleMode === 'empresa' ? 'carteira' : 'vendas');
               setIsMobileMenuOpen(false);
             }}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
               activeTab === 'vendas' || activeTab === 'carteira' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
             {roleMode === 'empresa' ? <Wallet className="w-5 h-5" /> : <Receipt className="w-5 h-5" />}
-            <span className="text-[10px] font-bold mt-1">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
+            <span className="text-[10px] font-semibold mt-0.5">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
           </button>
 
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer min-w-[54px]"
+            className="h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer min-w-[50px]"
           >
             <Menu className="w-5 h-5" />
-            <span className="text-[10px] font-bold mt-1">Menu</span>
+            <span className="text-[10px] font-semibold mt-0.5">Menu</span>
           </button>
         </nav>
       </div>
