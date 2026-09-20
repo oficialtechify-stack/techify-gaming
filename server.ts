@@ -53,6 +53,7 @@ import {
   notifyCompanySale, 
   notifySystemUpdate 
 } from './src/lib/notifications';
+import { setupMcpRoutes } from './server/mcpRoutes';
 
 const app = express();
 const PORT = 3000;
@@ -78,6 +79,9 @@ const fbApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 
 console.log('🔥 Firebase Firestore conectado com sucesso no backend Node.js');
+
+// Register MCP & Custom Actions Routes (ChatGPT / Claude / Gemini)
+setupMcpRoutes(app, db);
 
 // Helper: Credit Platform Global Account (Checkout fee R$ 0.99, Withdrawal fee R$ 2.50)
 async function creditServerPlatformFinances(type: 'checkout' | 'withdrawal', feeAmount: number) {

@@ -1,0 +1,260 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LeadsPay API para IAs (MCP & GPT Actions)",
+    "description": "API oficial da LeadsPay para Assistentes de IA (ChatGPT, Claude, Gemini). Permite consultar saldo de afiliado, gerar cupons de desconto, listar produtos e criar links de checkout comissionados diretamente nas conversas.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Suporte LeadsPay",
+      "url": "https://techify-gaming.vercel.app"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/mcp/v1",
+      "description": "Servidor Oficial LeadsPay API v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/": {
+      "post": {
+        "summary": "Executa uma ação na conta LeadsPay do usuário",
+        "description": "Ponto de entrada central para ChatGPT Custom Actions e assistentes de IA. Executa consultas de saldo, criação de cupons e geração de links de checkout.",
+        "operationId": "executeLeadsPayAction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ação executada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave API não autorizada ou ausente"
+          },
+          "400": {
+            "description": "Parâmetros inválidos ou ação não reconhecida"
+          }
+        }
+      }
+    },
+    "/balance": {
+      "get": {
+        "summary": "Consulta saldo do afiliado ou vendedor",
+        "description": "Retorna o saldo disponível, saldo pendente a liberar em 9 dias, total acumulado e chave Pix configurada.",
+        "operationId": "getBalance",
+        "responses": {
+          "200": {
+            "description": "Saldo consultado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autorizado"
+          }
+        }
+      }
+    },
+    "/coupons": {
+      "post": {
+        "summary": "Cria um novo cupom de desconto",
+        "description": "Gera um cupom de desconto no sistema LeadsPay para planos e checkouts.",
+        "operationId": "createCoupon",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCouponParams"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cupom criado com sucesso"
+          }
+        }
+      }
+    },
+    "/checkout": {
+      "post": {
+        "summary": "Gera um link de checkout comissionado",
+        "description": "Cria a URL de checkout direto para o produto especificado com rastreamento do afiliado.",
+        "operationId": "createCheckout",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckoutParams"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Link gerado com sucesso"
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "summary": "Lista produtos e planos disponíveis para venda",
+        "description": "Retorna catálogo de planos com IDs, preços, comissões de afiliados e links de checkout.",
+        "operationId": "listProducts",
+        "responses": {
+          "200": {
+            "description": "Lista de produtos disponíveis"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key LeadsPay (lp_live_...)",
+        "description": "Insira sua Chave API pessoal gerada na aba 'Meu Perfil' ou 'Integrações' da LeadsPay."
+      }
+    },
+    "schemas": {
+      "ActionRequest": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "get_balance",
+              "create_coupon",
+              "create_checkout",
+              "list_products",
+              "list_coupons",
+              "get_affiliations"
+            ],
+            "description": "Identificador da ação a ser executada na LeadsPay"
+          },
+          "params": {
+            "type": "object",
+            "description": "Parâmetros específicos da ação selecionada",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Código do cupom (ex: PROMO20)"
+              },
+              "discount": {
+                "type": "number",
+                "description": "Valor do desconto (ex: 20 para 20%)"
+              },
+              "discountType": {
+                "type": "string",
+                "enum": ["percentage", "fixed"],
+                "default": "percentage"
+              },
+              "maxUses": {
+                "type": "integer",
+                "default": 100
+              },
+              "productId": {
+                "type": "string",
+                "description": "ID do plano ou produto na LeadsPay"
+              },
+              "affiliateId": {
+                "type": "string",
+                "description": "Código ou ID do afiliado (opcional, usa o vinculado à chave se omitido)"
+              }
+            }
+          }
+        }
+      },
+      "BalanceResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "userName": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string" },
+          "availableBalance": { "type": "number", "description": "Saldo disponível para saque imediato" },
+          "pendingBalance": { "type": "number", "description": "Saldo pendente com liberação em 9 dias" },
+          "totalEarned": { "type": "number", "description": "Total histórico acumulado" },
+          "currency": { "type": "string", "example": "BRL" },
+          "formattedAvailable": { "type": "string", "example": "R$ 1.250,00" },
+          "formattedPending": { "type": "string", "example": "R$ 450,00" },
+          "pixKey": { "type": "string", "nullable": true }
+        }
+      },
+      "CreateCouponParams": {
+        "type": "object",
+        "required": ["code", "discount"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Código do cupom (ex: VIP30)"
+          },
+          "discount": {
+            "type": "number",
+            "description": "Valor do desconto (ex: 30 para 30%)"
+          },
+          "discountType": {
+            "type": "string",
+            "enum": ["percentage", "fixed"],
+            "default": "percentage"
+          },
+          "maxUses": {
+            "type": "integer",
+            "default": 100
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "Data de expiração (opcional, ex: 31/12/2026)"
+          }
+        }
+      },
+      "CreateCheckoutParams": {
+        "type": "object",
+        "required": ["productId"],
+        "properties": {
+          "productId": {
+            "type": "string",
+            "description": "ID ou slug do produto/plano"
+          },
+          "affiliateId": {
+            "type": "string",
+            "description": "Código do afiliado (opcional, usa o vinculado à chave)"
+          },
+          "couponCode": {
+            "type": "string",
+            "description": "Código de cupom pré-aplicado no checkout (opcional)"
+          }
+        }
+      }
+    }
+  }
+}

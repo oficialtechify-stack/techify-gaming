@@ -17,11 +17,13 @@ import {
   ShieldCheck, 
   RefreshCw,
   Tag,
-  DollarSign
+  DollarSign,
+  Bot
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { updateUserProfileInFirebase, subscribePlans } from '../../services/firestoreService';
 import { CompanyPlan, CompanyStartup } from '../../types/platform';
+import { ApiKeySection } from './ApiKeySection';
 
 interface IntegracoesViewProps {
   plans?: CompanyPlan[];
@@ -55,7 +57,7 @@ export const IntegracoesView: React.FC<IntegracoesViewProps> = ({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Abas de documentação
-  const [activeDocTab, setActiveDocTab] = useState<'prompt' | 'rest' | 'nocode'>('prompt');
+  const [activeDocTab, setActiveDocTab] = useState<'prompt' | 'rest' | 'nocode' | 'mcp'>('prompt');
   const [restSubTab, setRestSubTab] = useState<'js' | 'curl'>('js');
 
   // Planos para a Aba C (Modo sem código)
@@ -462,6 +464,19 @@ async function gerarPixLeadsPay() {
             >
               <Globe className="w-3.5 h-3.5" />
               <span>C: Modo Sem Código</span>
+            </button>
+
+            <button
+              id="tab-btn-mcp"
+              onClick={() => setActiveDocTab('mcp')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                activeDocTab === 'mcp'
+                  ? 'bg-emerald-500 text-black shadow-sm'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>D: Assistentes de IA (MCP)</span>
             </button>
           </div>
         </div>
@@ -892,6 +907,16 @@ async function gerarPixLeadsPay() {
                 <li>Após a confirmação do pagamento, seu Webhook receberá o postback automático informando os dados do comprador.</li>
               </ol>
             </div>
+          </div>
+        )}
+
+        {/* ================= ABA D: ASSISTENTES DE IA & PROTOCOLO MCP ================= */}
+        {activeDocTab === 'mcp' && (
+          <div className="animate-in fade-in duration-200" id="doc-tab-content-mcp">
+            <ApiKeySection 
+              apiKey={apiKey} 
+              onApiKeyChange={(newKey) => setApiKey(newKey)} 
+            />
           </div>
         )}
       </div>

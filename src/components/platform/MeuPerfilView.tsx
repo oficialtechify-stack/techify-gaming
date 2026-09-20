@@ -27,6 +27,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
+import { ApiKeySection } from './ApiKeySection';
 
 interface MeuPerfilViewProps {
   userProfile: UserSellerProfile;
@@ -681,6 +682,14 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* ================= ASSISTENTES DE IA & PROTOCOLO MCP ================= */}
+      <div className="mb-6">
+        <ApiKeySection 
+          apiKey={userProfile.apiKey} 
+          onApiKeyChange={(newKey) => onSaveProfile({ apiKey: newKey })}
+        />
       </div>
 
       <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
