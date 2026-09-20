@@ -523,5 +523,4 @@ export type PlatformTab =
   | 'cupons'
   | 'planos'
   | 'database'
-  | 'modal_backgrounds'
-  | 'agencyos_webhook';
+  | 'modal_backgrounds';

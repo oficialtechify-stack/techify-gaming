@@ -65,8 +65,6 @@ import { CreatePlanModal } from './CreatePlanModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
 import { ProductEditorView } from './ProductEditorView';
-import { AgencyOSWebhookView } from './AgencyOSWebhookView';
-import { isAgencyOSAuthorized } from '../../services/webhookDispatcher';
 import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
 import { Modals } from '../Modals';
 import { ActiveModal } from '../../types';
@@ -111,7 +109,6 @@ import {
   Package,
   CreditCard,
   ArrowUpRight,
-  Radio,
   Image as ImageIcon
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
@@ -154,7 +151,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     userEmail.includes('leadspay') ||
     userProfile?.role === 'admin'
   );
-  const isAgencyOSUser = isAgencyOSAuthorized(userEmail);
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -173,6 +169,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Modals state
   const [isCompanyAccordionOpen, setIsCompanyAccordionOpen] = useState<boolean>(false);
+  const [isAffiliateAccordionOpen, setIsAffiliateAccordionOpen] = useState<boolean>(true);
   const [isRegisterAffiliateModalOpen, setIsRegisterAffiliateModalOpen] = useState<boolean>(false);
   const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState<boolean>(false);
   const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState<boolean>(false);
@@ -249,14 +246,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   useEffect(() => {
     if (activeTab === 'database' && !isSuperAdmin) {
       setActiveTab('dashboard');
-    } else if (activeTab === 'agencyos_webhook' && !isAgencyOSUser) {
-      setActiveTab('dashboard');
     } else if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
       setActiveTab('dashboard');
     } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios')) {
       setActiveTab('minha_empresa');
     }
-  }, [roleMode, activeTab, isSuperAdmin, isAgencyOSUser]);
+  }, [roleMode, activeTab, isSuperAdmin]);
 
   // Robust Role Switcher with Mandatory Registration
   const handleSwitchRole = (targetRole: UserRoleMode) => {
@@ -878,18 +873,20 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'saques' as PlatformTab, label: 'Saques', icon: ArrowUpRight },
   ];
 
-  const affiliateNavItems = [
-    { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
-    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
-    { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
-    { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações (Sair)', icon: Link2, badge: `${affiliations.length}` },
-    { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: `${userVisibleTransactions.length}` },
-    { id: 'saques' as PlatformTab, label: 'Saques & Transferências', icon: ArrowUpRight },
+  const affiliateAccordionItems: { id: PlatformTab; label: string; icon: any; badge?: string }[] = [
+    { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações', icon: Link2, badge: affiliations.length > 0 ? `${affiliations.length}` : undefined },
+    { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
     { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
+    { id: 'saques' as PlatformTab, label: 'Saques & Transferências', icon: ArrowUpRight },
     { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
-    ...(isAgencyOSUser ? [{ id: 'agencyos_webhook' as PlatformTab, label: 'AgencyOS Webhook', icon: Radio, badge: 'AgencyOS' }] : []),
+  ];
+
+  const affiliateNavItems = [
+    { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
+    { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
+    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
       { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
@@ -903,7 +900,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
-    ...(isAgencyOSUser ? [{ id: 'agencyos_webhook' as PlatformTab, label: 'AgencyOS Webhook', icon: Radio, badge: 'AgencyOS' }] : []),
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
       { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
@@ -1059,6 +1055,70 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                     {companyAccordionItems.map((subItem) => {
                       const SubIcon = subItem.icon;
                       const isSubActive = activeTab === subItem.id || (subItem.id === 'produtos' && activeTab === 'minha_empresa');
+                      return (
+                        <button
+                          key={subItem.id}
+                          onClick={() => {
+                            setActiveTab(subItem.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all cursor-pointer ${
+                            isSubActive
+                              ? 'bg-[#102419] text-[#D9F22A] font-black border border-[#D9F22A]/40 shadow-[0_0_12px_rgba(217,242,42,0.15)]'
+                              : 'text-white/60 hover:text-white hover:bg-white/[0.05] font-medium'
+                          }`}
+                        >
+                          <SubIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isSubActive ? 'text-[#D9F22A]' : 'text-white/40'}`} />
+                          <span className="flex-1 text-left truncate">{subItem.label}</span>
+                          {subItem.badge && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-white/10 text-white/70">
+                              {subItem.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 2b. Collapsible Afiliado Gestão & Finanças Accordion */}
+            {roleMode === 'afiliado' && (
+              <div className="space-y-1 my-1">
+                <button
+                  onClick={() => {
+                    if (sidebarCollapsed && !isMobileMenuOpen) {
+                      setSidebarCollapsed(false);
+                    }
+                    setIsAffiliateAccordionOpen(!isAffiliateAccordionOpen);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    affiliateAccordionItems.some(sub => activeTab === sub.id)
+                      ? 'bg-white/[0.07] text-white border border-white/10'
+                      : 'text-white/70 hover:text-white hover:bg-white/[0.04]'
+                  } ${sidebarCollapsed ? 'lg:justify-center lg:px-0' : ''}`}
+                  title={sidebarCollapsed ? 'Minhas Afiliações & Vendas' : undefined}
+                >
+                  <Link2 className={`w-4 h-4 flex-shrink-0 ${affiliateAccordionItems.some(sub => activeTab === sub.id) ? 'text-[#D9F22A]' : 'text-white/60'}`} />
+                  {(!sidebarCollapsed || isMobileMenuOpen) && (
+                    <>
+                      <span className="flex-1 text-left truncate font-['Syne'] font-black">Minhas Afiliações & Vendas</span>
+                      <ChevronDown 
+                        className={`w-4 h-4 text-white/50 transition-transform duration-200 ${
+                          isAffiliateAccordionOpen ? 'rotate-180 text-[#D9F22A]' : ''
+                        }`} 
+                      />
+                    </>
+                  )}
+                </button>
+
+                {/* Accordion Sub-items */}
+                {isAffiliateAccordionOpen && (!sidebarCollapsed || isMobileMenuOpen) && (
+                  <div className="pl-3.5 ml-3 border-l-2 border-white/10 space-y-1 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                    {affiliateAccordionItems.map((subItem) => {
+                      const SubIcon = subItem.icon;
+                      const isSubActive = activeTab === subItem.id;
                       return (
                         <button
                           key={subItem.id}
@@ -1644,9 +1704,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
           {activeTab === 'modal_backgrounds' && isSuperAdmin && <AdminModalImagesManager />}
-          {activeTab === 'agencyos_webhook' && isAgencyOSUser && (
-            <AgencyOSWebhookView userEmail={userEmail} />
-          )}
             </>
           )}
         </main>
