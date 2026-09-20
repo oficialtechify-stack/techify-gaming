@@ -109,6 +109,7 @@ import {
   Package,
   CreditCard,
   ArrowUpRight,
+  Share2,
   Image as ImageIcon
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
@@ -169,7 +170,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Modals state
   const [isCompanyAccordionOpen, setIsCompanyAccordionOpen] = useState<boolean>(false);
-  const [isAffiliateAccordionOpen, setIsAffiliateAccordionOpen] = useState<boolean>(true);
+  const [isAffiliateAccordionOpen, setIsAffiliateAccordionOpen] = useState<boolean>(false);
   const [isRegisterAffiliateModalOpen, setIsRegisterAffiliateModalOpen] = useState<boolean>(false);
   const [isCreateCompanyModalOpen, setIsCreateCompanyModalOpen] = useState<boolean>(false);
   const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState<boolean>(false);
@@ -874,12 +875,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const affiliateAccordionItems: { id: PlatformTab; label: string; icon: any; badge?: string }[] = [
+    { id: 'afiliados' as PlatformTab, label: 'Links & Redes Sociais', icon: Share2, badge: 'Links' },
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações', icon: Link2, badge: affiliations.length > 0 ? `${affiliations.length}` : undefined },
     { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
     { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'saques' as PlatformTab, label: 'Saques & Transferências', icon: ArrowUpRight },
-    { id: 'afiliados' as PlatformTab, label: 'Calculadora & Materiais', icon: Layers },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
   ];
 
@@ -907,6 +908,36 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
+
+  const mobileAffiliateTabs = [
+    { id: 'dashboard' as PlatformTab, label: 'Início', icon: LayoutDashboard },
+    { id: 'afiliados' as PlatformTab, label: 'Links Sociais', icon: Share2 },
+    { id: 'minhas_afiliacoes' as PlatformTab, label: 'Afiliações', icon: Link2, badge: affiliations.length > 0 ? `${affiliations.length}` : undefined },
+    { id: 'vendas' as PlatformTab, label: 'Vendas', icon: Receipt, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
+    { id: 'vitrine' as PlatformTab, label: 'Startups', icon: ShoppingBag, badge: plans.length > 0 ? `${plans.length}` : undefined },
+    { id: 'saques' as PlatformTab, label: 'Saques PIX', icon: ArrowUpRight },
+    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
+    { id: 'cupons' as PlatformTab, label: 'Cupons', icon: Tag },
+    { id: 'relatorios' as PlatformTab, label: 'Relatórios', icon: BarChart3 },
+    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
+  ];
+
+  const mobileCompanyTabs = [
+    { id: 'dashboard' as PlatformTab, label: 'Início', icon: LayoutDashboard },
+    { id: 'minha_empresa' as PlatformTab, label: 'Startup', icon: Building2 },
+    { id: 'equipe' as PlatformTab, label: 'Afiliados', icon: Users, badge: myCompanyAffiliations.length > 0 ? `${myCompanyAffiliations.length}` : undefined },
+    { id: 'cobrancas' as PlatformTab, label: 'Cobranças', icon: CreditCard },
+    { id: 'carteira' as PlatformTab, label: 'Carteira', icon: Wallet },
+    { id: 'links_pagamento' as PlatformTab, label: 'Links', icon: Link2 },
+    { id: 'vitrine' as PlatformTab, label: 'Marketplace', icon: Store },
+    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
+    { id: 'cupons' as PlatformTab, label: 'Cupons', icon: Tag },
+    { id: 'integracoes' as PlatformTab, label: 'Webhooks', icon: Network },
+    { id: 'relatorios' as PlatformTab, label: 'Relatórios', icon: BarChart3 },
+    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
+  ];
+
+  const currentMobileTabs = roleMode === 'afiliado' ? mobileAffiliateTabs : mobileCompanyTabs;
 
   return (
     <div className="min-h-screen bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]">
@@ -1445,6 +1476,40 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           </div>
         </header>
 
+        {/* RESPONSIVE HORIZONTAL MOBILE TABS STRIP - Dedicated mobile navigation */}
+        <div className="lg:hidden sticky top-16 z-20 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-2.5 py-2 overflow-x-auto scrollbar-none flex items-center justify-start gap-1.5 shadow-md">
+          {currentMobileTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex-shrink-0 active:scale-95 min-h-[34px] ${
+                  isActive
+                    ? 'bg-[#D9F22A] text-[#060A15] font-black shadow-[0_0_12px_rgba(217,242,42,0.35)]'
+                    : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10 border border-white/5'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#060A15]' : 'text-[#D9F22A]'}`} />
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span
+                    className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
+                      isActive ? 'bg-black/20 text-black' : 'bg-white/15 text-white'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
         {/* VIEW CONTAINER */}
         <main className={`flex-1 w-full mx-auto min-w-0 pb-24 lg:pb-8 ${
           activeTab === 'dashboard' 
@@ -1712,7 +1777,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#060A15]/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 flex items-center justify-around shadow-2xl safe-area-inset-bottom">
           <button
             onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
               activeTab === 'dashboard' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
@@ -1720,45 +1785,57 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <span className="text-[10px] font-bold mt-1">Início</span>
           </button>
 
+          {roleMode === 'afiliado' ? (
+            <button
+              onClick={() => { setActiveTab('afiliados'); setIsMobileMenuOpen(false); }}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+                activeTab === 'afiliados' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+              }`}
+            >
+              <Share2 className="w-5 h-5" />
+              <span className="text-[10px] font-bold mt-1">Links</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => { setActiveTab('minha_empresa'); setIsMobileMenuOpen(false); }}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+                activeTab === 'minha_empresa' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+              }`}
+            >
+              <Building2 className="w-5 h-5" />
+              <span className="text-[10px] font-bold mt-1">Startup</span>
+            </button>
+          )}
+
           <button
             onClick={() => {
-              setActiveTab(roleMode === 'empresa' ? 'minha_empresa' : 'vitrine');
+              setActiveTab(roleMode === 'empresa' ? 'cobrancas' : 'vitrine');
               setIsMobileMenuOpen(false);
             }}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'vitrine' || activeTab === 'minha_empresa' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+              activeTab === 'vitrine' || activeTab === 'cobrancas' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            {roleMode === 'empresa' ? <Building2 className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
-            <span className="text-[10px] font-bold mt-1">{roleMode === 'empresa' ? 'Startup' : 'Marketplace'}</span>
+            {roleMode === 'empresa' ? <CreditCard className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
+            <span className="text-[10px] font-bold mt-1">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
           </button>
 
           <button
-            onClick={() => { setActiveTab('vendas'); setIsMobileMenuOpen(false); }}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'vendas' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
-            }`}
-          >
-            <Receipt className="w-5 h-5" />
-            <span className="text-[10px] font-bold mt-1">Vendas</span>
-          </button>
-
-          <button
             onClick={() => {
-              setActiveTab(roleMode === 'empresa' ? 'carteira' : 'financeiro');
+              setActiveTab(roleMode === 'empresa' ? 'carteira' : 'vendas');
               setIsMobileMenuOpen(false);
             }}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'financeiro' || activeTab === 'carteira' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
+            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer min-w-[54px] ${
+              activeTab === 'vendas' || activeTab === 'carteira' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            <Wallet className="w-5 h-5" />
-            <span className="text-[10px] font-bold mt-1">Saldo PIX</span>
+            {roleMode === 'empresa' ? <Wallet className="w-5 h-5" /> : <Receipt className="w-5 h-5" />}
+            <span className="text-[10px] font-bold mt-1">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
           </button>
 
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
+            className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer min-w-[54px]"
           >
             <Menu className="w-5 h-5" />
             <span className="text-[10px] font-bold mt-1">Menu</span>
