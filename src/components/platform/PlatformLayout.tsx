@@ -60,6 +60,8 @@ import { CobrancasView } from './CobrancasView';
 import { LinksPagamentoView } from './LinksPagamentoView';
 import { SaquesView } from './SaquesView';
 import { PlanosAssinaturasView } from './PlanosAssinaturasView';
+import { ComunidadeAfiliadosView } from './ComunidadeAfiliadosView';
+import { AffiliateOnboardingModal } from './AffiliateOnboardingModal';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
@@ -107,6 +109,8 @@ import {
   Trophy,
   Repeat,
   Tag,
+  HeartHandshake,
+  MessageCircle,
   ChevronDown,
   Package,
   CreditCard,
@@ -224,6 +228,28 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
+  // Modal de Boas-vindas & Onboarding de Primeiro Login do Afiliado
+  const [isAffiliateOnboardingOpen, setIsAffiliateOnboardingOpen] = useState<boolean>(false);
+
+  // Detecta primeiro acesso do afiliado para exibir as boas-vindas e o guia
+  useEffect(() => {
+    if (roleMode === 'afiliado' && currentUser?.uid) {
+      const storageKey = `leadspay_affiliate_onboarding_seen_${currentUser.uid}`;
+      try {
+        const hasSeen = localStorage.getItem(storageKey);
+        if (!hasSeen) {
+          const timer = setTimeout(() => {
+            setIsAffiliateOnboardingOpen(true);
+            localStorage.setItem(storageKey, 'true');
+          }, 800);
+          return () => clearTimeout(timer);
+        }
+      } catch (e) {
+        console.warn('Erro ao verificar status do onboarding do afiliado:', e);
+      }
+    }
+  }, [roleMode, currentUser?.uid]);
+
   // Travar completamente o scroll do fundo quando modais, popups ou drawers estiverem abertos
   const isAnyModalOrDrawerOpen = Boolean(
     isMobileMenuOpen ||
@@ -231,6 +257,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     isRegisterAffiliateModalOpen ||
     isCreateCompanyModalOpen ||
     isCreatePlanModalOpen ||
+    isAffiliateOnboardingOpen ||
     editingPlan ||
     liveCheckoutPlan ||
     selectedDetailProduct ||
@@ -276,7 +303,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setActiveTab('dashboard');
     } else if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
       setActiveTab('dashboard');
-    } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios')) {
+    } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios' || activeTab === 'comunidade')) {
       setActiveTab('minha_empresa');
     }
   }, [roleMode, activeTab, isSuperAdmin]);
@@ -913,6 +940,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const affiliateNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
+    { id: 'comunidade' as PlatformTab, label: 'Comunidade VIP (Família)', icon: HeartHandshake, badge: 'WhatsApp' },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
@@ -1523,6 +1551,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 />
               )}
 
+              {activeTab === 'comunidade' && (
+                <ComunidadeAfiliadosView
+                  userName={userProfile?.name || currentUser?.displayName || 'Afiliado'}
+                  onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
+                  onNavigateToVitrine={() => setActiveTab('vitrine')}
+                />
+              )}
+
           {activeTab === 'meu_perfil' && (
             <MeuPerfilView
               userProfile={userProfile}
@@ -1897,6 +1933,21 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       <ProductDetailModal
         product={selectedDetailProduct}
         onClose={() => setSelectedDetailProduct(null)}
+      />
+
+      {/* Onboarding & Boas-Vindas da Família LeadsPay para Afiliados */}
+      <AffiliateOnboardingModal
+        isOpen={isAffiliateOnboardingOpen}
+        onClose={() => setIsAffiliateOnboardingOpen(false)}
+        onOpenCommunity={() => {
+          setIsAffiliateOnboardingOpen(false);
+          setActiveTab('comunidade');
+        }}
+        onOpenVitrine={() => {
+          setIsAffiliateOnboardingOpen(false);
+          setActiveTab('vitrine');
+        }}
+        userName={userProfile?.name || currentUser?.displayName || 'Afiliado'}
       />
 
       {/* Global Auth Modal for Company / Google switch flow */}

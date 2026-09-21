@@ -36,7 +36,9 @@ import {
   Settings,
   ShieldCheck,
   CheckCircle2,
-  HelpCircle
+  HelpCircle,
+  HeartHandshake,
+  MessageCircle
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -775,6 +777,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Banner de Boas-Vindas & Comunidade para Afiliados */}
+      {roleMode === 'afiliado' && (
+        <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-r from-[#102419] via-[#09130d] to-[#070d18] border border-[#D9F22A]/30 p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-[#D9F22A]/15 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] flex-shrink-0 mt-0.5 sm:mt-0">
+              <HeartHandshake className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#D9F22A] font-['Syne']">
+                  SOMOS UMA FAMÍLIA • COMUNIDADE VIP
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-semibold">
+                  WhatsApp Oficial
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-white/80 mt-1 leading-snug">
+                Conecte-se com outros afiliados, monte equipes de vendas, participe das reuniões semanais ao vivo com nossos especialistas e concorra a premiações!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-stretch md:self-auto flex-shrink-0">
+            <button
+              onClick={() => setActiveTab('comunidade')}
+              className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#c8e224] text-[#060A15] font-black text-xs font-['Syne'] flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(217,242,42,0.25)] active:scale-95 cursor-pointer"
+            >
+              <MessageCircle className="w-4 h-4 fill-current" />
+              <span>Acessar Comunidade</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 2. MAIN GRID (LEFT: 68% / RIGHT: 32%)                                     */}

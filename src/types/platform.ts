@@ -501,6 +501,7 @@ export interface PlatformClient {
 
 export type PlatformTab = 
   | 'dashboard' 
+  | 'comunidade'
   | 'carteira'
   | 'meu_perfil'
   | 'vitrine' 
