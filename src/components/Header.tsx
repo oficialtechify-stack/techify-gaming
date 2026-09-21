@@ -25,7 +25,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) =
   return (
     <>
       <header className="elementor-element sticky top-0 z-50 w-full bg-[#060A15]/95 backdrop-blur-md border-b border-white/5 transition-all">
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 h-[88px] flex items-center justify-between">
+        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 h-[58px] sm:h-[72px] md:h-[84px] flex items-center justify-between">
           {/* Logo - LeadsPay */}
           <div className="elementor-widget-image">
             <a 
