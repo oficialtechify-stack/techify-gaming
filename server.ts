@@ -83,6 +83,11 @@ console.log('🔥 Firebase Firestore conectado com sucesso no backend Node.js');
 // Register MCP & Custom Actions Routes (ChatGPT / Claude / Gemini)
 setupMcpRoutes(app, db);
 
+// Firebase Auth Handler redirect for custom domain & preview support
+app.all('/__/auth/*', (req, res) => {
+  res.redirect(307, `https://techify-gaming-106fe.firebaseapp.com${req.originalUrl}`);
+});
+
 // Helper: Credit Platform Global Account (Checkout fee R$ 0.99, Withdrawal fee R$ 2.50)
 async function creditServerPlatformFinances(type: 'checkout' | 'withdrawal', feeAmount: number) {
   try {

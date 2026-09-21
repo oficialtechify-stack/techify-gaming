@@ -26,6 +26,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://techify-gaming-106fe.firebaseapp.com/__/auth/:path*"
+    },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
