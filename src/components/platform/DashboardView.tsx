@@ -52,6 +52,7 @@ interface DashboardViewProps {
   onSelectProductDetail: (product: CompanyPlan) => void;
   onSwitchRole?: (role: UserRoleMode) => void;
   onLogout?: () => void;
+  onOpenOnboardingTour?: () => void;
   selectedPeriod: string;
   setSelectedPeriod: (p: string) => void;
   selectedProductFilter: string;
@@ -261,6 +262,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectProductDetail,
   onSwitchRole,
   onLogout,
+  onOpenOnboardingTour,
   selectedPeriod = 'Hoje',
   setSelectedPeriod,
   selectedProductFilter = 'all',
@@ -800,10 +802,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-stretch md:self-auto flex-shrink-0">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 self-stretch md:self-auto flex-shrink-0">
+            {onOpenOnboardingTour && (
+              <button
+                onClick={onOpenOnboardingTour}
+                className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/90 border border-white/10 text-xs font-bold font-['Syne'] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>Ver Guia da Plataforma</span>
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('comunidade')}
-              className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#c8e224] text-[#060A15] font-black text-xs font-['Syne'] flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(217,242,42,0.25)] active:scale-95 cursor-pointer"
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#c8e224] text-[#060A15] font-black text-xs font-['Syne'] flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(217,242,42,0.25)] active:scale-95 cursor-pointer"
             >
               <MessageCircle className="w-4 h-4 fill-current" />
               <span>Acessar Comunidade</span>

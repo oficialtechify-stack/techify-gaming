@@ -1548,6 +1548,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   userName={userProfile?.name || currentUser?.displayName || 'Marcos Henrique'}
                   userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
                   userEmail={userEmail || currentUser?.email || undefined}
+                  onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
                 />
               )}
 
