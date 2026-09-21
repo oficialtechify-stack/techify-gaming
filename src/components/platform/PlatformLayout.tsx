@@ -128,7 +128,7 @@ interface PlatformLayoutProps {
 
 const ADMIN_EMAILS = [
   'rickmarketing81@gmail.com',
-  'aigerakabane81983521523@gmail.com'
+  'leadspay.oficial@gmail.com'
 ];
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
@@ -151,13 +151,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
-  const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase();
-  const isSuperAdmin = Boolean(
-    ADMIN_EMAILS.includes(userEmail) ||
-    userEmail.includes('admin') ||
-    userEmail.includes('leadspay') ||
-    userProfile?.role === 'admin'
-  );
+  const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase().trim();
+  const isSuperAdmin = ADMIN_EMAILS.includes(userEmail);
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -299,7 +294,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   }, [currentUser?.uid, roleMode]);
 
   useEffect(() => {
-    if (activeTab === 'database' && !isSuperAdmin) {
+    if ((activeTab === 'database' || activeTab === 'modal_backgrounds') && !isSuperAdmin) {
       setActiveTab('dashboard');
     } else if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
       setActiveTab('dashboard');

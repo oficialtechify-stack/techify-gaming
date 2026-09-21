@@ -64,7 +64,7 @@ import { AdminModalImagesManager } from './AdminModalImagesManager';
 
 const ADMIN_EMAILS = [
   'rickmarketing81@gmail.com',
-  'aigerakabane81983521523@gmail.com'
+  'leadspay.oficial@gmail.com'
 ];
 
 type MainAdminTab = 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'modal_backgrounds' | 'database_explorer';
@@ -90,13 +90,8 @@ export const DatabaseManagerView: React.FC = () => {
   // Coleção selecionada quando estiver no Explorador de Banco de Dados
   const [explorerCollection, setExplorerCollection] = useState<string>(COLLECTIONS.PROFILES);
 
-  const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase();
-  const isSuperAdmin = Boolean(
-    ADMIN_EMAILS.includes(userEmail) ||
-    userEmail.includes('admin') ||
-    userEmail.includes('leadspay') ||
-    userProfile?.role === 'admin'
-  );
+  const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase().trim();
+  const isSuperAdmin = ADMIN_EMAILS.includes(userEmail);
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
@@ -205,10 +200,11 @@ export const DatabaseManagerView: React.FC = () => {
             Área Exclusiva do Administrador
           </h2>
           <p className="text-xs text-white/60 leading-relaxed">
-            O painel de validação e gerenciamento do banco de dados Cloud é protegido e acessível apenas pelo administrador mestre da plataforma:
+            O painel de validação e gerenciamento do banco de dados Cloud é protegido e acessível apenas pelos administradores autorizados:
           </p>
-          <div className="bg-[#050811] border border-white/10 rounded-xl px-4 py-2.5 font-mono text-xs text-[#D9F22A] font-bold">
-            rickmarketing81@gmail.com
+          <div className="bg-[#050811] border border-white/10 rounded-xl px-4 py-2.5 font-mono text-xs text-[#D9F22A] font-bold space-y-1">
+            <div>rickmarketing81@gmail.com</div>
+            <div>leadspay.oficial@gmail.com</div>
           </div>
           <p className="text-[11px] text-white/40 mt-1">
             Seu usuário atual ({currentUser?.email || 'Visitante'}) não possui privilégios de superadministrador.
