@@ -52,6 +52,7 @@ import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
 import { AdminModalImagesManager } from './AdminModalImagesManager';
 import { MeuPerfilView } from './MeuPerfilView';
+import { AssistentesIaView } from './AssistentesIaView';
 import { AssinaturasView } from './AssinaturasView';
 import { CuponsView } from './CuponsView';
 import { ClientesView } from './ClientesView';
@@ -97,6 +98,7 @@ import {
   ArrowRightLeft,
   LogOut,
   User,
+  Bot,
   CheckCircle2,
   GraduationCap,
   Menu,
@@ -912,6 +914,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const affiliateNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
+    { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
@@ -922,6 +925,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const companyNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Visão Geral', icon: LayoutDashboard },
     { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
+    { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
@@ -933,36 +937,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
-
-  const mobileAffiliateTabs = [
-    { id: 'dashboard' as PlatformTab, label: 'Início', icon: LayoutDashboard },
-    { id: 'afiliados' as PlatformTab, label: 'Links Sociais', icon: Share2 },
-    { id: 'minhas_afiliacoes' as PlatformTab, label: 'Afiliações', icon: Link2, badge: affiliations.length > 0 ? `${affiliations.length}` : undefined },
-    { id: 'vendas' as PlatformTab, label: 'Vendas', icon: Receipt, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
-    { id: 'vitrine' as PlatformTab, label: 'Startups', icon: ShoppingBag, badge: plans.length > 0 ? `${plans.length}` : undefined },
-    { id: 'saques' as PlatformTab, label: 'Saques PIX', icon: ArrowUpRight },
-    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
-    { id: 'cupons' as PlatformTab, label: 'Cupons', icon: Tag },
-    { id: 'relatorios' as PlatformTab, label: 'Relatórios', icon: BarChart3 },
-    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
-  ];
-
-  const mobileCompanyTabs = [
-    { id: 'dashboard' as PlatformTab, label: 'Início', icon: LayoutDashboard },
-    { id: 'minha_empresa' as PlatformTab, label: 'Startup', icon: Building2 },
-    { id: 'equipe' as PlatformTab, label: 'Afiliados', icon: Users, badge: myCompanyAffiliations.length > 0 ? `${myCompanyAffiliations.length}` : undefined },
-    { id: 'cobrancas' as PlatformTab, label: 'Cobranças', icon: CreditCard },
-    { id: 'carteira' as PlatformTab, label: 'Carteira', icon: Wallet },
-    { id: 'links_pagamento' as PlatformTab, label: 'Links', icon: Link2 },
-    { id: 'vitrine' as PlatformTab, label: 'Marketplace', icon: Store },
-    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
-    { id: 'cupons' as PlatformTab, label: 'Cupons', icon: Tag },
-    { id: 'integracoes' as PlatformTab, label: 'Webhooks', icon: Network },
-    { id: 'relatorios' as PlatformTab, label: 'Relatórios', icon: BarChart3 },
-    { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
-  ];
-
-  const currentMobileTabs = roleMode === 'afiliado' ? mobileAffiliateTabs : mobileCompanyTabs;
 
   return (
     <div className="min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]">
@@ -1501,40 +1475,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           </div>
         </header>
 
-        {/* RESPONSIVE HORIZONTAL MOBILE TABS STRIP - Dedicated mobile navigation */}
-        <div className="lg:hidden sticky top-16 z-20 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-2.5 py-2 overflow-x-auto scrollbar-none flex items-center justify-start gap-1.5 shadow-md">
-          {currentMobileTabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex-shrink-0 active:scale-95 min-h-[34px] ${
-                  isActive
-                    ? 'bg-[#D9F22A] text-[#060A15] font-black shadow-[0_0_12px_rgba(217,242,42,0.35)]'
-                    : 'bg-white/5 text-white/70 hover:text-white hover:bg-white/10 border border-white/5'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#060A15]' : 'text-[#D9F22A]'}`} />
-                <span>{tab.label}</span>
-                {tab.badge && (
-                  <span
-                    className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
-                      isActive ? 'bg-black/20 text-black' : 'bg-white/15 text-white'
-                    }`}
-                  >
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
         {/* VIEW CONTAINER */}
         <main className={`flex-1 w-full mx-auto min-w-0 pb-16 lg:pb-8 ${
           activeTab === 'dashboard' 
@@ -1591,6 +1531,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onNavigateToTab={setActiveTab}
               roleMode={roleMode}
               company={myCompanies[0] || companies[0]}
+            />
+          )}
+
+          {activeTab === 'assistentes_ia' && (
+            <AssistentesIaView
+              userProfile={userProfile}
+              onSaveProfile={handleSaveProfile}
+              roleMode={roleMode}
             />
           )}
 
