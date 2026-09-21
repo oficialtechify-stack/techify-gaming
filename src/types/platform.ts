@@ -418,6 +418,7 @@ export interface VerificationRequest {
   phone: string;
   avatar: string;
   roleType?: 'afiliado' | 'empresa';
+  companyId?: string;
   companyName?: string;
   companyLegalName?: string;
   companyCnpj?: string;

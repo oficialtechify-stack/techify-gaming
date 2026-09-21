@@ -134,6 +134,10 @@ export const DatabaseManagerView: React.FC = () => {
     isProcessing: false
   });
 
+  // Rastreamento em memória de IDs excluídos e recém-aprovados para garantir sincronização perfeita
+  const [deletedEntityIds, setDeletedEntityIds] = useState<Set<string>>(new Set());
+  const [recentlyApprovedIds, setRecentlyApprovedIds] = useState<Set<string>>(new Set());
+
   // Assinatura em Tempo Real para Solicitações de Verificação, Empresas e Perfis
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -222,14 +226,27 @@ export const DatabaseManagerView: React.FC = () => {
     try {
       await approveVerificationInFirebase(userId);
       
-      // Atualização imediata no estado local
-      setVerifications(prev => prev.map(v => (v.userId === userId || v.id === userId) ? { ...v, status: 'approved' } : v));
+      // Marca como recém-aprovado para nunca sumir da tela
+      setRecentlyApprovedIds(prev => {
+        const next = new Set(prev);
+        next.add(userId);
+        return next;
+      });
+
+      // Atualização imediata em todos os estados locais
+      setVerifications(prev => prev.map(v => (v.userId === userId || v.id === userId) ? { ...v, status: 'approved', banned: false } : v));
+      setRegisteredProfiles(prev => prev.map(p => (p.userId === userId || p.id === userId) ? { ...p, verified: true, verificationStatus: 'approved', status: 'approved', banned: false } : p));
       
-      setStatusMessage(`O usuário "${userName}" foi APROVADO com sucesso e movido para a aba "Aprovados & Verificados"!`);
-      setTimeout(() => setStatusMessage(''), 6000);
+      // Se estava na aba de pendentes, muda automaticamente para 'all' para o usuário ver o item aprovado
+      if (statusFilter === 'pending') {
+        setStatusFilter('all');
+      }
+
+      setStatusMessage(`O afiliado "${userName}" foi APROVADO com sucesso! Cadastro verificado e liberado para vendas.`);
+      setTimeout(() => setStatusMessage(''), 7000);
     } catch (err: any) {
-      setErrorMessage(`Erro ao aprovar usuário: ${err.message}`);
-      setTimeout(() => setErrorMessage(''), 6000);
+      setErrorMessage(`Erro ao aprovar afiliado: ${err.message}`);
+      setTimeout(() => setErrorMessage(''), 7000);
     } finally {
       setProcessingId(null);
     }
@@ -237,38 +254,85 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Recusar Usuário / Afiliado
   const handleRejectUser = async (userId: string, userName: string) => {
-    const reason = prompt(`Motivo da recusa para "${userName}":`, 'Dados cadastrais necessitam de ajuste ou confirmação.');
-    if (reason === null) return;
+    const rawReason = prompt(`Motivo da recusa para "${userName}":`, 'Dados cadastrais necessitam de ajuste ou confirmação.');
+    if (rawReason === null) return;
+    const reason = rawReason.trim() || 'Dados cadastrais necessitam de ajuste ou confirmação.';
 
     setProcessingId(userId);
     try {
       await rejectVerificationInFirebase(userId, reason);
       
       setVerifications(prev => prev.map(v => (v.userId === userId || v.id === userId) ? { ...v, status: 'rejected', rejectionReason: reason } : v));
+      setRegisteredProfiles(prev => prev.map(p => (p.userId === userId || p.id === userId) ? { ...p, verificationStatus: 'rejected', rejectionReason: reason } : p));
 
-      setStatusMessage(`Validação do usuário "${userName}" recusada com motivo registrado.`);
-      setTimeout(() => setStatusMessage(''), 6000);
+      if (statusFilter === 'pending') {
+        setStatusFilter('all');
+      }
+
+      setStatusMessage(`Validação do afiliado "${userName}" recusada com motivo registrado.`);
+      setTimeout(() => setStatusMessage(''), 7000);
     } catch (err: any) {
-      setErrorMessage(`Erro ao recusar usuário: ${err.message}`);
-      setTimeout(() => setErrorMessage(''), 6000);
+      setErrorMessage(`Erro ao recusar afiliado: ${err.message}`);
+      setTimeout(() => setErrorMessage(''), 7000);
     } finally {
       setProcessingId(null);
     }
   };
 
-  // Aprovar Empresa
+  // Aprovar Empresa (Startup / Produtor)
   const handleApproveCompany = async (companyId: string, companyName: string) => {
     setProcessingId(companyId);
     try {
       await approveCompanyInFirebase(companyId);
 
-      setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status: 'approved', verified: true } : c));
+      // Marca como recém-aprovada para nunca sumir da tela
+      setRecentlyApprovedIds(prev => {
+        const next = new Set(prev);
+        next.add(companyId);
+        return next;
+      });
 
-      setStatusMessage(`A empresa "${companyName}" foi APROVADA com sucesso e movida para a aba "Aprovadas"!`);
-      setTimeout(() => setStatusMessage(''), 6000);
+      // Atualiza companies
+      setCompanies(prev => {
+        const exists = prev.some(c => c.id === companyId);
+        if (exists) {
+          return prev.map(c => c.id === companyId ? { ...c, status: 'approved', verified: true, banned: false } : c);
+        }
+        return [...prev, {
+          id: companyId,
+          name: companyName,
+          status: 'approved',
+          verified: true,
+          category: 'SaaS / B2B',
+          commissionRange: '10% - 50%',
+          createdAt: new Date().toISOString()
+        } as CompanyStartup];
+      });
+
+      // Atualiza verifications
+      setVerifications(prev => prev.map(v => 
+        (v.id === companyId || v.userId === companyId || v.companyId === companyId) 
+          ? { ...v, status: 'approved' } 
+          : v
+      ));
+
+      // Atualiza registeredProfiles
+      setRegisteredProfiles(prev => prev.map(p => 
+        (p.id === companyId || p.userId === companyId || p.companyId === companyId)
+          ? { ...p, verified: true, verificationStatus: 'approved' }
+          : p
+      ));
+
+      // Se estava na aba de pendentes, muda para 'all' para o administrador ver a empresa aprovada com destaque!
+      if (statusFilter === 'pending') {
+        setStatusFilter('all');
+      }
+
+      setStatusMessage(`Empresa "${companyName}" APROVADA com sucesso! Status atualizado para Aprovada & Ativa.`);
+      setTimeout(() => setStatusMessage(''), 7000);
     } catch (err: any) {
       setErrorMessage(`Erro ao aprovar empresa: ${err.message}`);
-      setTimeout(() => setErrorMessage(''), 6000);
+      setTimeout(() => setErrorMessage(''), 7000);
     } finally {
       setProcessingId(null);
     }
@@ -276,20 +340,30 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Recusar Empresa
   const handleRejectCompany = async (companyId: string, companyName: string) => {
-    const reason = prompt(`Motivo da recusa para "${companyName}":`, 'Dados cadastrais ou documentação da empresa necessitam de ajuste.');
-    if (reason === null) return;
+    const rawReason = prompt(`Motivo da recusa para "${companyName}":`, 'Dados cadastrais ou documentação da empresa necessitam de ajuste.');
+    if (rawReason === null) return;
+    const reason = rawReason.trim() || 'Dados cadastrais ou documentação da empresa necessitam de ajuste.';
 
     setProcessingId(companyId);
     try {
       await rejectCompanyInFirebase(companyId, reason);
 
-      setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status: 'rejected', rejectionReason: reason } : c));
+      setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status: 'rejected', rejectionReason: reason, verified: false } : c));
+      setVerifications(prev => prev.map(v => 
+        (v.id === companyId || v.userId === companyId || v.companyId === companyId) 
+          ? { ...v, status: 'rejected', rejectionReason: reason } 
+          : v
+      ));
+
+      if (statusFilter === 'pending') {
+        setStatusFilter('all');
+      }
 
       setStatusMessage(`Empresa "${companyName}" recusada com motivo registrado.`);
-      setTimeout(() => setStatusMessage(''), 6000);
+      setTimeout(() => setStatusMessage(''), 7000);
     } catch (err: any) {
       setErrorMessage(`Erro ao recusar empresa: ${err.message}`);
-      setTimeout(() => setErrorMessage(''), 6000);
+      setTimeout(() => setErrorMessage(''), 7000);
     } finally {
       setProcessingId(null);
     }
@@ -317,12 +391,14 @@ export const DatabaseManagerView: React.FC = () => {
       // Atualiza listas locais
       if (type === 'user') {
         setVerifications(prev => prev.map(v => (v.userId === id || v.id === id) ? { ...v, banned: true, banReason: banModal.reason } : v));
+        setRegisteredProfiles(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, banned: true, banReason: banModal.reason } : p));
       } else {
-        setCompanies(prev => prev.map(c => c.id === id ? { ...c, banned: true, banReason: banModal.reason } : c));
+        setCompanies(prev => prev.map(c => (c.id === id || c.ownerId === id) ? { ...c, banned: true, banReason: banModal.reason, verified: false } : c));
+        setVerifications(prev => prev.map(v => (v.companyId === id || v.id === id) ? { ...v, banned: true, banReason: banModal.reason } : v));
       }
 
       setStatusMessage(`"${name}" foi BANIDO com sucesso. O acesso à plataforma foi imediatamente revogado.`);
-      setTimeout(() => setStatusMessage(''), 6000);
+      setTimeout(() => setStatusMessage(''), 7000);
       setBanModal({ isOpen: false, target: null, reason: '', isProcessing: false });
     } catch (err: any) {
       setErrorMessage(`Falha ao banir: ${err.message}`);
@@ -338,13 +414,15 @@ export const DatabaseManagerView: React.FC = () => {
       await unbanEntityInFirebase(target.id, target.type);
 
       if (target.type === 'user') {
-        setVerifications(prev => prev.map(v => (v.userId === target.id || v.id === target.id) ? { ...v, banned: false, banReason: undefined } : v));
+        setVerifications(prev => prev.map(v => (v.userId === target.id || v.id === target.id) ? { ...v, banned: false, banReason: undefined, status: 'approved' } : v));
+        setRegisteredProfiles(prev => prev.map(p => (p.userId === target.id || p.id === target.id) ? { ...p, banned: false, banReason: undefined, status: 'approved' } : p));
       } else {
-        setCompanies(prev => prev.map(c => c.id === target.id ? { ...c, banned: false, banReason: undefined } : c));
+        setCompanies(prev => prev.map(c => (c.id === target.id || c.ownerId === target.id) ? { ...c, banned: false, banReason: undefined, status: 'approved', verified: true } : c));
+        setVerifications(prev => prev.map(v => (v.companyId === target.id || v.id === target.id) ? { ...v, banned: false, banReason: undefined, status: 'approved' } : v));
       }
 
       setStatusMessage(`"${target.name}" foi DESBANIDO e teve seu acesso restabelecido.`);
-      setTimeout(() => setStatusMessage(''), 6000);
+      setTimeout(() => setStatusMessage(''), 7000);
     } catch (err: any) {
       setErrorMessage(`Falha ao desbanir: ${err.message}`);
     } finally {
@@ -352,7 +430,7 @@ export const DatabaseManagerView: React.FC = () => {
     }
   };
 
-  // ================= AÇÕES DE EXCLUSÃO TOTAL (PURGE / HARD DELETE) =================
+  // ================= AÇÕES DE EXCLUSÃO TOTAL (PURGE / HARD DELETE DEFINITIVO) =================
 
   const openPurgeModal = (target: SecurityTarget) => {
     setPurgeModal({
@@ -365,8 +443,9 @@ export const DatabaseManagerView: React.FC = () => {
 
   const handleConfirmPurge = async () => {
     if (!purgeModal.target) return;
-    if (purgeModal.confirmationInput.trim().toUpperCase() !== 'EXCLUIR') {
-      alert('Para confirmar, você deve digitar exatamente a palavra EXCLUIR.');
+    const inputUpper = purgeModal.confirmationInput.trim().toUpperCase();
+    if (inputUpper !== 'EXCLUIR') {
+      alert('Para confirmar a exclusão definitiva, digite a palavra EXCLUIR.');
       return;
     }
 
@@ -374,18 +453,37 @@ export const DatabaseManagerView: React.FC = () => {
 
     try {
       const { id, type, name } = purgeModal.target;
+
+      // 1. Marca imediatamente no conjunto de IDs deletados da sessão para nunca reaparecer
+      setDeletedEntityIds(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+
+      // 2. Chama a exclusão profunda e em cascata no servidor / Firestore
       await purgeEntityInFirebase(id, type, 'EXCLUIR');
 
-      // Remove de todos os estados locais
-      if (type === 'user') {
-        setVerifications(prev => prev.filter(v => v.userId !== id && v.id !== id));
-      } else {
-        setCompanies(prev => prev.filter(c => c.id !== id));
-      }
+      // 3. Remove de TODOS os estados locais
+      setVerifications(prev => prev.filter(v => v.userId !== id && v.id !== id && v.companyId !== id));
+      setCompanies(prev => prev.filter(c => c.id !== id && c.ownerId !== id));
+      setRegisteredProfiles(prev => prev.filter(p => p.id !== id && p.userId !== id).map(p => 
+        p.companyId === id ? { ...p, companyId: null, companyName: null, hasCompanyProfile: false } : p
+      ));
       setDocuments(prev => prev.filter(d => d._id !== id && d.userId !== id && d.companyId !== id));
 
-      setStatusMessage(`"${name}" e todos os seus vínculos foram COMPLETAMENTE EXCLUÍDOS do banco de dados Cloud.`);
-      setTimeout(() => setStatusMessage(''), 7000);
+      // 4. Limpeza de caches do localStorage
+      try {
+        if (typeof window !== 'undefined') {
+          const keysToRemove = Object.keys(localStorage).filter(k => 
+            k.includes(id) || k.includes('leadspay_') || k.includes('companies') || k.includes('affiliations') || k.includes('verification')
+          );
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+        }
+      } catch (e) {}
+
+      setStatusMessage(`"${name}" e todos os seus vínculos foram COMPLETAMENTE EXCLUÍDOS do banco de dados como se nunca tivessem existido.`);
+      setTimeout(() => setStatusMessage(''), 8000);
       setPurgeModal({ isOpen: false, target: null, confirmationInput: '', isProcessing: false });
     } catch (err: any) {
       setErrorMessage(`Falha ao excluir registro: ${err.message}`);
@@ -426,8 +524,9 @@ export const DatabaseManagerView: React.FC = () => {
 
     // 1. Verificações explícitas
     verifications.forEach((v) => {
+      const key = v.userId || v.id;
+      if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
       if ((v.roleType || 'afiliado') !== 'empresa') {
-        const key = v.userId || v.id;
         map.set(key, v);
       }
     });
@@ -435,6 +534,7 @@ export const DatabaseManagerView: React.FC = () => {
     // 2. Perfis de usuários cadastrados
     registeredProfiles.forEach((p) => {
       const key = p.userId || p.id;
+      if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id)) return;
       if (!map.has(key)) {
         const isVerified = p.verified === true || p.verificationStatus === 'approved';
         const isBanned = p.banned === true;
@@ -465,7 +565,7 @@ export const DatabaseManagerView: React.FC = () => {
     });
 
     return Array.from(map.values());
-  }, [verifications, registeredProfiles]);
+  }, [verifications, registeredProfiles, deletedEntityIds]);
 
   // Unificação Inteligente: Empresas (Lista de Companies + Perfis com Empresa)
   const allCompanies: CompanyStartup[] = useMemo(() => {
@@ -473,6 +573,7 @@ export const DatabaseManagerView: React.FC = () => {
 
     // 1. Empresas existentes no banco
     companies.forEach((c) => {
+      if (deletedEntityIds.has(c.id) || (c.ownerId && deletedEntityIds.has(c.ownerId))) return;
       map.set(c.id, c);
     });
 
@@ -480,6 +581,7 @@ export const DatabaseManagerView: React.FC = () => {
     verifications.forEach((v) => {
       if (v.roleType === 'empresa') {
         const key = v.userId || v.id;
+        if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
         if (!map.has(key)) {
           map.set(key, {
             id: key,
@@ -511,35 +613,38 @@ export const DatabaseManagerView: React.FC = () => {
     // 3. Perfis cadastrados com dados empresariais
     registeredProfiles.forEach((p) => {
       const compId = p.companyId || (p.companyName || p.role === 'empresa' ? (p.userId || p.id) : null);
-      if (compId && !map.has(compId)) {
-        map.set(compId, {
-          id: compId,
-          name: p.companyName || p.name || 'Empresa ' + compId.slice(0, 5),
-          slug: (p.companyName || p.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
-          tagline: p.tagline || 'Inovação e escala digital',
-          logo: p.logo || '',
-          bannerImage: '',
-          website: p.website || '',
-          commissionRange: '10% - 50%',
-          cnpj: p.cnpj || p.cpf || '',
-          category: (p.companyCategory as any) || 'SaaS / B2B',
-          description: p.companyDescription || 'Empresa parceira cadastrada na plataforma LeadsPay.',
-          email: p.companyEmail || p.email || '',
-          whatsapp: p.companyWhatsapp || p.phone || '',
-          ownerId: p.userId || p.id,
-          submittedBy: p.userId || p.id,
-          status: p.verified ? 'approved' : 'approved',
-          verified: Boolean(p.verified),
-          totalPlansCount: 0,
-          totalAffiliatesCount: 0,
-          totalSalesVolume: 0,
-          createdAt: p.createdAt || new Date().toISOString()
-        } as CompanyStartup);
+      if (compId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
+        if (!map.has(compId)) {
+          const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
+          map.set(compId, {
+            id: compId,
+            name: p.companyName || p.name || 'Empresa ' + compId.slice(0, 5),
+            slug: (p.companyName || p.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+            tagline: p.tagline || 'Inovação e escala digital',
+            logo: p.logo || '',
+            bannerImage: '',
+            website: p.website || '',
+            commissionRange: '10% - 50%',
+            cnpj: p.cnpj || p.cpf || '',
+            category: (p.companyCategory as any) || 'SaaS / B2B',
+            description: p.companyDescription || 'Empresa parceira cadastrada na plataforma LeadsPay.',
+            email: p.companyEmail || p.email || '',
+            whatsapp: p.companyWhatsapp || p.phone || '',
+            ownerId: p.userId || p.id,
+            submittedBy: p.userId || p.id,
+            status: isApprv ? 'approved' : (p.verificationStatus || 'pending'),
+            verified: isApprv,
+            totalPlansCount: 0,
+            totalAffiliatesCount: 0,
+            totalSalesVolume: 0,
+            createdAt: p.createdAt || new Date().toISOString()
+          } as CompanyStartup);
+        }
       }
     });
 
     return Array.from(map.values());
-  }, [companies, verifications, registeredProfiles]);
+  }, [companies, verifications, registeredProfiles, deletedEntityIds]);
 
   // Helper para verificar status de um registro
   const getStatusOfVerification = (v: VerificationRequest): StatusFilter => {
@@ -553,13 +658,19 @@ export const DatabaseManagerView: React.FC = () => {
     if (c.banned) return 'banned';
     if (c.status === 'rejected') return 'rejected';
     if (c.status === 'approved' || (c.status as string) === 'active' || c.verified) return 'approved';
-    return (c.status || 'approved') as StatusFilter;
+    return (c.status || 'pending') as StatusFilter;
   };
 
   // Afiliados filtrados
   const filteredAffiliates = allAffiliates.filter(v => {
+    const vId = v.userId || v.id;
+    if (deletedEntityIds.has(vId) || deletedEntityIds.has(v.id)) return false;
+
     const currentStatus = getStatusOfVerification(v);
-    if (statusFilter !== 'all' && currentStatus !== statusFilter) return false;
+    const isRecentlyApproved = recentlyApprovedIds.has(vId) || recentlyApprovedIds.has(v.id);
+
+    // Se acabou de aprovar na sessão, não some da tela do admin
+    if (statusFilter !== 'all' && currentStatus !== statusFilter && !isRecentlyApproved) return false;
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -575,8 +686,13 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Empresas filtradas
   const filteredCompanies = allCompanies.filter(c => {
+    if (deletedEntityIds.has(c.id) || (c.ownerId && deletedEntityIds.has(c.ownerId))) return false;
+
     const currentStatus = getStatusOfCompany(c);
-    if (statusFilter !== 'all' && currentStatus !== statusFilter) return false;
+    const isRecentlyApproved = recentlyApprovedIds.has(c.id);
+
+    // Se acabou de aprovar na sessão, não some da tela do admin
+    if (statusFilter !== 'all' && currentStatus !== statusFilter && !isRecentlyApproved) return false;
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -1003,10 +1119,17 @@ export const DatabaseManagerView: React.FC = () => {
                                   Aguardando Análise
                                 </span>
                               ) : isApproved ? (
-                                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
-                                  <ShieldCheck className="w-3 h-3" />
-                                  Aprovado & Verificado
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                  {recentlyApprovedIds.has(targetId) && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-400 text-black shadow-sm animate-pulse">
+                                      ✓ Aprovado Agora
+                                    </span>
+                                  )}
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+                                    <ShieldCheck className="w-3 h-3" />
+                                    Aprovado & Verificado
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 shadow-sm">
                                   <X className="w-3 h-3" />
@@ -1232,10 +1355,17 @@ export const DatabaseManagerView: React.FC = () => {
                                   Pendente de Análise
                                 </span>
                               ) : isApproved ? (
-                                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  Aprovada & Ativa
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                  {recentlyApprovedIds.has(comp.id) && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-400 text-black shadow-sm animate-pulse">
+                                      ✓ Aprovada Agora
+                                    </span>
+                                  )}
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Aprovada & Ativa
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 shadow-sm">
                                   <X className="w-3 h-3" />
@@ -1665,14 +1795,20 @@ export const DatabaseManagerView: React.FC = () => {
 
             {/* Input de Confirmação por Texto */}
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-white flex items-center justify-between">
-                <span>Digite a palavra abaixo para confirmar:</span>
-                <span className="text-red-400 font-mono font-black">EXCLUIR</span>
-              </label>
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-white">
+                <span>Confirmação de Segurança:</span>
+                <button
+                  type="button"
+                  onClick={() => setPurgeModal(prev => ({ ...prev, confirmationInput: 'EXCLUIR' }))}
+                  className="text-[10px] text-red-400 hover:text-red-300 underline cursor-pointer normal-case"
+                >
+                  ⚡ Preencher "EXCLUIR"
+                </button>
+              </div>
               <input
                 type="text"
                 value={purgeModal.confirmationInput}
-                onChange={(e) => setPurgeModal(prev => ({ ...prev, confirmationInput: e.target.value.toUpperCase() }))}
+                onChange={(e) => setPurgeModal(prev => ({ ...prev, confirmationInput: e.target.value }))}
                 placeholder="Digite EXCLUIR para liberar o botão"
                 className="w-full px-4 py-3 bg-black border-2 border-red-500/40 rounded-xl text-white font-mono font-bold text-center tracking-widest text-sm focus:outline-none focus:border-red-500 transition-colors uppercase"
               />
@@ -1692,7 +1828,7 @@ export const DatabaseManagerView: React.FC = () => {
               <button
                 type="button"
                 onClick={handleConfirmPurge}
-                disabled={purgeModal.isProcessing || purgeModal.confirmationInput.trim() !== 'EXCLUIR'}
+                disabled={purgeModal.isProcessing || purgeModal.confirmationInput.trim().toUpperCase() !== 'EXCLUIR'}
                 className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:hover:bg-red-600 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(220,38,38,0.5)] transition-all cursor-pointer flex items-center gap-2"
               >
                 {purgeModal.isProcessing ? (

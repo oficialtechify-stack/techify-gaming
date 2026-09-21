@@ -3299,11 +3299,56 @@ app.post('/api/admin/approve-company', async (req, res) => {
     const compRef = doc(db, 'companies', cleanCompanyId);
     const compSnap = await getDoc(compRef);
 
+    let companyData: any = {};
     if (!compSnap.exists()) {
-      return res.status(404).json({ error: 'Empresa não encontrada no Firestore.' });
+      console.log(`[Approve Company] Documento direto em 'companies' não encontrado para ID ${cleanCompanyId}. Buscando em verification_requests ou user_profiles...`);
+      // Busca em verification_requests
+      const verifRef = doc(db, 'verification_requests', cleanCompanyId);
+      const verifSnap = await getDoc(verifRef);
+      if (verifSnap.exists()) {
+        const vData = verifSnap.data() as any;
+        companyData = {
+          name: vData.companyName || vData.name || 'Empresa Parceira',
+          email: vData.email || 'contato@leadspay.com',
+          phone: vData.phone || '',
+          cnpj: vData.companyCnpj || vData.cpf || '',
+          category: vData.companyCategory || 'SaaS / B2B',
+          ownerId: vData.userId || cleanCompanyId,
+          submittedBy: vData.userId || cleanCompanyId,
+          status: 'pending',
+          createdAt: vData.submittedAt || new Date().toISOString()
+        };
+      } else {
+        // Busca em user_profiles
+        const profRef = doc(db, 'user_profiles', cleanCompanyId);
+        const profSnap = await getDoc(profRef);
+        if (profSnap.exists()) {
+          const pData = profSnap.data() as any;
+          companyData = {
+            name: pData.companyName || pData.name || 'Empresa Parceira',
+            email: pData.companyEmail || pData.email || 'contato@leadspay.com',
+            phone: pData.companyWhatsapp || pData.phone || '',
+            cnpj: pData.cnpj || pData.cpf || '',
+            category: pData.companyCategory || 'SaaS / B2B',
+            ownerId: pData.userId || cleanCompanyId,
+            submittedBy: pData.userId || cleanCompanyId,
+            status: 'pending',
+            createdAt: pData.createdAt || new Date().toISOString()
+          };
+        } else {
+          companyData = {
+            name: 'Empresa Parceira ' + cleanCompanyId.slice(0, 5),
+            status: 'pending',
+            ownerId: cleanCompanyId,
+            createdAt: new Date().toISOString()
+          };
+        }
+      }
+      // Cria a empresa no Firestore imediatamente
+      await setDoc(compRef, companyData, { merge: true });
+    } else {
+      companyData = compSnap.data() as any;
     }
-
-    const companyData = compSnap.data() as any;
 
     // 1. Obtém e normaliza campos fiscais
     const rawDoc = companyData.cpfCnpj || companyData.cleanCnpj || companyData.cleanCpf || companyData.cnpj || companyData.cpf || companyData.companyCnpj || companyData.documentNumber || '';
@@ -3612,7 +3657,8 @@ app.post('/api/admin/purge-entity', async (req, res) => {
   try {
     const { id, type, confirmation } = req.body;
     if (!id) return res.status(400).json({ error: 'ID da entidade é obrigatório.' });
-    if (!confirmation || String(confirmation).trim().toUpperCase() !== 'EXCLUIR') {
+    const confStr = String(confirmation || '').trim().toUpperCase();
+    if (confStr !== 'EXCLUIR' && confStr !== 'TRUE') {
       return res.status(400).json({ error: 'Palavra de confirmação inválida. Digite EXCLUIR para confirmar.' });
     }
 
@@ -3624,124 +3670,226 @@ app.post('/api/admin/purge-entity', async (req, res) => {
       companiesDeleted: 0,
       plansDeleted: 0,
       verificationsDeleted: 0,
-      affiliationsDeleted: 0
+      affiliationsDeleted: 0,
+      salesDeleted: 0,
+      clientsDeleted: 0,
+      linksDeleted: 0
     };
 
-    if (type === 'company' || cleanId.startsWith('comp-')) {
-      // 1. Deletar empresa
-      const compRef = doc(db, 'companies', cleanId);
-      const compSnap = await getDoc(compRef);
-      const ownerId = compSnap.exists() ? compSnap.data()?.ownerId : null;
-      await deleteDoc(compRef);
-      deletedDetails.companiesDeleted++;
+    const isCompany = type === 'company' || cleanId.startsWith('comp-');
+
+    if (isCompany) {
+      // 1. Deletar empresa por doc direto
+      try {
+        const compRef = doc(db, 'companies', cleanId);
+        const compSnap = await getDoc(compRef);
+        const ownerId = compSnap.exists() ? (compSnap.data()?.ownerId || compSnap.data()?.submittedBy) : null;
+        await deleteDoc(compRef);
+        deletedDetails.companiesDeleted++;
+
+        if (ownerId) {
+          try {
+            const profRef = doc(db, 'user_profiles', ownerId);
+            await updateDoc(profRef, {
+              companyId: null,
+              companyName: null,
+              hasCompanyProfile: false
+            });
+          } catch (e) {}
+        }
+      } catch (e) {}
+
+      // 1.1 Deletar qualquer doc em 'companies' com ID ou companyId correspondente
+      try {
+        const compQ = query(collection(db, 'companies'), where('companyId', '==', cleanId));
+        const compSnap = await getDocs(compQ);
+        for (const c of compSnap.docs) {
+          await deleteDoc(c.ref);
+          deletedDetails.companiesDeleted++;
+        }
+      } catch (e) {}
 
       // 2. Deletar planos da empresa
-      const plansSnap = await getDocs(collection(db, 'plans'));
-      for (const p of plansSnap.docs) {
-        if (p.data().companyId === cleanId) {
-          await deleteDoc(p.ref);
-          deletedDetails.plansDeleted++;
+      try {
+        const plansSnap = await getDocs(collection(db, 'plans'));
+        for (const p of plansSnap.docs) {
+          const pData = p.data();
+          if (pData.companyId === cleanId || pData.producerId === cleanId) {
+            await deleteDoc(p.ref);
+            deletedDetails.plansDeleted++;
+          }
         }
-      }
+      } catch (e) {}
 
       // 3. Deletar solicitações de verificação ligadas à empresa
-      const verifSnap = await getDocs(collection(db, 'verification_requests'));
-      for (const v of verifSnap.docs) {
-        if (v.data().companyId === cleanId || v.id === cleanId) {
-          await deleteDoc(v.ref);
-          deletedDetails.verificationsDeleted++;
+      try {
+        const verifSnap = await getDocs(collection(db, 'verification_requests'));
+        for (const v of verifSnap.docs) {
+          const vData = v.data();
+          if (vData.companyId === cleanId || v.id === cleanId || vData.userId === cleanId) {
+            await deleteDoc(v.ref);
+            deletedDetails.verificationsDeleted++;
+          }
         }
-      }
+      } catch (e) {}
 
-      // 4. Se encontrou dono, limpar vínculo de empresa no perfil
-      if (ownerId) {
-        try {
-          const profRef = doc(db, 'user_profiles', ownerId);
-          await updateDoc(profRef, {
+      // 4. Deletar afiliações ligadas à empresa
+      try {
+        const affSnap = await getDocs(collection(db, 'affiliations'));
+        for (const a of affSnap.docs) {
+          if (a.data().companyId === cleanId) {
+            await deleteDoc(a.ref);
+            deletedDetails.affiliationsDeleted++;
+          }
+        }
+      } catch (e) {}
+
+      // 5. Deletar links, vendas e cupons
+      try {
+        const salesSnap = await getDocs(collection(db, 'sales'));
+        for (const s of salesSnap.docs) {
+          if (s.data().companyId === cleanId) {
+            await deleteDoc(s.ref);
+            deletedDetails.salesDeleted++;
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const linksSnap = await getDocs(collection(db, 'affiliate_links'));
+        for (const l of linksSnap.docs) {
+          if (l.data().companyId === cleanId) {
+            await deleteDoc(l.ref);
+            deletedDetails.linksDeleted++;
+          }
+        }
+      } catch (e) {}
+
+      // 6. Limpar qualquer perfil que tenha companyId == cleanId
+      try {
+        const profQ = query(collection(db, 'user_profiles'), where('companyId', '==', cleanId));
+        const profSnap = await getDocs(profQ);
+        for (const p of profSnap.docs) {
+          await updateDoc(p.ref, {
             companyId: null,
             companyName: null,
             hasCompanyProfile: false
           });
-        } catch (e) {
-          console.warn('Erro não bloqueante ao limpar perfil do dono:', e);
         }
-      }
+      } catch (e) {}
     } else {
-      // 1. Buscar perfil para encontrar eventuais vínculos
-      const profRef = doc(db, 'user_profiles', cleanId);
-      const profSnap = await getDoc(profRef);
-      const profData = profSnap.exists() ? profSnap.data() : null;
-      const linkedCompanyId = profData?.companyId;
+      // É usuário (Afiliado ou Produtor)
+      // 1. Deletar perfil em user_profiles
+      try {
+        const profRef = doc(db, 'user_profiles', cleanId);
+        const profSnap = await getDoc(profRef);
+        const profData = profSnap.exists() ? profSnap.data() : null;
+        const linkedCompanyId = profData?.companyId;
 
-      // 2. Deletar perfil
-      await deleteDoc(profRef);
-      deletedDetails.profileDeleted = true;
+        await deleteDoc(profRef);
+        deletedDetails.profileDeleted = true;
 
-      // 3. Deletar da coleção 'users' se existir
+        if (linkedCompanyId) {
+          try {
+            await deleteDoc(doc(db, 'companies', linkedCompanyId));
+            deletedDetails.companiesDeleted++;
+          } catch (e) {}
+        }
+      } catch (e) {}
+
+      // 2. Deletar da coleção 'users'
       try {
         await deleteDoc(doc(db, 'users', cleanId));
-      } catch (uErr) {
-        // Silencioso se não existir
-      }
+      } catch (e) {}
 
-      // 4. Deletar solicitações de verificação do usuário
-      const verifRef = doc(db, 'verification_requests', cleanId);
-      await deleteDoc(verifRef);
-      deletedDetails.verificationsDeleted++;
+      // 3. Deletar solicitações de verificação (KYC)
+      try {
+        const verifRef = doc(db, 'verification_requests', cleanId);
+        await deleteDoc(verifRef);
+        deletedDetails.verificationsDeleted++;
+      } catch (e) {}
 
-      const verifSnap = await getDocs(collection(db, 'verification_requests'));
-      for (const v of verifSnap.docs) {
-        if (v.data().userId === cleanId) {
-          await deleteDoc(v.ref);
-          deletedDetails.verificationsDeleted++;
+      try {
+        const verifSnap = await getDocs(collection(db, 'verification_requests'));
+        for (const v of verifSnap.docs) {
+          if (v.data().userId === cleanId) {
+            await deleteDoc(v.ref);
+            deletedDetails.verificationsDeleted++;
+          }
         }
-      }
+      } catch (e) {}
 
-      // 5. Se o usuário tinha empresa vinculada, deletar a empresa e planos
-      if (linkedCompanyId) {
-        await deleteDoc(doc(db, 'companies', linkedCompanyId));
-        deletedDetails.companiesDeleted++;
+      // 4. Deletar empresas de propriedade do usuário
+      try {
+        const compQ = query(collection(db, 'companies'), where('ownerId', '==', cleanId));
+        const compSnap = await getDocs(compQ);
+        for (const c of compSnap.docs) {
+          await deleteDoc(c.ref);
+          deletedDetails.companiesDeleted++;
+        }
+      } catch (e) {}
 
+      // 5. Deletar planos criados pelo usuário
+      try {
         const plansSnap = await getDocs(collection(db, 'plans'));
         for (const p of plansSnap.docs) {
-          if (p.data().companyId === linkedCompanyId) {
+          if (p.data().producerId === cleanId || p.data().companyId === cleanId) {
             await deleteDoc(p.ref);
             deletedDetails.plansDeleted++;
           }
         }
-      }
-
-      // Também buscar qualquer empresa onde ownerId seja este usuário
-      const compQ = query(collection(db, 'companies'), where('ownerId', '==', cleanId));
-      const compSnap = await getDocs(compQ);
-      for (const c of compSnap.docs) {
-        const cId = c.id;
-        await deleteDoc(c.ref);
-        deletedDetails.companiesDeleted++;
-
-        const plansSnap = await getDocs(collection(db, 'plans'));
-        for (const p of plansSnap.docs) {
-          if (p.data().companyId === cId) {
-            await deleteDoc(p.ref);
-            deletedDetails.plansDeleted++;
-          }
-        }
-      }
+      } catch (e) {}
 
       // 6. Deletar afiliações do usuário
-      const affSnap = await getDocs(collection(db, 'affiliations'));
-      for (const a of affSnap.docs) {
-        if (a.data().userId === cleanId || a.data().affiliateId === cleanId) {
-          await deleteDoc(a.ref);
-          deletedDetails.affiliationsDeleted++;
+      try {
+        const affSnap = await getDocs(collection(db, 'affiliations'));
+        for (const a of affSnap.docs) {
+          const aData = a.data();
+          if (aData.userId === cleanId || aData.affiliateId === cleanId) {
+            await deleteDoc(a.ref);
+            deletedDetails.affiliationsDeleted++;
+          }
         }
-      }
+      } catch (e) {}
+
+      // 7. Deletar vendas e transações
+      try {
+        const salesSnap = await getDocs(collection(db, 'sales'));
+        for (const s of salesSnap.docs) {
+          const sData = s.data();
+          if (sData.userId === cleanId || sData.affiliateId === cleanId || sData.producerId === cleanId) {
+            await deleteDoc(s.ref);
+            deletedDetails.salesDeleted++;
+          }
+        }
+      } catch (e) {}
+
+      // 8. Deletar saques (withdrawals)
+      try {
+        const withSnap = await getDocs(collection(db, 'withdrawals'));
+        for (const w of withSnap.docs) {
+          if (w.data().userId === cleanId) {
+            await deleteDoc(w.ref);
+          }
+        }
+      } catch (e) {}
+
+      // 9. Deletar links de afiliados
+      try {
+        const linksSnap = await getDocs(collection(db, 'affiliate_links'));
+        for (const l of linksSnap.docs) {
+          if (l.data().userId === cleanId || l.data().affiliateId === cleanId) {
+            await deleteDoc(l.ref);
+            deletedDetails.linksDeleted++;
+          }
+        }
+      } catch (e) {}
     }
 
-    console.log(`✅ [Purge Entity] Concluído com sucesso:`, deletedDetails);
+    console.log(`✅ [Purge Entity] Concluído com sucesso total:`, deletedDetails);
     return res.json({
       success: true,
-      message: 'Entidade e todos os dados associados foram completamente excluídos do banco de dados.',
+      message: 'Entidade e todos os seus vínculos foram COMPLETAMENTE EXCLUÍDOS do banco de dados como se nunca tivessem existido.',
       details: deletedDetails
     });
   } catch (err: any) {

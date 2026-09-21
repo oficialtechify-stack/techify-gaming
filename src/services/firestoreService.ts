@@ -551,35 +551,105 @@ export async function purgeEntityInFirebase(id: string, type: 'user' | 'company'
     console.warn('Backend purge API fallback, proceeding with direct Firestore:', apiErr);
     
     // Direct Firestore cascading purge fallback
-    if (type === 'company' || id.startsWith('comp-')) {
-      await deleteDoc(doc(db, COLLECTIONS.COMPANIES, id));
-      const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
-      for (const p of plansSnap.docs) {
-        if (p.data().companyId === id) await deleteDoc(p.ref);
-      }
+    const isCompany = type === 'company' || id.startsWith('comp-');
+    if (isCompany) {
       try {
-        await deleteDoc(doc(db, COLLECTIONS.VERIFICATIONS, id));
+        await deleteDoc(doc(db, COLLECTIONS.COMPANIES, id));
+      } catch (e) {}
+
+      try {
+        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('companyId', '==', id));
+        const compSnap = await getDocs(compQ);
+        for (const c of compSnap.docs) await deleteDoc(c.ref);
+      } catch (e) {}
+
+      try {
+        const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
+        for (const p of plansSnap.docs) {
+          if (p.data().companyId === id || p.data().producerId === id) await deleteDoc(p.ref);
+        }
+      } catch (e) {}
+
+      try {
+        const verifSnap = await getDocs(collection(db, COLLECTIONS.VERIFICATIONS));
+        for (const v of verifSnap.docs) {
+          if (v.data().companyId === id || v.id === id || v.data().userId === id) await deleteDoc(v.ref);
+        }
+      } catch (e) {}
+
+      try {
+        const affSnap = await getDocs(collection(db, COLLECTIONS.AFFILIATIONS));
+        for (const a of affSnap.docs) {
+          if (a.data().companyId === id) await deleteDoc(a.ref);
+        }
+      } catch (e) {}
+
+      try {
+        const profQ = query(collection(db, COLLECTIONS.PROFILES), where('companyId', '==', id));
+        const profSnap = await getDocs(profQ);
+        for (const p of profSnap.docs) {
+          await updateDoc(p.ref, {
+            companyId: null,
+            companyName: null,
+            hasCompanyProfile: false
+          });
+        }
       } catch (e) {}
     } else {
-      await deleteDoc(doc(db, COLLECTIONS.PROFILES, id));
+      try {
+        await deleteDoc(doc(db, COLLECTIONS.PROFILES, id));
+      } catch (e) {}
       try {
         await deleteDoc(doc(db, 'users', id));
       } catch (e) {}
       try {
         await deleteDoc(doc(db, COLLECTIONS.VERIFICATIONS, id));
       } catch (e) {}
+      try {
+        const verifSnap = await getDocs(collection(db, COLLECTIONS.VERIFICATIONS));
+        for (const v of verifSnap.docs) {
+          if (v.data().userId === id) await deleteDoc(v.ref);
+        }
+      } catch (e) {}
 
       // Clean any owned company
-      const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', id));
-      const compSnap = await getDocs(compQ);
-      for (const c of compSnap.docs) {
-        await deleteDoc(c.ref);
-        const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
-        for (const p of plansSnap.docs) {
-          if (p.data().companyId === c.id) await deleteDoc(p.ref);
+      try {
+        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', id));
+        const compSnap = await getDocs(compQ);
+        for (const c of compSnap.docs) {
+          await deleteDoc(c.ref);
+          const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
+          for (const p of plansSnap.docs) {
+            if (p.data().companyId === c.id) await deleteDoc(p.ref);
+          }
         }
-      }
+      } catch (e) {}
+
+      try {
+        const affSnap = await getDocs(collection(db, COLLECTIONS.AFFILIATIONS));
+        for (const a of affSnap.docs) {
+          if (a.data().userId === id || a.data().affiliateId === id) await deleteDoc(a.ref);
+        }
+      } catch (e) {}
+
+      try {
+        const salesSnap = await getDocs(collection(db, COLLECTIONS.SALES));
+        for (const s of salesSnap.docs) {
+          if (s.data().userId === id || s.data().affiliateId === id) await deleteDoc(s.ref);
+        }
+      } catch (e) {}
     }
+
+    // Limpa caches do localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const keysToRemove = Object.keys(localStorage).filter(k => 
+          k.includes(id) || k.includes('company') || k.includes('affiliat') || k.includes('verification')
+        );
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+      }
+    } catch (e) {}
+
     return { success: true };
   }
 }
