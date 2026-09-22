@@ -303,9 +303,26 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   }, [roleMode, activeTab, isSuperAdmin]);
 
-  // Robust Role Switcher with Mandatory Registration
+  // Robust Role Switcher with Strict Role Separation
   const handleSwitchRole = (targetRole: UserRoleMode) => {
     if (targetRole === roleMode) return;
+
+    // Estrita separação de papéis: conta criada como afiliado não pode virar empresa e vice-versa
+    const isAffiliateAccount = userProfile?.accountType === 'afiliado' || 
+      (userProfile?.hasAffiliateProfile && !userProfile?.hasCompanyProfile && !userProfile?.companyId);
+    const isCompanyAccount = userProfile?.accountType === 'empresa' || 
+      userProfile?.hasCompanyProfile || 
+      Boolean(userProfile?.companyId);
+
+    if (targetRole === 'empresa' && isAffiliateAccount) {
+      alert('Esta conta foi registrada exclusivamente como AFILIADO. Por regras de segurança da plataforma, uma conta de afiliado não pode criar ou virar empresa. Utilize um e-mail diferente para cadastrar sua Empresa ou Startup.');
+      return;
+    }
+
+    if (targetRole === 'afiliado' && isCompanyAccount) {
+      alert('Esta conta foi registrada exclusivamente como EMPRESA. Por regras de segurança da plataforma, contas corporativas não podem atuar como afiliado. Utilize um e-mail diferente para cadastrar sua conta de Afiliado.');
+      return;
+    }
 
     if (targetRole === 'afiliado') {
       const hasAffiliate = userProfile?.hasAffiliateProfile || (userProfile?.cpf && userProfile?.cleanCpf?.length === 11);
@@ -1243,38 +1260,45 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           </nav>
         </div>
 
-        {/* Bottom Sidebar Action */}
-        <div className="p-3 border-t border-white/10 space-y-1">
+        {/* Bottom Sidebar: Perfil do Usuário */}
+        <div className="p-3 border-t border-white/10">
           <button
             onClick={() => {
+              setActiveTab('meu_perfil');
               setIsMobileMenuOpen(false);
-              onBackToHome();
             }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-white/60 hover:text-white hover:bg-white/5 transition-colors cursor-pointer ${
-              sidebarCollapsed ? 'lg:justify-center lg:px-0' : ''
-            }`}
-            title="Voltar ao site institucional"
+            className={`w-full flex items-center gap-3 p-2.5 rounded-2xl transition-all cursor-pointer ${
+              activeTab === 'meu_perfil'
+                ? 'bg-[#102419] border border-[#D9F22A]/50 shadow-[0_0_15px_rgba(217,242,42,0.15)] text-[#D9F22A]'
+                : 'bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-white/20 text-white'
+            } ${sidebarCollapsed ? 'lg:justify-center lg:p-2' : ''}`}
+            title="Meu Perfil"
           >
-            <ExternalLink className="w-4 h-4 flex-shrink-0 text-[#D9F22A]" />
-            {(!sidebarCollapsed || isMobileMenuOpen) && <span className="truncate">Voltar ao Site</span>}
-          </button>
+            <div className="relative flex-shrink-0">
+              <img
+                src={userProfile?.avatar || currentUser?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUser?.uid || 'user')}`}
+                alt={userProfile?.name || currentUser?.displayName || 'Usuário'}
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-white/20"
+              />
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#D9F22A] ring-2 ring-[#060A15]" />
+            </div>
 
-          {currentUser && (
-            <button
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                logout();
-                onBackToHome();
-              }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer ${
-                sidebarCollapsed ? 'lg:justify-center lg:px-0' : ''
-              }`}
-              title="Sair da Conta"
-            >
-              <LogOut className="w-4 h-4 flex-shrink-0" />
-              {(!sidebarCollapsed || isMobileMenuOpen) && <span className="truncate">Sair da Conta</span>}
-            </button>
-          )}
+            {(!sidebarCollapsed || isMobileMenuOpen) && (
+              <div className="min-w-0 flex-1 text-left">
+                <div className="text-xs font-bold text-white truncate font-['Syne']">
+                  {userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Meu Perfil'}
+                </div>
+                <div className="text-[10px] text-white/50 truncate flex items-center gap-1">
+                  <span className="text-[#D9F22A]">●</span>
+                  <span>{roleMode === 'afiliado' ? 'Afiliado LeadsPay' : 'Produtor / Empresa'}</span>
+                </div>
+              </div>
+            )}
+
+            {(!sidebarCollapsed || isMobileMenuOpen) && (
+              <User className={`w-4 h-4 flex-shrink-0 ${activeTab === 'meu_perfil' ? 'text-[#D9F22A]' : 'text-white/40'}`} />
+            )}
+          </button>
         </div>
       </aside>
 
@@ -1544,6 +1568,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
                   userEmail={userEmail || currentUser?.email || undefined}
                   onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
+                  onBackToHome={onBackToHome}
                 />
               )}
 

@@ -241,6 +241,12 @@ export function getAuthErrorMessage(error: any): string {
   if (code.includes('custom/cnpj-already-in-use') || code.includes('cnpj-already-in-use')) {
     return 'Este CNPJ já está cadastrado em outra empresa parceira no LeadsPay.';
   }
+  if (code.includes('custom/affiliate-cannot-create-company') || code.includes('affiliate-cannot-create-company')) {
+    return 'Este e-mail já está cadastrado como AFILIADO. Por segurança e regras da plataforma, uma conta de afiliado não pode ser usada para cadastrar empresa. Utilize um e-mail diferente para a sua Empresa/Startup.';
+  }
+  if (code.includes('custom/company-cannot-create-affiliate') || code.includes('company-cannot-create-affiliate')) {
+    return 'Este e-mail já está cadastrado como EMPRESA. Por segurança e regras da plataforma, contas corporativas não podem ser usadas para atuar como afiliado. Utilize um e-mail pessoal diferente para sua conta de Afiliado.';
+  }
   if (code.includes('custom/email-already-in-use')) {
     return 'Este e-mail já possui uma conta no LeadsPay. Você pode fazer login diretamente com sua senha.';
   }
@@ -313,6 +319,28 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
   const cleanCpf = data.cpf ? cleanDigits(data.cpf) : '';
   const formattedCpf = cleanCpf ? formatCPF(cleanCpf) : '';
 
+  // 0. Pre-verificação: Garantir que não existe conta cadastrada como EMPRESA com este e-mail
+  try {
+    const compQ = query(collection(db, COLLECTIONS.PROFILES), where('email', '==', normalizedEmail));
+    const compSnap = await getDocs(compQ);
+    if (!compSnap.empty) {
+      const existing = compSnap.docs[0].data() as UserSellerProfile;
+      const isCompany = existing.accountType === 'empresa' || 
+                        existing.hasCompanyProfile === true || 
+                        Boolean(existing.companyId) || 
+                        existing.activeRoleMode === 'empresa';
+      if (isCompany) {
+        const err = new Error('custom/company-cannot-create-affiliate');
+        (err as any).code = 'custom/company-cannot-create-affiliate';
+        throw err;
+      }
+    }
+  } catch (checkErr: any) {
+    if (checkErr.code === 'custom/company-cannot-create-affiliate') {
+      throw checkErr;
+    }
+  }
+
   // 1. Validar CPF se fornecido completo
   if (cleanCpf && cleanCpf.length === 11) {
     if (!isValidCPF(cleanCpf)) {
@@ -365,10 +393,22 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
   const now = new Date().toISOString();
   const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(data.name.trim())}`;
 
-  // 4. Buscar perfil existente para manter saldos se já houver
+  // 4. Buscar perfil existente para verificar se a conta já era empresa
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
   const existingSnap = await getDoc(profileRef);
   const existingData = existingSnap.exists() ? (existingSnap.data() as UserSellerProfile) : null;
+
+  if (existingData) {
+    const isCompany = existingData.accountType === 'empresa' || 
+                      existingData.hasCompanyProfile === true || 
+                      Boolean(existingData.companyId) || 
+                      existingData.activeRoleMode === 'empresa';
+    if (isCompany) {
+      const err = new Error('custom/company-cannot-create-affiliate');
+      (err as any).code = 'custom/company-cannot-create-affiliate';
+      throw err;
+    }
+  }
 
   const profile: UserSellerProfile = {
     userId: user.uid,
@@ -385,23 +425,47 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     partnerLevel: existingData?.partnerLevel || 'Afiliado Starter',
     targetGoal: existingData?.targetGoal || 100000,
     currentSalesProgress: existingData?.currentSalesProgress || 0,
+    accountType: 'afiliado',
     hasAffiliateProfile: true,
-    hasCompanyProfile: existingData?.hasCompanyProfile || false,
+    hasCompanyProfile: false,
     activeRoleMode: 'afiliado',
     whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : (existingData?.whatsapp || ''),
     cpf: formattedCpf || existingData?.cpf || '',
     cleanCpf: cleanCpf || existingData?.cleanCpf || '',
-    companyId: existingData?.companyId,
-    companyName: existingData?.companyName,
-    cnpj: existingData?.cnpj,
-    cleanCnpj: existingData?.cleanCnpj,
+    companyId: undefined,
+    companyName: undefined,
+    cnpj: undefined,
+    cleanCnpj: undefined,
+    verificationRoleType: 'afiliado',
     verified: existingData?.verified ?? false,
-    verificationStatus: existingData?.verificationStatus ?? 'unsubmitted',
+    verificationStatus: existingData?.verificationStatus ?? 'pending',
     updatedAt: now
   };
 
   // Salvar perfil atualizado no Firestore
   await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
+
+  // Criar ou atualizar verificação do afiliado
+  try {
+    const verifRef = doc(db, COLLECTIONS.VERIFICATIONS, user.uid);
+    const verifData = {
+      id: user.uid,
+      userId: user.uid,
+      name: data.name.trim(),
+      email: normalizedEmail,
+      phone: data.whatsapp ? formatPhone(data.whatsapp) : '',
+      cpf: formattedCpf || '',
+      pixKey: data.pixKey?.trim() || formattedCpf || '',
+      pixKeyType: data.pixKeyType || 'CPF',
+      roleType: 'afiliado',
+      status: existingData?.verificationStatus || 'pending',
+      avatar,
+      submittedAt: now
+    };
+    await setDoc(verifRef, sanitizeForFirestore(verifData), { merge: true });
+  } catch (verifErr) {
+    console.warn('Erro ao registrar verificação de afiliado:', verifErr);
+  }
 
   return { user, profile };
 }
@@ -417,6 +481,26 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
   const formattedCnpj = cleanCnpj ? formatCNPJ(cleanCnpj) : '';
   const cleanCpf = data.cpf ? cleanDigits(data.cpf) : '';
   const formattedCpf = cleanCpf ? formatCPF(cleanCpf) : '';
+
+  // 0. Pre-verificação: Garantir que não existe conta cadastrada como AFILIADO com este e-mail
+  try {
+    const affQ = query(collection(db, COLLECTIONS.PROFILES), where('email', '==', normalizedEmail));
+    const affSnap = await getDocs(affQ);
+    if (!affSnap.empty) {
+      const existing = affSnap.docs[0].data() as UserSellerProfile;
+      const isAffiliate = existing.accountType === 'afiliado' || 
+                          (existing.hasAffiliateProfile === true && !existing.hasCompanyProfile && !existing.companyId);
+      if (isAffiliate) {
+        const err = new Error('custom/affiliate-cannot-create-company');
+        (err as any).code = 'custom/affiliate-cannot-create-company';
+        throw err;
+      }
+    }
+  } catch (checkErr: any) {
+    if (checkErr.code === 'custom/affiliate-cannot-create-company') {
+      throw checkErr;
+    }
+  }
 
   // 1. Validar formato de CNPJ se informado como tipo CNPJ
   if (docType === 'CNPJ' && cleanCnpj) {
@@ -456,12 +540,20 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     }
   }
 
-  // 2. Verificar se o usuário já possui empresa cadastrada no Firestore
-  // Se já possui, NÃO cria uma nova empresa duplicada; apenas conecta a conta existente
-  // mantendo os planos, perfil, produtos e configurações intactos!
+  // 2. Verificar se o usuário já possui cadastro e se era afiliado
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
   const existingSnap = await getDoc(profileRef);
   const existingData = existingSnap.exists() ? (existingSnap.data() as UserSellerProfile) : null;
+
+  if (existingData) {
+    const isAffiliate = existingData.accountType === 'afiliado' || 
+                        (existingData.hasAffiliateProfile === true && !existingData.hasCompanyProfile && !existingData.companyId);
+    if (isAffiliate) {
+      const err = new Error('custom/affiliate-cannot-create-company');
+      (err as any).code = 'custom/affiliate-cannot-create-company';
+      throw err;
+    }
+  }
 
   // Buscar empresa existente por ownerId ou submittedBy ou existingData.companyId
   let existingCompany: CompanyStartup | null = null;
@@ -478,6 +570,8 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     }
   }
 
+  const now = new Date().toISOString();
+
   // Se já existe empresa cadastrada para este usuário / conta:
   if (existingCompany) {
     const updatedProfile: UserSellerProfile = {
@@ -485,7 +579,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
       userId: user.uid,
       name: existingData?.name || data.ownerName.trim() || user.displayName || normalizedEmail.split('@')[0],
       email: normalizedEmail,
-      role: existingData?.role || 'Fundador / Startup',
+      role: 'Fundador / Startup',
       avatar: existingCompany.logo || existingData?.avatar || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(existingCompany.name)}`,
       pixKey: existingData?.pixKey || '',
       pixKeyType: existingData?.pixKeyType || 'Chave Aleatória',
@@ -493,25 +587,57 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
       pendingBalance: existingData?.pendingBalance ?? 0,
       totalEarned: existingData?.totalEarned ?? 0,
       totalSalesCount: existingData?.totalSalesCount ?? 0,
-      partnerLevel: existingData?.partnerLevel || 'Empresa Parceira',
-      targetGoal: existingData?.targetGoal || 500000,
+      partnerLevel: 'Empresa Parceira',
+      targetGoal: 500000,
       currentSalesProgress: existingData?.currentSalesProgress || 0,
-      hasAffiliateProfile: existingData?.hasAffiliateProfile || false,
+      accountType: 'empresa',
+      hasAffiliateProfile: false,
       hasCompanyProfile: true,
       activeRoleMode: 'empresa',
       companyId: existingCompany.id,
       companyName: existingCompany.name,
+      companyLegalName: existingCompany.name,
+      companyCategory: existingCompany.category || data.category || 'SaaS / B2B',
+      companyTagline: existingCompany.tagline,
+      companyWebsite: existingCompany.website,
+      companyLogo: existingCompany.logo,
+      companyPhone: existingCompany.whatsapp || (data.whatsapp ? formatPhone(data.whatsapp) : ''),
+      companyDocType: docType as any,
       whatsapp: existingData?.whatsapp || (data.whatsapp ? formatPhone(data.whatsapp) : ''),
       cpf: existingData?.cpf || (docType === 'CPF' ? formattedCpf : ''),
       cleanCpf: existingData?.cleanCpf || (docType === 'CPF' ? cleanCpf : ''),
       cnpj: existingCompany.cnpj || existingData?.cnpj || (docType === 'CNPJ' ? formattedCnpj : ''),
       cleanCnpj: existingCompany.cleanCnpj || existingData?.cleanCnpj || (docType === 'CNPJ' ? cleanCnpj : ''),
+      companyCnpj: existingCompany.cnpj || (docType === 'CNPJ' ? formattedCnpj : (docType === 'CPF' ? formattedCpf : '')),
+      verificationRoleType: 'empresa',
       verified: existingCompany.verified ?? existingData?.verified ?? false,
       verificationStatus: existingCompany.status === 'approved' ? 'approved' : (existingData?.verificationStatus || 'pending'),
-      updatedAt: new Date().toISOString()
+      kyc_status: existingCompany.status === 'approved' ? 'verified' : 'submitted',
+      updatedAt: now
     };
 
     await setDoc(profileRef, sanitizeForFirestore(updatedProfile), { merge: true });
+
+    // Atualizar verificação vinculada
+    try {
+      const verifData = {
+        id: user.uid,
+        userId: user.uid,
+        name: existingCompany.name,
+        firstName: data.ownerName.trim(),
+        email: normalizedEmail,
+        phone: data.whatsapp ? formatPhone(data.whatsapp) : '',
+        avatar: existingCompany.logo,
+        roleType: 'empresa',
+        companyId: existingCompany.id,
+        companyName: existingCompany.name,
+        companyCnpj: existingCompany.cnpj || (docType === 'CNPJ' ? formattedCnpj : ''),
+        status: existingCompany.status === 'approved' ? 'approved' : 'pending',
+        submittedAt: now
+      };
+      await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, user.uid), sanitizeForFirestore(verifData), { merge: true });
+      await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, existingCompany.id), sanitizeForFirestore(verifData), { merge: true });
+    } catch (vErr) {}
 
     return {
       user,
@@ -537,7 +663,6 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     console.warn('Erro ao atualizar displayName no Auth:', err);
   }
 
-  const now = new Date().toISOString();
   const companyId = `comp-${user.uid.slice(0, 10)}`;
   const slug = data.companyName
     .toLowerCase()
@@ -555,11 +680,11 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     id: companyId,
     name: data.companyName.trim(),
     slug: slug || companyId,
-    tagline: data.tagline?.trim() || `${data.category} de alta performance e escala comercial`,
+    tagline: data.tagline?.trim() || `${data.category || 'SaaS / B2B'} de alta performance e escala comercial`,
     logo,
     bannerImage,
-    category: data.category as any,
-    description: data.description?.trim() || `Empresa parceira ${data.companyName} integrada ao ecossistema LeadsPay.`,
+    category: (data.category as any) || 'SaaS / B2B',
+    description: data.description?.trim() || `Empresa parceira ${data.companyName.trim()} integrada ao ecossistema LeadsPay.`,
     website: data.website?.trim() || 'https://leadspay.com',
     email: normalizedEmail,
     whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : '',
@@ -570,6 +695,9 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     verified: false,
     status: 'pending',
     ownerId: user.uid,
+    submittedBy: user.uid,
+    submittedByName: data.ownerName.trim(),
+    submittedByEmail: normalizedEmail,
     docType: docType as any,
     cnpj: docType === 'CNPJ' ? formattedCnpj : undefined,
     cleanCnpj: docType === 'CNPJ' ? cleanCnpj : undefined,
@@ -581,7 +709,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
 
   await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), sanitizeForFirestore(company), { merge: true });
 
-  // 2. Criar/Atualizar Perfil de Usuário
+  // 2. Criar/Atualizar Perfil de Usuário como EMPRESA estrita
   const profile: UserSellerProfile = {
     userId: user.uid,
     name: data.ownerName.trim(),
@@ -597,22 +725,67 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     partnerLevel: 'Empresa Parceira',
     targetGoal: 500000,
     currentSalesProgress: existingData?.currentSalesProgress || 0,
-    hasAffiliateProfile: existingData?.hasAffiliateProfile || false,
+    accountType: 'empresa',
+    hasAffiliateProfile: false,
     hasCompanyProfile: true,
     activeRoleMode: 'empresa',
     companyId: companyId,
     companyName: data.companyName.trim(),
+    companyLegalName: data.companyName.trim(),
+    companyCnpj: docType === 'CNPJ' ? formattedCnpj : (docType === 'CPF' ? formattedCpf : ''),
+    cleanCnpj: docType === 'CNPJ' ? cleanCnpj : (docType === 'CPF' ? cleanCpf : ''),
+    companyDocType: docType as any,
+    companyCategory: data.category || 'SaaS / B2B',
+    companyTagline: company.tagline,
+    companyWebsite: company.website,
+    companyLogo: logo,
+    companyPhone: data.whatsapp ? formatPhone(data.whatsapp) : '',
     whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : (existingData?.whatsapp || ''),
-    cpf: docType === 'CPF' ? formattedCpf : (existingData?.cpf || ''),
-    cleanCpf: docType === 'CPF' ? cleanCpf : (existingData?.cleanCpf || ''),
-    cnpj: docType === 'CNPJ' ? formattedCnpj : (existingData?.cnpj || ''),
-    cleanCnpj: docType === 'CNPJ' ? cleanCnpj : (existingData?.cleanCnpj || ''),
-    verified: false,
+    phone: data.whatsapp ? formatPhone(data.whatsapp) : (existingData?.whatsapp || ''),
+    cpf: docType === 'CPF' ? formattedCpf : '',
+    cleanCpf: docType === 'CPF' ? cleanCpf : '',
+    cnpj: docType === 'CNPJ' ? formattedCnpj : '',
+    verificationRoleType: 'empresa',
     verificationStatus: 'pending',
+    kyc_status: 'submitted',
+    verified: false,
+    verificationSubmittedAt: now,
     updatedAt: now
   };
 
   await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
+
+  // 3. Criar registro de verificação para a fila de "Aprovação de Empresas" do Super Painel Admin
+  try {
+    const verifData = {
+      id: user.uid,
+      userId: user.uid,
+      name: data.companyName.trim(),
+      firstName: data.ownerName.trim(),
+      email: normalizedEmail,
+      phone: data.whatsapp ? formatPhone(data.whatsapp) : '',
+      avatar: logo,
+      roleType: 'empresa',
+      companyId: companyId,
+      companyName: data.companyName.trim(),
+      companyLegalName: data.companyName.trim(),
+      companyCnpj: docType === 'CNPJ' ? formattedCnpj : (docType === 'CPF' ? formattedCpf : ''),
+      companyCategory: data.category || 'SaaS / B2B',
+      companyTagline: company.tagline,
+      companyWebsite: company.website,
+      companyLogo: logo,
+      companyPhone: data.whatsapp ? formatPhone(data.whatsapp) : '',
+      companyDocType: docType as any,
+      status: 'pending',
+      kyc_status: 'submitted',
+      submittedAt: now
+    };
+
+    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, user.uid), sanitizeForFirestore(verifData), { merge: true });
+    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId), sanitizeForFirestore(verifData), { merge: true });
+  } catch (vErr) {
+    console.warn('Erro ao salvar registro de verificação de empresa:', vErr);
+  }
 
   return { user, profile, company };
 }
@@ -633,6 +806,14 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
   if (profileSnap.exists()) {
     profile = profileSnap.data() as UserSellerProfile;
+    const isCompany = profile.accountType === 'empresa' || 
+                      profile.hasCompanyProfile === true || 
+                      Boolean(profile.companyId) || 
+                      profile.activeRoleMode === 'empresa';
+    profile.accountType = isCompany ? 'empresa' : 'afiliado';
+    profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
+    profile.hasCompanyProfile = isCompany;
+    profile.hasAffiliateProfile = !isCompany;
   } else {
     // Tentar localizar por e-mail em caso de migração
     const profilesColl = collection(db, COLLECTIONS.PROFILES);
@@ -641,6 +822,14 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
     if (!snap.empty) {
       profile = snap.docs[0].data() as UserSellerProfile;
+      const isCompany = profile.accountType === 'empresa' || 
+                        profile.hasCompanyProfile === true || 
+                        Boolean(profile.companyId) || 
+                        profile.activeRoleMode === 'empresa';
+      profile.accountType = isCompany ? 'empresa' : 'afiliado';
+      profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
+      profile.hasCompanyProfile = isCompany;
+      profile.hasAffiliateProfile = !isCompany;
       await setDoc(profileRef, sanitizeForFirestore({ ...profile, userId: user.uid }), { merge: true });
     } else {
       // Criar perfil padrão se não existir
@@ -648,7 +837,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
         userId: user.uid,
         name: user.displayName || normalizedEmail.split('@')[0],
         email: normalizedEmail,
-        role: 'Usuário LeadsPay',
+        role: 'Afiliado de Alta Performance',
         avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
         pixKey: '',
         pixKeyType: 'Chave Aleatória',
@@ -659,6 +848,9 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
         partnerLevel: 'Afiliado Starter',
         targetGoal: 100000,
         currentSalesProgress: 0,
+        accountType: 'afiliado',
+        hasAffiliateProfile: true,
+        hasCompanyProfile: false,
         activeRoleMode: 'afiliado',
         updatedAt: new Date().toISOString()
       };
@@ -688,16 +880,23 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
 
     if (profileSnap.exists()) {
       const existing = profileSnap.data() as UserSellerProfile;
+      // Respeitar estritamente o tipo de conta já existente (uma conta empresa permanece empresa; uma conta afiliado permanece afiliado)
+      const isExistingCompany = existing.accountType === 'empresa' ||
+                                existing.hasCompanyProfile === true ||
+                                Boolean(existing.companyId) ||
+                                existing.activeRoleMode === 'empresa';
+      const resolvedRole: UserRoleMode = isExistingCompany ? 'empresa' : 'afiliado';
+
       profile = {
         ...existing,
-        hasAffiliateProfile: preferredRole === 'afiliado' ? true : existing.hasAffiliateProfile,
-        hasCompanyProfile: preferredRole === 'empresa' ? true : existing.hasCompanyProfile,
-        activeRoleMode: preferredRole || existing.activeRoleMode || 'afiliado',
+        accountType: resolvedRole,
+        hasAffiliateProfile: !isExistingCompany,
+        hasCompanyProfile: isExistingCompany,
+        activeRoleMode: resolvedRole,
         updatedAt: new Date().toISOString()
       };
 
-      // Se entrou com preferência 'empresa', verificar se já possui empresa cadastrada no Firestore
-      if (preferredRole === 'empresa') {
+      if (isExistingCompany) {
         const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
         const compSnap = await getDocs(compQ);
         
@@ -706,24 +905,6 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
           const compData = userComp.data();
           profile.companyId = userComp.id;
           profile.companyName = compData.name || compData.companyName;
-          profile.hasCompanyProfile = true;
-        } else if (existing.companyId) {
-          const companyRef = doc(db, COLLECTIONS.COMPANIES, existing.companyId);
-          const companySnap = await getDoc(companyRef);
-          if (companySnap.exists()) {
-            profile.companyId = existing.companyId;
-            profile.companyName = companySnap.data()?.name || existing.companyName;
-            profile.hasCompanyProfile = true;
-          } else {
-            profile.companyId = undefined;
-            profile.companyName = undefined;
-            profile.hasCompanyProfile = false;
-          }
-        } else {
-          // Não cria empresa fictícia; permite que o usuário cadastre a sua empresa real
-          profile.companyId = undefined;
-          profile.companyName = undefined;
-          profile.hasCompanyProfile = false;
         }
       }
 
@@ -736,22 +917,22 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
       let existingUserCompanyName: string | undefined = undefined;
       let hasCompany = false;
 
-      if (preferredRole === 'empresa') {
-        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
-        const compSnap = await getDocs(compQ);
-        if (!compSnap.empty) {
-          const userComp = compSnap.docs[0];
-          existingUserCompanyId = userComp.id;
-          existingUserCompanyName = userComp.data()?.name || userComp.data()?.companyName;
-          hasCompany = true;
-        }
+      const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
+      const compSnap = await getDocs(compQ);
+      if (!compSnap.empty) {
+        const userComp = compSnap.docs[0];
+        existingUserCompanyId = userComp.id;
+        existingUserCompanyName = userComp.data()?.name || userComp.data()?.companyName;
+        hasCompany = true;
       }
+
+      const resolvedRole: UserRoleMode = (preferredRole === 'empresa' || hasCompany) ? 'empresa' : 'afiliado';
 
       profile = {
         userId: user.uid,
         name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário LeadsPay',
         email: normalizedEmail,
-        role: preferredRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
+        role: resolvedRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
         avatar,
         pixKey: '',
         pixKeyType: 'Chave Aleatória',
@@ -759,27 +940,29 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         pendingBalance: 0,
         totalEarned: 0,
         totalSalesCount: 0,
-        partnerLevel: preferredRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
-        targetGoal: preferredRole === 'empresa' ? 500000 : 100000,
+        partnerLevel: resolvedRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
+        targetGoal: resolvedRole === 'empresa' ? 500000 : 100000,
         currentSalesProgress: 0,
-        hasAffiliateProfile: preferredRole === 'afiliado',
-        hasCompanyProfile: hasCompany,
-        activeRoleMode: preferredRole,
+        accountType: resolvedRole,
+        hasAffiliateProfile: resolvedRole === 'afiliado',
+        hasCompanyProfile: resolvedRole === 'empresa',
+        activeRoleMode: resolvedRole,
         companyId: existingUserCompanyId,
         companyName: existingUserCompanyName,
         verified: false,
-        verificationStatus: 'unsubmitted',
+        verificationStatus: 'pending',
         updatedAt: new Date().toISOString()
       };
       await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
     }
   } catch (firestoreErr) {
     console.warn('Sincronização Firestore offline ou pendente:', firestoreErr);
+    const resolvedRole: UserRoleMode = preferredRole === 'empresa' ? 'empresa' : 'afiliado';
     profile = {
       userId: user.uid,
       name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário LeadsPay',
       email: normalizedEmail,
-      role: preferredRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
+      role: resolvedRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
       avatar: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
       pixKey: '',
       pixKeyType: 'Chave Aleatória',
@@ -787,12 +970,13 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
       pendingBalance: 0,
       totalEarned: 0,
       totalSalesCount: 0,
-      partnerLevel: preferredRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
-      targetGoal: preferredRole === 'empresa' ? 500000 : 100000,
+      partnerLevel: resolvedRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
+      targetGoal: resolvedRole === 'empresa' ? 500000 : 100000,
       currentSalesProgress: 0,
-      hasAffiliateProfile: preferredRole === 'afiliado',
-      hasCompanyProfile: preferredRole === 'empresa',
-      activeRoleMode: preferredRole,
+      accountType: resolvedRole,
+      hasAffiliateProfile: resolvedRole === 'afiliado',
+      hasCompanyProfile: resolvedRole === 'empresa',
+      activeRoleMode: resolvedRole,
       updatedAt: new Date().toISOString()
     };
   }

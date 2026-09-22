@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -39,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<UserSellerProfile>(INITIAL_USER_PROFILE);
   const [userRole, setUserRole] = useState<UserRoleMode>('afiliado');
   const [loading, setLoading] = useState<boolean>(true);
+  const isRegisteringRef = useRef<boolean>(false);
 
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
@@ -52,6 +53,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubProfile = onSnapshot(profileRef, async (snap) => {
           if (snap.exists()) {
             const data = snap.data() as Partial<UserSellerProfile>;
+
+            // Identificar se a conta é estritamente Empresa ou Afiliado
+            const isCompanyAccount = data.accountType === 'empresa' ||
+                                     data.hasCompanyProfile === true ||
+                                     Boolean(data.companyId) ||
+                                     data.activeRoleMode === 'empresa' ||
+                                     (typeof data.role === 'string' && (data.role.toLowerCase().includes('startup') || data.role.toLowerCase().includes('empresa') || data.role.toLowerCase().includes('produtor')));
+
+            const resolvedRoleMode: UserRoleMode = isCompanyAccount ? 'empresa' : 'afiliado';
+
             const safeProfile: UserSellerProfile = {
               ...INITIAL_USER_PROFILE,
               ...data,
@@ -63,11 +74,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               pendingBalance: typeof data.pendingBalance === 'number' && !isNaN(data.pendingBalance) ? data.pendingBalance : 0,
               totalEarned: typeof data.totalEarned === 'number' && !isNaN(data.totalEarned) ? data.totalEarned : 0,
               totalSalesCount: typeof data.totalSalesCount === 'number' && !isNaN(data.totalSalesCount) ? data.totalSalesCount : 0,
-              targetGoal: typeof data.targetGoal === 'number' && !isNaN(data.targetGoal) ? data.targetGoal : 100000,
+              targetGoal: typeof data.targetGoal === 'number' && !isNaN(data.targetGoal) ? data.targetGoal : (isCompanyAccount ? 500000 : 100000),
               currentSalesProgress: typeof data.currentSalesProgress === 'number' && !isNaN(data.currentSalesProgress) ? data.currentSalesProgress : 0,
-              partnerLevel: data.partnerLevel || 'Afiliado Starter',
-              activeRoleMode: data.activeRoleMode || 'afiliado',
-              role: data.role || (data.activeRoleMode === 'empresa' ? 'Empresa / Produtor' : 'Afiliado de Alta Performance'),
+              partnerLevel: data.partnerLevel || (isCompanyAccount ? 'Empresa Parceira' : 'Afiliado Starter'),
+              accountType: resolvedRoleMode,
+              hasAffiliateProfile: !isCompanyAccount,
+              hasCompanyProfile: isCompanyAccount,
+              activeRoleMode: resolvedRoleMode,
+              role: data.role || (isCompanyAccount ? 'Empresa / Produtor' : 'Afiliado de Alta Performance'),
               plan: data.plan,
               planStatus: data.planStatus,
               subscriptionTier: data.subscriptionTier,
@@ -75,11 +89,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               subscriptionActiveAt: data.subscriptionActiveAt
             };
             setUserProfile(safeProfile);
-            if (safeProfile.activeRoleMode) {
-              setUserRole(safeProfile.activeRoleMode);
-            }
+            setUserRole(resolvedRoleMode);
           } else {
-            // Se o perfil não existir ainda no Firestore para este usuário autenticado, criar com segurança
+            // Se o perfil não existir ainda no Firestore para este usuário autenticado,
+            // NÃO sobrescreva nem force perfil padrão como 'afiliado' se um registro estiver em andamento!
+            if (isRegisteringRef.current) {
+              return;
+            }
+
             const initialNewProfile: UserSellerProfile = {
               ...INITIAL_USER_PROFILE,
               userId: user.uid,
@@ -94,16 +111,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               targetGoal: 100000,
               currentSalesProgress: 0,
               activeRoleMode: 'afiliado',
+              accountType: 'afiliado',
               hasAffiliateProfile: true,
               hasCompanyProfile: false,
               updatedAt: new Date().toISOString()
             };
             setUserProfile(initialNewProfile);
-            try {
-              await setDoc(profileRef, sanitizeForFirestore(initialNewProfile), { merge: true });
-            } catch (createErr) {
-              console.warn('Tentativa de criar perfil inicial no Firestore adiada:', createErr);
-            }
           }
         }, (err) => {
           console.error('Erro no listener do perfil do usuário:', err);
@@ -126,6 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const registerAffiliateUser = async (data: RegisterAffiliateData) => {
+    isRegisteringRef.current = true;
     setLoading(true);
     try {
       const res = await registerAffiliate(data);
@@ -135,10 +149,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return res;
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        isRegisteringRef.current = false;
+      }, 2500);
     }
   };
 
   const registerCompanyUser = async (data: RegisterCompanyData) => {
+    isRegisteringRef.current = true;
     setLoading(true);
     try {
       const res = await registerCompany(data);
@@ -148,6 +166,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return res;
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        isRegisteringRef.current = false;
+      }, 2500);
     }
   };
 
@@ -167,6 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogle = async (preferredRole: UserRoleMode = 'afiliado') => {
+    isRegisteringRef.current = true;
     setLoading(true);
     try {
       const res = await authLoginWithGoogle(preferredRole);
@@ -178,6 +200,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return res;
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        isRegisteringRef.current = false;
+      }, 2500);
     }
   };
 

@@ -60,6 +60,11 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       return;
     }
 
+    if (userProfile?.accountType === 'afiliado' || (userProfile?.hasAffiliateProfile && !userProfile?.hasCompanyProfile && !userProfile?.companyId)) {
+      setErrorMsg('Esta conta foi registrada exclusivamente como AFILIADO. Por regras de segurança e separação de funções do LeadsPay, uma conta de afiliado não pode cadastrar empresa. Utilize uma nova conta com outro e-mail corporativo.');
+      return;
+    }
+
     const cleanCnpj = cnpj.replace(/\D/g, '');
     const cleanCpf = cpf.replace(/\D/g, '');
 

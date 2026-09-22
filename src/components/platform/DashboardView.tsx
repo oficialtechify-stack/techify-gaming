@@ -62,6 +62,7 @@ interface DashboardViewProps {
   userName?: string;
   userAvatar?: string;
   userEmail?: string;
+  onBackToHome?: () => void;
 }
 
 // 3D Glowing Wallet Illustration matching the reference screenshots (Green & Purple variants)
@@ -271,7 +272,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   setSelectedTypeFilter,
   userName,
   userAvatar,
-  userEmail
+  userEmail,
+  onBackToHome
 }) => {
   // Eye visibility state (masks financial values)
   const [showValues, setShowValues] = useState<boolean>(true);
@@ -285,6 +287,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Dropdown open states
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState<boolean>(false);
   const [isProductMenuOpen, setIsProductMenuOpen] = useState<boolean>(false);
+  const [isBellMenuOpen, setIsBellMenuOpen] = useState<boolean>(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
 
   // Selected chart point for interactive hover
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -775,6 +779,192 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </button>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Bell / Notificações ("cino") */}
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => {
+                setIsBellMenuOpen(!isBellMenuOpen);
+                setIsProfileMenuOpen(false);
+                setIsPeriodMenuOpen(false);
+                setIsProductMenuOpen(false);
+              }}
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 hover:border-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer relative shadow-sm"
+              title="Notificações e Avisos do Sistema"
+            >
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#D9F22A] animate-pulse shadow-[0_0_8px_#D9F22A]" />
+            </button>
+
+            {/* Notification Popover */}
+            {isBellMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsBellMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-32px)] bg-[#070d18] border border-white/15 rounded-2xl p-3.5 shadow-2xl z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
+                    <span className="text-xs font-bold text-white font-['Syne'] flex items-center gap-1.5">
+                      <Bell className="w-3.5 h-3.5 text-[#D9F22A]" />
+                      Notificações LeadsPay
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D9F22A]/10 text-[#D9F22A] font-bold border border-[#D9F22A]/20">
+                      2 Novas
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
+                      <div className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        Sistema LeadsPay 100% Online
+                      </div>
+                      <div className="text-[10px] text-white/60 mt-0.5 leading-relaxed">
+                        Split instantâneo, comissões em D+9 e PIX automático habilitados.
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
+                      <div className="text-[11px] font-bold text-[#D9F22A] flex items-center gap-1.5">
+                        <HeartHandshake className="w-3.5 h-3.5 text-[#D9F22A]" />
+                        Comunidade VIP no WhatsApp
+                      </div>
+                      <div className="text-[10px] text-white/60 mt-0.5 leading-relaxed">
+                        Participe do grupo oficial de afiliados e tire dúvidas direto com o time.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* User Profile Avatar & Dropdown Menu */}
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => {
+                setIsProfileMenuOpen(!isProfileMenuOpen);
+                setIsBellMenuOpen(false);
+                setIsPeriodMenuOpen(false);
+                setIsProductMenuOpen(false);
+              }}
+              className="flex items-center gap-2 p-1 pl-1 sm:pl-1.5 pr-2 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 hover:border-white/25 transition-all cursor-pointer shadow-sm"
+              title="Menu do Perfil"
+            >
+              <img
+                src={userAvatar || userProfile?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(displayName)}`}
+                alt={displayName}
+                className="w-7 h-7 rounded-full object-cover border border-[#D9F22A]/40 flex-shrink-0"
+              />
+              <span className="text-xs font-bold text-white max-w-[90px] sm:max-w-[120px] truncate hidden xs:inline-block font-['Syne']">
+                {displayName}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-white/50 transition-transform flex-shrink-0 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Profile Dropdown Menu */}
+            {isProfileMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsProfileMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-24px)] bg-[#070d18] border border-white/15 rounded-2xl p-2.5 shadow-2xl z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center gap-3 p-2.5 bg-white/[0.04] rounded-xl mb-2 border border-white/5">
+                    <img
+                      src={userAvatar || userProfile?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(displayName)}`}
+                      alt={displayName}
+                      className="w-10 h-10 rounded-full object-cover border border-[#D9F22A]/40 flex-shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white truncate font-['Syne']">
+                        {displayName}
+                      </div>
+                      <div className="text-[11px] text-white/50 truncate">
+                        {userEmail || userProfile?.email || 'afiliado@leadspay.com'}
+                      </div>
+                      <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full mt-1 ${
+                        roleMode === 'afiliado'
+                          ? 'bg-[#D9F22A]/15 text-[#D9F22A] border border-[#D9F22A]/30'
+                          : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                      }`}>
+                        {roleMode === 'afiliado' ? 'Afiliado LeadsPay' : 'Conta Empresa'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        setActiveTab('meu_perfil');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <User className="w-3.5 h-3.5 text-[#D9F22A]" />
+                      <span>Meu Perfil & Chave PIX</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        setActiveTab('comunidade');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <HeartHandshake className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Comunidade VIP</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        setActiveTab('vitrine');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <Package className="w-3.5 h-3.5 text-white/50" />
+                      <span>Vitrine de Startups</span>
+                    </button>
+
+                    {onSwitchRole && (
+                      <button
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          onSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
+                      >
+                        <span>{roleMode === 'afiliado' ? 'Mudar para Produtor/Empresa' : 'Mudar para Afiliado'}</span>
+                        <ArrowRightLeft className="w-3.5 h-3.5 text-[#D9F22A]" />
+                      </button>
+                    )}
+
+                    {onBackToHome && (
+                      <button
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          onBackToHome();
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Voltar ao Site
+                      </button>
+                    )}
+                  </div>
+
+                  {onLogout && (
+                    <>
+                      <div className="h-px bg-white/10 my-1.5" />
+                      <button
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          onLogout();
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sair da Conta</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

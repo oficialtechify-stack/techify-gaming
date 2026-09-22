@@ -865,6 +865,11 @@ export async function approveCompanyInFirebase(companyId: string) {
           verified: true,
           verificationStatus: 'approved',
           kyc_status: 'verified',
+          accountType: 'empresa',
+          hasCompanyProfile: true,
+          hasAffiliateProfile: false,
+          activeRoleMode: 'empresa',
+          role: 'Fundador / Startup',
           companyId,
           companyName: compData?.name || compData?.companyName,
           updatedAt: now
@@ -903,12 +908,48 @@ export async function approveCompanyInFirebase(companyId: string) {
 export async function rejectCompanyInFirebase(companyId: string, reason: string = 'Dados da empresa necessitam de revisão') {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
   const now = new Date().toISOString();
+
+  let ownerId: string | null = null;
+  try {
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      ownerId = snap.data()?.ownerId || snap.data()?.submittedBy;
+    }
+  } catch (e) {}
+
   await setDoc(docRef, sanitizeForFirestore({
     status: 'rejected',
     verified: false,
     rejectionReason: reason,
     reviewedAt: now
   }), { merge: true });
+
+  if (ownerId) {
+    try {
+      await setDoc(doc(db, COLLECTIONS.PROFILES, ownerId), {
+        verified: false,
+        verificationStatus: 'rejected',
+        kyc_status: 'rejected',
+        rejectionReason: reason,
+        updatedAt: now
+      }, { merge: true });
+
+      await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, ownerId), {
+        status: 'rejected',
+        rejectionReason: reason,
+        reviewedAt: now
+      }, { merge: true });
+    } catch (e) {}
+  }
+
+  try {
+    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId), {
+      status: 'rejected',
+      rejectionReason: reason,
+      reviewedAt: now
+    }, { merge: true });
+  } catch (e) {}
+
   return { success: true };
 }
 

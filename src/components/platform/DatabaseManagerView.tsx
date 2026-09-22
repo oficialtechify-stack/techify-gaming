@@ -518,19 +518,36 @@ export const DatabaseManagerView: React.FC = () => {
   const allAffiliates: VerificationRequest[] = useMemo(() => {
     const map = new Map<string, VerificationRequest>();
 
-    // 1. Verificações explícitas
+    // 1. Verificações explícitas (apenas afiliados)
     verifications.forEach((v) => {
       const key = v.userId || v.id;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
-      if ((v.roleType || 'afiliado') !== 'empresa') {
+      const isCompanyVerif = v.roleType === 'empresa' || 
+                             Boolean(v.companyId) || 
+                             Boolean(v.companyName) || 
+                             Boolean(v.companyCnpj);
+      if (!isCompanyVerif) {
         map.set(key, v);
       }
     });
 
-    // 2. Perfis de usuários cadastrados
+    // 2. Perfis de usuários cadastrados (garantindo que perfis de empresa NUNCA caiam aqui)
     registeredProfiles.forEach((p) => {
       const key = p.userId || p.id;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id)) return;
+      
+      const isCompanyProfile = p.accountType === 'empresa' ||
+                               p.activeRoleMode === 'empresa' ||
+                               p.hasCompanyProfile === true ||
+                               p.role === 'empresa' ||
+                               p.role === 'Fundador / Startup' ||
+                               p.roleType === 'empresa' ||
+                               p.verificationRoleType === 'empresa' ||
+                               Boolean(p.companyId) ||
+                               Boolean(p.companyName);
+
+      if (isCompanyProfile) return;
+
       if (!map.has(key)) {
         const isVerified = p.verified === true || p.verificationStatus === 'approved';
         const isBanned = p.banned === true;
@@ -538,7 +555,7 @@ export const DatabaseManagerView: React.FC = () => {
         if (isBanned) status = 'banned';
         else if (p.verificationStatus === 'rejected') status = 'rejected';
         else if (isVerified) status = 'approved';
-        else status = p.verificationStatus || 'approved';
+        else status = p.verificationStatus || 'pending';
 
         map.set(key, {
           id: key,
@@ -551,7 +568,7 @@ export const DatabaseManagerView: React.FC = () => {
           state: p.state || '',
           pixKey: p.pixKey || '',
           pixKeyType: p.pixKeyType || 'CPF',
-          roleType: p.roleType || p.role || 'afiliado',
+          roleType: 'afiliado',
           status,
           banned: isBanned,
           avatar: p.avatar || '',
@@ -575,8 +592,12 @@ export const DatabaseManagerView: React.FC = () => {
 
     // 2. Solicitações de verificação com perfil empresa
     verifications.forEach((v) => {
-      if (v.roleType === 'empresa') {
-        const key = v.userId || v.id;
+      const isCompanyVerif = v.roleType === 'empresa' || 
+                             Boolean(v.companyId) || 
+                             Boolean(v.companyName) || 
+                             Boolean(v.companyCnpj);
+      if (isCompanyVerif) {
+        const key = v.companyId || v.userId || v.id;
         if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
         if (!map.has(key)) {
           map.set(key, {
@@ -584,7 +605,7 @@ export const DatabaseManagerView: React.FC = () => {
             name: v.companyName || v.name || 'Empresa ' + key.slice(0, 5),
             slug: (v.companyName || v.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
             tagline: v.companyTagline || 'Inovação e escala digital',
-            logo: v.companyLogo || '',
+            logo: v.companyLogo || v.avatar || '',
             bannerImage: '',
             website: v.companyWebsite || '',
             commissionRange: '10% - 50%',
@@ -608,7 +629,19 @@ export const DatabaseManagerView: React.FC = () => {
 
     // 3. Perfis cadastrados com dados empresariais
     registeredProfiles.forEach((p) => {
-      const compId = p.companyId || (p.companyName || p.role === 'empresa' ? (p.userId || p.id) : null);
+      const isCompanyProfile = p.accountType === 'empresa' ||
+                               p.activeRoleMode === 'empresa' ||
+                               p.hasCompanyProfile === true ||
+                               p.role === 'empresa' ||
+                               p.role === 'Fundador / Startup' ||
+                               p.roleType === 'empresa' ||
+                               p.verificationRoleType === 'empresa' ||
+                               Boolean(p.companyId) ||
+                               Boolean(p.companyName);
+
+      if (!isCompanyProfile) return;
+
+      const compId = p.companyId || (p.userId || p.id);
       if (compId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
         if (!map.has(compId)) {
           const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
@@ -616,16 +649,16 @@ export const DatabaseManagerView: React.FC = () => {
             id: compId,
             name: p.companyName || p.name || 'Empresa ' + compId.slice(0, 5),
             slug: (p.companyName || p.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            tagline: p.tagline || 'Inovação e escala digital',
-            logo: p.logo || '',
+            tagline: p.companyTagline || p.tagline || 'Inovação e escala digital',
+            logo: p.companyLogo || p.logo || p.avatar || '',
             bannerImage: '',
-            website: p.website || '',
+            website: p.companyWebsite || p.website || '',
             commissionRange: '10% - 50%',
-            cnpj: p.cnpj || p.cpf || '',
+            cnpj: p.companyCnpj || p.cnpj || p.cpf || '',
             category: (p.companyCategory as any) || 'SaaS / B2B',
             description: p.companyDescription || 'Empresa parceira cadastrada na plataforma LeadsPay.',
             email: p.companyEmail || p.email || '',
-            whatsapp: p.companyWhatsapp || p.phone || '',
+            whatsapp: p.companyWhatsapp || p.whatsapp || p.phone || '',
             ownerId: p.userId || p.id,
             submittedBy: p.userId || p.id,
             status: isApprv ? 'approved' : (p.verificationStatus || 'pending'),
