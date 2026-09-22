@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } fro
 import { auth, db } from '../lib/firebase';
 import { COLLECTIONS, DEFAULT_USER_ID, sanitizeForFirestore } from './firestoreService';
 import { UserSellerProfile, CompanyStartup, UserRoleMode } from '../types/platform';
+import { isSuperAdminEmail, ADMIN_EMAILS, INITIAL_USER_PROFILE } from '../data/platformData';
 
 export interface RegisterAffiliateData {
   name: string;
@@ -482,26 +483,6 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
   const cleanCpf = data.cpf ? cleanDigits(data.cpf) : '';
   const formattedCpf = cleanCpf ? formatCPF(cleanCpf) : '';
 
-  // 0. Pre-verificação: Garantir que não existe conta cadastrada como AFILIADO com este e-mail
-  try {
-    const affQ = query(collection(db, COLLECTIONS.PROFILES), where('email', '==', normalizedEmail));
-    const affSnap = await getDocs(affQ);
-    if (!affSnap.empty) {
-      const existing = affSnap.docs[0].data() as UserSellerProfile;
-      const isAffiliate = existing.accountType === 'afiliado' || 
-                          (existing.hasAffiliateProfile === true && !existing.hasCompanyProfile && !existing.companyId);
-      if (isAffiliate) {
-        const err = new Error('custom/affiliate-cannot-create-company');
-        (err as any).code = 'custom/affiliate-cannot-create-company';
-        throw err;
-      }
-    }
-  } catch (checkErr: any) {
-    if (checkErr.code === 'custom/affiliate-cannot-create-company') {
-      throw checkErr;
-    }
-  }
-
   // 1. Validar formato de CNPJ se informado como tipo CNPJ
   if (docType === 'CNPJ' && cleanCnpj) {
     if (cleanCnpj.length === 14 && !isValidCNPJ(cleanCnpj)) {
@@ -540,20 +521,10 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     }
   }
 
-  // 2. Verificar se o usuário já possui cadastro e se era afiliado
+  // 2. Obter perfil existente se houver
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
   const existingSnap = await getDoc(profileRef);
   const existingData = existingSnap.exists() ? (existingSnap.data() as UserSellerProfile) : null;
-
-  if (existingData) {
-    const isAffiliate = existingData.accountType === 'afiliado' || 
-                        (existingData.hasAffiliateProfile === true && !existingData.hasCompanyProfile && !existingData.companyId);
-    if (isAffiliate) {
-      const err = new Error('custom/affiliate-cannot-create-company');
-      (err as any).code = 'custom/affiliate-cannot-create-company';
-      throw err;
-    }
-  }
 
   // Buscar empresa existente por ownerId ou submittedBy ou existingData.companyId
   let existingCompany: CompanyStartup | null = null;
@@ -806,14 +777,36 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
   if (profileSnap.exists()) {
     profile = profileSnap.data() as UserSellerProfile;
-    const isCompany = profile.accountType === 'empresa' || 
-                      profile.hasCompanyProfile === true || 
-                      Boolean(profile.companyId) || 
-                      profile.activeRoleMode === 'empresa';
-    profile.accountType = isCompany ? 'empresa' : 'afiliado';
-    profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
-    profile.hasCompanyProfile = isCompany;
-    profile.hasAffiliateProfile = !isCompany;
+    const isAdm = isSuperAdminEmail(normalizedEmail) || profile.accountType === 'admin' || profile.role === 'Administrador do Sistema';
+    
+    if (isAdm) {
+      profile.accountType = 'admin';
+      profile.activeRoleMode = 'admin';
+      profile.role = 'Administrador do Sistema';
+      profile.partnerLevel = 'Super Administrador';
+      profile.hasCompanyProfile = false;
+      profile.hasAffiliateProfile = false;
+    } else {
+      const isCompany = profile.accountType === 'empresa' || 
+                        profile.hasCompanyProfile === true || 
+                        Boolean(profile.companyId) || 
+                        Boolean(profile.companyName) ||
+                        profile.activeRoleMode === 'empresa' ||
+                        (typeof profile.role === 'string' && (
+                          profile.role.toLowerCase().includes('startup') || 
+                          profile.role.toLowerCase().includes('empresa') || 
+                          profile.role.toLowerCase().includes('produtor') ||
+                          profile.role.toLowerCase().includes('fundador')
+                        ));
+      profile.accountType = isCompany ? 'empresa' : 'afiliado';
+      profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
+      profile.hasCompanyProfile = isCompany;
+      profile.hasAffiliateProfile = !isCompany;
+      if (isCompany && (!profile.role || profile.role === 'Afiliado de Alta Performance')) {
+        profile.role = 'Fundador / Startup';
+        profile.partnerLevel = 'Empresa Parceira';
+      }
+    }
   } else {
     // Tentar localizar por e-mail em caso de migração
     const profilesColl = collection(db, COLLECTIONS.PROFILES);
@@ -822,22 +815,44 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
     if (!snap.empty) {
       profile = snap.docs[0].data() as UserSellerProfile;
-      const isCompany = profile.accountType === 'empresa' || 
-                        profile.hasCompanyProfile === true || 
-                        Boolean(profile.companyId) || 
-                        profile.activeRoleMode === 'empresa';
-      profile.accountType = isCompany ? 'empresa' : 'afiliado';
-      profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
-      profile.hasCompanyProfile = isCompany;
-      profile.hasAffiliateProfile = !isCompany;
+      const isAdm = isSuperAdminEmail(normalizedEmail) || profile.accountType === 'admin' || profile.role === 'Administrador do Sistema';
+      
+      if (isAdm) {
+        profile.accountType = 'admin';
+        profile.activeRoleMode = 'admin';
+        profile.role = 'Administrador do Sistema';
+        profile.partnerLevel = 'Super Administrador';
+        profile.hasCompanyProfile = false;
+        profile.hasAffiliateProfile = false;
+      } else {
+        const isCompany = profile.accountType === 'empresa' || 
+                          profile.hasCompanyProfile === true || 
+                          Boolean(profile.companyId) || 
+                          Boolean(profile.companyName) ||
+                          profile.activeRoleMode === 'empresa' ||
+                          (typeof profile.role === 'string' && (
+                            profile.role.toLowerCase().includes('startup') || 
+                            profile.role.toLowerCase().includes('empresa') || 
+                            profile.role.toLowerCase().includes('produtor') ||
+                            profile.role.toLowerCase().includes('fundador')
+                          ));
+        profile.accountType = isCompany ? 'empresa' : 'afiliado';
+        profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
+        profile.hasCompanyProfile = isCompany;
+        profile.hasAffiliateProfile = !isCompany;
+        if (isCompany && (!profile.role || profile.role === 'Afiliado de Alta Performance')) {
+          profile.role = 'Fundador / Startup';
+          profile.partnerLevel = 'Empresa Parceira';
+        }
+      }
       await setDoc(profileRef, sanitizeForFirestore({ ...profile, userId: user.uid }), { merge: true });
     } else {
-      // Criar perfil padrão se não existir
+      const isAdm = isSuperAdminEmail(normalizedEmail);
       profile = {
         userId: user.uid,
         name: user.displayName || normalizedEmail.split('@')[0],
         email: normalizedEmail,
-        role: 'Afiliado de Alta Performance',
+        role: isAdm ? 'Administrador do Sistema' : 'Afiliado de Alta Performance',
         avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
         pixKey: '',
         pixKeyType: 'Chave Aleatória',
@@ -845,13 +860,13 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
         pendingBalance: 0,
         totalEarned: 0,
         totalSalesCount: 0,
-        partnerLevel: 'Afiliado Starter',
+        partnerLevel: isAdm ? 'Super Administrador' : 'Afiliado Starter',
         targetGoal: 100000,
         currentSalesProgress: 0,
-        accountType: 'afiliado',
-        hasAffiliateProfile: true,
+        accountType: isAdm ? 'admin' : 'afiliado',
+        hasAffiliateProfile: !isAdm,
         hasCompanyProfile: false,
-        activeRoleMode: 'afiliado',
+        activeRoleMode: isAdm ? 'admin' : 'afiliado',
         updatedAt: new Date().toISOString()
       };
       await setDoc(profileRef, sanitizeForFirestore(profile));
@@ -871,112 +886,168 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
   const userCredential = await signInWithPopup(auth, provider);
   const user = userCredential.user;
   const normalizedEmail = (user.email || '').trim().toLowerCase();
+  const isAdm = isSuperAdminEmail(normalizedEmail);
 
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
   let profile: UserSellerProfile;
 
   try {
     const profileSnap = await getDoc(profileRef);
+    const existing = profileSnap.exists() ? (profileSnap.data() as UserSellerProfile) : null;
 
-    if (profileSnap.exists()) {
-      const existing = profileSnap.data() as UserSellerProfile;
-      // Respeitar estritamente o tipo de conta já existente (uma conta empresa permanece empresa; uma conta afiliado permanece afiliado)
-      const isExistingCompany = existing.accountType === 'empresa' ||
-                                existing.hasCompanyProfile === true ||
-                                Boolean(existing.companyId) ||
-                                existing.activeRoleMode === 'empresa';
-      const resolvedRole: UserRoleMode = isExistingCompany ? 'empresa' : 'afiliado';
-
+    if (isAdm) {
       profile = {
+        ...INITIAL_USER_PROFILE,
         ...existing,
-        accountType: resolvedRole,
-        hasAffiliateProfile: !isExistingCompany,
-        hasCompanyProfile: isExistingCompany,
-        activeRoleMode: resolvedRole,
+        userId: user.uid,
+        name: user.displayName || existing?.name || normalizedEmail.split('@')[0],
+        email: normalizedEmail,
+        role: 'Administrador do Sistema',
+        avatar: user.photoURL || existing?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
+        partnerLevel: 'Super Administrador',
+        accountType: 'admin',
+        hasAffiliateProfile: false,
+        hasCompanyProfile: false,
+        activeRoleMode: 'admin',
+        verified: true,
+        verificationStatus: 'approved',
         updatedAt: new Date().toISOString()
       };
-
-      if (isExistingCompany) {
-        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
-        const compSnap = await getDocs(compQ);
-        
-        if (!compSnap.empty) {
-          const userComp = compSnap.docs[0];
-          const compData = userComp.data();
-          profile.companyId = userComp.id;
-          profile.companyName = compData.name || compData.companyName;
-        }
-      }
-
       await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
-    } else {
-      const avatar = user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
-      
-      // Verificar se já possui alguma empresa existente
-      let existingUserCompanyId: string | undefined = undefined;
-      let existingUserCompanyName: string | undefined = undefined;
-      let hasCompany = false;
+      return { user, profile };
+    }
 
-      const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
-      const compSnap = await getDocs(compQ);
-      if (!compSnap.empty) {
-        const userComp = compSnap.docs[0];
-        existingUserCompanyId = userComp.id;
-        existingUserCompanyName = userComp.data()?.name || userComp.data()?.companyName;
-        hasCompany = true;
+    // Verificar se o usuário já possui empresa registrada no Firestore
+    let existingUserCompanyId: string | undefined = existing?.companyId;
+    let existingUserCompanyName: string | undefined = existing?.companyName;
+    let hasCompany = Boolean(existingUserCompanyId);
+
+    const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
+    const compSnap = await getDocs(compQ);
+    if (!compSnap.empty) {
+      const userComp = compSnap.docs[0];
+      existingUserCompanyId = userComp.id;
+      existingUserCompanyName = userComp.data()?.name || userComp.data()?.companyName;
+      hasCompany = true;
+    }
+
+    // Se o usuário clicou na aba Empresa OU já é uma Empresa previamente registrada:
+    const isCompanyRegistration = preferredRole === 'empresa' || hasCompany || existing?.accountType === 'empresa' || existing?.hasCompanyProfile === true;
+
+    if (isCompanyRegistration) {
+      const now = new Date().toISOString();
+      const companyId = existingUserCompanyId || `comp-${user.uid.slice(0, 10)}`;
+      const companyName = existingUserCompanyName || (user.displayName ? `${user.displayName} (Startup)` : 'Minha Startup');
+      const companyLogo = user.photoURL || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(companyName)}`;
+
+      // Se ainda não existir empresa na coleção 'companies', criá-la imediatamente para o Super Admin gerenciar
+      if (!hasCompany) {
+        const newCompany: CompanyStartup = {
+          id: companyId,
+          name: companyName,
+          slug: companyName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'),
+          tagline: 'SaaS / B2B de alta performance e escala comercial',
+          logo: companyLogo,
+          bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
+          category: 'SaaS / B2B',
+          description: `Empresa parceira ${companyName} integrada ao ecossistema LeadsPay.`,
+          website: 'https://leadspay.com',
+          email: normalizedEmail,
+          whatsapp: '',
+          totalPlansCount: 0,
+          totalAffiliatesCount: 0,
+          totalSalesVolume: 0,
+          commissionRange: '30% - 50%',
+          verified: false,
+          status: 'pending',
+          ownerId: user.uid,
+          submittedBy: user.uid,
+          submittedByName: user.displayName || 'Produtor',
+          submittedByEmail: normalizedEmail,
+          createdAt: now
+        };
+        await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), sanitizeForFirestore(newCompany), { merge: true });
+
+        // Criar registro na fila de verificação de empresas
+        const verifData = {
+          id: user.uid,
+          userId: user.uid,
+          name: companyName,
+          firstName: user.displayName || 'Produtor',
+          email: normalizedEmail,
+          phone: '',
+          avatar: companyLogo,
+          roleType: 'empresa',
+          companyId: companyId,
+          companyName: companyName,
+          companyCategory: 'SaaS / B2B',
+          status: 'pending',
+          kyc_status: 'submitted',
+          submittedAt: now
+        };
+        await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, user.uid), sanitizeForFirestore(verifData), { merge: true });
+        await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId), sanitizeForFirestore(verifData), { merge: true });
       }
-
-      const resolvedRole: UserRoleMode = (preferredRole === 'empresa' || hasCompany) ? 'empresa' : 'afiliado';
 
       profile = {
+        ...INITIAL_USER_PROFILE,
+        ...existing,
         userId: user.uid,
-        name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário LeadsPay',
+        name: user.displayName || existing?.name || normalizedEmail.split('@')[0],
         email: normalizedEmail,
-        role: resolvedRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
+        role: 'Fundador / Startup',
+        avatar: companyLogo,
+        partnerLevel: 'Empresa Parceira',
+        targetGoal: 500000,
+        accountType: 'empresa',
+        hasAffiliateProfile: false,
+        hasCompanyProfile: true,
+        activeRoleMode: 'empresa',
+        companyId: companyId,
+        companyName: companyName,
+        verificationRoleType: 'empresa',
+        verificationStatus: existing?.verificationStatus || 'pending',
+        verified: existing?.verified ?? false,
+        updatedAt: now
+      };
+      await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
+    } else {
+      // Afiliado de Alta Performance
+      const avatar = user.photoURL || existing?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`;
+      profile = {
+        ...INITIAL_USER_PROFILE,
+        ...existing,
+        userId: user.uid,
+        name: user.displayName || existing?.name || normalizedEmail.split('@')[0] || 'Afiliado LeadsPay',
+        email: normalizedEmail,
+        role: 'Afiliado de Alta Performance',
         avatar,
-        pixKey: '',
-        pixKeyType: 'Chave Aleatória',
-        availableBalance: 0,
-        pendingBalance: 0,
-        totalEarned: 0,
-        totalSalesCount: 0,
-        partnerLevel: resolvedRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
-        targetGoal: resolvedRole === 'empresa' ? 500000 : 100000,
-        currentSalesProgress: 0,
-        accountType: resolvedRole,
-        hasAffiliateProfile: resolvedRole === 'afiliado',
-        hasCompanyProfile: resolvedRole === 'empresa',
-        activeRoleMode: resolvedRole,
-        companyId: existingUserCompanyId,
-        companyName: existingUserCompanyName,
-        verified: false,
-        verificationStatus: 'pending',
+        partnerLevel: existing?.partnerLevel || 'Afiliado Starter',
+        targetGoal: 100000,
+        accountType: 'afiliado',
+        hasAffiliateProfile: true,
+        hasCompanyProfile: false,
+        activeRoleMode: 'afiliado',
         updatedAt: new Date().toISOString()
       };
       await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
     }
   } catch (firestoreErr) {
     console.warn('Sincronização Firestore offline ou pendente:', firestoreErr);
-    const resolvedRole: UserRoleMode = preferredRole === 'empresa' ? 'empresa' : 'afiliado';
+    const isCompany = preferredRole === 'empresa';
     profile = {
+      ...INITIAL_USER_PROFILE,
       userId: user.uid,
       name: user.displayName || normalizedEmail.split('@')[0] || 'Usuário LeadsPay',
       email: normalizedEmail,
-      role: resolvedRole === 'empresa' ? 'Fundador / Startup' : 'Afiliado de Alta Performance',
+      role: isAdm ? 'Administrador do Sistema' : (isCompany ? 'Fundador / Startup' : 'Afiliado de Alta Performance'),
       avatar: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
-      pixKey: '',
-      pixKeyType: 'Chave Aleatória',
-      availableBalance: 0,
-      pendingBalance: 0,
-      totalEarned: 0,
-      totalSalesCount: 0,
-      partnerLevel: resolvedRole === 'empresa' ? 'Empresa Parceira' : 'Afiliado Starter',
-      targetGoal: resolvedRole === 'empresa' ? 500000 : 100000,
-      currentSalesProgress: 0,
-      accountType: resolvedRole,
-      hasAffiliateProfile: resolvedRole === 'afiliado',
-      hasCompanyProfile: resolvedRole === 'empresa',
-      activeRoleMode: resolvedRole,
+      partnerLevel: isAdm ? 'Super Administrador' : (isCompany ? 'Empresa Parceira' : 'Afiliado Starter'),
+      targetGoal: isCompany ? 500000 : 100000,
+      accountType: isAdm ? 'admin' : (isCompany ? 'empresa' : 'afiliado'),
+      hasAffiliateProfile: !isAdm && !isCompany,
+      hasCompanyProfile: !isAdm && isCompany,
+      activeRoleMode: isAdm ? 'admin' : (isCompany ? 'empresa' : 'afiliado'),
       updatedAt: new Date().toISOString()
     };
   }

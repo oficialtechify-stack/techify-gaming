@@ -351,7 +351,7 @@ export interface UserSellerProfile {
   partnerLevel: 'Afiliado Starter' | 'Parceiro Silver' | 'Parceiro Gold' | 'Master Elite Black' | 'Elite Partner' | string;
   targetGoal: number;
   currentSalesProgress: number;
-  accountType?: 'afiliado' | 'empresa';
+  accountType?: 'afiliado' | 'empresa' | 'admin';
   hasAffiliateProfile?: boolean;
   hasCompanyProfile?: boolean;
   activeRoleMode?: UserRoleMode;

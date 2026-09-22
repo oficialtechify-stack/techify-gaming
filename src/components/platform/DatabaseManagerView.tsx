@@ -58,14 +58,10 @@ import {
 } from 'lucide-react';
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
+import { ADMIN_EMAILS, isSuperAdminEmail } from '../../data/platformData';
 import firebaseConfig from '../../../firebase-applet-config.json';
 import { AdminBrandingManager } from './AdminBrandingManager';
 import { AdminModalImagesManager } from './AdminModalImagesManager';
-
-const ADMIN_EMAILS = [
-  'rickmarketing81@gmail.com',
-  'leadspay.oficial@gmail.com'
-];
 
 type MainAdminTab = 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'modal_backgrounds' | 'database_explorer';
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'banned' | 'all';
@@ -525,6 +521,8 @@ export const DatabaseManagerView: React.FC = () => {
     verifications.forEach((v) => {
       const key = v.userId || v.id;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
+      if (isSuperAdminEmail(v.email)) return;
+
       const isCompanyVerif = v.roleType === 'empresa' || 
                              Boolean(v.companyId) || 
                              Boolean(v.companyName) || 
@@ -539,15 +537,39 @@ export const DatabaseManagerView: React.FC = () => {
       const key = p.userId || p.id;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id)) return;
       
-      // Contas de administrador da plataforma não são listadas como afiliados pendentes
-      if (p.accountType === 'admin' && !map.has(key)) return;
+      // Contas de administrador da plataforma JAMAIS são listadas como afiliados
+      const isAdmin = p.accountType === 'admin' || 
+                      isSuperAdminEmail(p.email) || 
+                      p.role === 'Administrador do Sistema' || 
+                      p.partnerLevel === 'Super Administrador';
+      if (isAdmin) {
+        map.delete(key);
+        if (p.id) map.delete(p.id);
+        if (p.userId) map.delete(p.userId);
+        return;
+      }
 
+      // Contas corporativas (Empresas / Startups / Produtores) JAMAIS são listadas como afiliados
       const isCompanyProfile = p.accountType === 'empresa' ||
                                p.hasCompanyProfile === true ||
                                Boolean(p.companyId?.trim()) ||
-                               Boolean(p.companyName?.trim());
+                               Boolean(p.companyName?.trim()) ||
+                               p.activeRoleMode === 'empresa' ||
+                               p.verificationRoleType === 'empresa' ||
+                               (typeof p.role === 'string' && (
+                                 p.role.toLowerCase().includes('startup') || 
+                                 p.role.toLowerCase().includes('empresa') || 
+                                 p.role.toLowerCase().includes('produtor') ||
+                                 p.role.toLowerCase().includes('fundador')
+                               )) ||
+                               (typeof p.partnerLevel === 'string' && p.partnerLevel.toLowerCase().includes('empresa'));
 
-      if (isCompanyProfile) return;
+      if (isCompanyProfile) {
+        map.delete(key);
+        if (p.id) map.delete(p.id);
+        if (p.userId) map.delete(p.userId);
+        return;
+      }
 
       if (!map.has(key)) {
         const isVerified = p.verified === true || p.verificationStatus === 'approved';
@@ -655,27 +677,41 @@ export const DatabaseManagerView: React.FC = () => {
       }
     });
 
-    // 3. Perfis cadastrados com dados empresariais REAIS (somente se tiverem nome de empresa ou CNPJ ou companyId explícito)
+    // 3. Perfis cadastrados com perfil de empresa
     registeredProfiles.forEach((p) => {
       // Ignorar contas de admin sem empresa
-      if (p.accountType === 'admin') return;
+      const isAdmin = p.accountType === 'admin' || 
+                      isSuperAdminEmail(p.email) || 
+                      p.role === 'Administrador do Sistema' || 
+                      p.partnerLevel === 'Super Administrador';
+      if (isAdmin && !p.companyId && !p.companyName) return;
 
-      const hasRealCompanyData = Boolean(p.companyName?.trim()) || 
-                                Boolean(p.companyId?.trim()) || 
-                                Boolean(p.companyCnpj?.trim()) ||
-                                (p.hasCompanyProfile === true && Boolean(p.companyName?.trim()));
+      const isCompanyProfile = p.accountType === 'empresa' ||
+                               p.hasCompanyProfile === true ||
+                               Boolean(p.companyId?.trim()) ||
+                               Boolean(p.companyName?.trim()) ||
+                               p.activeRoleMode === 'empresa' ||
+                               p.verificationRoleType === 'empresa' ||
+                               (typeof p.role === 'string' && (
+                                 p.role.toLowerCase().includes('startup') || 
+                                 p.role.toLowerCase().includes('empresa') || 
+                                 p.role.toLowerCase().includes('produtor') ||
+                                 p.role.toLowerCase().includes('fundador')
+                               )) ||
+                               (typeof p.partnerLevel === 'string' && p.partnerLevel.toLowerCase().includes('empresa'));
 
-      if (!hasRealCompanyData) return;
+      if (!isCompanyProfile) return;
 
       const compId = p.companyId || (p.userId || p.id);
       if (compId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
         const existing = map.get(compId);
         const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
+        const companyDisplayName = p.companyName?.trim() || p.name?.trim() || 'Empresa Cadastrada';
 
         if (existing) {
           map.set(compId, {
             ...existing,
-            name: existing.name || p.companyName || p.name || '',
+            name: existing.name || companyDisplayName,
             tagline: existing.tagline || p.companyTagline || p.tagline || '',
             logo: existing.logo || p.companyLogo || p.logo || p.avatar || '',
             website: existing.website || p.companyWebsite || p.website || '',
@@ -691,8 +727,8 @@ export const DatabaseManagerView: React.FC = () => {
         } else {
           map.set(compId, {
             id: compId,
-            name: p.companyName || p.name || 'Empresa Cadastrada',
-            slug: (p.companyName || p.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+            name: companyDisplayName,
+            slug: companyDisplayName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
             tagline: p.companyTagline || p.tagline || '',
             logo: p.companyLogo || p.logo || p.avatar || '',
             bannerImage: '',

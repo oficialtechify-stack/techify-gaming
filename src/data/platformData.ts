@@ -1,5 +1,14 @@
 import { PlatformProduct, SaleTransaction, PaymentMethodStat, UserSellerProfile, WithdrawalRequest } from '../types/platform';
 
+export const ADMIN_EMAILS: string[] = [
+  'leadspay.oficial@gmail.com'
+];
+
+export function isSuperAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.includes(email.trim().toLowerCase());
+}
+
 export const INITIAL_USER_PROFILE: UserSellerProfile = {
   name: '',
   firstName: '',

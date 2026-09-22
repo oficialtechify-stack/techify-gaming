@@ -15,7 +15,7 @@ import {
   AuthResult
 } from '../services/authService';
 import { UserSellerProfile, UserRoleMode } from '../types/platform';
-import { INITIAL_USER_PROFILE } from '../data/platformData';
+import { INITIAL_USER_PROFILE, isSuperAdminEmail } from '../data/platformData';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -53,22 +53,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubProfile = onSnapshot(profileRef, async (snap) => {
           if (snap.exists()) {
             const data = snap.data() as Partial<UserSellerProfile>;
+            const userEmail = data.email || user.email || '';
+            const isAdminAccount = isSuperAdminEmail(userEmail) || data.accountType === 'admin' || data.role === 'Administrador do Sistema';
 
             // Identificar se a conta é estritamente Empresa ou Afiliado
-            const isCompanyAccount = data.accountType === 'empresa' ||
-                                     data.hasCompanyProfile === true ||
-                                     Boolean(data.companyId) ||
-                                     data.activeRoleMode === 'empresa' ||
-                                     (typeof data.role === 'string' && (data.role.toLowerCase().includes('startup') || data.role.toLowerCase().includes('empresa') || data.role.toLowerCase().includes('produtor')));
+            const isCompanyAccount = !isAdminAccount && (
+              data.accountType === 'empresa' ||
+              data.hasCompanyProfile === true ||
+              Boolean(data.companyId) ||
+              Boolean(data.companyName) ||
+              data.activeRoleMode === 'empresa' ||
+              (typeof data.role === 'string' && (
+                data.role.toLowerCase().includes('startup') || 
+                data.role.toLowerCase().includes('empresa') || 
+                data.role.toLowerCase().includes('produtor') ||
+                data.role.toLowerCase().includes('fundador')
+              )) ||
+              (typeof data.partnerLevel === 'string' && data.partnerLevel.toLowerCase().includes('empresa'))
+            );
 
-            const resolvedRoleMode: UserRoleMode = isCompanyAccount ? 'empresa' : 'afiliado';
+            const resolvedRoleMode: UserRoleMode = isAdminAccount ? 'admin' : (isCompanyAccount ? 'empresa' : 'afiliado');
 
             const safeProfile: UserSellerProfile = {
               ...INITIAL_USER_PROFILE,
               ...data,
               userId: user.uid,
               name: data.name || user.displayName || user.email?.split('@')[0] || 'Usuário LeadsPay',
-              email: data.email || user.email || '',
+              email: userEmail,
               avatar: data.avatar || user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
               availableBalance: typeof data.availableBalance === 'number' && !isNaN(data.availableBalance) ? data.availableBalance : 0,
               pendingBalance: typeof data.pendingBalance === 'number' && !isNaN(data.pendingBalance) ? data.pendingBalance : 0,
@@ -76,12 +87,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               totalSalesCount: typeof data.totalSalesCount === 'number' && !isNaN(data.totalSalesCount) ? data.totalSalesCount : 0,
               targetGoal: typeof data.targetGoal === 'number' && !isNaN(data.targetGoal) ? data.targetGoal : (isCompanyAccount ? 500000 : 100000),
               currentSalesProgress: typeof data.currentSalesProgress === 'number' && !isNaN(data.currentSalesProgress) ? data.currentSalesProgress : 0,
-              partnerLevel: data.partnerLevel || (isCompanyAccount ? 'Empresa Parceira' : 'Afiliado Starter'),
+              partnerLevel: data.partnerLevel || (isAdminAccount ? 'Super Administrador' : (isCompanyAccount ? 'Empresa Parceira' : 'Afiliado Starter')),
               accountType: resolvedRoleMode,
-              hasAffiliateProfile: !isCompanyAccount,
-              hasCompanyProfile: isCompanyAccount,
+              hasAffiliateProfile: !isAdminAccount && !isCompanyAccount,
+              hasCompanyProfile: !isAdminAccount && isCompanyAccount,
               activeRoleMode: resolvedRoleMode,
-              role: data.role || (isCompanyAccount ? 'Empresa / Produtor' : 'Afiliado de Alta Performance'),
+              role: data.role || (isAdminAccount ? 'Administrador do Sistema' : (isCompanyAccount ? 'Fundador / Startup' : 'Afiliado de Alta Performance')),
               plan: data.plan,
               planStatus: data.planStatus,
               subscriptionTier: data.subscriptionTier,
@@ -97,26 +108,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return;
             }
 
+            const userEmail = user.email || '';
+            const isAdminAccount = isSuperAdminEmail(userEmail);
+            const defaultRole: UserRoleMode = isAdminAccount ? 'admin' : 'afiliado';
+
             const initialNewProfile: UserSellerProfile = {
               ...INITIAL_USER_PROFILE,
               userId: user.uid,
               name: user.displayName || user.email?.split('@')[0] || 'Usuário LeadsPay',
-              email: user.email || '',
+              email: userEmail,
               avatar: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
               availableBalance: 0,
               pendingBalance: 0,
               totalEarned: 0,
               totalSalesCount: 0,
-              partnerLevel: 'Afiliado Starter',
+              partnerLevel: isAdminAccount ? 'Super Administrador' : 'Afiliado Starter',
               targetGoal: 100000,
               currentSalesProgress: 0,
-              activeRoleMode: 'afiliado',
-              accountType: 'afiliado',
-              hasAffiliateProfile: true,
+              activeRoleMode: defaultRole,
+              accountType: defaultRole,
+              hasAffiliateProfile: !isAdminAccount,
               hasCompanyProfile: false,
+              role: isAdminAccount ? 'Administrador do Sistema' : 'Afiliado Starter',
               updatedAt: new Date().toISOString()
             };
             setUserProfile(initialNewProfile);
+            setUserRole(defaultRole);
           }
         }, (err) => {
           console.error('Erro no listener do perfil do usuário:', err);
