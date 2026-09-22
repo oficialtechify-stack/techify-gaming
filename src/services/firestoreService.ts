@@ -756,12 +756,39 @@ export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 
   const docRef = doc(db, COLLECTIONS.COMPANIES, id);
   await setDoc(docRef, sanitizeForFirestore(newCompany));
 
+  // Sincroniza também com verification_requests para que o admin visualize a solicitação de homologação
+  try {
+    const verifRef = doc(db, COLLECTIONS.VERIFICATIONS, id);
+    await setDoc(verifRef, sanitizeForFirestore({
+      id,
+      userId: newCompany.ownerId || DEFAULT_USER_ID,
+      name: newCompany.submittedByName || newCompany.name,
+      companyName: newCompany.name,
+      companyId: id,
+      companyCnpj: newCompany.cnpj || newCompany.cpf || '',
+      companyCategory: newCompany.category || 'SaaS / B2B',
+      companyTagline: newCompany.tagline || '',
+      companyWebsite: newCompany.website || '',
+      companyLogo: newCompany.logo || '',
+      email: newCompany.email || '',
+      phone: newCompany.whatsapp || newCompany.phone || '',
+      roleType: 'empresa',
+      status: 'pending',
+      kyc_status: 'submitted',
+      submittedAt: now
+    }), { merge: true });
+  } catch (e) {
+    console.warn('Could not sync verification request on company creation:', e);
+  }
+
   if (newCompany.ownerId && newCompany.ownerId !== DEFAULT_USER_ID) {
     try {
       await updateDoc(doc(db, COLLECTIONS.PROFILES, newCompany.ownerId), {
         companyId: id,
         companyName: newCompany.name,
         hasCompanyProfile: true,
+        accountType: 'empresa',
+        activeRoleMode: 'empresa',
         environment: newCompany.environment,
         kyc_status: newCompany.kyc_status
       });
@@ -841,9 +868,62 @@ export async function approveCompanyInFirebase(companyId: string) {
   try {
     const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
     const compSnap = await getDoc(docRef);
-    const compData = compSnap.exists() ? compSnap.data() : null;
+    let compData = compSnap.exists() ? compSnap.data() : null;
+
+    // Se o documento não existir ou estiver sem dados vitais (ex: aprovada a partir de verificação ou perfil)
+    if (!compData || (!compData.name && !compData.companyName)) {
+      // Buscar em verification_requests
+      let verifData: any = null;
+      try {
+        const verifSnap = await getDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId));
+        if (verifSnap.exists()) verifData = verifSnap.data();
+      } catch (e) {}
+
+      // Buscar em user_profiles
+      let profData: any = null;
+      try {
+        const profSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, companyId));
+        if (profSnap.exists()) profData = profSnap.data();
+      } catch (e) {}
+
+      const resolvedName = verifData?.companyName || verifData?.name || profData?.companyName || profData?.name || compData?.name || 'Empresa Aprovada';
+      const resolvedOwnerId = verifData?.userId || profData?.userId || compData?.ownerId || companyId;
+      const resolvedEmail = verifData?.email || profData?.email || compData?.email || '';
+      const resolvedPhone = verifData?.phone || profData?.whatsapp || profData?.phone || compData?.whatsapp || '';
+      const resolvedCnpj = verifData?.companyCnpj || profData?.companyCnpj || profData?.cnpj || compData?.cnpj || '';
+      const resolvedTagline = verifData?.companyTagline || profData?.companyTagline || compData?.tagline || '';
+      const resolvedWebsite = verifData?.companyWebsite || profData?.companyWebsite || compData?.website || '';
+      const resolvedCategory = verifData?.companyCategory || profData?.companyCategory || compData?.category || 'SaaS / B2B';
+      const resolvedLogo = verifData?.companyLogo || verifData?.avatar || profData?.companyLogo || profData?.avatar || compData?.logo || '';
+
+      compData = {
+        ...(compData || {}),
+        id: companyId,
+        name: resolvedName,
+        companyName: resolvedName,
+        ownerId: resolvedOwnerId,
+        submittedBy: resolvedOwnerId,
+        submittedByName: profData?.name || verifData?.name || resolvedName,
+        submittedByEmail: resolvedEmail,
+        email: resolvedEmail,
+        whatsapp: resolvedPhone,
+        phone: resolvedPhone,
+        cnpj: resolvedCnpj,
+        tagline: resolvedTagline,
+        website: resolvedWebsite,
+        category: resolvedCategory,
+        logo: resolvedLogo,
+        description: resolvedTagline || `Empresa ${resolvedName} cadastrada na plataforma LeadsPay.`,
+        status: 'approved',
+        verified: true,
+        kyc_status: 'verified',
+        reviewedAt: now,
+        createdAt: compData?.createdAt || now
+      };
+    }
 
     const payload: Record<string, any> = {
+      ...(compData || {}),
       status: 'approved',
       verified: true,
       kyc_status: 'verified',
@@ -857,7 +937,7 @@ export async function approveCompanyInFirebase(companyId: string) {
     await setDoc(docRef, sanitizeForFirestore(payload), { merge: true });
 
     // 3. Atualiza perfil do proprietário (ownerId ou submittedBy)
-    const ownerId = compData?.ownerId || compData?.submittedBy;
+    const ownerId = compData?.ownerId || compData?.submittedBy || companyId;
     if (ownerId) {
       try {
         const profRef = doc(db, COLLECTIONS.PROFILES, String(ownerId));

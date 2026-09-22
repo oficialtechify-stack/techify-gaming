@@ -129,7 +129,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       bannerImage: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80',
       category: category as any,
       description: description.trim() || `Empresa ${name.trim()} integrada ao ecossistema LeadsPay.`,
-      website: website.trim() || 'https://suaempresa.com',
+      website: website.trim() || '',
       email: email.trim(),
       whatsapp: formatPhone(whatsapp),
       phone: cleanPhone,
@@ -147,14 +147,14 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       totalPlansCount: 0,
       totalAffiliatesCount: 0,
       totalSalesVolume: 0,
-      commissionRange: commissionRange.trim() || '30% a 50%',
+      commissionRange: commissionRange.trim() || '10% a 50%',
       verified: false,
       status: 'pending',
       submittedAt: new Date().toISOString(),
       ownerId: targetUserId,
       submittedBy: targetUserId,
       submittedByName: userProfile?.name || name.trim(),
-      submittedByEmail: email.trim() || userProfile?.email || 'contato@empresa.com'
+      submittedByEmail: email.trim() || userProfile?.email || ''
     };
 
     onCompanyCreated(payload as any);

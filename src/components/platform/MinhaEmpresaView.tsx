@@ -136,10 +136,6 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   };
 
   const handleCreateCompanyRequest = () => {
-    if (!isVerified) {
-      setVerificationWarningModal(true);
-      return;
-    }
     onOpenCreateCompany();
   };
 
@@ -936,7 +932,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                     </thead>
                     <tbody className="divide-y divide-white/5 text-xs">
                       {companyAffiliations.map(aff => {
-                        const affName = aff.userName || aff.affiliateName || 'Afiliado LeadsPay';
+                        const affName = aff.userName || aff.affiliateName || 'Afiliado';
                         const affCode = aff.affiliateCode || aff.affiliate_code || '---';
                         const planName = aff.planName || aff.platformName || 'Plano Oficial';
                         const clicksCount = aff.clicks ?? aff.clicksCount ?? 0;

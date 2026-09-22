@@ -288,20 +288,23 @@ export const DatabaseManagerView: React.FC = () => {
         return next;
       });
 
-      // Atualiza companies
+      // Atualiza companies preservando todos os dados reais
+      const existingCompanyData = allCompanies.find(c => c.id === companyId);
       setCompanies(prev => {
         const exists = prev.some(c => c.id === companyId);
         if (exists) {
           return prev.map(c => c.id === companyId ? { ...c, status: 'approved', verified: true, banned: false } : c);
         }
         return [...prev, {
+          ...(existingCompanyData || {}),
           id: companyId,
-          name: companyName,
+          name: existingCompanyData?.name || companyName,
           status: 'approved',
           verified: true,
-          category: 'SaaS / B2B',
-          commissionRange: '10% - 50%',
-          createdAt: new Date().toISOString()
+          banned: false,
+          category: existingCompanyData?.category || 'SaaS / B2B',
+          commissionRange: existingCompanyData?.commissionRange || '10% - 50%',
+          createdAt: existingCompanyData?.createdAt || new Date().toISOString()
         } as CompanyStartup];
       });
 
@@ -531,20 +534,18 @@ export const DatabaseManagerView: React.FC = () => {
       }
     });
 
-    // 2. Perfis de usuários cadastrados (garantindo que perfis de empresa NUNCA caiam aqui)
+    // 2. Perfis de usuários cadastrados (garantindo que perfis de empresa ou admins sem verificação não poluam)
     registeredProfiles.forEach((p) => {
       const key = p.userId || p.id;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id)) return;
       
+      // Contas de administrador da plataforma não são listadas como afiliados pendentes
+      if (p.accountType === 'admin' && !map.has(key)) return;
+
       const isCompanyProfile = p.accountType === 'empresa' ||
-                               p.activeRoleMode === 'empresa' ||
                                p.hasCompanyProfile === true ||
-                               p.role === 'empresa' ||
-                               p.role === 'Fundador / Startup' ||
-                               p.roleType === 'empresa' ||
-                               p.verificationRoleType === 'empresa' ||
-                               Boolean(p.companyId) ||
-                               Boolean(p.companyName);
+                               Boolean(p.companyId?.trim()) ||
+                               Boolean(p.companyName?.trim());
 
       if (isCompanyProfile) return;
 
@@ -555,7 +556,7 @@ export const DatabaseManagerView: React.FC = () => {
         if (isBanned) status = 'banned';
         else if (p.verificationStatus === 'rejected') status = 'rejected';
         else if (isVerified) status = 'approved';
-        else status = p.verificationStatus || 'pending';
+        else status = 'pending';
 
         map.set(key, {
           id: key,
@@ -580,14 +581,22 @@ export const DatabaseManagerView: React.FC = () => {
     return Array.from(map.values());
   }, [verifications, registeredProfiles, deletedEntityIds]);
 
-  // Unificação Inteligente: Empresas (Lista de Companies + Perfis com Empresa)
+  // Unificação Inteligente: Empresas (Lista de Companies + Solicitações Reais)
   const allCompanies: CompanyStartup[] = useMemo(() => {
     const map = new Map<string, CompanyStartup>();
 
-    // 1. Empresas existentes no banco
+    // 1. Empresas reais existentes na coleção companies do banco
     companies.forEach((c) => {
       if (deletedEntityIds.has(c.id) || (c.ownerId && deletedEntityIds.has(c.ownerId))) return;
-      map.set(c.id, c);
+      // Pula registros órfãos ou corrompidos sem nenhum dado identificável
+      if (!c.name && !c.companyName && !c.ownerId && !c.submittedBy && !c.email) return;
+
+      map.set(c.id, {
+        ...c,
+        name: c.name || c.companyName || 'Empresa Cadastrada',
+        category: c.category || 'SaaS / B2B',
+        status: (c.status || (c.verified ? 'approved' : 'pending')) as any
+      });
     });
 
     // 2. Solicitações de verificação com perfil empresa
@@ -599,19 +608,38 @@ export const DatabaseManagerView: React.FC = () => {
       if (isCompanyVerif) {
         const key = v.companyId || v.userId || v.id;
         if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
-        if (!map.has(key)) {
+        
+        const existing = map.get(key);
+        if (existing) {
+          // Funde dados reais para nunca sobrescrever com campos vazios
+          map.set(key, {
+            ...existing,
+            name: existing.name || v.companyName || v.name || '',
+            tagline: existing.tagline || v.companyTagline || '',
+            logo: existing.logo || v.companyLogo || v.avatar || '',
+            website: existing.website || v.companyWebsite || '',
+            cnpj: existing.cnpj || v.companyCnpj || v.cpf || '',
+            category: existing.category || (v.companyCategory as any) || 'SaaS / B2B',
+            description: existing.description || v.companyTagline || '',
+            email: existing.email || v.email || '',
+            whatsapp: existing.whatsapp || v.phone || '',
+            ownerId: existing.ownerId || v.userId || v.id,
+            status: existing.status || v.status || 'pending',
+            verified: Boolean(existing.verified || v.status === 'approved')
+          });
+        } else {
           map.set(key, {
             id: key,
-            name: v.companyName || v.name || 'Empresa ' + key.slice(0, 5),
+            name: v.companyName || v.name || 'Empresa Cadastrada',
             slug: (v.companyName || v.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            tagline: v.companyTagline || 'Inovação e escala digital',
+            tagline: v.companyTagline || '',
             logo: v.companyLogo || v.avatar || '',
             bannerImage: '',
             website: v.companyWebsite || '',
             commissionRange: '10% - 50%',
             cnpj: v.companyCnpj || v.cpf || '',
             category: (v.companyCategory as any) || 'SaaS / B2B',
-            description: v.companyTagline || 'Empresa parceira cadastrada na plataforma LeadsPay.',
+            description: v.companyTagline || '',
             email: v.email || '',
             whatsapp: v.phone || '',
             ownerId: v.userId || v.id,
@@ -627,36 +655,52 @@ export const DatabaseManagerView: React.FC = () => {
       }
     });
 
-    // 3. Perfis cadastrados com dados empresariais
+    // 3. Perfis cadastrados com dados empresariais REAIS (somente se tiverem nome de empresa ou CNPJ ou companyId explícito)
     registeredProfiles.forEach((p) => {
-      const isCompanyProfile = p.accountType === 'empresa' ||
-                               p.activeRoleMode === 'empresa' ||
-                               p.hasCompanyProfile === true ||
-                               p.role === 'empresa' ||
-                               p.role === 'Fundador / Startup' ||
-                               p.roleType === 'empresa' ||
-                               p.verificationRoleType === 'empresa' ||
-                               Boolean(p.companyId) ||
-                               Boolean(p.companyName);
+      // Ignorar contas de admin sem empresa
+      if (p.accountType === 'admin') return;
 
-      if (!isCompanyProfile) return;
+      const hasRealCompanyData = Boolean(p.companyName?.trim()) || 
+                                Boolean(p.companyId?.trim()) || 
+                                Boolean(p.companyCnpj?.trim()) ||
+                                (p.hasCompanyProfile === true && Boolean(p.companyName?.trim()));
+
+      if (!hasRealCompanyData) return;
 
       const compId = p.companyId || (p.userId || p.id);
       if (compId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
-        if (!map.has(compId)) {
-          const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
+        const existing = map.get(compId);
+        const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
+
+        if (existing) {
+          map.set(compId, {
+            ...existing,
+            name: existing.name || p.companyName || p.name || '',
+            tagline: existing.tagline || p.companyTagline || p.tagline || '',
+            logo: existing.logo || p.companyLogo || p.logo || p.avatar || '',
+            website: existing.website || p.companyWebsite || p.website || '',
+            cnpj: existing.cnpj || p.companyCnpj || p.cnpj || p.cpf || '',
+            category: existing.category || (p.companyCategory as any) || 'SaaS / B2B',
+            description: existing.description || p.companyDescription || '',
+            email: existing.email || p.companyEmail || p.email || '',
+            whatsapp: existing.whatsapp || p.companyWhatsapp || p.whatsapp || p.phone || '',
+            ownerId: existing.ownerId || p.userId || p.id,
+            status: existing.status || (isApprv ? 'approved' : (p.verificationStatus || 'pending')),
+            verified: Boolean(existing.verified || isApprv)
+          });
+        } else {
           map.set(compId, {
             id: compId,
-            name: p.companyName || p.name || 'Empresa ' + compId.slice(0, 5),
+            name: p.companyName || p.name || 'Empresa Cadastrada',
             slug: (p.companyName || p.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            tagline: p.companyTagline || p.tagline || 'Inovação e escala digital',
+            tagline: p.companyTagline || p.tagline || '',
             logo: p.companyLogo || p.logo || p.avatar || '',
             bannerImage: '',
             website: p.companyWebsite || p.website || '',
             commissionRange: '10% - 50%',
             cnpj: p.companyCnpj || p.cnpj || p.cpf || '',
             category: (p.companyCategory as any) || 'SaaS / B2B',
-            description: p.companyDescription || 'Empresa parceira cadastrada na plataforma LeadsPay.',
+            description: p.companyDescription || '',
             email: p.companyEmail || p.email || '',
             whatsapp: p.companyWhatsapp || p.whatsapp || p.phone || '',
             ownerId: p.userId || p.id,
@@ -679,15 +723,15 @@ export const DatabaseManagerView: React.FC = () => {
   const getStatusOfVerification = (v: VerificationRequest): StatusFilter => {
     if (v.banned) return 'banned';
     if (v.status === 'rejected') return 'rejected';
-    if (v.status === 'approved') return 'approved';
-    return (v.status || 'pending') as StatusFilter;
+    if (v.status === 'approved' || (v as any).status === 'active' || (v as any).verified) return 'approved';
+    return 'pending';
   };
 
   const getStatusOfCompany = (c: CompanyStartup): StatusFilter => {
     if (c.banned) return 'banned';
     if (c.status === 'rejected') return 'rejected';
     if (c.status === 'approved' || (c.status as string) === 'active' || c.verified) return 'approved';
-    return (c.status || 'pending') as StatusFilter;
+    return 'pending';
   };
 
   // Afiliados filtrados
@@ -1367,7 +1411,9 @@ export const DatabaseManagerView: React.FC = () => {
                                     {comp.category || 'Geral'}
                                   </span>
                                 </div>
-                                <p className="text-xs text-white/60 line-clamp-1 mt-0.5">{comp.tagline || 'Startup LeadsPay'}</p>
+                                {comp.tagline && (
+                                  <p className="text-xs text-white/60 line-clamp-1 mt-0.5">{comp.tagline}</p>
+                                )}
                               </div>
                             </div>
 
@@ -1409,7 +1455,7 @@ export const DatabaseManagerView: React.FC = () => {
                             <div className="bg-[#050811] p-3 rounded-xl border border-white/5">
                               <span className="text-[10px] font-bold text-white/40 uppercase block">Documento da Empresa</span>
                               <span className="font-mono font-bold text-white mt-0.5 block">
-                                {comp.cnpj ? `CNPJ: ${comp.cnpj}` : comp.cpf ? `CPF: ${comp.cpf}` : 'Sem CNPJ (Pessoa Física)'}
+                                {comp.cnpj ? `CNPJ: ${comp.cnpj}` : comp.cpf ? `CPF: ${comp.cpf}` : (comp as any).hasNoCnpj ? 'Pessoa Física (Sem CNPJ)' : 'Não informado'}
                               </span>
                             </div>
 
@@ -1434,7 +1480,7 @@ export const DatabaseManagerView: React.FC = () => {
                             <div className="bg-[#050811] p-3 rounded-xl border border-white/5 flex items-center justify-between">
                               <div>
                                 <span className="text-[10px] font-bold text-white/40 uppercase block">E-mail Oficial</span>
-                                <span className="text-white mt-0.5 block truncate max-w-[180px]">{comp.email || 'contato@empresa.com'}</span>
+                                <span className="text-white mt-0.5 block truncate max-w-[180px]">{comp.email || 'Não informado'}</span>
                               </div>
                               {comp.email && (
                                 <a
@@ -1450,7 +1496,7 @@ export const DatabaseManagerView: React.FC = () => {
                             <div className="bg-[#050811] p-3 rounded-xl border border-white/5 flex items-center justify-between">
                               <div>
                                 <span className="text-[10px] font-bold text-white/40 uppercase block">Website / Landing</span>
-                                <span className="text-[#D9F22A] mt-0.5 block truncate max-w-[180px]">{comp.website || 'https://suaempresa.com'}</span>
+                                <span className="text-[#D9F22A] mt-0.5 block truncate max-w-[180px]">{comp.website || 'Não informado'}</span>
                               </div>
                               {comp.website && (
                                 <a
@@ -1468,18 +1514,18 @@ export const DatabaseManagerView: React.FC = () => {
                             <div className="bg-[#050811] p-3 rounded-xl border border-white/5 sm:col-span-2">
                               <span className="text-[10px] font-bold text-white/40 uppercase block mb-1">Descrição & Proposta de Valor</span>
                               <p className="text-white/80 leading-relaxed text-xs">
-                                {comp.description || 'Nenhuma descrição detalhada fornecida.'}
+                                {comp.description || comp.tagline || 'Nenhuma descrição detalhada informada.'}
                               </p>
                             </div>
 
                             <div className="bg-[#050811] p-3 rounded-xl border border-white/5 sm:col-span-2 flex items-center justify-between">
                               <div>
                                 <span className="text-[10px] font-bold text-white/40 uppercase block">Faixa de Comissão Afiliados</span>
-                                <span className="text-sm font-black text-[#D9F22A]">{comp.commissionRange || '30% a 50%'}</span>
+                                <span className="text-sm font-black text-[#D9F22A]">{comp.commissionRange || 'A definir'}</span>
                               </div>
                               <div className="text-right text-[11px] text-white/40">
-                                <span>Solicitado por: <strong className="text-white/80">{comp.submittedByName || 'Produtor LeadsPay'}</strong></span>
-                                <span className="block">{comp.submittedAt ? new Date(comp.submittedAt).toLocaleString('pt-BR') : 'Data recente'}</span>
+                                <span>Solicitado por: <strong className="text-white/80">{comp.submittedByName || comp.name || 'Produtor'}</strong></span>
+                                <span className="block">{comp.submittedAt ? new Date(comp.submittedAt).toLocaleString('pt-BR') : comp.createdAt ? new Date(comp.createdAt).toLocaleString('pt-BR') : 'Data recente'}</span>
                               </div>
                             </div>
 
