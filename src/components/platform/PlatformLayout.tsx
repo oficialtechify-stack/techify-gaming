@@ -146,7 +146,29 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return null;
   }
 
-  const [roleMode, setRoleMode] = useState<UserRoleMode>(userRole || 'afiliado');
+  // Detect mobile screen (<768px)
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const [roleMode, setRoleMode] = useState<UserRoleMode>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return 'afiliado';
+    }
+    return userRole || 'afiliado';
+  });
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -273,10 +295,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Role Security & Tab Guard
   useEffect(() => {
+    if (isMobileScreen) {
+      if (roleMode !== 'afiliado') {
+        setRoleMode('afiliado');
+      }
+      return;
+    }
     if (userRole && userRole !== roleMode) {
       setRoleMode(userRole);
     }
-  }, [userRole]);
+  }, [userRole, isMobileScreen]);
 
   // Solicita permissão e registra subscrição Web Push no arranque do dashboard (Afiliado ou Empresa)
   useEffect(() => {
@@ -306,6 +334,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Robust Role Switcher with Strict Role Separation
   const handleSwitchRole = (targetRole: UserRoleMode) => {
     if (targetRole === roleMode) return;
+
+    if (isMobileScreen && targetRole === 'empresa') {
+      alert('O acesso e gerenciamento de conta Empresa estão disponíveis exclusivamente em computadores e desktops.');
+      return;
+    }
 
     // Estrita separação de papéis: conta criada como afiliado não pode virar empresa e vice-versa
     const isAffiliateAccount = userProfile?.accountType === 'afiliado' || 
@@ -1489,16 +1522,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                         </button>
                       )}
 
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          handleSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
-                      >
-                        <span>{roleMode === 'afiliado' ? 'Mudar para painel da empresa' : 'Mudar para painel de afiliado'}</span>
-                        <ArrowRightLeft className="w-3.5 h-3.5 text-[#D9F22A]" />
-                      </button>
+                      {!isMobileScreen && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            handleSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
+                        >
+                          <span>{roleMode === 'afiliado' ? 'Mudar para painel da empresa' : 'Mudar para painel de afiliado'}</span>
+                          <ArrowRightLeft className="w-3.5 h-3.5 text-[#D9F22A]" />
+                        </button>
+                      )}
                     </div>
 
                     <div className="h-px bg-white/10 my-1.5" />
@@ -1556,7 +1591,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setActiveTab={setActiveTab}
                   onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
                   onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
-                  onSwitchRole={handleSwitchRole}
+                  onSwitchRole={!isMobileScreen ? handleSwitchRole : undefined}
                   onLogout={logout}
                   selectedPeriod={selectedPeriod}
                   setSelectedPeriod={setSelectedPeriod}
@@ -1682,7 +1717,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setIsCreatePlanModalOpen(true);
               } : undefined}
               onDeletePlatform={roleMode === 'empresa' ? handleDeletePlan : undefined}
-              onSwitchToCompanyMode={() => handleSwitchRole('empresa')}
+              onSwitchToCompanyMode={!isMobileScreen ? () => handleSwitchRole('empresa') : undefined}
             />
           )}
 

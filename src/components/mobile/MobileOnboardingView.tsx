@@ -200,22 +200,22 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
       <div className="w-full px-4 sm:px-5 pb-3 sm:pb-5 z-20 flex flex-col items-center">
         {/* SLIDE 1 CARD: Bem-vindo à LeadsPay */}
         {currentSlide === 0 && (
-          <div className="w-full max-w-[340px] animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col items-center">
-            <div className="w-full rounded-[24px] bg-black/45 border border-[#b5f617]/40 p-4 sm:p-5 shadow-[0_0_25px_rgba(181,246,23,0.15)] backdrop-blur-md">
-              <div className="text-[10px] font-bold text-[#b5f617] uppercase tracking-[0.2em] mb-1 font-['Syne']">
+          <div className="w-full max-w-[315px] animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col items-center">
+            <div className="w-full rounded-[20px] bg-black/25 border border-[#b5f617]/35 p-3.5 sm:p-4 shadow-[0_0_20px_rgba(181,246,23,0.12)] backdrop-blur-md">
+              <div className="text-[9px] font-bold text-[#b5f617] uppercase tracking-[0.2em] mb-0.5 font-['Syne']">
                 BEM-VINDO À LEADSPAY
               </div>
-              <h2 className="text-[20px] sm:text-[22px] font-black text-white leading-tight font-['Syne']">
+              <h2 className="text-[17px] sm:text-[19px] font-black text-white leading-tight font-['Syne']">
                 Mais conexões.<br />Mais vendas.
               </h2>
-              <p className="text-white/70 text-[11px] sm:text-xs leading-relaxed mt-1 mb-3.5 font-medium">
+              <p className="text-white/70 text-[10.5px] sm:text-[11px] leading-relaxed mt-0.5 mb-3 font-medium">
                 Uma plataforma feita para quem acredita em grandes oportunidades.
               </p>
               {/* Botão 1: Acessar conta */}
               <button
                 type="button"
                 onClick={() => onOpenModal('login')}
-                className="w-full py-2.5 sm:py-3 px-5 rounded-full bg-[#b5f617] hover:bg-[#c8ff21] active:scale-[0.98] text-[#050b07] font-black text-xs sm:text-sm font-['Syne'] flex items-center justify-center shadow-[0_4px_18px_rgba(181,246,23,0.35)] transition-all cursor-pointer mb-2"
+                className="w-full py-2 px-4 rounded-full bg-[#b5f617] hover:bg-[#c8ff21] active:scale-[0.98] text-[#050b07] font-black text-xs font-['Syne'] flex items-center justify-center shadow-[0_4px_14px_rgba(181,246,23,0.3)] transition-all cursor-pointer mb-1.5"
               >
                 Acessar conta
               </button>
@@ -224,7 +224,7 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenModal('register_affiliate')}
-                className="w-full py-2.5 sm:py-3 px-5 rounded-full border border-[#b5f617] bg-black/60 hover:bg-[#b5f617]/10 active:scale-[0.98] text-[#b5f617] font-bold text-xs sm:text-sm font-['Syne'] flex items-center justify-center transition-all cursor-pointer shadow-[0_0_12px_rgba(181,246,23,0.12)]"
+                className="w-full py-2 px-4 rounded-full border border-[#b5f617]/90 bg-black/35 hover:bg-[#b5f617]/10 active:scale-[0.98] text-[#b5f617] font-bold text-xs font-['Syne'] flex items-center justify-center transition-all cursor-pointer shadow-[0_0_10px_rgba(181,246,23,0.1)]"
               >
                 Abrir uma conta
               </button>
@@ -234,27 +234,27 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
 
         {/* SLIDE 2 CARD: Acesse sua conta (Ícones Pix, Transferir, Pagar, Token) */}
         {currentSlide === 1 && (
-          <div className="w-full max-w-[340px] animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="w-full rounded-[24px] bg-black/45 border border-[#b5f617]/40 p-4 sm:p-5 shadow-[0_0_25px_rgba(181,246,23,0.15)] backdrop-blur-md">
-              <h2 className="text-[20px] sm:text-[22px] font-black text-white leading-tight font-['Syne']">
+          <div className="w-full max-w-[315px] animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="w-full rounded-[20px] bg-black/25 border border-[#b5f617]/35 p-3.5 sm:p-4 shadow-[0_0_20px_rgba(181,246,23,0.12)] backdrop-blur-md">
+              <h2 className="text-[17px] sm:text-[19px] font-black text-white leading-tight font-['Syne']">
                 Acesse sua conta
               </h2>
-              <p className="text-white/70 text-[11px] sm:text-xs leading-relaxed mt-0.5 mb-2.5 font-medium">
+              <p className="text-white/70 text-[10.5px] sm:text-[11px] leading-relaxed mt-0.5 mb-2 font-medium">
                 Acompanhe vendas, Pix e saldo em um só lugar.
               </p>
 
               {/* 4 Círculos de recursos com traço verde neon */}
-              <div className="grid grid-cols-4 gap-1.5 my-2.5">
+              <div className="grid grid-cols-4 gap-1.5 my-2">
                 {/* 1. Transferir */}
                 <button 
                   type="button"
                   onClick={() => onOpenModal('login')}
                   className="flex flex-col items-center gap-1 group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full border border-[#b5f617]/70 bg-black/50 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
-                    <ArrowLeftRight className="w-4 h-4 stroke-[1.8]" />
+                  <div className="w-9 h-9 rounded-full border border-[#b5f617]/70 bg-black/40 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
+                    <ArrowLeftRight className="w-3.5 h-3.5 stroke-[1.8]" />
                   </div>
-                  <span className="text-[10px] text-white/80 font-medium text-center">Transferir</span>
+                  <span className="text-[9.5px] text-white/80 font-medium text-center">Transferir</span>
                 </button>
 
                 {/* 2. Pagar */}
@@ -263,10 +263,10 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
                   onClick={() => onOpenModal('login')}
                   className="flex flex-col items-center gap-1 group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full border border-[#b5f617]/70 bg-black/50 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
-                    <Barcode className="w-4 h-4 stroke-[1.8]" />
+                  <div className="w-9 h-9 rounded-full border border-[#b5f617]/70 bg-black/40 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
+                    <Barcode className="w-3.5 h-3.5 stroke-[1.8]" />
                   </div>
-                  <span className="text-[10px] text-white/80 font-medium text-center">Pagar</span>
+                  <span className="text-[9.5px] text-white/80 font-medium text-center">Pagar</span>
                 </button>
 
                 {/* 3. Área Pix */}
@@ -275,15 +275,15 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
                   onClick={() => onOpenModal('login')}
                   className="flex flex-col items-center gap-1 group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full border border-[#b5f617]/70 bg-black/50 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-[#b5f617] stroke-[1.9]" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="w-9 h-9 rounded-full border border-[#b5f617]/70 bg-black/40 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-none stroke-[#b5f617] stroke-[1.9]" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="5.5" y="5.5" width="6" height="6" rx="1.5" transform="rotate(45 8.5 8.5)" />
                       <rect x="12.5" y="12.5" width="6" height="6" rx="1.5" transform="rotate(45 15.5 15.5)" />
                       <rect x="12.5" y="5.5" width="6" height="6" rx="1.5" transform="rotate(45 15.5 8.5)" />
                       <rect x="5.5" y="12.5" width="6" height="6" rx="1.5" transform="rotate(45 8.5 15.5)" />
                     </svg>
                   </div>
-                  <span className="text-[10px] text-white/80 font-medium text-center">Área Pix</span>
+                  <span className="text-[9.5px] text-white/80 font-medium text-center">Área Pix</span>
                 </button>
 
                 {/* 4. Token */}
@@ -292,10 +292,10 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
                   onClick={() => onOpenModal('login')}
                   className="flex flex-col items-center gap-1 group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full border border-[#b5f617]/70 bg-black/50 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
-                    <KeyRound className="w-4 h-4 stroke-[1.8]" />
+                  <div className="w-9 h-9 rounded-full border border-[#b5f617]/70 bg-black/40 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
+                    <KeyRound className="w-3.5 h-3.5 stroke-[1.8]" />
                   </div>
-                  <span className="text-[10px] text-white/80 font-medium text-center">Token</span>
+                  <span className="text-[9.5px] text-white/80 font-medium text-center">Token</span>
                 </button>
               </div>
 
@@ -303,7 +303,7 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenModal('login')}
-                className="w-full py-2.5 sm:py-3 px-5 rounded-full bg-[#b5f617] hover:bg-[#c8ff21] active:scale-[0.98] text-[#050b07] font-black text-xs sm:text-sm font-['Syne'] flex items-center justify-center shadow-[0_4px_18px_rgba(181,246,23,0.35)] transition-all cursor-pointer mb-2"
+                className="w-full py-2 px-4 rounded-full bg-[#b5f617] hover:bg-[#c8ff21] active:scale-[0.98] text-[#050b07] font-black text-xs font-['Syne'] flex items-center justify-center shadow-[0_4px_14px_rgba(181,246,23,0.3)] transition-all cursor-pointer mb-1.5"
               >
                 Acessar conta
               </button>
@@ -312,7 +312,7 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenModal('register_affiliate')}
-                className="w-full py-2.5 sm:py-3 px-5 rounded-full border border-[#b5f617] bg-black/60 hover:bg-[#b5f617]/10 active:scale-[0.98] text-[#b5f617] font-bold text-xs sm:text-sm font-['Syne'] flex items-center justify-center transition-all cursor-pointer shadow-[0_0_12px_rgba(181,246,23,0.12)]"
+                className="w-full py-2 px-4 rounded-full border border-[#b5f617]/90 bg-black/35 hover:bg-[#b5f617]/10 active:scale-[0.98] text-[#b5f617] font-bold text-xs font-['Syne'] flex items-center justify-center transition-all cursor-pointer shadow-[0_0_10px_rgba(181,246,23,0.1)]"
               >
                 Abrir uma conta
               </button>
@@ -322,52 +322,52 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
 
         {/* SLIDE 3 CARD: Crescimento que você acompanha (Empresas e Startups) */}
         {currentSlide === 2 && (
-          <div className="w-full max-w-[340px] animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="w-full rounded-[24px] bg-black/45 border border-[#b5f617]/40 p-4 sm:p-5 shadow-[0_0_25px_rgba(181,246,23,0.15)] backdrop-blur-md">
-              <h2 className="text-[20px] sm:text-[22px] font-black text-white leading-tight font-['Syne']">
+          <div className="w-full max-w-[315px] animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="w-full rounded-[20px] bg-black/25 border border-[#b5f617]/35 p-3.5 sm:p-4 shadow-[0_0_20px_rgba(181,246,23,0.12)] backdrop-blur-md">
+              <h2 className="text-[17px] sm:text-[19px] font-black text-white leading-tight font-['Syne']">
                 Crescimento que você<br />acompanha.
               </h2>
-              <p className="text-white/70 text-[11px] sm:text-xs leading-relaxed mt-0.5 mb-2.5 font-medium">
+              <p className="text-white/70 text-[10.5px] sm:text-[11px] leading-relaxed mt-0.5 mb-2 font-medium">
                 Afiliados divulgam seus planos.<br />
                 Você acompanha o alcance e cada venda.
               </p>
 
               {/* 3 Círculos: Divulgação, Alcance, Vendas */}
-              <div className="grid grid-cols-3 gap-2 my-2.5">
+              <div className="grid grid-cols-3 gap-2 my-2">
                 {/* Divulgação */}
                 <button 
                   type="button"
-                  onClick={() => onOpenModal('register_company')}
+                  onClick={() => onOpenModal('register_affiliate')}
                   className="flex flex-col items-center gap-1 group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full border border-[#b5f617]/70 bg-black/50 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
-                    <Megaphone className="w-4 h-4 stroke-[1.8]" />
+                  <div className="w-9 h-9 rounded-full border border-[#b5f617]/70 bg-black/40 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
+                    <Megaphone className="w-3.5 h-3.5 stroke-[1.8]" />
                   </div>
-                  <span className="text-[10px] text-white/80 font-medium text-center">Divulgação</span>
+                  <span className="text-[9.5px] text-white/80 font-medium text-center">Divulgação</span>
                 </button>
 
                 {/* Alcance */}
                 <button 
                   type="button"
-                  onClick={() => onOpenModal('register_company')}
+                  onClick={() => onOpenModal('register_affiliate')}
                   className="flex flex-col items-center gap-1 group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full border border-[#b5f617]/70 bg-black/50 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
-                    <BarChart3 className="w-4 h-4 stroke-[1.8]" />
+                  <div className="w-9 h-9 rounded-full border border-[#b5f617]/70 bg-black/40 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
+                    <BarChart3 className="w-3.5 h-3.5 stroke-[1.8]" />
                   </div>
-                  <span className="text-[10px] text-white/80 font-medium text-center">Alcance</span>
+                  <span className="text-[9.5px] text-white/80 font-medium text-center">Alcance</span>
                 </button>
 
                 {/* Vendas */}
                 <button 
                   type="button"
-                  onClick={() => onOpenModal('register_company')}
+                  onClick={() => onOpenModal('register_affiliate')}
                   className="flex flex-col items-center gap-1 group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-full border border-[#b5f617]/70 bg-black/50 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
-                    <ShoppingCart className="w-4 h-4 stroke-[1.8]" />
+                  <div className="w-9 h-9 rounded-full border border-[#b5f617]/70 bg-black/40 flex items-center justify-center text-[#b5f617] group-hover:scale-105 group-hover:border-[#b5f617] transition-all">
+                    <ShoppingCart className="w-3.5 h-3.5 stroke-[1.8]" />
                   </div>
-                  <span className="text-[10px] text-white/80 font-medium text-center">Vendas</span>
+                  <span className="text-[9.5px] text-white/80 font-medium text-center">Vendas</span>
                 </button>
               </div>
 
@@ -375,16 +375,16 @@ export const MobileOnboardingView: React.FC<MobileOnboardingViewProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenModal('login')}
-                className="w-full py-2.5 sm:py-3 px-5 rounded-full bg-[#b5f617] hover:bg-[#c8ff21] active:scale-[0.98] text-[#050b07] font-black text-xs sm:text-sm font-['Syne'] flex items-center justify-center shadow-[0_4px_18px_rgba(181,246,23,0.35)] transition-all cursor-pointer mb-2"
+                className="w-full py-2 px-4 rounded-full bg-[#b5f617] hover:bg-[#c8ff21] active:scale-[0.98] text-[#050b07] font-black text-xs font-['Syne'] flex items-center justify-center shadow-[0_4px_14px_rgba(181,246,23,0.3)] transition-all cursor-pointer mb-1.5"
               >
                 Acessar conta
               </button>
 
-              {/* Botão Abrir uma conta */}
+              {/* Botão Abrir uma conta (Apenas Afiliado no celular) */}
               <button
                 type="button"
-                onClick={() => onOpenModal('register_company')}
-                className="w-full py-2.5 sm:py-3 px-5 rounded-full border border-[#b5f617] bg-black/60 hover:bg-[#b5f617]/10 active:scale-[0.98] text-[#b5f617] font-bold text-xs sm:text-sm font-['Syne'] flex items-center justify-center transition-all cursor-pointer shadow-[0_0_12px_rgba(181,246,23,0.12)]"
+                onClick={() => onOpenModal('register_affiliate')}
+                className="w-full py-2 px-4 rounded-full border border-[#b5f617]/90 bg-black/35 hover:bg-[#b5f617]/10 active:scale-[0.98] text-[#b5f617] font-bold text-xs font-['Syne'] flex items-center justify-center transition-all cursor-pointer shadow-[0_0_10px_rgba(181,246,23,0.1)]"
               >
                 Abrir uma conta
               </button>

@@ -181,10 +181,37 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   const [manualAffiliateOpen, setManualAffiliateOpen] = useState<boolean>(false); // Closed by default as requested
   const [basicCompanyOpen, setBasicCompanyOpen] = useState<boolean>(false); // Collapsed by default
 
+  // Detect mobile screen (<768px)
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // 1. Login State (Screenshot 3)
   const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('afiliado');
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
+
+  // No celular, força papel de afiliado sempre
+  useEffect(() => {
+    if (isMobileScreen) {
+      setLoginRole('afiliado');
+      if (currentTab === 'register_company') {
+        setCurrentTab('register_affiliate');
+      }
+    }
+  }, [isMobileScreen, currentTab]);
 
   // 2. Affiliate Registration State (Screenshot 1)
   const [affName, setAffName] = useState<string>('');
@@ -214,6 +241,12 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
 
   // Switch tab helper
   const handleSwitchTab = (tab: AuthModalType) => {
+    // No celular, impede mudar para cadastro de empresa
+    if (isMobileScreen && tab === 'register_company') {
+      setErrorMessage('O cadastro corporativo de empresas está disponível exclusivamente via computador/desktop.');
+      setCurrentTab('register_affiliate');
+      return;
+    }
     setCurrentTab(tab);
     setManualAffiliateOpen(false);
     setBasicCompanyOpen(false);
@@ -237,8 +270,9 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
     setErrorMessage('');
     setSuccessMessage('');
     setIsSubmitting(true);
+    const targetRole = isMobileScreen ? 'afiliado' : preferredRole;
     try {
-      await loginWithGoogle(preferredRole);
+      await loginWithGoogle(targetRole);
       setSuccessMessage('Conta conectada com sucesso via Google!');
       setTimeout(() => {
         setIsSubmitting(false);
@@ -258,8 +292,10 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
     setSuccessMessage('');
     setIsSubmitting(true);
 
+    const effectiveRole = isMobileScreen ? 'afiliado' : loginRole;
+
     try {
-      await login(loginEmail, loginPassword, loginRole);
+      await login(loginEmail, loginPassword, effectiveRole);
       setSuccessMessage('Autenticado com sucesso! Entrando na plataforma...');
       setTimeout(() => {
         setIsSubmitting(false);
@@ -991,39 +1027,46 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
               </div>
 
               {/* Role Selector Switcher (Afiliado vs Empresa Pills as in Screenshot 3) */}
-              <div className="grid grid-cols-2 gap-2 p-1.5 rounded-full border border-white/10 bg-[#070c12]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginRole('afiliado');
-                    setErrorMessage('');
-                  }}
-                  className={`py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    loginRole === 'afiliado'
-                      ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
-                      : 'text-white/60 hover:text-white'
-                  }`}
-                >
-                  <User className="w-4 h-4" />
-                  <span>Entrar como Afiliado</span>
-                </button>
+              {!isMobileScreen ? (
+                <div className="grid grid-cols-2 gap-2 p-1.5 rounded-full border border-white/10 bg-[#070c12]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginRole('afiliado');
+                      setErrorMessage('');
+                    }}
+                    className={`py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      loginRole === 'afiliado'
+                        ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    <span>Entrar como Afiliado</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginRole('empresa');
-                    setErrorMessage('');
-                  }}
-                  className={`py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                    loginRole === 'empresa'
-                      ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
-                      : 'text-white/60 hover:text-white'
-                  }`}
-                >
-                  <Briefcase className="w-4 h-4" />
-                  <span>Entrar como Empresa</span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginRole('empresa');
+                      setErrorMessage('');
+                    }}
+                    className={`py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      loginRole === 'empresa'
+                        ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    <Briefcase className="w-4 h-4" />
+                    <span>Entrar como Empresa</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full py-2 px-3 rounded-xl border border-[#b5f617]/30 bg-[#b5f617]/10 flex items-center justify-center gap-2 text-[#b5f617] text-xs font-bold font-['Syne']">
+                  <User className="w-4 h-4" />
+                  <span>Acesso Exclusivo de Afiliado (Mobile)</span>
+                </div>
+              )}
 
               {/* Login Form */}
               <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
@@ -1113,10 +1156,10 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                 Ainda não possui conta?{' '}
                 <button
                   type="button"
-                  onClick={() => handleSwitchTab(loginRole === 'empresa' ? 'register_company' : 'register_affiliate')}
+                  onClick={() => handleSwitchTab(isMobileScreen ? 'register_affiliate' : (loginRole === 'empresa' ? 'register_company' : 'register_affiliate'))}
                   className="text-[#a3e635] font-bold hover:underline cursor-pointer ml-1"
                 >
-                  Cadastre-se
+                  Cadastre-se como Afiliado
                 </button>
               </div>
             </div>
