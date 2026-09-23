@@ -2228,25 +2228,36 @@ export async function saveAuthModalSettings(
   const docRef = doc(db, COLLECTIONS.SETTINGS, MODAL_IMAGES_DOC_ID);
   const now = new Date().toISOString();
 
-  const payload: AuthModalSettings = {
+  const currentLocal = getLocalAuthModalSettings();
+  const mergedSettings: AuthModalSettings = {
+    ...currentLocal,
     ...settings,
     updatedAt: now,
     updatedBy: updatedBy || 'admin'
   };
 
-  const cleanPayload = sanitizeForFirestore(payload);
-  await setDoc(docRef, cleanPayload, { merge: true });
+  const cleanPayload = sanitizeForFirestore(mergedSettings);
 
+  // 1. Sempre grava imediatamente no cache local (garante persistência mesmo com internet lenta ou quotas)
   try {
-    const current = getLocalAuthModalSettings();
-    localStorage.setItem(LOCAL_MODAL_IMAGES_KEY, JSON.stringify({ ...current, ...cleanPayload }));
-  } catch (_) {}
+    localStorage.setItem(LOCAL_MODAL_IMAGES_KEY, JSON.stringify(cleanPayload));
+  } catch (err) {
+    console.warn('Erro ao salvar imagens no localStorage:', err);
+  }
 
+  // 2. Dispara evento de atualização em tempo real para todos os componentes
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('leadspay_modal_backgrounds_updated', { detail: cleanPayload }));
   }
 
-  return payload;
+  // 3. Salva no banco de dados Firestore
+  try {
+    await setDoc(docRef, cleanPayload, { merge: true });
+  } catch (firestoreErr) {
+    console.warn('Erro ao persistir no Firestore:', firestoreErr);
+  }
+
+  return mergedSettings;
 }
 
 /* ==========================================================================

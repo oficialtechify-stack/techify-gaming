@@ -159,6 +159,11 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    match /platform_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
     match /platform_finances/{docId} {
       allow read, write: if isAuthenticated();
     }

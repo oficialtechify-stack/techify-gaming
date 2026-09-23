@@ -21,6 +21,7 @@ import {
 } from '../../services/firestoreService';
 import { useAuth } from '../../context/AuthContext';
 import { AuthScreenModal, AuthModalType } from '../auth/AuthScreenModal';
+import { compressImageFileToBase64 } from '../../utils/imageCompressor';
 
 export const AdminModalImagesManager: React.FC = () => {
   const { currentUser } = useAuth();
@@ -57,8 +58,8 @@ export const AdminModalImagesManager: React.FC = () => {
     return () => unsub();
   }, []);
 
-  // Leitor de arquivo de imagem local para base64
-  const handleFileSlotUpload = (
+  // Leitor e compressor de arquivo de imagem local para base64 otimizado
+  const handleFileSlotUpload = async (
     slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl' | 'mobileSlidePaymentBgUrl' | 'mobileSlideCompanyBgUrl' | 'mobileSlideAuraBgUrl', 
     file?: File
   ) => {
@@ -72,34 +73,59 @@ export const AdminModalImagesManager: React.FC = () => {
       return;
     }
 
-    if (file.size > 4 * 1024 * 1024) {
-      setFeedback({
-        type: 'error',
-        message: 'A imagem deve ter no máximo 4MB para garantir carregamento instantâneo.'
-      });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setSettings(prev => ({
-        ...prev,
-        [slot]: result
-      }));
+    try {
+      setIsSaving(true);
       setFeedback({
         type: 'success',
-        message: `Imagem carregada! Clique no botão "Salvar Imagens no Banco" para confirmar.`
+        message: 'Otimizando e salvando imagem...'
+      });
+
+      // Comprime a imagem para dimensões ideais de tela (max 1920px) e tamanho ultraleve
+      const compressedDataUrl = await compressImageFileToBase64(file, 1920, 0.80);
+
+      const updatedSettings = {
+        ...settings,
+        [slot]: compressedDataUrl
+      };
+      setSettings(updatedSettings);
+
+      // Auto-salva imediatamente no Firestore e no cache local
+      await persistSettings(updatedSettings);
+
+      setFeedback({
+        type: 'success',
+        message: `Imagem salva e aplicada com sucesso! Já está ativa.`
       });
       setTimeout(() => setFeedback(null), 4000);
-    };
-    reader.onerror = () => {
+    } catch (err: any) {
+      console.error('Falha ao processar/salvar imagem:', err);
       setFeedback({
         type: 'error',
-        message: 'Falha ao processar o arquivo de imagem.'
+        message: `Erro ao processar imagem: ${err.message || 'Tente outra imagem'}`
       });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Função central de persistência
+  const persistSettings = async (targetSettings: AuthModalSettings) => {
+    const payload: Partial<AuthModalSettings> = {
+      loginBgUrl: targetSettings.loginBgUrl || '',
+      affiliateBgUrl: targetSettings.affiliateBgUrl || '',
+      companyBgUrl: targetSettings.companyBgUrl || '',
+      mobileSlidePaymentBgUrl: targetSettings.mobileSlidePaymentBgUrl || '',
+      mobileSlideCompanyBgUrl: targetSettings.mobileSlideCompanyBgUrl || '',
+      mobileSlideAuraBgUrl: targetSettings.mobileSlideAuraBgUrl || '',
+      // chaves legadas sincronizadas
+      loginShowcaseUrl: targetSettings.loginBgUrl || '',
+      affiliateShowcaseUrl: targetSettings.affiliateBgUrl || '',
+      companyShowcaseUrl: targetSettings.companyBgUrl || '',
+      forgotPasswordShowcaseUrl: targetSettings.loginBgUrl || '',
+      overlayDarkness: targetSettings.overlayDarkness ?? 78
     };
-    reader.readAsDataURL(file);
+
+    await saveAuthModalSettings(payload, currentUser?.email || 'admin');
   };
 
   // Salvar no Firestore e localStorage
@@ -107,25 +133,10 @@ export const AdminModalImagesManager: React.FC = () => {
     setIsSaving(true);
     setFeedback(null);
     try {
-      const payload: Partial<AuthModalSettings> = {
-        loginBgUrl: settings.loginBgUrl || '',
-        affiliateBgUrl: settings.affiliateBgUrl || '',
-        companyBgUrl: settings.companyBgUrl || '',
-        mobileSlidePaymentBgUrl: settings.mobileSlidePaymentBgUrl || '',
-        mobileSlideCompanyBgUrl: settings.mobileSlideCompanyBgUrl || '',
-        mobileSlideAuraBgUrl: settings.mobileSlideAuraBgUrl || '',
-        // chaves legadas sincronizadas
-        loginShowcaseUrl: settings.loginBgUrl || '',
-        affiliateShowcaseUrl: settings.affiliateBgUrl || '',
-        companyShowcaseUrl: settings.companyBgUrl || '',
-        forgotPasswordShowcaseUrl: settings.loginBgUrl || '',
-        overlayDarkness: settings.overlayDarkness ?? 78
-      };
-
-      await saveAuthModalSettings(payload, currentUser?.email || 'admin');
+      await persistSettings(settings);
       setFeedback({
         type: 'success',
-        message: 'Imagens de fundo salvas com sucesso no banco de dados! Elas já estão ativas nos modais e nos slides mobile.'
+        message: 'Todas as imagens de fundo foram salvas com sucesso no banco de dados!'
       });
       setTimeout(() => setFeedback(null), 5000);
     } catch (err: any) {
@@ -140,11 +151,22 @@ export const AdminModalImagesManager: React.FC = () => {
   };
 
   // Limpar slot
-  const handleClearSlot = (slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl' | 'mobileSlidePaymentBgUrl' | 'mobileSlideCompanyBgUrl' | 'mobileSlideAuraBgUrl') => {
-    setSettings(prev => ({
-      ...prev,
+  const handleClearSlot = async (slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl' | 'mobileSlidePaymentBgUrl' | 'mobileSlideCompanyBgUrl' | 'mobileSlideAuraBgUrl') => {
+    const updated = {
+      ...settings,
       [slot]: ''
-    }));
+    };
+    setSettings(updated);
+    try {
+      await persistSettings(updated);
+      setFeedback({
+        type: 'success',
+        message: 'Imagem restaurada para o padrão oficial com sucesso!'
+      });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (e: any) {
+      console.warn('Erro ao restaurar slot:', e);
+    }
   };
 
   return (
@@ -696,35 +718,62 @@ export const AdminModalImagesManager: React.FC = () => {
                   />
                 </label>
 
-                <div className="pt-1">
+                <div className="pt-1 space-y-1.5">
                   <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
                     2. Ou Cole a URL da Imagem
                   </label>
-                  <div className="relative flex items-center">
-                    <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
-                    <input
-                      type="url"
-                      value={settings.mobileSlidePaymentBgUrl || ''}
-                      onChange={(e) => setSettings(prev => ({ ...prev, mobileSlidePaymentBgUrl: e.target.value }))}
-                      placeholder="https://exemplo.com/slide2-pagamento.jpg"
-                      className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#080d1a] border border-white/10 focus:border-[#b5f617] text-xs text-white placeholder-white/30 outline-none"
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1 flex items-center">
+                      <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
+                      <input
+                        type="url"
+                        value={settings.mobileSlidePaymentBgUrl || ''}
+                        onChange={(e) => setSettings(prev => ({ ...prev, mobileSlidePaymentBgUrl: e.target.value }))}
+                        placeholder="https://exemplo.com/slide2-pagamento.jpg"
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#080d1a] border border-white/10 focus:border-[#b5f617] text-xs text-white placeholder-white/30 outline-none"
+                      />
+                    </div>
+                    {settings.mobileSlidePaymentBgUrl && (
+                      <button
+                        type="button"
+                        onClick={handleSaveAll}
+                        disabled={isSaving}
+                        className="px-3 py-1.5 rounded-xl bg-[#b5f617] hover:bg-[#c8ff21] text-black font-bold text-xs flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Salvar</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {settings.mobileSlidePaymentBgUrl && (
-              <div className="pt-2 border-t border-white/5 flex justify-end">
+            <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+              <span className="text-[10px] text-white/40">
+                {settings.mobileSlidePaymentBgUrl ? 'Imagem pronta para o app mobile' : 'Usando imagem padrão do sistema'}
+              </span>
+              <div className="flex items-center gap-2">
+                {settings.mobileSlidePaymentBgUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleClearSlot('mobileSlidePaymentBgUrl')}
+                    className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                  >
+                    Restaurar padrão
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => handleClearSlot('mobileSlidePaymentBgUrl')}
-                  className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                  onClick={handleSaveAll}
+                  disabled={isSaving}
+                  className="px-3 py-1.5 rounded-xl bg-[#b5f617]/10 hover:bg-[#b5f617]/20 border border-[#b5f617]/30 text-[#b5f617] font-bold text-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
                 >
-                  Restaurar padrão
+                  <Save className="w-3 h-3" />
+                  <span>Salvar Slide 2</span>
                 </button>
               </div>
-            )}
+            </div>
           </div>
 
           {/* 📱 SLIDE 3: Sua empresa vai mais longe */}
@@ -783,35 +832,62 @@ export const AdminModalImagesManager: React.FC = () => {
                   />
                 </label>
 
-                <div className="pt-1">
+                <div className="pt-1 space-y-1.5">
                   <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
                     2. Ou Cole a URL da Imagem
                   </label>
-                  <div className="relative flex items-center">
-                    <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
-                    <input
-                      type="url"
-                      value={settings.mobileSlideCompanyBgUrl || ''}
-                      onChange={(e) => setSettings(prev => ({ ...prev, mobileSlideCompanyBgUrl: e.target.value }))}
-                      placeholder="https://exemplo.com/slide3-empresa.jpg"
-                      className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#080d1a] border border-white/10 focus:border-[#b5f617] text-xs text-white placeholder-white/30 outline-none"
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1 flex items-center">
+                      <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
+                      <input
+                        type="url"
+                        value={settings.mobileSlideCompanyBgUrl || ''}
+                        onChange={(e) => setSettings(prev => ({ ...prev, mobileSlideCompanyBgUrl: e.target.value }))}
+                        placeholder="https://exemplo.com/slide3-empresa.jpg"
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#080d1a] border border-white/10 focus:border-[#b5f617] text-xs text-white placeholder-white/30 outline-none"
+                      />
+                    </div>
+                    {settings.mobileSlideCompanyBgUrl && (
+                      <button
+                        type="button"
+                        onClick={handleSaveAll}
+                        disabled={isSaving}
+                        className="px-3 py-1.5 rounded-xl bg-[#b5f617] hover:bg-[#c8ff21] text-black font-bold text-xs flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Salvar</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {settings.mobileSlideCompanyBgUrl && (
-              <div className="pt-2 border-t border-white/5 flex justify-end">
+            <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+              <span className="text-[10px] text-white/40">
+                {settings.mobileSlideCompanyBgUrl ? 'Imagem pronta para o app mobile' : 'Usando imagem padrão do sistema'}
+              </span>
+              <div className="flex items-center gap-2">
+                {settings.mobileSlideCompanyBgUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleClearSlot('mobileSlideCompanyBgUrl')}
+                    className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                  >
+                    Restaurar padrão
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => handleClearSlot('mobileSlideCompanyBgUrl')}
-                  className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                  onClick={handleSaveAll}
+                  disabled={isSaving}
+                  className="px-3 py-1.5 rounded-xl bg-[#b5f617]/10 hover:bg-[#b5f617]/20 border border-[#b5f617]/30 text-[#b5f617] font-bold text-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
                 >
-                  Restaurar padrão
+                  <Save className="w-3 h-3" />
+                  <span>Salvar Slide 3</span>
                 </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
