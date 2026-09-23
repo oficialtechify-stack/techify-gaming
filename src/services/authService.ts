@@ -764,7 +764,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
 /**
  * Login de Usuário (Afiliado ou Empresa) com E-mail e Senha
  */
-export async function loginUser(email: string, password: string): Promise<AuthResult> {
+export async function loginUser(email: string, password: string, preferredRole?: UserRoleMode): Promise<AuthResult> {
   const normalizedEmail = email.trim().toLowerCase();
   const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
   const user = userCredential.user;
@@ -787,10 +787,29 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
       profile.hasCompanyProfile = false;
       profile.hasAffiliateProfile = false;
     } else {
-      const isCompany = profile.accountType === 'empresa' || 
+      // Verificar se possui empresa vinculada ou se selecionou entrar como empresa
+      let userCompanyId = profile.companyId;
+      let userCompanyName = profile.companyName;
+
+      if (!userCompanyId) {
+        try {
+          const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', user.uid));
+          const compSnap = await getDocs(compQ);
+          if (!compSnap.empty) {
+            const compDoc = compSnap.docs[0];
+            userCompanyId = compDoc.id;
+            userCompanyName = compDoc.data()?.name || compDoc.data()?.companyName;
+          }
+        } catch (err) {
+          console.warn('Erro ao consultar empresas do usuário:', err);
+        }
+      }
+
+      const isCompany = preferredRole === 'empresa' ||
+                        profile.accountType === 'empresa' || 
                         profile.hasCompanyProfile === true || 
-                        Boolean(profile.companyId) || 
-                        Boolean(profile.companyName) ||
+                        Boolean(userCompanyId) || 
+                        Boolean(userCompanyName) ||
                         profile.activeRoleMode === 'empresa' ||
                         (typeof profile.role === 'string' && (
                           profile.role.toLowerCase().includes('startup') || 
@@ -798,14 +817,25 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
                           profile.role.toLowerCase().includes('produtor') ||
                           profile.role.toLowerCase().includes('fundador')
                         ));
+
       profile.accountType = isCompany ? 'empresa' : 'afiliado';
       profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
       profile.hasCompanyProfile = isCompany;
       profile.hasAffiliateProfile = !isCompany;
-      if (isCompany && (!profile.role || profile.role === 'Afiliado de Alta Performance')) {
+      if (userCompanyId) {
+        profile.companyId = userCompanyId;
+      }
+      if (userCompanyName) {
+        profile.companyName = userCompanyName;
+      }
+
+      if (isCompany && (!profile.role || profile.role === 'Afiliado de Alta Performance' || profile.role === 'Afiliado Starter')) {
         profile.role = 'Fundador / Startup';
         profile.partnerLevel = 'Empresa Parceira';
       }
+
+      // Persistir atualização para garantir integridade
+      await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
     }
   } else {
     // Tentar localizar por e-mail em caso de migração
@@ -825,7 +855,8 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
         profile.hasCompanyProfile = false;
         profile.hasAffiliateProfile = false;
       } else {
-        const isCompany = profile.accountType === 'empresa' || 
+        const isCompany = preferredRole === 'empresa' ||
+                          profile.accountType === 'empresa' || 
                           profile.hasCompanyProfile === true || 
                           Boolean(profile.companyId) || 
                           Boolean(profile.companyName) ||
@@ -840,7 +871,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
         profile.activeRoleMode = isCompany ? 'empresa' : 'afiliado';
         profile.hasCompanyProfile = isCompany;
         profile.hasAffiliateProfile = !isCompany;
-        if (isCompany && (!profile.role || profile.role === 'Afiliado de Alta Performance')) {
+        if (isCompany && (!profile.role || profile.role === 'Afiliado de Alta Performance' || profile.role === 'Afiliado Starter')) {
           profile.role = 'Fundador / Startup';
           profile.partnerLevel = 'Empresa Parceira';
         }
@@ -848,25 +879,28 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
       await setDoc(profileRef, sanitizeForFirestore({ ...profile, userId: user.uid }), { merge: true });
     } else {
       const isAdm = isSuperAdminEmail(normalizedEmail);
+      const isCompany = !isAdm && preferredRole === 'empresa';
       profile = {
         userId: user.uid,
         name: user.displayName || normalizedEmail.split('@')[0],
         email: normalizedEmail,
-        role: isAdm ? 'Administrador do Sistema' : 'Afiliado de Alta Performance',
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
+        role: isAdm ? 'Administrador do Sistema' : (isCompany ? 'Fundador / Startup' : 'Afiliado de Alta Performance'),
+        avatar: isCompany
+          ? `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(user.uid)}`
+          : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
         pixKey: '',
         pixKeyType: 'Chave Aleatória',
         availableBalance: 0,
         pendingBalance: 0,
         totalEarned: 0,
         totalSalesCount: 0,
-        partnerLevel: isAdm ? 'Super Administrador' : 'Afiliado Starter',
-        targetGoal: 100000,
+        partnerLevel: isAdm ? 'Super Administrador' : (isCompany ? 'Empresa Parceira' : 'Afiliado Starter'),
+        targetGoal: isCompany ? 500000 : 100000,
         currentSalesProgress: 0,
-        accountType: isAdm ? 'admin' : 'afiliado',
-        hasAffiliateProfile: !isAdm,
-        hasCompanyProfile: false,
-        activeRoleMode: isAdm ? 'admin' : 'afiliado',
+        accountType: isAdm ? 'admin' : (isCompany ? 'empresa' : 'afiliado'),
+        hasAffiliateProfile: !isAdm && !isCompany,
+        hasCompanyProfile: isCompany,
+        activeRoleMode: isAdm ? 'admin' : (isCompany ? 'empresa' : 'afiliado'),
         updatedAt: new Date().toISOString()
       };
       await setDoc(profileRef, sanitizeForFirestore(profile));

@@ -2161,10 +2161,14 @@ export async function savePlatformBranding(
 // ==========================================
 
 export interface AuthModalSettings {
-  // As 3 imagens de fundo oficiais: 1 para cada tela
+  // As 3 imagens de fundo oficiais dos modais desktop/web:
   loginBgUrl?: string; // Fundo da tela de Login / Recuperação
   affiliateBgUrl?: string; // Fundo do Cadastro de Afiliado
   companyBgUrl?: string; // Fundo do Cadastro de Empresa
+  // 📱 Imagens de Fundo dos Slides Mobile (Pague com simplicidade & Sua empresa vai mais longe)
+  mobileSlidePaymentBgUrl?: string; // Slide 2: "Pague com simplicidade."
+  mobileSlideCompanyBgUrl?: string; // Slide 3: "Sua empresa vai mais longe."
+  mobileSlideAuraBgUrl?: string;    // Slide 1: "Seu crescimento começa aqui."
   // Chaves legadas para compatibilidade retroativa
   loginShowcaseUrl?: string;
   affiliateShowcaseUrl?: string;
@@ -2189,6 +2193,9 @@ export function getLocalAuthModalSettings(): AuthModalSettings {
     loginBgUrl: '',
     affiliateBgUrl: '',
     companyBgUrl: '',
+    mobileSlidePaymentBgUrl: '',
+    mobileSlideCompanyBgUrl: '',
+    mobileSlideAuraBgUrl: '',
     overlayDarkness: 75
   };
 }

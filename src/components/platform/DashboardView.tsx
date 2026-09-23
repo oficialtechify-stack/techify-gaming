@@ -970,8 +970,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Banner de Boas-Vindas & Comunidade para Afiliados */}
-      {roleMode === 'afiliado' && (
+      {/* Banner de Boas-Vindas & Comunidade para Afiliados (NUNCA exibido para empresas, startups ou produtores) */}
+      {roleMode === 'afiliado' && 
+       userProfile?.accountType !== 'empresa' && 
+       userProfile?.accountType !== 'admin' && 
+       !userProfile?.hasCompanyProfile && 
+       !userProfile?.companyId && (
         <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-r from-[#102419] via-[#09130d] to-[#070d18] border border-[#D9F22A]/30 p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
           <div className="flex items-start sm:items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-[#D9F22A]/15 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] flex-shrink-0 mt-0.5 sm:mt-0">

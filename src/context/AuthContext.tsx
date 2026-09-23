@@ -26,7 +26,7 @@ interface AuthContextType {
   loading: boolean;
   registerAffiliateUser: (data: RegisterAffiliateData) => Promise<AuthResult>;
   registerCompanyUser: (data: RegisterCompanyData) => Promise<AuthResult>;
-  login: (email: string, password: string) => Promise<AuthResult>;
+  login: (email: string, password: string, preferredRole?: UserRoleMode) => Promise<AuthResult>;
   loginWithGoogle: (preferredRole?: UserRoleMode) => Promise<AuthResult>;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
@@ -189,15 +189,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, preferredRole?: UserRoleMode) => {
     setLoading(true);
     try {
-      const res = await loginUser(email, password);
+      const res = await loginUser(email, password, preferredRole);
       setCurrentUser(res.user);
       setUserProfile(res.profile);
-      if (res.profile.activeRoleMode) {
-        setUserRole(res.profile.activeRoleMode);
-      }
+      const effectiveRole = preferredRole || res.profile.activeRoleMode || res.profile.accountType || 'afiliado';
+      setUserRole(effectiveRole);
       return res;
     } finally {
       setLoading(false);

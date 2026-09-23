@@ -29,6 +29,9 @@ export const AdminModalImagesManager: React.FC = () => {
     loginBgUrl: '',
     affiliateBgUrl: '',
     companyBgUrl: '',
+    mobileSlidePaymentBgUrl: '',
+    mobileSlideCompanyBgUrl: '',
+    mobileSlideAuraBgUrl: '',
     overlayDarkness: 78
   });
 
@@ -44,6 +47,9 @@ export const AdminModalImagesManager: React.FC = () => {
           loginBgUrl: data.loginBgUrl || data.loginShowcaseUrl || data.forgotPasswordShowcaseUrl || '',
           affiliateBgUrl: data.affiliateBgUrl || data.affiliateShowcaseUrl || '',
           companyBgUrl: data.companyBgUrl || data.companyShowcaseUrl || '',
+          mobileSlidePaymentBgUrl: data.mobileSlidePaymentBgUrl || '',
+          mobileSlideCompanyBgUrl: data.mobileSlideCompanyBgUrl || '',
+          mobileSlideAuraBgUrl: data.mobileSlideAuraBgUrl || '',
           overlayDarkness: typeof data.overlayDarkness === 'number' ? data.overlayDarkness : 78
         });
       }
@@ -52,7 +58,10 @@ export const AdminModalImagesManager: React.FC = () => {
   }, []);
 
   // Leitor de arquivo de imagem local para base64
-  const handleFileSlotUpload = (slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl', file?: File) => {
+  const handleFileSlotUpload = (
+    slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl' | 'mobileSlidePaymentBgUrl' | 'mobileSlideCompanyBgUrl' | 'mobileSlideAuraBgUrl', 
+    file?: File
+  ) => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -102,6 +111,9 @@ export const AdminModalImagesManager: React.FC = () => {
         loginBgUrl: settings.loginBgUrl || '',
         affiliateBgUrl: settings.affiliateBgUrl || '',
         companyBgUrl: settings.companyBgUrl || '',
+        mobileSlidePaymentBgUrl: settings.mobileSlidePaymentBgUrl || '',
+        mobileSlideCompanyBgUrl: settings.mobileSlideCompanyBgUrl || '',
+        mobileSlideAuraBgUrl: settings.mobileSlideAuraBgUrl || '',
         // chaves legadas sincronizadas
         loginShowcaseUrl: settings.loginBgUrl || '',
         affiliateShowcaseUrl: settings.affiliateBgUrl || '',
@@ -113,7 +125,7 @@ export const AdminModalImagesManager: React.FC = () => {
       await saveAuthModalSettings(payload, currentUser?.email || 'admin');
       setFeedback({
         type: 'success',
-        message: 'Imagens de fundo salvas com sucesso no banco de dados! Elas já estão ativas nos modais.'
+        message: 'Imagens de fundo salvas com sucesso no banco de dados! Elas já estão ativas nos modais e nos slides mobile.'
       });
       setTimeout(() => setFeedback(null), 5000);
     } catch (err: any) {
@@ -128,7 +140,7 @@ export const AdminModalImagesManager: React.FC = () => {
   };
 
   // Limpar slot
-  const handleClearSlot = (slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl') => {
+  const handleClearSlot = (slot: 'loginBgUrl' | 'affiliateBgUrl' | 'companyBgUrl' | 'mobileSlidePaymentBgUrl' | 'mobileSlideCompanyBgUrl' | 'mobileSlideAuraBgUrl') => {
     setSettings(prev => ({
       ...prev,
       [slot]: ''
@@ -606,6 +618,202 @@ export const AdminModalImagesManager: React.FC = () => {
           </div>
         </div>
 
+      </div>
+
+      {/* ============================================================== */}
+      {/* 📱 SEÇÃO DEDICADA: FUNDOS DOS SLIDES MOBILE (CELULAR)           */}
+      {/* ============================================================== */}
+      <div className="bg-[#080d1a] border border-[#b5f617]/30 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-[#b5f617]/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#b5f617]/10 border border-[#b5f617]/25 text-[#b5f617] text-xs font-bold uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Exclusivo Mobile • Celular</span>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne'] tracking-tight">
+            Imagens de Fundo dos 2 Slides Mobile
+          </h3>
+          <p className="text-sm text-white/60 leading-relaxed max-w-3xl">
+            Personalize diretamente as imagens de fundo em tela cheia que aparecem para os usuários no celular para as duas partes: <strong>"Pague com simplicidade."</strong> (Slide 2) e <strong>"Sua empresa vai mais longe."</strong> (Slide 3). O slide passa sozinho automaticamente.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          {/* 📱 SLIDE 2: Pague com simplicidade */}
+          <div className="bg-[#050811] border border-white/10 rounded-2xl p-5 shadow-lg flex flex-col justify-between gap-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-[#b5f617]/15 text-[#b5f617] flex items-center justify-center font-bold text-xs font-['Syne']">
+                    S2
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-sm">Fundo: Pague com simplicidade.</h4>
+                    <span className="text-[10px] text-[#b5f617]">Slide 2 Mobile (Cartão / Maquininha)</span>
+                  </div>
+                </div>
+                {settings.mobileSlidePaymentBgUrl ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Customizada
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-white/5 text-white/40 text-[10px]">
+                    Foto Padrão
+                  </span>
+                )}
+              </div>
+
+              {/* Thumbnail */}
+              <div className="w-full h-36 rounded-xl bg-black/50 border border-white/10 overflow-hidden relative group">
+                {settings.mobileSlidePaymentBgUrl ? (
+                  <img
+                    src={settings.mobileSlidePaymentBgUrl}
+                    alt="Preview Slide 2"
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-white/40 text-center p-3 gap-1">
+                    <ImageIcon className="w-6 h-6 stroke-[1.5] text-[#b5f617]" />
+                    <span className="text-[11px]">Foto oficial de pagamento/cartão ativa</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Inputs */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block">
+                  1. Upload Imagem Slide 2 (Celular)
+                </label>
+                <label className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-xl border border-dashed border-[#b5f617]/40 hover:border-[#b5f617] bg-[#b5f617]/[0.03] hover:bg-[#b5f617]/[0.08] text-xs text-white/90 cursor-pointer transition-all">
+                  <Upload className="w-4 h-4 text-[#b5f617]" />
+                  <span className="truncate">Escolher Imagem (PNG, JPG, WebP)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileSlotUpload('mobileSlidePaymentBgUrl', e.target.files?.[0])}
+                    className="hidden"
+                  />
+                </label>
+
+                <div className="pt-1">
+                  <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
+                    2. Ou Cole a URL da Imagem
+                  </label>
+                  <div className="relative flex items-center">
+                    <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
+                    <input
+                      type="url"
+                      value={settings.mobileSlidePaymentBgUrl || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, mobileSlidePaymentBgUrl: e.target.value }))}
+                      placeholder="https://exemplo.com/slide2-pagamento.jpg"
+                      className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#080d1a] border border-white/10 focus:border-[#b5f617] text-xs text-white placeholder-white/30 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {settings.mobileSlidePaymentBgUrl && (
+              <div className="pt-2 border-t border-white/5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleClearSlot('mobileSlidePaymentBgUrl')}
+                  className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                >
+                  Restaurar padrão
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 📱 SLIDE 3: Sua empresa vai mais longe */}
+          <div className="bg-[#050811] border border-white/10 rounded-2xl p-5 shadow-lg flex flex-col justify-between gap-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-[#b5f617]/15 text-[#b5f617] flex items-center justify-center font-bold text-xs font-['Syne']">
+                    S3
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-sm">Fundo: Sua empresa vai mais longe.</h4>
+                    <span className="text-[10px] text-[#b5f617]">Slide 3 Mobile (Crescimento de Startups)</span>
+                  </div>
+                </div>
+                {settings.mobileSlideCompanyBgUrl ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Customizada
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-white/5 text-white/40 text-[10px]">
+                    Foto Padrão
+                  </span>
+                )}
+              </div>
+
+              {/* Thumbnail */}
+              <div className="w-full h-36 rounded-xl bg-black/50 border border-white/10 overflow-hidden relative group">
+                {settings.mobileSlideCompanyBgUrl ? (
+                  <img
+                    src={settings.mobileSlideCompanyBgUrl}
+                    alt="Preview Slide 3"
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-white/40 text-center p-3 gap-1">
+                    <ImageIcon className="w-6 h-6 stroke-[1.5] text-[#b5f617]" />
+                    <span className="text-[11px]">Foto oficial de esportes/empresa ativa</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Inputs */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block">
+                  1. Upload Imagem Slide 3 (Celular)
+                </label>
+                <label className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-xl border border-dashed border-[#b5f617]/40 hover:border-[#b5f617] bg-[#b5f617]/[0.03] hover:bg-[#b5f617]/[0.08] text-xs text-white/90 cursor-pointer transition-all">
+                  <Upload className="w-4 h-4 text-[#b5f617]" />
+                  <span className="truncate">Escolher Imagem (PNG, JPG, WebP)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileSlotUpload('mobileSlideCompanyBgUrl', e.target.files?.[0])}
+                    className="hidden"
+                  />
+                </label>
+
+                <div className="pt-1">
+                  <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">
+                    2. Ou Cole a URL da Imagem
+                  </label>
+                  <div className="relative flex items-center">
+                    <LinkIcon className="w-3.5 h-3.5 text-white/40 absolute left-3" />
+                    <input
+                      type="url"
+                      value={settings.mobileSlideCompanyBgUrl || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, mobileSlideCompanyBgUrl: e.target.value }))}
+                      placeholder="https://exemplo.com/slide3-empresa.jpg"
+                      className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#080d1a] border border-white/10 focus:border-[#b5f617] text-xs text-white placeholder-white/30 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {settings.mobileSlideCompanyBgUrl && (
+              <div className="pt-2 border-t border-white/5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleClearSlot('mobileSlideCompanyBgUrl')}
+                  className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                >
+                  Restaurar padrão
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Dica de Boas Práticas */}

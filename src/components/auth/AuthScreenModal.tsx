@@ -112,6 +112,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   useEffect(() => {
     if (activeModal) {
       setCurrentTab(activeModal);
+      setManualAffiliateOpen(false);
+      setBasicCompanyOpen(false);
       if (activeModal === 'register_company') {
         if (currentUser?.email && !compEmail) {
           setCompEmail(currentUser.email);
@@ -176,8 +178,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   const [showCompConfirmPassword, setShowCompConfirmPassword] = useState<boolean>(false);
 
   // Accordion states
-  const [manualAffiliateOpen, setManualAffiliateOpen] = useState<boolean>(true); // Pre-opened as in screenshot 1
-  const [basicCompanyOpen, setBasicCompanyOpen] = useState<boolean>(false); // Collapsed as in screenshot 2
+  const [manualAffiliateOpen, setManualAffiliateOpen] = useState<boolean>(false); // Closed by default as requested
+  const [basicCompanyOpen, setBasicCompanyOpen] = useState<boolean>(false); // Collapsed by default
 
   // 1. Login State (Screenshot 3)
   const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('afiliado');
@@ -213,6 +215,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   // Switch tab helper
   const handleSwitchTab = (tab: AuthModalType) => {
     setCurrentTab(tab);
+    setManualAffiliateOpen(false);
+    setBasicCompanyOpen(false);
     setErrorMessage('');
     setSuccessMessage('');
   };
@@ -255,7 +259,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      await login(loginEmail, loginPassword);
+      await login(loginEmail, loginPassword, loginRole);
       setSuccessMessage('Autenticado com sucesso! Entrando na plataforma...');
       setTimeout(() => {
         setIsSubmitting(false);

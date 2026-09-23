@@ -26,11 +26,27 @@ import { CompanyPlan } from './types/platform';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliateTracking';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
+import { MobileOnboardingView } from './components/mobile/MobileOnboardingView';
 
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [viewPlatform, setViewPlatform] = useState<boolean>(false);
   const { isAuthenticated, currentUser } = useAuth();
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Direct checkout link state
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -274,6 +290,28 @@ function MainApp() {
       <ErrorBoundary fallbackTitle="Erro ao carregar o Painel LeadsPay" onReset={() => setViewPlatform(false)}>
         <PlatformLayout onBackToHome={() => setViewPlatform(false)} />
       </ErrorBoundary>
+    );
+  }
+
+  // Se for celular / tela mobile (< 768px), substitui a landing page inteira pela experiência de onboarding mobile oficial
+  if (isMobileScreen) {
+    return (
+      <div className="w-full h-full min-h-[100dvh] bg-[#030605] text-white relative overflow-hidden">
+        <MobileOnboardingView
+          onOpenModal={handleOpenModal}
+          onOpenPlatform={handleOpenPlatform}
+        />
+
+        {/* Interactive Modals (Login, Register Affiliate, Register Company, Forgot Password) */}
+        <Modals
+          activeModal={activeModal}
+          onClose={handleCloseModal}
+          onLoginSuccess={handleLoginSuccess}
+        />
+
+        {/* LGPD Cookie Consent Banner */}
+        <CookieConsentBanner />
+      </div>
     );
   }
 

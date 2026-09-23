@@ -171,7 +171,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
     setIsSubmitting(true);
 
     try {
-      await login(loginEmail, loginPassword);
+      await login(loginEmail, loginPassword, loginRole);
       setSuccessMessage('Autenticado com sucesso! Entrando na plataforma...');
       setTimeout(() => {
         setIsSubmitting(false);
