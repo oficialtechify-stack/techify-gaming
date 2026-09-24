@@ -74,6 +74,12 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
   const [priceSetup, setPriceSetup] = useState<number>(plan.priceSetup || 197.00);
   const [priceMonthly, setPriceMonthly] = useState<number>(plan.priceMonthly || 0);
   const [commissionPercentage, setCommissionPercentage] = useState<number>(plan.commissionPercentage || 30);
+  const [recurrentCommissionPercent, setRecurrentCommissionPercent] = useState<number>(
+    plan.recurrentCommissionPercent || plan.recurrentCommission || plan.commissionPercentage || 20
+  );
+  const [billingCycle, setBillingCycle] = useState<CompanyPlan['billingCycle']>(
+    plan.billingCycle || 'MONTHLY'
+  );
   const [supportEmail, setSupportEmail] = useState<string>(plan.supportEmail || 'suporte@empresa.com.br');
   const [warrantyDays, setWarrantyDays] = useState<number>(plan.warrantyDays || 7);
   const [thankYouPageUrl, setThankYouPageUrl] = useState<string>(plan.thankYouPageUrl || '');
@@ -84,7 +90,6 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
   const [deliveryUrl, setDeliveryUrl] = useState<string>(plan.deliveryUrl || plan.thankYouPageUrl || '');
   const [deliveryInstructions, setDeliveryInstructions] = useState<string>(plan.deliveryInstructions || '');
   const [deliveryWebhookUrl, setDeliveryWebhookUrl] = useState<string>(plan.deliveryWebhookUrl || '');
-
 
   // Checkout list
   const defaultCheckout: ProductCustomCheckout = {
@@ -108,12 +113,13 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
   const [newCheckoutPrice, setNewCheckoutPrice] = useState<number>(priceSetup);
   const [newCheckoutOffer, setNewCheckoutOffer] = useState<string>('');
 
-  // Coupons
-  const [coupons, setCoupons] = useState<ProductCoupon[]>(
-    plan.coupons || [
-      { id: 'c-1', code: 'LEADSPAY10', discountType: 'percentage', discountValue: 10, active: true, usedCount: 5 }
-    ]
-  );
+  // Coupons (Apenas cupons cadastrados pela empresa para o produto ou afiliados)
+  const [coupons, setCoupons] = useState<ProductCoupon[]>(() => {
+    if (plan.coupons && Array.isArray(plan.coupons)) {
+      return plan.coupons.filter(c => c.code !== 'LEADSPAY10' && c.code !== 'VIP20' && c.code !== 'TECHIFY10' && c.code !== 'DESCONTO10');
+    }
+    return [];
+  });
   const [newCouponCode, setNewCouponCode] = useState<string>('');
   const [newCouponDiscount, setNewCouponDiscount] = useState<number>(10);
   const [newCouponType, setNewCouponType] = useState<'percentage' | 'fixed'>('percentage');
@@ -140,17 +146,24 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
 
   const handleSaveProduct = () => {
     const commissionValue = Number(((priceSetup * commissionPercentage) / 100).toFixed(2));
+    const recurrentCommissionValue = Number((((priceMonthly || priceSetup) * recurrentCommissionPercent) / 100).toFixed(2));
     
     onSave({
       name,
       description,
       category,
       paymentType,
+      billingType: paymentType === 'Único' ? 'unico' : 'recorrente',
+      billingCycle,
+      billingInterval: billingCycle === 'YEARLY' ? 'yearly' : 'monthly',
       bannerImage,
       priceSetup,
-      priceMonthly,
+      priceMonthly: paymentType !== 'Único' ? (priceMonthly || priceSetup) : priceMonthly,
       commissionPercentage,
       commissionValue,
+      recurrentCommissionPercent,
+      recurrentCommissionValue,
+      recurrentCommission: recurrentCommissionPercent,
       supportEmail,
       warrantyDays,
       thankYouPageUrl: deliveryUrl.trim() || thankYouPageUrl,
@@ -412,20 +425,26 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-white/80 mb-1.5">
-                Preço de Venda / Setup (R$)
+                {paymentType === 'Único' ? 'Preço de Venda / Setup (R$)' : 'Valor da Assinatura / Setup (R$)'}
               </label>
               <input
                 type="number"
                 step="0.01"
                 value={priceSetup}
-                onChange={(e) => setPriceSetup(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setPriceSetup(val);
+                  if (paymentType !== 'Único' && (!priceMonthly || priceMonthly === 0)) {
+                    setPriceMonthly(val);
+                  }
+                }}
                 className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white font-bold"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-white/80 mb-1.5">
-                Comissão de Afiliados (%)
+                Comissão de Afiliados (%) na 1ª Venda
               </label>
               <input
                 type="number"
@@ -434,6 +453,47 @@ export const ProductEditorView: React.FC<ProductEditorViewProps> = ({
                 className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white font-bold"
               />
             </div>
+
+            {/* Configurações Recorrentes (Mensal / Anual / etc.) */}
+            {paymentType !== 'Único' && (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-white/80 mb-1.5">
+                    Periodicidade da Cobrança
+                  </label>
+                  <select
+                    value={billingCycle}
+                    onChange={(e) => setBillingCycle(e.target.value as any)}
+                    className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white cursor-pointer"
+                  >
+                    <option value="MONTHLY">Mensal (Todo mês)</option>
+                    <option value="YEARLY">Anual (Cobrança por ano)</option>
+                    <option value="QUARTERLY">Trimestral (A cada 3 meses)</option>
+                    <option value="SEMIANNUALLY">Semestral (A cada 6 meses)</option>
+                    <option value="WEEKLY">Semanal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-white/80 mb-1.5 flex items-center justify-between">
+                    <span>Comissão Recorrente do Afiliado (%)</span>
+                    <span className="text-[11px] text-[#D9F22A] font-mono">
+                      R$ {(((priceMonthly || priceSetup) * recurrentCommissionPercent) / 100).toFixed(2)} / ciclo
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    value={recurrentCommissionPercent}
+                    onChange={(e) => setRecurrentCommissionPercent(Number(e.target.value))}
+                    placeholder="Ex: 20"
+                    className="w-full bg-[#050811] border border-white/15 focus:border-[#208b68] rounded-xl px-4 py-3 text-xs text-white font-bold"
+                  />
+                  <span className="text-[11px] text-white/50 block mt-1">
+                    Pago automaticamente ao afiliado em cada renovação ({billingCycle === 'YEARLY' ? 'anual' : 'mensal'}).
+                  </span>
+                </div>
+              </>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-white/80 mb-1.5">
@@ -1112,6 +1172,12 @@ export async function POST(req: Request) {
               <span>Comissão Fixada por Venda:</span>
               <span className="text-[#D9F22A] font-bold">{commissionPercentage}% (R$ {((priceSetup * commissionPercentage) / 100).toFixed(2).replace('.', ',')})</span>
             </div>
+            {paymentType !== 'Único' && (
+              <div className="flex items-center justify-between border-t border-white/5 pt-2">
+                <span>Comissão Recorrente ({billingCycle === 'YEARLY' ? 'Anual' : 'Mensal'}):</span>
+                <span className="text-emerald-400 font-bold">{recurrentCommissionPercent}% (R$ {(((priceMonthly || priceSetup) * recurrentCommissionPercent) / 100).toFixed(2).replace('.', ',')})</span>
+              </div>
+            )}
           </div>
         </div>
       )}

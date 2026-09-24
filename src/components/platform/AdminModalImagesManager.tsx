@@ -17,6 +17,7 @@ import {
 import { 
   subscribeAuthModalSettings, 
   saveAuthModalSettings, 
+  getLocalAuthModalSettings,
   AuthModalSettings 
 } from '../../services/firestoreService';
 import { useAuth } from '../../context/AuthContext';

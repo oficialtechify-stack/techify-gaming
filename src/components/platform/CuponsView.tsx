@@ -19,7 +19,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { CompanyPlan, UserAffiliation } from '../../types/platform';
-import { saveCouponToFirebase, deleteCouponInFirebase } from '../../services/firestoreService';
+import { saveCouponToFirebase, deleteCouponInFirebase, getCouponsFromFirebase } from '../../services/firestoreService';
 
 export interface CouponItem {
   id: string;
@@ -34,6 +34,7 @@ export interface CouponItem {
   applicablePlansNames?: string[];
   applicableAffiliates: string[]; // ['all'] or array of affiliate codes or IDs
   applicableAffiliatesNames?: string[];
+  companyId?: string;
 }
 
 interface CuponsViewProps {
@@ -63,44 +64,39 @@ export const CuponsView: React.FC<CuponsViewProps> = ({ plans = [], affiliations
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Filtra qualquer cupom padrão antigo que possa ter ficado no storage local
+          return parsed.filter((c: any) => c.code !== 'LEADSPAY10' && c.code !== 'VIP20' && c.code !== 'TECHIFY10' && c.code !== 'DESCONTO10');
+        }
       }
     } catch (e) {
       console.error('Error loading coupons:', e);
     }
-    
-    // Seed default coupons with product and affiliate linking
-    return [
-      {
-        id: 'cup_leadspay10',
-        code: 'LEADSPAY10',
-        discountType: 'percentage',
-        value: 10,
-        maxUses: 200,
-        usedCount: 24,
-        expiresAt: '31/12/2026',
-        status: 'active',
-        applicablePlans: ['all'],
-        applicablePlansNames: ['Todos os Produtos'],
-        applicableAffiliates: ['all'],
-        applicableAffiliatesNames: ['Todos os Afiliados']
-      },
-      {
-        id: 'cup_vip20',
-        code: 'VIP20',
-        discountType: 'percentage',
-        value: 20,
-        maxUses: 100,
-        usedCount: 15,
-        expiresAt: '30/11/2026',
-        status: 'active',
-        applicablePlans: plans.length > 0 ? [plans[0].id] : ['all'],
-        applicablePlansNames: plans.length > 0 ? [plans[0].name] : ['Todos os Produtos'],
-        applicableAffiliates: ['all'],
-        applicableAffiliatesNames: ['Todos os Afiliados']
-      }
-    ];
+    return [];
   });
+
+  // Carrega cupons reais persistidos no Firestore criados pelas empresas ou para afiliados
+  useEffect(() => {
+    let isMounted = true;
+    const loadRealCoupons = async () => {
+      try {
+        const firstCompId = plans[0]?.companyId;
+        const firestoreCoupons = await getCouponsFromFirebase(firstCompId);
+        if (isMounted && firestoreCoupons && firestoreCoupons.length > 0) {
+          // Filtra cupons hardcoded residuais
+          const cleaned = firestoreCoupons.filter((c: any) => c.code !== 'LEADSPAY10' && c.code !== 'VIP20' && c.code !== 'TECHIFY10' && c.code !== 'DESCONTO10');
+          setCoupons(cleaned);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+        }
+      } catch (err) {
+        console.warn('Aviso ao sincronizar cupons do Firestore:', err);
+      }
+    };
+    loadRealCoupons();
+    return () => {
+      isMounted = false;
+    };
+  }, [plans]);
 
   useEffect(() => {
     try {

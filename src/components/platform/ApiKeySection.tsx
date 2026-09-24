@@ -170,7 +170,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = ({
         action: 'create_checkout', 
         params: { 
           productId: 'pln_principal_exemplo', 
-          couponCode: 'LEADSPAY10' 
+          couponCode: 'PROMO10' 
         } 
       }, null, 2));
     }

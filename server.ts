@@ -393,15 +393,31 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
 
     // Busca dados do Plano / Produto (percentual de comissão e companyId / sellerId associado)
     let commissionPercentage = 20; // padrão 20% do produto quando houver afiliação
+    let recurrentCommissionPercentage: number | null = null;
+    let isPlanRecurring = false;
+
     if (planId) {
       try {
-        const planRef = doc(db, 'plans', String(planId));
-        const planSnap = await getDoc(planRef);
+        let planSnap = await getDoc(doc(db, 'plans', String(planId)));
+        if (!planSnap.exists()) {
+          planSnap = await getDoc(doc(db, 'company_plans', String(planId)));
+        }
+
         if (planSnap.exists()) {
           const pData = planSnap.data();
           if (pData.commissionPercentage !== undefined && pData.commissionPercentage !== null) {
             commissionPercentage = Number(pData.commissionPercentage);
           }
+          if (pData.recurrentCommissionPercent !== undefined && pData.recurrentCommissionPercent !== null) {
+            recurrentCommissionPercentage = Number(pData.recurrentCommissionPercent);
+          } else if (pData.recurrentCommission !== undefined && pData.recurrentCommission !== null) {
+            recurrentCommissionPercentage = Number(pData.recurrentCommission);
+          }
+          isPlanRecurring = pData.billingType === 'recorrente' || 
+                            pData.paymentType === 'Recorrente' || 
+                            pData.paymentType === 'Assinatura' ||
+                            (Number(pData.priceMonthly) > 0);
+
           if (!companyId && pData.companyId) {
             companyId = pData.companyId;
           }
@@ -434,22 +450,33 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
           const affData = affDoc.data();
           affiliateId = affData.userId || affData.user_id;
           affiliationDocId = affDoc.id;
+          if (affData.commissionPercentage) {
+            commissionPercentage = Number(affData.commissionPercentage);
+          }
+          if (affData.recurrentCommissionPercent !== undefined) {
+            recurrentCommissionPercentage = Number(affData.recurrentCommissionPercent);
+          }
         }
       } catch (affErr) {
         console.warn('Erro ao consultar afiliação no Firestore:', affErr);
       }
     }
 
+    // Se o plano for de assinatura recorrente (mensal, anual, etc) e houver comissão recorrente preenchida pela empresa
+    const effectiveCommissionPercentage = (isPlanRecurring && recurrentCommissionPercentage !== null && recurrentCommissionPercentage > 0)
+      ? recurrentCommissionPercentage
+      : commissionPercentage;
+
     // 2. Cálculo dos Valores Financeiros:
     // - Taxa LeadsPay: R$ 0,99 fixo por checkout aprovado
     const platformFee = 0.99;
 
     // - Comissão do Afiliado:
-    //   Se houver affiliateId, calcula com base na porcentagem cadastrada no produto.
+    //   Se houver affiliateId, calcula com base na porcentagem cadastrada no produto (seja recorrente ou comissão padrão).
     //   Se NÃO houver afiliado (venda direta / integração API livre), affiliateCommission = 0.
     let affiliateCommission = 0;
     if (affiliateId) {
-      affiliateCommission = Number(((totalAmount * commissionPercentage) / 100).toFixed(2));
+      affiliateCommission = Number(((totalAmount * effectiveCommissionPercentage) / 100).toFixed(2));
     }
 
     // - Receita Líquida da Empresa (netAmount):

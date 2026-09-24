@@ -510,15 +510,28 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     if (activeAffiliateCode) {
       try {
         const affDoc = await findAffiliationByCode(activeAffiliateCode);
+        const isRecurringPlan = plan.paymentType === 'Recorrente' || 
+                                plan.paymentType === 'Assinatura' || 
+                                (plan as any).billingType === 'recorrente' || 
+                                (plan.priceMonthly && plan.priceMonthly > 0);
+
+        const recurrentPct = plan.recurrentCommissionPercent || 
+                             plan.recurrentCommission || 
+                             (affDoc as any)?.recurrentCommissionPercent;
+
         if (affDoc) {
           resolvedAffiliateId = affDoc.userId || affDoc.user_id;
           resolvedAffiliateName = affDoc.userName;
-          const commPct = affDoc.commissionPercentage || plan.commissionPercentage || (plan as any).affiliateCommission || 0;
+          const commPct = (isRecurringPlan && recurrentPct && recurrentPct > 0)
+            ? recurrentPct
+            : (affDoc.commissionPercentage || plan.commissionPercentage || (plan as any).affiliateCommission || 0);
           commissionEarned = Number(((finalTotal * commPct) / 100).toFixed(2));
         } else {
-          const planCommissionPct = plan.commissionPercentage || (plan as any).affiliateCommission;
-          if (planCommissionPct) {
-            commissionEarned = Number(((finalTotal * planCommissionPct) / 100).toFixed(2));
+          const commPct = (isRecurringPlan && recurrentPct && recurrentPct > 0)
+            ? recurrentPct
+            : (plan.commissionPercentage || (plan as any).affiliateCommission || 0);
+          if (commPct) {
+            commissionEarned = Number(((finalTotal * commPct) / 100).toFixed(2));
           }
         }
       } catch (e) {
@@ -713,20 +726,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           type: planCoupon.discountType
         });
         setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
-      } else if (cleanCode === 'LEADSPAY10' || cleanCode === 'TECHIFY10' || cleanCode === 'DESCONTO10') {
-        setAppliedCoupon({
-          code: cleanCode,
-          discount: 10,
-          type: 'percentage'
-        });
-        setCouponSuccess(`Cupom "${cleanCode}" de 10% OFF aplicado!`);
-      } else if (cleanCode === 'PRIMEIRACOMPRA' || cleanCode === 'VIP20') {
-        setAppliedCoupon({
-          code: cleanCode,
-          discount: 20,
-          type: 'fixed'
-        });
-        setCouponSuccess(`Cupom "${cleanCode}" de R$ 20,00 OFF aplicado!`);
       } else {
         setCouponError('Cupom inválido ou expirado.');
       }

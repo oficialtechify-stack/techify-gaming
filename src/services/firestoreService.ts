@@ -2674,6 +2674,21 @@ export async function deleteCouponInFirebase(couponId: string): Promise<void> {
   }
 }
 
+export async function getCouponsFromFirebase(companyId?: string): Promise<CouponItem[]> {
+  try {
+    const couponsColl = collection(db, 'coupons');
+    let q = query(couponsColl);
+    if (companyId) {
+      q = query(couponsColl, where('companyId', 'in', [companyId, 'global', 'all']));
+    }
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  } catch (err) {
+    console.warn('Erro ao listar cupons do Firestore:', err);
+    return [];
+  }
+}
+
 export async function findCouponByCodeInFirebase(code: string): Promise<CouponItem | null> {
   try {
     const cleanCode = code.toUpperCase().trim();

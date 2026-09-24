@@ -241,6 +241,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         commissionValue: calculatedCommissionValue,
         recurrentCommissionPercent: numRecurrentCommission,
         recurrentCommissionValue: calculatedRecurrentVal,
+        recurrentCommission: numRecurrentCommission,
         features: features.length > 0 ? features : ['Ativação e setup imediato', 'Suporte dedicado'],
         bannerImage: finalImage,
         affiliatesCount: initialData?.affiliatesCount || 0,

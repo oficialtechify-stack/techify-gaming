@@ -141,6 +141,7 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
   const activeCount = activeSubs.length;
   const avgTicket = activeCount > 0 ? totalMRR / activeCount : 0;
   const churnRate = 0.0;
+  const totalAffiliateCommissions = activeSubs.reduce((acc, s) => acc + (s.commission || 0), 0);
 
   // Handler for "+ Novo Checkout de Assinatura" with intelligent check
   const handleNewSubscriptionCheckout = () => {
@@ -231,7 +232,7 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
       {activeSubTab === 'assinaturas' && (
         <div className="space-y-6">
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
               <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 block">Assinaturas Ativas</span>
               <div className="text-2xl font-black text-white font-['Syne'] mt-1">
@@ -248,6 +249,14 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
                 R$ {avgTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
               <span className="text-[11px] text-white/40 mt-1 block">Por contrato</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 block">Comissões Recorrentes</span>
+              <div className="text-2xl font-black text-[#D9F22A] font-['Syne'] mt-1">
+                R$ {totalAffiliateCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </div>
+              <span className="text-[11px] text-[#D9F22A]/80 mt-1 block">Repasse para afiliados</span>
             </div>
 
             <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10">
@@ -328,11 +337,12 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs min-w-[700px]">
+                <table className="w-full text-left text-xs min-w-[750px]">
                   <thead>
                     <tr className="border-b border-white/10 bg-white/[0.02] text-white/50 uppercase tracking-wider font-bold">
                       <th className="p-4">Cliente & Contrato</th>
                       <th className="p-4">Plano</th>
+                      <th className="p-4">Afiliado / Origem</th>
                       <th className="p-4">Valor / Ciclo</th>
                       <th className="p-4">Próxima Cobrança</th>
                       <th className="p-4">Método</th>
@@ -353,6 +363,11 @@ export const AssinaturasView: React.FC<AssinaturasViewProps> = ({
                               Comissão: R$ {sub.commission.toFixed(2)}
                             </span>
                           )}
+                        </td>
+                        <td className="p-4">
+                          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-white/5 text-white/80 border border-white/10">
+                            {sub.affiliateName || 'Link Direto'}
+                          </span>
                         </td>
                         <td className="p-4 font-black text-white font-mono">
                           R$ {sub.amount.toFixed(2)}{' '}
