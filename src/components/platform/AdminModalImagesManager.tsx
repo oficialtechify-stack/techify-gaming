@@ -26,14 +26,17 @@ import { compressImageFileToBase64 } from '../../utils/imageCompressor';
 export const AdminModalImagesManager: React.FC = () => {
   const { currentUser } = useAuth();
 
-  const [settings, setSettings] = useState<AuthModalSettings>({
-    loginBgUrl: '',
-    affiliateBgUrl: '',
-    companyBgUrl: '',
-    mobileSlidePaymentBgUrl: '',
-    mobileSlideCompanyBgUrl: '',
-    mobileSlideAuraBgUrl: '',
-    overlayDarkness: 78
+  const [settings, setSettings] = useState<AuthModalSettings>(() => {
+    const local = getLocalAuthModalSettings();
+    return {
+      loginBgUrl: local.loginBgUrl || local.loginShowcaseUrl || '',
+      affiliateBgUrl: local.affiliateBgUrl || local.affiliateShowcaseUrl || '',
+      companyBgUrl: local.companyBgUrl || local.companyShowcaseUrl || '',
+      mobileSlidePaymentBgUrl: local.mobileSlidePaymentBgUrl || '',
+      mobileSlideCompanyBgUrl: local.mobileSlideCompanyBgUrl || '',
+      mobileSlideAuraBgUrl: local.mobileSlideAuraBgUrl || '',
+      overlayDarkness: typeof local.overlayDarkness === 'number' ? local.overlayDarkness : 78
+    };
   });
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
