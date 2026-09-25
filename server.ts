@@ -1,8 +1,9 @@
 import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
 dotenv.config();
 
 import express from 'express';
-import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import QRCode from 'qrcode';
 import { initializeApp, getApps, getApp } from 'firebase/app';
