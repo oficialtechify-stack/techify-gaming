@@ -100,7 +100,7 @@ export const DatabaseManagerView: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // Modais de Segurança (Ban e Exclusão Total)
+  // Modais de Segurança (Ban, Exclusão Total e Recusa)
   const [banModal, setBanModal] = useState<{
     isOpen: boolean;
     target: SecurityTarget | null;
@@ -122,6 +122,18 @@ export const DatabaseManagerView: React.FC = () => {
     isOpen: false,
     target: null,
     confirmationInput: '',
+    isProcessing: false
+  });
+
+  const [rejectModal, setRejectModal] = useState<{
+    isOpen: boolean;
+    target: { id: string; name: string; email?: string; type: 'user' | 'company' } | null;
+    reason: string;
+    isProcessing: boolean;
+  }>({
+    isOpen: false,
+    target: null,
+    reason: 'Dados cadastrais necessitam de ajuste ou confirmação.',
     isProcessing: false
   });
 
@@ -225,9 +237,25 @@ export const DatabaseManagerView: React.FC = () => {
         return next;
       });
 
-      // Atualização imediata em todos os estados locais
-      setVerifications(prev => prev.map(v => (v.userId === userId || v.id === userId) ? { ...v, status: 'approved', banned: false } : v));
-      setRegisteredProfiles(prev => prev.map(p => (p.userId === userId || p.id === userId) ? { ...p, verified: true, verificationStatus: 'approved', status: 'approved', banned: false } : p));
+      // Atualização imediata em todos os estados locais preservando o perfil real
+      setVerifications(prev => prev.map(v => (v.userId === userId || v.id === userId) ? { 
+        ...v, 
+        status: 'approved', 
+        verified: true, 
+        kyc_status: 'verified', 
+        banned: false, 
+        rejectionReason: undefined 
+      } : v));
+      
+      setRegisteredProfiles(prev => prev.map(p => (p.userId === userId || p.id === userId) ? { 
+        ...p, 
+        verified: true, 
+        verificationStatus: 'approved', 
+        kyc_status: 'verified', 
+        status: 'approved', 
+        banned: false, 
+        verificationRejectionReason: null 
+      } : p));
       
       // Se estava na aba de pendentes, muda automaticamente para 'all' para o usuário ver o item aprovado
       if (statusFilter === 'pending') {
@@ -244,28 +272,49 @@ export const DatabaseManagerView: React.FC = () => {
     }
   };
 
-  // Recusar Usuário / Afiliado
-  const handleRejectUser = async (userId: string, userName: string) => {
-    const rawReason = prompt(`Motivo da recusa para "${userName}":`, 'Dados cadastrais necessitam de ajuste ou confirmação.');
-    if (rawReason === null) return;
-    const reason = rawReason.trim() || 'Dados cadastrais necessitam de ajuste ou confirmação.';
+  // Abrir Modal de Recusa / Solicitação de Ajuste
+  const openRejectModal = (target: { id: string; name: string; email?: string; type: 'user' | 'company' }) => {
+    setRejectModal({
+      isOpen: true,
+      target,
+      reason: target.type === 'company'
+        ? 'Dados cadastrais ou documentação da empresa necessitam de ajuste.'
+        : 'Dados cadastrais necessitam de ajuste ou confirmação.',
+      isProcessing: false
+    });
+  };
 
-    setProcessingId(userId);
+  // Confirmar Recusa através do Modal Seguro
+  const handleConfirmReject = async () => {
+    if (!rejectModal.target) return;
+    const { id, name, type } = rejectModal.target;
+    const reason = rejectModal.reason.trim() || 'Dados cadastrais necessitam de ajuste ou confirmação.';
+
+    setRejectModal(prev => ({ ...prev, isProcessing: true }));
+    setProcessingId(id);
     try {
-      await rejectVerificationInFirebase(userId, reason);
-      
-      setVerifications(prev => prev.map(v => (v.userId === userId || v.id === userId) ? { ...v, status: 'rejected', rejectionReason: reason } : v));
-      setRegisteredProfiles(prev => prev.map(p => (p.userId === userId || p.id === userId) ? { ...p, verificationStatus: 'rejected', rejectionReason: reason } : p));
+      if (type === 'user') {
+        await rejectVerificationInFirebase(id, reason);
+        setVerifications(prev => prev.map(v => (v.userId === id || v.id === id) ? { ...v, status: 'rejected', rejectionReason: reason, verified: false } : v));
+        setRegisteredProfiles(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, verified: false, verificationStatus: 'rejected', rejectionReason: reason } : p));
+        setStatusMessage(`Validação do afiliado "${name}" recusada com motivo registrado.`);
+      } else {
+        await rejectCompanyInFirebase(id, reason);
+        setCompanies(prev => prev.map(c => c.id === id ? { ...c, status: 'rejected', rejectionReason: reason, verified: false } : c));
+        setVerifications(prev => prev.map(v => (v.id === id || v.userId === id || v.companyId === id) ? { ...v, status: 'rejected', rejectionReason: reason, verified: false } : v));
+        setStatusMessage(`Empresa "${name}" recusada com motivo registrado.`);
+      }
 
       if (statusFilter === 'pending') {
         setStatusFilter('all');
       }
 
-      setStatusMessage(`Validação do afiliado "${userName}" recusada com motivo registrado.`);
       setTimeout(() => setStatusMessage(''), 7000);
+      setRejectModal({ isOpen: false, target: null, reason: '', isProcessing: false });
     } catch (err: any) {
-      setErrorMessage(`Erro ao recusar afiliado: ${err.message}`);
+      setErrorMessage(`Erro ao recusar: ${err.message}`);
       setTimeout(() => setErrorMessage(''), 7000);
+      setRejectModal(prev => ({ ...prev, isProcessing: false }));
     } finally {
       setProcessingId(null);
     }
@@ -289,7 +338,7 @@ export const DatabaseManagerView: React.FC = () => {
       setCompanies(prev => {
         const exists = prev.some(c => c.id === companyId);
         if (exists) {
-          return prev.map(c => c.id === companyId ? { ...c, status: 'approved', verified: true, banned: false } : c);
+          return prev.map(c => c.id === companyId ? { ...c, status: 'approved', verified: true, banned: false, rejectionReason: undefined } : c);
         }
         return [...prev, {
           ...(existingCompanyData || {}),
@@ -298,6 +347,7 @@ export const DatabaseManagerView: React.FC = () => {
           status: 'approved',
           verified: true,
           banned: false,
+          rejectionReason: undefined,
           category: existingCompanyData?.category || 'SaaS / B2B',
           commissionRange: existingCompanyData?.commissionRange || '10% - 50%',
           createdAt: existingCompanyData?.createdAt || new Date().toISOString()
@@ -307,7 +357,7 @@ export const DatabaseManagerView: React.FC = () => {
       // Atualiza verifications
       setVerifications(prev => prev.map(v => 
         (v.id === companyId || v.userId === companyId || v.companyId === companyId) 
-          ? { ...v, status: 'approved' } 
+          ? { ...v, status: 'approved', verified: true, rejectionReason: undefined } 
           : v
       ));
 
@@ -327,37 +377,6 @@ export const DatabaseManagerView: React.FC = () => {
       setTimeout(() => setStatusMessage(''), 7000);
     } catch (err: any) {
       setErrorMessage(`Erro ao aprovar empresa: ${err.message}`);
-      setTimeout(() => setErrorMessage(''), 7000);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  // Recusar Empresa
-  const handleRejectCompany = async (companyId: string, companyName: string) => {
-    const rawReason = prompt(`Motivo da recusa para "${companyName}":`, 'Dados cadastrais ou documentação da empresa necessitam de ajuste.');
-    if (rawReason === null) return;
-    const reason = rawReason.trim() || 'Dados cadastrais ou documentação da empresa necessitam de ajuste.';
-
-    setProcessingId(companyId);
-    try {
-      await rejectCompanyInFirebase(companyId, reason);
-
-      setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status: 'rejected', rejectionReason: reason, verified: false } : c));
-      setVerifications(prev => prev.map(v => 
-        (v.id === companyId || v.userId === companyId || v.companyId === companyId) 
-          ? { ...v, status: 'rejected', rejectionReason: reason } 
-          : v
-      ));
-
-      if (statusFilter === 'pending') {
-        setStatusFilter('all');
-      }
-
-      setStatusMessage(`Empresa "${companyName}" recusada com motivo registrado.`);
-      setTimeout(() => setStatusMessage(''), 7000);
-    } catch (err: any) {
-      setErrorMessage(`Erro ao recusar empresa: ${err.message}`);
       setTimeout(() => setErrorMessage(''), 7000);
     } finally {
       setProcessingId(null);
@@ -523,16 +542,13 @@ export const DatabaseManagerView: React.FC = () => {
       if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
       if (isSuperAdminEmail(v.email)) return;
 
-      const isCompanyVerif = v.roleType === 'empresa' || 
-                             Boolean(v.companyId) || 
-                             Boolean(v.companyName) || 
-                             Boolean(v.companyCnpj);
-      if (!isCompanyVerif) {
+      const isCompanyVerif = v.roleType === 'empresa' || (Boolean(v.companyCnpj) && v.roleType !== 'afiliado');
+      if (!isCompanyVerif || v.roleType === 'afiliado') {
         map.set(key, v);
       }
     });
 
-    // 2. Perfis de usuários cadastrados (garantindo que perfis de empresa ou admins sem verificação não poluam)
+    // 2. Perfis de usuários cadastrados
     registeredProfiles.forEach((p) => {
       const key = p.userId || p.id;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id)) return;
@@ -549,37 +565,63 @@ export const DatabaseManagerView: React.FC = () => {
         return;
       }
 
-      // Contas corporativas (Empresas / Startups / Produtores) JAMAIS são listadas como afiliados
-      const isCompanyProfile = p.accountType === 'empresa' ||
-                               p.hasCompanyProfile === true ||
-                               Boolean(p.companyId?.trim()) ||
-                               Boolean(p.companyName?.trim()) ||
-                               p.activeRoleMode === 'empresa' ||
-                               p.verificationRoleType === 'empresa' ||
-                               (typeof p.role === 'string' && (
-                                 p.role.toLowerCase().includes('startup') || 
-                                 p.role.toLowerCase().includes('empresa') || 
-                                 p.role.toLowerCase().includes('produtor') ||
-                                 p.role.toLowerCase().includes('fundador')
-                               )) ||
-                               (typeof p.partnerLevel === 'string' && p.partnerLevel.toLowerCase().includes('empresa'));
+      // Apenas perfis estritamente corporativos (sem nenhum perfil ou papel de afiliado) são omitidos
+      const hasAffiliate = p.hasAffiliateProfile === true || p.accountType === 'afiliado' || p.accountType === 'ambos';
+      const isExclusivelyCompany = !hasAffiliate && (
+        p.accountType === 'empresa' || 
+        (p.hasCompanyProfile === true && !p.hasAffiliateProfile) ||
+        p.activeRoleMode === 'empresa' ||
+        p.verificationRoleType === 'empresa'
+      );
 
-      if (isCompanyProfile) {
+      if (isExclusivelyCompany) {
         map.delete(key);
         if (p.id) map.delete(p.id);
         if (p.userId) map.delete(p.userId);
         return;
       }
 
-      if (!map.has(key)) {
-        const isVerified = p.verified === true || p.verificationStatus === 'approved';
-        const isBanned = p.banned === true;
-        let status: any = 'pending';
-        if (isBanned) status = 'banned';
-        else if (p.verificationStatus === 'rejected') status = 'rejected';
-        else if (isVerified) status = 'approved';
-        else status = 'pending';
+      const isVerified = p.verified === true || p.verificationStatus === 'approved' || p.kyc_status === 'verified';
+      const isBanned = p.banned === true;
+      let status: any = 'pending';
+      if (isBanned) status = 'banned';
+      else if (p.verificationStatus === 'rejected') status = 'rejected';
+      else if (isVerified) status = 'approved';
+      else status = 'pending';
 
+      const existing = map.get(key);
+      if (existing) {
+        // FUNDE SEMPRE! NUNCA DEIXE NOME, FOTO OU DADOS CADASTRAIS VAZIOS
+        const isApprovedFinal = isVerified || existing.status === 'approved' || (existing as any).verified;
+        const resolvedStatus = isBanned 
+          ? 'banned' 
+          : isApprovedFinal 
+            ? 'approved' 
+            : (existing.status || status);
+
+        map.set(key, {
+          ...existing,
+          id: key,
+          userId: key,
+          name: p.name || p.fullName || existing.name || (p.email ? p.email.split('@')[0] : 'Afiliado ' + key.slice(0, 5)),
+          email: p.email || existing.email || '',
+          phone: p.phone || p.whatsapp || existing.phone || '',
+          cpf: p.cpf || existing.cpf || '',
+          city: p.city || existing.city || '',
+          state: p.state || existing.state || '',
+          address: p.address || existing.address || '',
+          cep: p.cep || existing.cep || '',
+          pixKey: p.pixKey || existing.pixKey || '',
+          pixKeyType: p.pixKeyType || existing.pixKeyType || 'CPF',
+          avatar: p.avatar || existing.avatar || '',
+          roleType: 'afiliado',
+          status: resolvedStatus,
+          verified: resolvedStatus === 'approved',
+          banned: isBanned || Boolean(existing.banned),
+          rejectionReason: resolvedStatus === 'approved' ? undefined : (existing.rejectionReason || p.verificationRejectionReason || undefined),
+          submittedAt: existing.submittedAt || p.submittedAt || p.createdAt || p.updatedAt || new Date().toISOString()
+        } as VerificationRequest);
+      } else {
         map.set(key, {
           id: key,
           userId: key,
@@ -589,11 +631,15 @@ export const DatabaseManagerView: React.FC = () => {
           cpf: p.cpf || '',
           city: p.city || '',
           state: p.state || '',
+          address: p.address || '',
+          cep: p.cep || '',
           pixKey: p.pixKey || '',
           pixKeyType: p.pixKeyType || 'CPF',
           roleType: 'afiliado',
           status,
+          verified: status === 'approved',
           banned: isBanned,
+          rejectionReason: status === 'approved' ? undefined : (p.verificationRejectionReason || undefined),
           avatar: p.avatar || '',
           submittedAt: p.submittedAt || p.createdAt || p.updatedAt || new Date().toISOString()
         } as VerificationRequest);
@@ -621,15 +667,13 @@ export const DatabaseManagerView: React.FC = () => {
       });
     });
 
-    // 2. Solicitações de verificação com perfil empresa
+    // 2. Solicitações de verificação genuínas de empresa (NUNCA converte afiliados em empresas)
     verifications.forEach((v) => {
       const isCompanyVerif = v.roleType === 'empresa' || 
-                             Boolean(v.companyId) || 
-                             Boolean(v.companyName) || 
-                             Boolean(v.companyCnpj);
+                             (Boolean(v.companyCnpj) && v.roleType !== 'afiliado' && Boolean(v.companyName));
       if (isCompanyVerif) {
-        const key = v.companyId || v.userId || v.id;
-        if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
+        const key = v.companyId || (v.roleType === 'empresa' ? (v.userId || v.id) : null);
+        if (!key || deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
         
         const existing = map.get(key);
         if (existing) {
@@ -758,15 +802,15 @@ export const DatabaseManagerView: React.FC = () => {
   // Helper para verificar status de um registro
   const getStatusOfVerification = (v: VerificationRequest): StatusFilter => {
     if (v.banned) return 'banned';
+    if (v.status === 'approved' || (v as any).status === 'active' || (v as any).verified || (v as any).kyc_status === 'verified') return 'approved';
     if (v.status === 'rejected') return 'rejected';
-    if (v.status === 'approved' || (v as any).status === 'active' || (v as any).verified) return 'approved';
     return 'pending';
   };
 
   const getStatusOfCompany = (c: CompanyStartup): StatusFilter => {
     if (c.banned) return 'banned';
+    if (c.status === 'approved' || (c.status as string) === 'active' || c.verified || (c as any).kyc_status === 'verified') return 'approved';
     if (c.status === 'rejected') return 'rejected';
-    if (c.status === 'approved' || (c.status as string) === 'active' || c.verified) return 'approved';
     return 'pending';
   };
 
@@ -1349,7 +1393,7 @@ export const DatabaseManagerView: React.FC = () => {
                             {!isApproved && !isBanned && (
                               <>
                                 <button
-                                  onClick={() => handleRejectUser(targetId, req.name)}
+                                  onClick={() => openRejectModal({ id: targetId, name: req.name || 'Afiliado', email: req.email, type: 'user' })}
                                   disabled={processingId === targetId}
                                   className="px-3.5 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                                 >
@@ -1375,7 +1419,7 @@ export const DatabaseManagerView: React.FC = () => {
                             {/* Se aprovado: opção de solicitar ajuste */}
                             {isApproved && !isBanned && (
                               <button
-                                onClick={() => handleRejectUser(targetId, req.name)}
+                                onClick={() => openRejectModal({ id: targetId, name: req.name || 'Afiliado', email: req.email, type: 'user' })}
                                 disabled={processingId === targetId}
                                 className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                               >
@@ -1619,7 +1663,7 @@ export const DatabaseManagerView: React.FC = () => {
                             {!isApproved && !isBanned && (
                               <>
                                 <button
-                                  onClick={() => handleRejectCompany(comp.id, comp.name)}
+                                  onClick={() => openRejectModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company' })}
                                   disabled={processingId === comp.id}
                                   className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                                 >
@@ -1644,7 +1688,7 @@ export const DatabaseManagerView: React.FC = () => {
 
                             {isApproved && !isBanned && (
                               <button
-                                onClick={() => handleRejectCompany(comp.id, comp.name)}
+                                onClick={() => openRejectModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company' })}
                                 disabled={processingId === comp.id}
                                 className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                               >
@@ -1951,6 +1995,109 @@ export const DatabaseManagerView: React.FC = () => {
                   <>
                     <Trash2 className="w-4 h-4" />
                     <span>Excluir Definitivamente</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL DE RECUSA / SOLICITAÇÃO DE AJUSTE ================= */}
+      {rejectModal.isOpen && rejectModal.target && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-[#12080a] border border-rose-500/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-[0_0_50px_rgba(244,63,94,0.25)] space-y-5">
+            {/* Header */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 flex-shrink-0">
+                <X className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-rose-400 bg-rose-950/60 border border-rose-800/40 px-2.5 py-0.5 rounded-full">
+                  {rejectModal.target.type === 'company' ? 'Empresa / Produtor' : 'Afiliado'}
+                </span>
+                <h3 className="text-xl font-black text-white font-['Syne'] mt-1">
+                  Recusar / Solicitar Ajuste
+                </h3>
+                <p className="text-xs text-white/60 mt-0.5">
+                  Informe ao usuário o motivo para que ele possa regularizar seu cadastro.
+                </p>
+              </div>
+            </div>
+
+            {/* Target Info */}
+            <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-xs space-y-1">
+              <div className="text-white font-bold">{rejectModal.target.name}</div>
+              {rejectModal.target.email && (
+                <div className="text-white/60 text-[11px]">E-mail: {rejectModal.target.email}</div>
+              )}
+              <div className="text-white/40 text-[10px] font-mono">ID: {rejectModal.target.id}</div>
+            </div>
+
+            {/* Sugestões rápidas de motivos */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-white/70 uppercase tracking-wider block">
+                Sugestões Rápidas:
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  'Dados cadastrais necessitam de ajuste ou confirmação.',
+                  'Documento de identificação ilegível ou incompleto.',
+                  'Chave PIX divergente do titular cadastrado.',
+                  'CNPJ ou dados societários necessitam de revisão.'
+                ].map((sug, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setRejectModal(prev => ({ ...prev, reason: sug }))}
+                    className="text-[10px] px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5 transition-all text-left"
+                  >
+                    {sug}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Motivo detalhado */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-white uppercase tracking-wider block">
+                Motivo da Recusa / Ajuste Necessário:
+              </label>
+              <textarea
+                value={rejectModal.reason}
+                onChange={(e) => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+                rows={3}
+                placeholder="Descreva claramente o que o usuário precisa corrigir..."
+                className="w-full px-3.5 py-2.5 bg-black/60 border border-rose-500/30 rounded-xl text-white text-xs focus:outline-none focus:border-rose-500 transition-colors placeholder:text-white/30 resize-none"
+              />
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRejectModal({ isOpen: false, target: null, reason: '', isProcessing: false })}
+                disabled={rejectModal.isProcessing}
+                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmReject}
+                disabled={rejectModal.isProcessing || !rejectModal.reason.trim()}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all cursor-pointer flex items-center gap-2"
+              >
+                {rejectModal.isProcessing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="w-4 h-4" />
+                    <span>Confirmar Recusa</span>
                   </>
                 )}
               </button>

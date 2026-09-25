@@ -327,14 +327,44 @@ export function subscribeVerifications(callback: (requests: VerificationRequest[
 export async function approveVerificationInFirebase(userId: string) {
   const now = new Date().toISOString();
   
-  // 1. Atualiza perfil do usuário (user_profiles)
+  // 1. Busca perfil atual para preservar e sincronizar todos os dados reais (nome, email, cpf, phone, avatar)
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
+  let pData: any = {};
+  try {
+    const profSnap = await getDoc(profileRef);
+    if (profSnap.exists()) {
+      pData = profSnap.data();
+    }
+  } catch (e) {}
+
+  if (!pData.name && !pData.email) {
+    try {
+      const uSnap = await getDoc(doc(db, 'users', userId));
+      if (uSnap.exists()) {
+        pData = { ...uSnap.data(), ...pData };
+      }
+    } catch (e) {}
+  }
+
+  // 1. Identifica se o usuário é um afiliado para preservar categoricamente suas permissões
+  const isAffiliate = pData.accountType === 'afiliado' || 
+                      pData.hasAffiliateProfile === true || 
+                      (!pData.accountType && !pData.hasCompanyProfile && !pData.companyCnpj);
+  const resolvedAccountType = pData.accountType || (isAffiliate ? 'afiliado' : 'empresa');
+
+  // Atualiza perfil do usuário (user_profiles) PRESERVANDO perfil de afiliado
   await setDoc(profileRef, {
     verified: true,
     verificationStatus: 'approved',
     kyc_status: 'verified',
+    accountType: resolvedAccountType,
+    hasAffiliateProfile: isAffiliate || pData.hasAffiliateProfile === true,
+    hasCompanyProfile: Boolean(pData.hasCompanyProfile),
+    activeRoleMode: pData.activeRoleMode || (isAffiliate ? 'afiliado' : 'empresa'),
+    role: pData.role || (isAffiliate ? 'Afiliado de Alta Performance' : 'Fundador / Startup'),
     verificationReviewedAt: now,
     verificationRejectionReason: null,
+    rejectionReason: null,
     updatedAt: now
   }, { merge: true });
 
@@ -348,13 +378,30 @@ export async function approveVerificationInFirebase(userId: string) {
     }, { merge: true });
   } catch (e) {}
 
-  // 3. Atualiza o registro em verification_requests pelo ID
+  // 3. Atualiza o registro em verification_requests pelo ID PRESERVANDO dados reais
   try {
     const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
     await setDoc(requestRef, {
+      id: userId,
+      userId: userId,
+      name: pData.name || pData.fullName || '',
+      email: pData.email || '',
+      phone: pData.phone || pData.whatsapp || '',
+      cpf: pData.cpf || '',
+      avatar: pData.avatar || '',
+      city: pData.city || '',
+      state: pData.state || '',
+      address: pData.address || '',
+      cep: pData.cep || '',
+      pixKey: pData.pixKey || '',
+      pixKeyType: pData.pixKeyType || 'CPF',
+      roleType: isAffiliate ? 'afiliado' : (pData.accountType === 'empresa' ? 'empresa' : 'afiliado'),
       status: 'approved',
+      verified: true,
+      kyc_status: 'verified',
       reviewedAt: now,
-      rejectionReason: null
+      rejectionReason: null,
+      updatedAt: now
     }, { merge: true });
   } catch (e) {}
 
@@ -365,37 +412,38 @@ export async function approveVerificationInFirebase(userId: string) {
     for (const vDoc of vSnap.docs) {
       await setDoc(vDoc.ref, {
         status: 'approved',
+        verified: true,
+        kyc_status: 'verified',
         reviewedAt: now,
         rejectionReason: null
       }, { merge: true });
     }
   } catch (e) {}
 
-  // 5. Aprova automaticamente quaisquer empresas pertencentes a este usuário
+  // 5. Se e SOMENTE SE o usuário for comprovadamente uma empresa/produtor, aprova empresas cadastradas
+  // JAMAIS converte usuários afiliados em empresas!
   try {
-    const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
-    const compSnap = await getDocs(compQ);
-    for (const cDoc of compSnap.docs) {
-      await setDoc(cDoc.ref, {
-        status: 'approved',
-        verified: true,
-        kyc_status: 'verified',
-        reviewedAt: now,
-        rejectionReason: null
-      }, { merge: true });
-    }
+    const isCompanyUser = !isAffiliate && (pData.accountType === 'empresa' || pData.roleType === 'empresa');
+    if (isCompanyUser) {
+      const approvedCompIds = new Set<string>();
 
-    // Também verifica por submittedBy
-    const compQ2 = query(collection(db, COLLECTIONS.COMPANIES), where('submittedBy', '==', userId));
-    const compSnap2 = await getDocs(compQ2);
-    for (const cDoc of compSnap2.docs) {
-      await setDoc(cDoc.ref, {
-        status: 'approved',
-        verified: true,
-        kyc_status: 'verified',
-        reviewedAt: now,
-        rejectionReason: null
-      }, { merge: true });
+      const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
+      const compSnap = await getDocs(compQ);
+      for (const cDoc of compSnap.docs) {
+        if (cDoc.id !== userId) {
+          approvedCompIds.add(cDoc.id);
+          await approveCompanyInFirebase(cDoc.id);
+        }
+      }
+
+      const compQ2 = query(collection(db, COLLECTIONS.COMPANIES), where('submittedBy', '==', userId));
+      const compSnap2 = await getDocs(compQ2);
+      for (const cDoc of compSnap2.docs) {
+        if (cDoc.id !== userId && !approvedCompIds.has(cDoc.id)) {
+          approvedCompIds.add(cDoc.id);
+          await approveCompanyInFirebase(cDoc.id);
+        }
+      }
     }
   } catch (err) {
     console.warn('Aviso ao auto-aprovar empresas vinculadas:', err);
@@ -410,22 +458,59 @@ export async function approveVerificationInFirebase(userId: string) {
 export async function rejectVerificationInFirebase(userId: string, reason: string = 'Dados cadastrais necessitam de correção') {
   const now = new Date().toISOString();
 
+  let pData: any = {};
+  try {
+    const profSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, userId));
+    if (profSnap.exists()) {
+      pData = profSnap.data();
+    }
+  } catch (e) {}
+
+  if (!pData.name && !pData.email) {
+    try {
+      const uSnap = await getDoc(doc(db, 'users', userId));
+      if (uSnap.exists()) {
+        pData = { ...uSnap.data(), ...pData };
+      }
+    } catch (e) {}
+  }
+
   // 1. Update user profile
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
   await setDoc(profileRef, {
     verified: false,
     verificationStatus: 'rejected',
+    kyc_status: 'rejected',
     verificationRejectionReason: reason,
+    rejectionReason: reason,
     verificationReviewedAt: now,
     updatedAt: now
   }, { merge: true });
 
-  // 2. Update verification request record
+  try {
+    await setDoc(doc(db, 'users', userId), {
+      verified: false,
+      verificationStatus: 'rejected',
+      kyc_status: 'rejected',
+      updatedAt: now
+    }, { merge: true });
+  } catch (e) {}
+
+  // 2. Update verification request record mantendo integridade dos dados
   const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
   await setDoc(requestRef, {
+    id: userId,
+    userId: userId,
+    name: pData.name || pData.fullName || '',
+    email: pData.email || '',
+    phone: pData.phone || pData.whatsapp || '',
+    cpf: pData.cpf || '',
+    avatar: pData.avatar || '',
     status: 'rejected',
+    verified: false,
     rejectionReason: reason,
-    reviewedAt: now
+    reviewedAt: now,
+    updatedAt: now
   }, { merge: true });
 
   // 3. Also update company status
@@ -870,14 +955,31 @@ export async function approveCompanyInFirebase(companyId: string) {
     const compSnap = await getDoc(docRef);
     let compData = compSnap.exists() ? compSnap.data() : null;
 
-    // Se o documento não existir ou estiver sem dados vitais (ex: aprovada a partir de verificação ou perfil)
+    // Se o documento não existir na coleção companies
     if (!compData || (!compData.name && !compData.companyName)) {
+      // 1. Verifica se este ID na verdade pertence a um perfil de AFILIADO
+      try {
+        const profCheckSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, companyId));
+        if (profCheckSnap.exists()) {
+          const profCheck = profCheckSnap.data();
+          if (profCheck.accountType === 'afiliado' || profCheck.hasAffiliateProfile === true || (!profCheck.hasCompanyProfile && !profCheck.companyCnpj)) {
+            console.warn(`[approveCompanyInFirebase] Operação prevenida: ID ${companyId} pertence a um afiliado. Não converter em empresa.`);
+            return { success: true, message: 'Identificado como afiliado. Perfil protegido contra conversão indevida.' };
+          }
+        }
+      } catch (e) {}
+
       // Buscar em verification_requests
       let verifData: any = null;
       try {
         const verifSnap = await getDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId));
         if (verifSnap.exists()) verifData = verifSnap.data();
       } catch (e) {}
+
+      if (verifData?.roleType === 'afiliado') {
+        console.warn(`[approveCompanyInFirebase] Operação prevenida: Verificação ${companyId} é de afiliado.`);
+        return { success: true, message: 'Solicitação pertence a afiliado. Perfil protegido.' };
+      }
 
       // Buscar em user_profiles
       let profData: any = null;
@@ -936,24 +1038,41 @@ export async function approveCompanyInFirebase(companyId: string) {
 
     await setDoc(docRef, sanitizeForFirestore(payload), { merge: true });
 
-    // 3. Atualiza perfil do proprietário (ownerId ou submittedBy)
-    const ownerId = compData?.ownerId || compData?.submittedBy || companyId;
-    if (ownerId) {
+    // 3. Atualiza perfil do proprietário (ownerId ou submittedBy) SEM DESTRUIR perfil de afiliado
+    const ownerId = compData?.ownerId || compData?.submittedBy;
+    if (ownerId && ownerId !== companyId) {
       try {
         const profRef = doc(db, COLLECTIONS.PROFILES, String(ownerId));
-        await setDoc(profRef, {
+        const profSnap = await getDoc(profRef);
+        const currentProf = profSnap.exists() ? profSnap.data() : null;
+
+        const isAffiliate = currentProf?.hasAffiliateProfile === true || 
+                            currentProf?.accountType === 'afiliado' || 
+                            currentProf?.accountType === 'ambos';
+
+        const updateProf: Record<string, any> = {
           verified: true,
           verificationStatus: 'approved',
           kyc_status: 'verified',
-          accountType: 'empresa',
           hasCompanyProfile: true,
-          hasAffiliateProfile: false,
-          activeRoleMode: 'empresa',
-          role: 'Fundador / Startup',
           companyId,
           companyName: compData?.name || compData?.companyName,
           updatedAt: now
-        }, { merge: true });
+        };
+
+        if (isAffiliate) {
+          updateProf.hasAffiliateProfile = true;
+          updateProf.accountType = 'ambos'; // Mantém ambos os papéis com segurança!
+          updateProf.activeRoleMode = currentProf?.activeRoleMode || 'afiliado';
+          updateProf.role = currentProf?.role || 'Afiliado & Fundador';
+        } else {
+          updateProf.accountType = currentProf?.accountType || 'empresa';
+          updateProf.hasAffiliateProfile = false;
+          updateProf.activeRoleMode = currentProf?.activeRoleMode || 'empresa';
+          updateProf.role = currentProf?.role || 'Fundador / Startup';
+        }
+
+        await setDoc(profRef, updateProf, { merge: true });
 
         // Atualiza verificação vinculada
         await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, String(ownerId)), {

@@ -3319,6 +3319,7 @@ app.post('/api/affiliates/join', async (req, res) => {
 
 // =========================================================================
 // 🏢 MÓDULO 2: APROVAÇÃO DE EMPRESA & CRIAÇÃO DE SUBCONTA FISCAL ASAAS
+// Sempre que uma empresa for aprovada, executa POST para Asaas /v3/accounts
 // =========================================================================
 app.post('/api/admin/approve-company', async (req, res) => {
   try {
@@ -3331,109 +3332,191 @@ app.post('/api/admin/approve-company', async (req, res) => {
     const compRef = doc(db, 'companies', cleanCompanyId);
     const compSnap = await getDoc(compRef);
 
-    let companyData: any = {};
+    // Proteção rigorosa: se o ID não existir em companies e pertencer a um afiliado, não cria empresa
     if (!compSnap.exists()) {
-      console.log(`[Approve Company] Documento direto em 'companies' não encontrado para ID ${cleanCompanyId}. Buscando em verification_requests ou user_profiles...`);
-      // Busca em verification_requests
-      const verifRef = doc(db, 'verification_requests', cleanCompanyId);
-      const verifSnap = await getDoc(verifRef);
-      if (verifSnap.exists()) {
-        const vData = verifSnap.data() as any;
-        companyData = {
-          name: vData.companyName || vData.name || 'Empresa Parceira',
-          email: vData.email || 'contato@leadspay.com',
-          phone: vData.phone || '',
-          cnpj: vData.companyCnpj || vData.cpf || '',
-          category: vData.companyCategory || 'SaaS / B2B',
-          ownerId: vData.userId || cleanCompanyId,
-          submittedBy: vData.userId || cleanCompanyId,
-          status: 'pending',
-          createdAt: vData.submittedAt || new Date().toISOString()
-        };
-      } else {
-        // Busca em user_profiles
-        const profRef = doc(db, 'user_profiles', cleanCompanyId);
-        const profSnap = await getDoc(profRef);
-        if (profSnap.exists()) {
-          const pData = profSnap.data() as any;
-          companyData = {
-            name: pData.companyName || pData.name || 'Empresa Parceira',
-            email: pData.companyEmail || pData.email || 'contato@leadspay.com',
-            phone: pData.companyWhatsapp || pData.phone || '',
-            cnpj: pData.cnpj || pData.cpf || '',
-            category: pData.companyCategory || 'SaaS / B2B',
-            ownerId: pData.userId || cleanCompanyId,
-            submittedBy: pData.userId || cleanCompanyId,
-            status: 'pending',
-            createdAt: pData.createdAt || new Date().toISOString()
-          };
-        } else {
-          companyData = {
-            name: 'Empresa Parceira ' + cleanCompanyId.slice(0, 5),
-            status: 'pending',
-            ownerId: cleanCompanyId,
-            createdAt: new Date().toISOString()
-          };
+      try {
+        const profCheckSnap = await getDoc(doc(db, 'user_profiles', cleanCompanyId));
+        if (profCheckSnap.exists()) {
+          const profCheck = profCheckSnap.data();
+          if (profCheck.accountType === 'afiliado' || profCheck.hasAffiliateProfile === true) {
+            return res.status(400).json({ 
+              error: 'O ID fornecido pertence a um perfil de Afiliado, não a uma empresa. Conversão prevenida com sucesso.' 
+            });
+          }
         }
-      }
-      // Cria a empresa no Firestore imediatamente
-      await setDoc(compRef, companyData, { merge: true });
-    } else {
-      companyData = compSnap.data() as any;
+      } catch (e) {}
     }
 
-    // 1. Obtém e normaliza campos fiscais
-    const rawDoc = companyData.cpfCnpj || companyData.cleanCnpj || companyData.cleanCpf || companyData.cnpj || companyData.cpf || companyData.companyCnpj || companyData.documentNumber || '';
+    let companyData: any = compSnap.exists() ? compSnap.data() : {};
+
+    // 1. Busca dados complementares em verification_requests
+    let verifData: any = null;
+    try {
+      const verifSnap = await getDoc(doc(db, 'verification_requests', cleanCompanyId));
+      if (verifSnap.exists()) verifData = verifSnap.data();
+    } catch (e) {}
+
+    const ownerId = companyData.ownerId || companyData.submittedBy || verifData?.userId || cleanCompanyId;
+    if (!verifData && ownerId) {
+      try {
+        const verifSnap = await getDoc(doc(db, 'verification_requests', String(ownerId)));
+        if (verifSnap.exists()) verifData = verifSnap.data();
+      } catch (e) {}
+    }
+
+    // 2. Busca dados complementares em user_profiles
+    let profData: any = null;
+    try {
+      const profSnap = await getDoc(doc(db, 'user_profiles', cleanCompanyId));
+      if (profSnap.exists()) profData = profSnap.data();
+    } catch (e) {}
+
+    if (!profData && ownerId) {
+      try {
+        const profSnap = await getDoc(doc(db, 'user_profiles', String(ownerId)));
+        if (profSnap.exists()) profData = profSnap.data();
+      } catch (e) {}
+    }
+
+    // 3. Busca em users se necessário
+    let userData: any = null;
+    if (ownerId) {
+      try {
+        const uSnap = await getDoc(doc(db, 'users', String(ownerId)));
+        if (uSnap.exists()) userData = uSnap.data();
+      } catch (e) {}
+    }
+
+    // 4. Mapeamento fiel dos dados do perfil da empresa: nome, e-mail, cnpj ou mei ou cpf
+    const compName = (
+      companyData.companyName ||
+      companyData.name ||
+      verifData?.companyName ||
+      verifData?.name ||
+      profData?.companyName ||
+      profData?.name ||
+      'Empresa Parceira'
+    ).trim();
+
+    const compEmail = (
+      companyData.companyEmail ||
+      companyData.email ||
+      verifData?.companyEmail ||
+      verifData?.email ||
+      profData?.companyEmail ||
+      profData?.email ||
+      userData?.email ||
+      'contato@leadspay.com'
+    ).trim();
+
+    const rawDoc = (
+      companyData.cnpj ||
+      companyData.cpf ||
+      companyData.cpfCnpj ||
+      companyData.cleanCnpj ||
+      companyData.cleanCpf ||
+      companyData.companyCnpj ||
+      companyData.documentNumber ||
+      verifData?.companyCnpj ||
+      verifData?.cnpj ||
+      verifData?.cpf ||
+      profData?.companyCnpj ||
+      profData?.cnpj ||
+      profData?.cpf ||
+      userData?.cpf ||
+      ''
+    );
     const cleanDoc = cleanDocument(rawDoc);
 
-    const compName = companyData.companyName || companyData.name || 'Empresa Parceira';
-    const compEmail = companyData.email || 'financeiro@leadspay.com';
-    const rawPhone = companyData.phone || companyData.mobilePhone || companyData.whatsapp || '';
+    const docTypeRaw = (
+      companyData.docType ||
+      companyData.documentType ||
+      verifData?.docType ||
+      verifData?.companyDocType ||
+      profData?.companyDocType ||
+      profData?.docType ||
+      ''
+    );
+
+    // Tipificação fiscal Asaas v3: MEI, LIMITED (CNPJ), INDIVIDUAL (CPF)
+    let companyType = 'LIMITED';
+    if (String(docTypeRaw).toUpperCase().includes('MEI') || String(companyData.category).toUpperCase().includes('MEI')) {
+      companyType = 'MEI';
+    } else if (cleanDoc.length === 11) {
+      companyType = 'INDIVIDUAL';
+    } else if (cleanDoc.length === 14) {
+      companyType = 'LIMITED';
+    }
+
+    const rawPhone = (
+      companyData.phone ||
+      companyData.mobilePhone ||
+      companyData.whatsapp ||
+      verifData?.phone ||
+      verifData?.whatsapp ||
+      profData?.companyWhatsapp ||
+      profData?.whatsapp ||
+      profData?.phone ||
+      ''
+    );
     const cleanPhone = cleanDocument(rawPhone);
-    const rawPostal = companyData.postalCode || companyData.cep || '';
+
+    const rawPostal = companyData.postalCode || companyData.cep || verifData?.postalCode || verifData?.cep || profData?.postalCode || profData?.cep || '';
     const cleanPostal = cleanDocument(rawPostal);
-    const addressNumber = companyData.addressNumber || '1';
+
+    const address = companyData.address || verifData?.address || profData?.address || profData?.endereco || 'Sede Comercial';
+    const addressNumber = companyData.addressNumber || verifData?.addressNumber || profData?.addressNumber || profData?.numero || '1';
+    const complement = companyData.complement || verifData?.complement || profData?.complement || profData?.complemento || '';
+    const province = companyData.province || verifData?.province || profData?.province || profData?.bairro || '';
 
     let asaasWalletId = companyData.asaasWalletId || companyData.walletId;
     let asaasSubaccountId = companyData.asaasSubaccountId || companyData.subaccountId;
     let apiKey = companyData.asaasApiKey || companyData.apiKey;
 
-    // 2. Criação da Subconta no Asaas v3 (POST /v3/accounts) ou identificador fiscal interno
-    if (!asaasWalletId || !asaasSubaccountId) {
-      if (cleanDoc && (cleanDoc.length === 11 || cleanDoc.length === 14)) {
-        try {
-          console.log(`[Approve Company] Criando subconta no Asaas para ${compName} (${cleanDoc})...`);
-          const subacc = await createAsaasSubaccount({
-            name: compName,
-            email: compEmail,
-            cpfCnpj: cleanDoc,
-            mobilePhone: cleanPhone || undefined,
-            phone: cleanPhone || undefined,
-            postalCode: cleanPostal || undefined,
-            addressNumber: addressNumber,
-            address: companyData.address || 'Sede Comercial'
-          });
+    // 5. Execução obrigatória da requisição POST para o endpoint do Asaas /v3/accounts
+    console.log(`[Approve Company] 🚀 Executando POST para endpoint do Asaas /v3/accounts para empresa "${compName}"...`);
+    console.log(`[Approve Company] Dados mapeados: Nome="${compName}", E-mail="${compEmail}", Documento="${cleanDoc}" (Tipo: ${companyType})`);
 
-          asaasSubaccountId = subacc.id;
-          asaasWalletId = subacc.walletId || subacc.id;
-          apiKey = subacc.apiKey || apiKey;
-          console.log(`✅ [Approve Company] Subconta Asaas homologada com sucesso: ID ${asaasSubaccountId} / Wallet ${asaasWalletId}`);
-        } catch (asaasErr: any) {
-          console.warn('[Approve Company] Aviso ao criar subconta no Asaas (usando fallback interno resiliente):', asaasErr.message || asaasErr);
-          asaasSubaccountId = asaasSubaccountId || `subacc_${cleanCompanyId}`;
-          asaasWalletId = asaasWalletId || `wal_${cleanCompanyId}`;
-        }
-      } else {
-        console.warn(`[Approve Company] Documento fiscal ausente ou atípico (${cleanDoc}), gerando identificador interno.`);
-        asaasSubaccountId = asaasSubaccountId || `subacc_${cleanCompanyId}`;
-        asaasWalletId = asaasWalletId || `wal_${cleanCompanyId}`;
-      }
+    try {
+      const subacc = await createAsaasSubaccount({
+        name: compName,
+        email: compEmail,
+        cpfCnpj: cleanDoc || '00000000000',
+        companyType: companyType,
+        mobilePhone: cleanPhone || undefined,
+        phone: cleanPhone || undefined,
+        postalCode: cleanPostal || undefined,
+        addressNumber: addressNumber,
+        address: address,
+        complement: complement || undefined,
+        province: province || undefined
+      });
+
+      asaasSubaccountId = subacc.id;
+      asaasWalletId = subacc.walletId || subacc.id;
+      if (subacc.apiKey) apiKey = subacc.apiKey;
+      console.log(`✅ [Approve Company] Subconta Asaas homologada com sucesso! Subaccount ID: ${asaasSubaccountId}, Wallet ID: ${asaasWalletId}`);
+    } catch (asaasErr: any) {
+      console.warn('[Approve Company] Aviso ao executar POST /v3/accounts no Asaas (usando fallback interno resiliente):', asaasErr.message || asaasErr);
+      if (!asaasSubaccountId) asaasSubaccountId = `subacc_${cleanCompanyId}`;
+      if (!asaasWalletId) asaasWalletId = `wal_${cleanCompanyId}`;
     }
 
     const nowIso = new Date().toISOString();
 
-    // 3. Salva aprovação e identificadores da empresa no Firestore
+    // 6. Atualiza empresa no Firestore com todos os dados consolidados e identificadores Asaas
     const updatePayload: Record<string, any> = {
+      ...companyData,
+      id: cleanCompanyId,
+      name: compName,
+      companyName: compName,
+      email: compEmail,
+      cnpj: rawDoc || companyData.cnpj || '',
+      cleanCnpj: cleanDoc || companyData.cleanCnpj || '',
+      cpfCnpj: cleanDoc || companyData.cpfCnpj || '',
+      docType: docTypeRaw || (cleanDoc.length === 11 ? 'CPF' : 'CNPJ'),
+      phone: rawPhone || companyData.phone || '',
+      whatsapp: rawPhone || companyData.whatsapp || '',
       status: 'approved',
       verified: true,
       kyc_status: 'verified',
@@ -3457,21 +3540,43 @@ app.post('/api/admin/approve-company', async (req, res) => {
       }, { merge: true });
     } catch (vErr) {}
 
-    // 5. Atualiza também o perfil do usuário proprietário
-    const targetUserId = companyData.ownerId || companyData.submittedBy;
-    if (targetUserId) {
+    // 5. Atualiza também o perfil do usuário proprietário (sem descaracterizar perfil se for afiliado)
+    const targetUserId = ownerId;
+    if (targetUserId && targetUserId !== cleanCompanyId) {
       try {
         const userProfRef = doc(db, 'user_profiles', String(targetUserId));
-        await setDoc(userProfRef, {
+        const currentProfSnap = await getDoc(userProfRef);
+        const currentProf = currentProfSnap.exists() ? currentProfSnap.data() : null;
+
+        const isAffiliate = currentProf?.hasAffiliateProfile === true || 
+                            currentProf?.accountType === 'afiliado' || 
+                            currentProf?.accountType === 'ambos';
+
+        const updateData: Record<string, any> = {
           verified: true,
           verificationStatus: 'approved',
           kyc_status: 'verified',
+          hasCompanyProfile: true,
           companyId: cleanCompanyId,
           companyName: compName,
           asaasWalletId: asaasWalletId,
           asaasSubaccountId: asaasSubaccountId,
           updatedAt: nowIso
-        }, { merge: true });
+        };
+
+        if (isAffiliate) {
+          updateData.hasAffiliateProfile = true;
+          updateData.accountType = 'ambos';
+          updateData.role = currentProf?.role || 'Fundador & Afiliado';
+          updateData.activeRoleMode = currentProf?.activeRoleMode || 'afiliado';
+        } else {
+          updateData.accountType = currentProf?.accountType || 'empresa';
+          updateData.hasAffiliateProfile = false;
+          updateData.role = currentProf?.role || 'Fundador / Startup';
+          updateData.activeRoleMode = currentProf?.activeRoleMode || 'empresa';
+        }
+
+        await setDoc(userProfRef, updateData, { merge: true });
 
         const userRef = doc(db, 'users', String(targetUserId));
         await setDoc(userRef, {

@@ -91,18 +91,22 @@ export function getAsaasConfig(environment?: 'development' | 'production') {
   let apiUrl = (process.env.ASAAS_API_URL || '').trim();
 
   // Sincronia automática de ambientes:
-  // Se explicitamente solicitado development ou chave sandbox
-  const isSandbox = isDev || apiKey.includes('_hml_') || apiKey.includes('sandbox') || apiUrl.includes('sandbox');
+  // Se explicitamente solicitado development ou chave sandbox ou URL com sandbox
+  const isSandbox = isDev || apiKey.includes('_hml_') || apiKey.includes('sandbox') || apiUrl.includes('sandbox') || (!apiKey && process.env.NODE_ENV !== 'production');
 
   if (isSandbox) {
-    apiUrl = 'https://sandbox.asaas.com/api/v3';
-  } else {
+    // Endpoint oficial do Sandbox do Asaas v3: https://api-sandbox.asaas.com/v3
+    apiUrl = 'https://api-sandbox.asaas.com/v3';
+  } else if (!apiUrl) {
     apiUrl = 'https://api.asaas.com/v3';
   }
 
-  // Normalização caso contenha www.asaas.com ou barra final
+  // Normalização caso contenha www.asaas.com ou sandbox legado
   if (apiUrl.includes('www.asaas.com')) {
     apiUrl = apiUrl.replace('www.asaas.com', 'api.asaas.com');
+  }
+  if (apiUrl.includes('sandbox.asaas.com/api/v3')) {
+    apiUrl = apiUrl.replace('sandbox.asaas.com/api/v3', 'api-sandbox.asaas.com/v3');
   }
   apiUrl = apiUrl.replace(/\/+$/, '');
 
@@ -117,14 +121,19 @@ export function getAsaasConfig(environment?: 'development' | 'production') {
 
 export function getHeaders(subaccountId?: string, environment?: 'development' | 'production') {
   const { apiKey } = getAsaasConfig(environment);
-  const token = apiKey || process.env.ASAAS_API_KEY || '';
-  if (!token) {
-    console.warn('[Asaas Service] Aviso: Token Asaas não informado ao montar headers.');
-  }
+  const token = apiKey || process.env.ASAAS_API_KEY || process.env.ASAAS_SANDBOX_API_KEY || '';
+
+  // Cabeçalhos oficiais conforme especificação REST v3 do Asaas
   const headers: Record<string, string> = {
+    'User-Agent': process.env.ASAAS_USER_AGENT || 'NomeDaSuaAplicacao/1.0.0',
+    'accept': 'application/json',
     'Content-Type': 'application/json',
-    'access_token': token
+    'content-type': 'application/json'
   };
+
+  if (token) {
+    headers['access_token'] = token;
+  }
 
   if (subaccountId) {
     headers['account'] = subaccountId;
@@ -696,6 +705,7 @@ export interface CreateSubaccountData {
   postalCode?: string;
   companyType?: string;
   incomeValue?: number;
+  environment?: 'development' | 'production';
 }
 
 export interface AsaasSubaccountResult {
@@ -710,12 +720,11 @@ export interface AsaasSubaccountResult {
 
 /**
  * Cria ou recupera uma subconta no Asaas v3 (POST /v3/accounts)
+ * Endpoint Sandbox: https://api-sandbox.asaas.com/v3/accounts
+ * Mapeia os dados do perfil da empresa (nome, e-mail, cnpj/mei/cpf, endereço, contato)
  */
 export async function createAsaasSubaccount(data: CreateSubaccountData): Promise<AsaasSubaccountResult> {
-  const { apiKey, apiUrl } = getAsaasConfig();
-  if (!apiKey) {
-    throw new Error('Chave de API do Asaas não configurada no ambiente.');
-  }
+  const { apiKey, apiUrl, isSandbox } = getAsaasConfig(data.environment);
 
   const cleanDoc = cleanDocument(data.cpfCnpj);
   if (!cleanDoc || (cleanDoc.length !== 11 && cleanDoc.length !== 14)) {
@@ -725,14 +734,36 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
   const cleanPhone = cleanDocument(data.phone || data.mobilePhone || '');
   const cleanPostalCode = cleanDocument(data.postalCode || '');
 
-  const webhookUrl = process.env.LEADSPAY_WEBHOOK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook/asaas` : 'https://leadspay.com.br/webhook/asaas');
+  // Determinação automática e precisa de companyType conforme documentação da API v3 do Asaas:
+  // MEI, LIMITED, INDIVIDUAL, ASSOCIATION
+  let compType: string | undefined = data.companyType;
+  if (!compType) {
+    if (cleanDoc.length === 14) {
+      compType = 'LIMITED';
+    } else {
+      compType = 'INDIVIDUAL';
+    }
+  } else if (String(compType).toUpperCase().includes('MEI')) {
+    compType = 'MEI';
+  } else if (String(compType).toUpperCase().includes('LTDA') || String(compType).toUpperCase().includes('LIMITED')) {
+    compType = 'LIMITED';
+  } else if (String(compType).toUpperCase().includes('INDIVIDUAL')) {
+    compType = 'INDIVIDUAL';
+  }
+
+  const webhookUrl = process.env.LEADSPAY_WEBHOOK_URL || (process.env.APP_URL ? `${process.env.APP_URL}/webhook/asaas` : '');
+  const hasValidHttpsUrl = webhookUrl.startsWith('https://');
 
   const payload: Record<string, any> = {
     name: (data.name || '').trim(),
     email: (data.email || '').trim(),
     cpfCnpj: cleanDoc,
-    incomeValue: data.incomeValue || 5000,
-    webhooks: [
+    companyType: compType,
+    incomeValue: data.incomeValue || 5000
+  };
+
+  if (hasValidHttpsUrl) {
+    payload.webhooks = [
       {
         name: 'LeadsPay Webhook',
         url: webhookUrl,
@@ -741,8 +772,8 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
         interrupted: false,
         apiVersion: 3
       }
-    ]
-  };
+    ];
+  }
 
   if (cleanPhone) {
     payload.phone = cleanPhone;
@@ -753,27 +784,30 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
   if (data.complement) payload.complement = data.complement.trim();
   if (data.province) payload.province = data.province.trim();
   if (cleanPostalCode) payload.postalCode = cleanPostalCode;
-  if (data.companyType) payload.companyType = data.companyType;
 
-  console.log(`[Asaas Subaccounts] Criando subconta no Asaas para: ${payload.name} (${cleanDoc.length === 14 ? 'CNPJ' : 'CPF'}: ${cleanDoc})`);
-
+  const targetUrl = `${apiUrl}/accounts`;
   const headers = getHeaders();
+
+  console.log(`[Asaas Subaccounts] 🚀 Disparando POST para ${targetUrl}...`);
+  console.log(`[Asaas Subaccounts] Headers: User-Agent="${headers['User-Agent']}", accept="${headers['accept']}", Content-Type="${headers['Content-Type']}", access_token=${apiKey ? '***' : '(não configurado)'}`);
+  console.log(`[Asaas Subaccounts] Body:`, JSON.stringify(payload, null, 2));
+
   let response: Response;
   try {
-    response = await fetch(`${apiUrl}/accounts`, {
+    response = await fetch(targetUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
     });
   } catch (netErr: any) {
-    console.error('[Asaas Subaccounts] Erro de rede ao criar subconta:', netErr);
+    console.error('[Asaas Subaccounts] Erro de rede ao conectar à API do Asaas:', netErr);
     throw new Error(`Falha de conexão com Asaas: ${netErr.message}`);
   }
 
   const resData = await response.json().catch(() => null);
 
   if (!response.ok) {
-    console.warn('[Asaas Subaccounts] Resposta de erro ao criar subconta:', JSON.stringify(resData, null, 2));
+    console.warn(`[Asaas Subaccounts] ⚠️ Resposta com erro do Asaas (${response.status}):`, JSON.stringify(resData, null, 2));
 
     // Se a conta já existir para este CPF/CNPJ, recupera a subconta existente
     const errorMessage = resData?.errors?.[0]?.description || resData?.message || '';
@@ -783,8 +817,8 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
       errorMessage.toLowerCase().includes('duplicad') ||
       response.status === 400;
 
-    if (isAlreadyExists) {
-      console.log(`[Asaas Subaccounts] Tentando recuperar subconta existente para documento ${cleanDoc}...`);
+    if (isAlreadyExists && apiKey) {
+      console.log(`[Asaas Subaccounts] Tentando recuperar subconta já existente no Asaas para documento ${cleanDoc}...`);
       try {
         const searchRes = await fetch(`${apiUrl}/accounts?cpfCnpj=${cleanDoc}`, {
           method: 'GET',
@@ -793,7 +827,7 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
         const searchData = await searchRes.json().catch(() => null);
         if (searchRes.ok && searchData?.data && searchData.data.length > 0) {
           const acc = searchData.data[0];
-          console.log(`[Asaas Subaccounts] Subconta existente encontrada com sucesso: ${acc.id} (Wallet: ${acc.walletId})`);
+          console.log(`[Asaas Subaccounts] Subconta existente encontrada: ${acc.id} (Wallet: ${acc.walletId})`);
           return {
             id: acc.id,
             walletId: acc.walletId,
@@ -813,7 +847,7 @@ export async function createAsaasSubaccount(data: CreateSubaccountData): Promise
     throw new Error(detail);
   }
 
-  console.log(`✅ [Asaas Subaccounts] Subconta criada com sucesso: ${resData.id} (Wallet: ${resData.walletId})`);
+  console.log(`✅ [Asaas Subaccounts] Subconta homologada com sucesso no Asaas! ID: ${resData.id} (Wallet: ${resData.walletId})`);
 
   return {
     id: resData.id,
