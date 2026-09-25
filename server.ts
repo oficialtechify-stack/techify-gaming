@@ -3639,6 +3639,113 @@ app.post('/api/admin/approve-company', async (req, res) => {
 });
 
 // =========================================================================
+// ❌ MÓDULO 2.05: RECUSAR / SUSPENDER / SOLICITAR AJUSTE (USUÁRIO OU EMPRESA)
+// =========================================================================
+app.post('/api/admin/reject-entity', async (req, res) => {
+  try {
+    const { id, type, reason } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'ID da entidade é obrigatório.' });
+    }
+
+    const cleanId = String(id).trim();
+    const resolvedReason = String(reason || 'Dados cadastrais necessitam de ajuste ou confirmação.').trim();
+    const nowIso = new Date().toISOString();
+
+    console.log(`[Reject Entity] 🛑 Processando recusa para ${type || 'entidade'} "${cleanId}" com motivo: "${resolvedReason}"`);
+
+    if (type === 'company' || cleanId.startsWith('comp-')) {
+      // 1. Atualiza documento da empresa em companies
+      const compRef = doc(db, 'companies', cleanId);
+      const compSnap = await getDoc(compRef);
+      const compData = compSnap.exists() ? compSnap.data() : {};
+      const ownerId = compData.ownerId || compData.submittedBy;
+
+      await setDoc(compRef, {
+        status: 'rejected',
+        verified: false,
+        rejectionReason: resolvedReason,
+        reviewedAt: nowIso
+      }, { merge: true });
+
+      // 2. Atualiza verificação vinculada
+      try {
+        await setDoc(doc(db, 'verification_requests', cleanId), {
+          status: 'rejected',
+          verified: false,
+          rejectionReason: resolvedReason,
+          reviewedAt: nowIso
+        }, { merge: true });
+      } catch (e) {}
+
+      // 3. Atualiza perfil do proprietário se houver
+      if (ownerId && ownerId !== cleanId) {
+        try {
+          await setDoc(doc(db, 'user_profiles', String(ownerId)), {
+            verificationStatus: 'rejected',
+            rejectionReason: resolvedReason,
+            updatedAt: nowIso
+          }, { merge: true });
+
+          await setDoc(doc(db, 'verification_requests', String(ownerId)), {
+            status: 'rejected',
+            verified: false,
+            rejectionReason: resolvedReason,
+            reviewedAt: nowIso
+          }, { merge: true });
+        } catch (e) {}
+      }
+
+      return res.json({ 
+        success: true, 
+        message: `Empresa "${compData.name || cleanId}" recusada/suspensa com sucesso.`,
+        id: cleanId 
+      });
+    } else {
+      // É usuário / afiliado
+      const profRef = doc(db, 'user_profiles', cleanId);
+      await setDoc(profRef, {
+        verified: false,
+        verificationStatus: 'rejected',
+        kyc_status: 'rejected',
+        verificationRejectionReason: resolvedReason,
+        rejectionReason: resolvedReason,
+        updatedAt: nowIso
+      }, { merge: true });
+
+      try {
+        await setDoc(doc(db, 'users', cleanId), {
+          verified: false,
+          verificationStatus: 'rejected',
+          kyc_status: 'rejected',
+          updatedAt: nowIso
+        }, { merge: true });
+      } catch (e) {}
+
+      try {
+        await setDoc(doc(db, 'verification_requests', cleanId), {
+          status: 'rejected',
+          verified: false,
+          kyc_status: 'rejected',
+          rejectionReason: resolvedReason,
+          reviewedAt: nowIso,
+          updatedAt: nowIso
+        }, { merge: true });
+      } catch (e) {}
+
+      return res.json({ 
+        success: true, 
+        message: `Validação do usuário recusada com sucesso.`,
+        id: cleanId 
+      });
+    }
+  } catch (err: any) {
+    console.error('Erro na rota /api/admin/reject-entity:', err);
+    return res.status(500).json({ error: err.message || 'Erro interno ao recusar entidade.' });
+  }
+});
+
+// =========================================================================
 // 🚫 MÓDULO 2.1: BANIR / SUSPENDER ENTIDADE (USUÁRIO OU EMPRESA)
 // =========================================================================
 app.post('/api/admin/ban-entity', async (req, res) => {

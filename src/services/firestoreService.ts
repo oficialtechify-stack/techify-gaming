@@ -458,6 +458,20 @@ export async function approveVerificationInFirebase(userId: string) {
 export async function rejectVerificationInFirebase(userId: string, reason: string = 'Dados cadastrais necessitam de correção') {
   const now = new Date().toISOString();
 
+  // 1. Aciona endpoint seguro do backend para garantir execução com privilégio administrativo
+  try {
+    const res = await fetch('/api/admin/reject-entity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, type: 'user', reason })
+    });
+    if (res.ok) {
+      console.log('[rejectVerificationInFirebase] Sincronizado via backend.');
+    }
+  } catch (apiErr) {
+    console.warn('[rejectVerificationInFirebase] Aviso na chamada do backend:', apiErr);
+  }
+
   let pData: any = {};
   try {
     const profSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, userId));
@@ -1107,6 +1121,20 @@ export async function approveCompanyInFirebase(companyId: string) {
 export async function rejectCompanyInFirebase(companyId: string, reason: string = 'Dados da empresa necessitam de revisão') {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
   const now = new Date().toISOString();
+
+  // 1. Aciona endpoint seguro do backend para garantir execução com privilégio administrativo
+  try {
+    const res = await fetch('/api/admin/reject-entity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: companyId, type: 'company', reason })
+    });
+    if (res.ok) {
+      console.log('[rejectCompanyInFirebase] Sincronizado com sucesso via backend.');
+    }
+  } catch (apiErr) {
+    console.warn('[rejectCompanyInFirebase] Aviso na chamada do backend:', apiErr);
+  }
 
   let ownerId: string | null = null;
   try {

@@ -130,11 +130,13 @@ export const DatabaseManagerView: React.FC = () => {
     target: { id: string; name: string; email?: string; type: 'user' | 'company' } | null;
     reason: string;
     isProcessing: boolean;
+    modalError?: string | null;
   }>({
     isOpen: false,
     target: null,
     reason: 'Dados cadastrais necessitam de ajuste ou confirmação.',
-    isProcessing: false
+    isProcessing: false,
+    modalError: null
   });
 
   // Rastreamento em memória de IDs excluídos e recém-aprovados para garantir sincronização perfeita
@@ -280,7 +282,8 @@ export const DatabaseManagerView: React.FC = () => {
       reason: target.type === 'company'
         ? 'Dados cadastrais ou documentação da empresa necessitam de ajuste.'
         : 'Dados cadastrais necessitam de ajuste ou confirmação.',
-      isProcessing: false
+      isProcessing: false,
+      modalError: null
     });
   };
 
@@ -290,7 +293,7 @@ export const DatabaseManagerView: React.FC = () => {
     const { id, name, type } = rejectModal.target;
     const reason = rejectModal.reason.trim() || 'Dados cadastrais necessitam de ajuste ou confirmação.';
 
-    setRejectModal(prev => ({ ...prev, isProcessing: true }));
+    setRejectModal(prev => ({ ...prev, isProcessing: true, modalError: null }));
     setProcessingId(id);
     try {
       if (type === 'user') {
@@ -310,11 +313,13 @@ export const DatabaseManagerView: React.FC = () => {
       }
 
       setTimeout(() => setStatusMessage(''), 7000);
-      setRejectModal({ isOpen: false, target: null, reason: '', isProcessing: false });
+      setRejectModal({ isOpen: false, target: null, reason: '', isProcessing: false, modalError: null });
     } catch (err: any) {
-      setErrorMessage(`Erro ao recusar: ${err.message}`);
+      console.error('Erro ao recusar:', err);
+      const msg = err.message || 'Erro ao processar recusa.';
+      setErrorMessage(`Erro ao recusar: ${msg}`);
       setTimeout(() => setErrorMessage(''), 7000);
-      setRejectModal(prev => ({ ...prev, isProcessing: false }));
+      setRejectModal(prev => ({ ...prev, isProcessing: false, modalError: msg }));
     } finally {
       setProcessingId(null);
     }
@@ -2071,6 +2076,14 @@ export const DatabaseManagerView: React.FC = () => {
                 className="w-full px-3.5 py-2.5 bg-black/60 border border-rose-500/30 rounded-xl text-white text-xs focus:outline-none focus:border-rose-500 transition-colors placeholder:text-white/30 resize-none"
               />
             </div>
+
+            {/* Mensagem de Erro no Modal se houver */}
+            {rejectModal.modalError && (
+              <div className="p-3.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <AlertOctagon className="w-4 h-4 flex-shrink-0" />
+                <span>{rejectModal.modalError}</span>
+              </div>
+            )}
 
             {/* Ações */}
             <div className="flex items-center justify-end gap-3 pt-2">
