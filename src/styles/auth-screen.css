@@ -355,3 +355,158 @@
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Branded, image-led sign-in backdrop using the existing LeadsPay illustration. */
+.leadspay-auth-screen .auth-backdrop-art {
+  background-image:
+    linear-gradient(180deg, rgba(251, 252, 249, .48), rgba(246, 249, 243, .58)),
+    url('/leadspay-network-light.webp');
+  background-position: center, center;
+  background-repeat: no-repeat;
+  background-size: cover, cover;
+  opacity: .9;
+  pointer-events: none;
+}
+
+.leadspay-auth-screen[data-theme="dark"] .auth-backdrop-art {
+  background-image:
+    linear-gradient(180deg, rgba(13, 24, 18, .88), rgba(16, 30, 22, .82)),
+    url('/leadspay-network-light.webp');
+  opacity: .96;
+}
+
+.leadspay-auth-screen .auth-card-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.leadspay-auth-screen .auth-brand-mark {
+  display: block;
+  width: 42px;
+  height: 42px;
+  padding: 7px;
+  object-fit: contain;
+}
+
+.leadspay-auth-screen .auth-theme-toggle {
+  display: inline-flex;
+  min-width: 82px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--auth-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .88);
+  color: #526559;
+  font: 750 11px/1 "Manrope", sans-serif;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(.23,1,.32,1), color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.leadspay-auth-screen .auth-theme-toggle:hover {
+  border-color: #9acb7f;
+  background: #f1f8ed;
+  color: #3f8830;
+  transform: translateY(-1px);
+}
+
+.leadspay-auth-screen .auth-theme-toggle:active { transform: scale(.97); }
+.leadspay-auth-screen .auth-theme-toggle:focus-visible { outline: 3px solid rgba(91, 166, 60, .55); outline-offset: 3px; }
+
+.leadspay-auth-screen .auth-network {
+  inset: 0;
+  z-index: -1;
+}
+
+.leadspay-auth-screen .auth-network svg {
+  opacity: .56;
+}
+
+.leadspay-auth-screen .auth-network path {
+  stroke: rgba(79, 143, 53, .28);
+  stroke-dasharray: 5 8;
+}
+
+.leadspay-auth-screen .auth-network-node {
+  min-height: 46px;
+  gap: 9px;
+  padding: 10px 15px;
+  border-color: rgba(255, 255, 255, .88);
+  background: rgba(255, 255, 255, .78);
+  box-shadow: 0 14px 34px rgba(28, 62, 41, .09), inset 0 1px rgba(255, 255, 255, .9);
+  color: #355340;
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+  letter-spacing: .01em;
+}
+
+.leadspay-auth-screen .auth-network-node::before { display: none; }
+.leadspay-auth-screen .auth-network-node svg { flex: 0 0 auto; color: #4c9637; }
+.leadspay-auth-screen .auth-network-node--1 { top: 21%; left: 8%; }
+.leadspay-auth-screen .auth-network-node--2 { top: 39%; left: 4%; }
+.leadspay-auth-screen .auth-network-node--3 { top: 60%; left: 10%; }
+.leadspay-auth-screen .auth-network-node--4 { top: 17%; right: 8%; }
+.leadspay-auth-screen .auth-network-node--5 { top: 40%; right: 4%; }
+.leadspay-auth-screen .auth-network-node--6 { top: 62%; right: 9%; }
+
+.leadspay-auth-screen[data-theme="dark"] {
+  --auth-ink: #edf4e9;
+  --auth-muted: #b2c0b5;
+  --auth-line: #35473a;
+  --auth-surface: #17251f;
+  --auth-field: #122018;
+  --auth-green: #8dd85e;
+  background:
+    radial-gradient(ellipse at 50% 112%, rgba(88, 145, 67, .3), transparent 46%),
+    linear-gradient(180deg, #111d17 0%, #14231a 58%, #1a2b1e 100%);
+  color: var(--auth-ink);
+}
+
+.leadspay-auth-screen[data-theme="dark"] .auth-card {
+  border-color: rgba(75, 100, 81, .72);
+  background: rgba(21, 34, 27, .97);
+  color: #edf4e9;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .34), 0 3px 12px rgba(0, 0, 0, .18);
+}
+
+.leadspay-auth-screen[data-theme="dark"] .auth-card h2,
+.leadspay-auth-screen[data-theme="dark"] .auth-card h3,
+.leadspay-auth-screen[data-theme="dark"] .auth-brand-name { color: #edf4e9 !important; }
+.leadspay-auth-screen[data-theme="dark"] .auth-brand-tagline { color: #afc0b0; }
+.leadspay-auth-screen[data-theme="dark"] .auth-card p,
+.leadspay-auth-screen[data-theme="dark"] .auth-card label:not(.flex) { color: #b8c6ba !important; }
+.leadspay-auth-screen[data-theme="dark"] .auth-card [class*="text-white"] { color: #b2c0b5 !important; }
+.leadspay-auth-screen[data-theme="dark"] .auth-card input:not([type="checkbox"]):not([type="file"]),
+.leadspay-auth-screen[data-theme="dark"] .auth-card select {
+  border-color: #35473a !important;
+  background: #122018 !important;
+  color: #edf4e9 !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card input:focus,
+.leadspay-auth-screen[data-theme="dark"] .auth-card select:focus { background: #182920 !important; }
+.leadspay-auth-screen[data-theme="dark"] .auth-role-switcher,
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-accordion,
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-security-note { background: #19281f !important; }
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-divider-label { background: #15221b; color: #9aaa9d !important; }
+.leadspay-auth-screen[data-theme="dark"] .auth-theme-toggle { border-color: #3b5140; background: #1c2d22; color: #d6e4d6; }
+.leadspay-auth-screen[data-theme="dark"] .auth-theme-toggle:hover { border-color: #83bd65; background: #233a29; color: #c1e7ae; }
+.leadspay-auth-screen[data-theme="dark"] .auth-close-button { border-color: #3b5140; background: rgba(28, 45, 34, .94); color: #d6e4d6; }
+.leadspay-auth-screen[data-theme="dark"] .auth-close-button:hover { background: #294232; color: #c1e7ae; }
+.leadspay-auth-screen[data-theme="dark"] .auth-network-node { border-color: rgba(120, 156, 125, .38); background: rgba(24, 43, 29, .78); color: #e0eee0; }
+.leadspay-auth-screen[data-theme="dark"] .auth-network-node svg { color: #a6df82; }
+
+@media (max-width: 900px) {
+  .leadspay-auth-screen .auth-network svg { opacity: .25; }
+}
+
+@media (max-width: 640px) {
+  .leadspay-auth-screen .auth-backdrop-art { background-position: center, 46% center; }
+  .leadspay-auth-screen .auth-card-topbar { gap: 10px; }
+  .leadspay-auth-screen .auth-theme-toggle { min-width: 76px; min-height: 38px; padding-inline: 10px; }
+}

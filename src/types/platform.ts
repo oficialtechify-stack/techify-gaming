@@ -398,6 +398,10 @@ export interface UserSellerProfile {
   verificationSubmittedAt?: string;
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
+  communicationPreferences?: {
+    inApp?: { enabled: boolean; updatedAt?: string; consentVersion?: string; source?: string };
+  };
+  inAppNotificationsEnabled?: boolean;
   updatedAt?: string;
   // Plano de Assinatura LeadsPay
   plan?: string;

@@ -1,0 +1,209 @@
+/* LeadsPay app workspace — a coherent fintech surface system for every dashboard tab. */
+.leadspay-platform {
+  --lp-page: #f5f8f4;
+  --lp-surface: #ffffff;
+  --lp-surface-soft: #f7faf6;
+  --lp-ink: #18382b;
+  --lp-muted: #63766b;
+  --lp-line: #e3eae2;
+  --lp-accent: #5b963b;
+  --lp-accent-soft: #e8f3df;
+  --lp-shadow: 0 12px 30px rgba(36, 63, 43, .055);
+  background: var(--lp-page);
+  color: var(--lp-ink);
+  font-family: "Manrope", "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+.leadspay-platform[data-theme="light"] {
+  background-color: var(--lp-page) !important;
+  color: var(--lp-ink) !important;
+  color-scheme: light;
+}
+
+.leadspay-platform[data-theme="light"] > aside {
+  background: #fff !important;
+  border-color: var(--lp-line) !important;
+  box-shadow: 6px 0 24px rgba(32, 57, 40, .035);
+}
+
+.leadspay-platform[data-theme="light"] header {
+  background-color: rgba(255, 255, 255, .92) !important;
+  color: var(--lp-ink) !important;
+  border-color: var(--lp-line) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-[#"] {
+  background-color: var(--lp-surface) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-white/"] {
+  background-color: #f2f6f1 !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-black/"]:not(.fixed) {
+  background-color: rgba(24, 56, 43, .08) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]"] {
+  background-color: #d9f0ca !important;
+  color: #25462d !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]/5"] { background-color: #f4f8f0 !important; }
+.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]/10"] { background-color: #edf5e8 !important; }
+.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]/15"] { background-color: #e8f3df !important; }
+.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]/20"] { background-color: #e1efd7 !important; }
+
+.leadspay-platform[data-theme="light"] [class*="bg-[#102419]"] {
+  background: #eaf4e4 !important;
+  color: #294c31 !important;
+  border-color: #c8dfbc !important;
+  box-shadow: 0 4px 12px rgba(60, 103, 47, .08) !important;
+}
+
+.leadspay-platform[data-theme="light"] button[aria-label^="Ativar tema"] {
+  background-color: #e9f1e6 !important;
+  border-color: #d5e1d2 !important;
+}
+
+.leadspay-platform[data-theme="light"] button[aria-label^="Ativar tema"] > div {
+  background-color: #ffffff !important;
+  color: #477b30 !important;
+  box-shadow: 0 1px 4px rgba(28, 54, 34, .16);
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-[#c8e217]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#c8e224]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#cbe327]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#cbe31c]"] {
+  background-color: #c9e8b8 !important;
+  color: #25462d !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-gradient-to-"] {
+  background-image: linear-gradient(125deg, #f7fbf4 0%, #eaf4e4 100%) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-emerald-"],
+.leadspay-platform[data-theme="light"] [class*="bg-green-"],
+.leadspay-platform[data-theme="light"] [class*="bg-rose-"],
+.leadspay-platform[data-theme="light"] [class*="bg-red-"],
+.leadspay-platform[data-theme="light"] [class*="bg-amber-"],
+.leadspay-platform[data-theme="light"] [class*="bg-indigo-"] {
+  color: #ffffff;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="text-white/90"],
+.leadspay-platform[data-theme="light"] [class~="text-white/80"],
+.leadspay-platform[data-theme="light"] [class~="text-white/70"],
+.leadspay-platform[data-theme="light"] [class~="text-white/60"],
+.leadspay-platform[data-theme="light"] [class~="text-white/50"] {
+  color: #53695b !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/40"],
+.leadspay-platform[data-theme="light"] [class~="text-white/30"],
+.leadspay-platform[data-theme="light"] [class~="text-white/20"] {
+  color: #738379 !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="text-[#D9F22A]"],
+.leadspay-platform[data-theme="light"] [class*="text-[#a3e635]"],
+.leadspay-platform[data-theme="light"] [class*="text-[#b5f617]"],
+.leadspay-platform[data-theme="light"] [class*="text-[#84CC16]"] {
+  color: #477b30 !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="border-white/"] {
+  border-color: #dfe8de !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="border-[#D9F22A]"] {
+  border-color: #b8d6a8 !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="divide-white/"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e7ede5 !important;
+}
+
+.leadspay-platform[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+.leadspay-platform[data-theme="light"] select,
+.leadspay-platform[data-theme="light"] textarea {
+  background-color: #fbfdfb !important;
+  color: #18382b !important;
+  border-color: #dbe5da !important;
+}
+
+.leadspay-platform[data-theme="light"] input::placeholder,
+.leadspay-platform[data-theme="light"] textarea::placeholder {
+  color: #819087 !important;
+}
+
+.leadspay-platform[data-theme="light"] table thead {
+  background: #f4f8f3 !important;
+  color: #53695b !important;
+}
+
+.leadspay-platform[data-theme="light"] table tbody tr:hover {
+  background: #f5f9f2 !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="shadow-"] {
+  --tw-shadow-color: rgba(34, 60, 40, .08) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="font-['Syne']"] {
+  font-family: "Manrope", "Plus Jakarta Sans", sans-serif !important;
+  letter-spacing: -.025em;
+}
+
+.leadspay-platform[data-theme="light"] button:not(:disabled) {
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .16s ease;
+}
+
+.leadspay-platform[data-theme="light"] button:active {
+  transform: scale(.985);
+}
+
+.leadspay-platform[data-theme="light"] :focus-visible {
+  outline: 2px solid #4f8435;
+  outline-offset: 2px;
+}
+
+.leadspay-platform[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #eef3ed;
+}
+
+.leadspay-platform[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #c5d4c3;
+}
+
+.leadspay-platform[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #84a977;
+}
+
+.leadspay-platform[data-theme="dark"] {
+  --lp-page: #050811;
+  --lp-surface: #080d1a;
+  --lp-surface-soft: #0b1322;
+  --lp-ink: #f8fafc;
+  --lp-muted: #94a3b8;
+  --lp-line: rgba(255,255,255,.1);
+  --lp-accent: #d9f22a;
+  --lp-accent-soft: rgba(217,242,42,.1);
+  --lp-shadow: 0 16px 42px rgba(0,0,0,.3);
+  background-color: #050811 !important;
+  color: #fff !important;
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leadspay-platform button,
+  .leadspay-platform [class*="animate-"] {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

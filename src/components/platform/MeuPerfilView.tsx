@@ -27,6 +27,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
+import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
 
 interface MeuPerfilViewProps {
   userProfile: UserSellerProfile;
@@ -1365,6 +1366,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         </div>
       </form>
+
+      <NotificationPreferencesPanel userProfile={userProfile} onSaveProfile={onSaveProfile} />
 
       {/* Floating Chat Support Widget */}
       <a

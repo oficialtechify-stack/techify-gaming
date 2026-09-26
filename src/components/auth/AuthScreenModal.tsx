@@ -23,7 +23,12 @@ import {
   X,
   Layers,
   Rocket,
-  Users
+  Users,
+  Moon,
+  Sun,
+  QrCode,
+  Network,
+  ChartNoAxesCombined
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -53,7 +58,7 @@ interface AuthScreenModalProps {
 // Leadspay mark shared with the public landing page
 const LeadsPayBrandLogo: React.FC = () => (
   <div className="auth-brand">
-    <span className="auth-brand-mark" aria-hidden="true">LP</span>
+    <img className="auth-brand-mark" src="/favicon.svg" alt="" />
     <span className="auth-brand-copy">
       <span className="auth-brand-name">LEADSPAY</span>
       <span className="auth-brand-tagline">PAYMENTS &amp; SPLIT</span>
@@ -92,6 +97,40 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
 
   // Active view: 'login' | 'register_affiliate' | 'register_company' | 'forgot_password'
   const [currentTab, setCurrentTab] = useState<AuthModalType>('login');
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      return typeof window !== 'undefined' && window.localStorage.getItem('leadspay-landing-theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const syncTheme = (event: Event) => {
+      const theme = (event as CustomEvent<'light' | 'dark'>).detail;
+      if (theme === 'light' || theme === 'dark') setIsDark(theme === 'dark');
+    };
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key === 'leadspay-landing-theme') setIsDark(event.newValue === 'dark');
+    };
+    window.addEventListener('leadspay-theme-change', syncTheme);
+    window.addEventListener('storage', syncStorage);
+    return () => {
+      window.removeEventListener('leadspay-theme-change', syncTheme);
+      window.removeEventListener('storage', syncStorage);
+    };
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = isDark ? 'light' : 'dark';
+    setIsDark(nextTheme === 'dark');
+    try {
+      window.localStorage.setItem('leadspay-landing-theme', nextTheme);
+    } catch {
+      // O tema continua alternável durante a sessão se o storage estiver indisponível.
+    }
+    window.dispatchEvent(new CustomEvent('leadspay-theme-change', { detail: nextTheme }));
+  };
 
   useEffect(() => {
     if (activeModal) {
@@ -384,7 +423,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   };
 
   return (
-    <div className="leadspay-auth-screen fixed inset-0 z-[60] overflow-y-auto flex items-center justify-center p-3 sm:p-6 lg:p-10" data-has-image={activeImageUrl ? 'true' : 'false'}>
+    <div className="leadspay-auth-screen fixed inset-0 z-[60] overflow-y-auto flex items-center justify-center p-3 sm:p-6 lg:p-10" data-has-image={activeImageUrl ? 'true' : 'false'} data-theme={isDark ? 'dark' : 'light'}>
       {/* 🖼️ IMAGEM REAL DE FUNDO DA TELA (FULLSCREEN COVER) */}
       {activeImageUrl ? (
         <div 
@@ -393,13 +432,15 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         />
       ) : null}
 
+      {!activeImageUrl && <div className="auth-backdrop-art fixed inset-0 -z-20" aria-hidden="true" />}
+
       {/* Véu claro preserva o contraste sem esconder a imagem customizada do administrador. */}
       <div 
         className="auth-overlay fixed inset-0 pointer-events-none transition-all duration-700 -z-10"
         style={{
           backgroundColor: activeImageUrl
             ? `rgba(2, 5, 12, ${(modalSettings.overlayDarkness ?? 78) / 100})`
-            : 'rgba(250, 252, 248, 0.08)'
+            : (isDark ? 'rgba(10, 18, 14, 0.35)' : 'rgba(250, 252, 248, 0.20)')
         }}
       />
 
@@ -414,12 +455,12 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
             <path d="M925 330 C730 330 650 335 500 350" />
             <path d="M875 505 C700 505 630 415 500 350" />
           </svg>
-          <span className="auth-network-node auth-network-node--1">SaaS</span>
-          <span className="auth-network-node auth-network-node--2">PIX</span>
-          <span className="auth-network-node auth-network-node--3">Afiliação</span>
-          <span className="auth-network-node auth-network-node--4">Pagamentos</span>
-          <span className="auth-network-node auth-network-node--5">Split automático</span>
-          <span className="auth-network-node auth-network-node--6">Comissões</span>
+          <span className="auth-network-node auth-network-node--1"><Layers size={15} aria-hidden="true" />SaaS</span>
+          <span className="auth-network-node auth-network-node--2"><QrCode size={15} aria-hidden="true" />PIX</span>
+          <span className="auth-network-node auth-network-node--3"><Users size={15} aria-hidden="true" />Afiliação</span>
+          <span className="auth-network-node auth-network-node--4"><CreditCard size={15} aria-hidden="true" />Pagamentos</span>
+          <span className="auth-network-node auth-network-node--5"><Network size={15} aria-hidden="true" />Split automático</span>
+          <span className="auth-network-node auth-network-node--6"><ChartNoAxesCombined size={15} aria-hidden="true" />Comissões</span>
         </div>
       )}
 
@@ -438,8 +479,21 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         {/* CARD DO FORMULÁRIO */}
         <div className="auth-card w-full border border-white/10 rounded-[32px] p-6 sm:p-9 md:p-10 relative overflow-hidden flex flex-col gap-6">
 
-          {/* Top Logo */}
-          <LeadsPayBrandLogo />
+          {/* Marca e alternância de tema compartilham a preferência da landing. */}
+          <div className="auth-card-topbar">
+            <LeadsPayBrandLogo />
+            <button
+              type="button"
+              className="auth-theme-toggle"
+              onClick={toggleTheme}
+              aria-label={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
+              aria-pressed={isDark}
+              title={isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            >
+              {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+              <span>{isDark ? 'Claro' : 'Escuro'}</span>
+            </button>
+          </div>
 
           {/* Notification Messages */}
           {errorMessage && (

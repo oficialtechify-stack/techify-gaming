@@ -443,6 +443,15 @@ export default function LeadspayLanding({
     }
   }, [isDark]);
 
+  useEffect(() => {
+    const syncTheme = (event: Event) => {
+      const theme = (event as CustomEvent<"light" | "dark">).detail;
+      if (theme === "light" || theme === "dark") setIsDark(theme === "dark");
+    };
+    window.addEventListener("leadspay-theme-change", syncTheme);
+    return () => window.removeEventListener("leadspay-theme-change", syncTheme);
+  }, []);
+
   const handleLandingClick = (event: MouseEvent<HTMLDivElement>) => {
     const link = (event.target as HTMLElement).closest<HTMLAnchorElement>(
       'a[href="#login"], a[href="#cadastro-empresa"], a[href="#cadastro-afiliado"]'
