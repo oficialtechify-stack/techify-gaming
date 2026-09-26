@@ -1,14 +1,14 @@
 .leadspay-site {
-  --ink: #153e32;
-  --muted-ink: #64756a;
-  --line: #e4e9df;
-  --paper: #fbfcf9;
+  --ink: #20272d;
+  --muted-ink: #57636e;
+  --line: #dce2e6;
+  --paper: #f7f8f9;
   --surface: #ffffff;
-  --soft: #f1f6ed;
-  --soft-green: #e8f4df;
-  --green: #5ba63c;
-  --lime: #9bdc58;
-  --deep: #153f32;
+  --soft: #edf0f2;
+  --soft-green: #e9edef;
+  --green: #36414b;
+  --lime: #e0e4e7;
+  --deep: #1b2228;
   color: var(--ink);
   background: var(--paper);
   font-family: "Manrope", sans-serif;
@@ -16,16 +16,16 @@
   transition: color 240ms ease, background-color 240ms ease;
 }
 .leadspay-site[data-theme="dark"] {
-  --ink: #edf4e9;
-  --muted-ink: #b2c0b5;
-  --line: #304138;
-  --paper: #101b17;
-  --surface: #17251f;
-  --soft: #1a2a22;
-  --soft-green: #263c2b;
-  --green: #8dd85e;
-  --lime: #b5ec76;
-  --deep: #0b1511;
+  --ink: #f0f2f3;
+  --muted-ink: #b2bdc5;
+  --line: #3a4249;
+  --paper: #101316;
+  --surface: #1a1e22;
+  --soft: #242a2e;
+  --soft-green: #2a3136;
+  --green: #d2d9dd;
+  --lime: #e4e8eb;
+  --deep: #0d1114;
 }
 .leadspay-site h1, .leadspay-site h2, .leadspay-site h3 { font-family: "Manrope", sans-serif; }
 .leadspay-site *, .leadspay-site *::before, .leadspay-site *::after { box-sizing: border-box; }
@@ -387,3 +387,45 @@
 @media (prefers-reduced-motion: reduce) {
   .leadspay-site *, .leadspay-site *::before, .leadspay-site *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* The brand mark remains recognizable; the interface and illustrations stay neutral. */
+.leadspay-site img,
+.leadspay-site svg { filter: grayscale(1); }
+.leadspay-site .button-primary,
+.leadspay-site[data-theme="dark"] .button-primary,
+.leadspay-site .button-light { color: #20272d; }
+.leadspay-site .button-primary:hover { background: #d3d9dd; }
+.leadspay-site .hero-image-wrap,
+.leadspay-site[data-theme="dark"] .hero-image-wrap,
+.leadspay-site .dashboard-showcase { background: #edf0f2; }
+.leadspay-site .float-icon { color: #36414b; background: #e9edef; }
+.leadspay-site .float-card small,
+.leadspay-site .float-demo,
+.leadspay-site .float-check,
+.leadspay-site .announcement-inner i { color: #5c6871; }
+.leadspay-site .float-card strong { color: #20272d; }
+.leadspay-site .dashboard-brand,
+.leadspay-site .dashboard-side-note b { color: #20272d; }
+.leadspay-site .live-tag i { background: #687680; }
+.leadspay-site .final-cta,
+.leadspay-site[data-theme="dark"] .final-cta { background: #1b2228; }
+.leadspay-site .final-cta h2 span,
+.leadspay-site .cta-monogram { color: #edf0f2; }
+.leadspay-site .final-cta .eyebrow,
+.leadspay-site .cta-monogram small { color: #c1cbd1; }
+.leadspay-site[data-theme="dark"] .skip-link { color: #101316; }
+.leadspay-site :focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+/* O aviso global fica fora do contêiner da landing; manter o mesmo acabamento. */
+#cookie-banner {
+  background: rgba(27, 34, 40, .97) !important;
+  border-color: #444f57 !important;
+  color: #f0f2f3;
+}
+#cookie-banner a { color: #e4e8eb !important; }
+#cookie-banner button {
+  background: #f0f2f3 !important;
+  color: #20272d !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .2) !important;
+}
+#cookie-banner :focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
