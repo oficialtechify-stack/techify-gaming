@@ -11,14 +11,16 @@ import {
   Firestore 
 } from 'firebase/firestore';
 
+const firebaseEnv = typeof process !== "undefined" ? process.env : ((import.meta as any).env ?? {});
+
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyBZY9m-CFG7-l9H1bptd4eGcd6IL_aEWIM",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "techify-gaming-106fe.firebaseapp.com",
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "techify-gaming-106fe",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "techify-gaming-106fe.firebasestorage.app",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "247058420839",
-  appId: process.env.VITE_FIREBASE_APP_ID || "1:247058420839:web:436355c69a6026be9b70c2",
-  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || "G-3SB1FEBFNZ"
+  apiKey: firebaseEnv.VITE_FIREBASE_API_KEY || "AIzaSyBZY9m-CFG7-l9H1bptd4eGcd6IL_aEWIM",
+  authDomain: firebaseEnv.VITE_FIREBASE_AUTH_DOMAIN || "techify-gaming-106fe.firebaseapp.com",
+  projectId: firebaseEnv.VITE_FIREBASE_PROJECT_ID || "techify-gaming-106fe",
+  storageBucket: firebaseEnv.VITE_FIREBASE_STORAGE_BUCKET || "techify-gaming-106fe.firebasestorage.app",
+  messagingSenderId: firebaseEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "247058420839",
+  appId: firebaseEnv.VITE_FIREBASE_APP_ID || "1:247058420839:web:436355c69a6026be9b70c2",
+  measurementId: firebaseEnv.VITE_FIREBASE_MEASUREMENT_ID || "G-3SB1FEBFNZ"
 };
 
 function getDbInstance(customDb?: Firestore): Firestore {
