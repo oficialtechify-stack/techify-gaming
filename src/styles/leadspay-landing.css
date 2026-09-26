@@ -29,7 +29,7 @@
 }
 .leadspay-site h1, .leadspay-site h2, .leadspay-site h3 { font-family: "Manrope", sans-serif; }
 .leadspay-site *, .leadspay-site *::before, .leadspay-site *::after { box-sizing: border-box; }
-.leadspay-site .container { width: min(100% - 56px, 1280px); }
+.leadspay-site .container { width: min(100% - 56px, 1280px); margin-inline: auto; }
 
 .skip-link { position: fixed; z-index: 100; inset: 12px auto auto 12px; transform: translateY(-160%); padding: 12px 16px; border-radius: 10px; background: var(--green); color: #fff; font-weight: 800; }
 .skip-link:focus { transform: translateY(0); }
