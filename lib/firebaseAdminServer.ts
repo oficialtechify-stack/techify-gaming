@@ -53,23 +53,25 @@ export function isServerAdminConfigured(): boolean {
 }
 
 /**
- * Future server-only Firestore entrypoint. Initializing it never happens during
- * module import, and callers must authenticate/authorize before using it:
- * Admin SDK requests bypass all Firestore Security Rules.
+ * This app is privileged and therefore must never be shared with the frontend
+ * or used before the HTTP handler has authenticated and authorized its caller.
  */
-export function getServerAdminFirestore(): Firestore {
+export function getServerAdminApp(): App {
   if (!isServerAdminConfigured()) {
     throw new Error('A credencial Firebase Admin não foi configurada no servidor.');
   }
 
-  let app: App;
   try {
-    app = getApp(ADMIN_APP_NAME);
+    return getApp(ADMIN_APP_NAME);
   } catch {
     const credential = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
       ? cert(parseServerServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_JSON))
       : applicationDefault();
-    app = initializeApp({ credential, projectId: ADMIN_PROJECT_ID }, ADMIN_APP_NAME);
+    return initializeApp({ credential, projectId: ADMIN_PROJECT_ID }, ADMIN_APP_NAME);
   }
-  return getFirestore(app);
+}
+
+/** Admin SDK reads/writes bypass all Firestore Security Rules. */
+export function getServerAdminFirestore(): Firestore {
+  return getFirestore(getServerAdminApp());
 }
