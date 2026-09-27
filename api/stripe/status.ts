@@ -6,6 +6,13 @@ type ResponseLike = { setHeader(name: string, value: string): void; status(code:
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
   res.setHeader('Cache-Control', 'no-store');
+  if (req.query?.retired === '1') {
+    return res.status(410).json({
+      error: true,
+      code: 'PAYMENT_PROVIDER_MIGRATED',
+      message: 'Este endpoint legado foi aposentado. Use os endpoints Stripe atuais da LeadsPay.',
+    });
+  }
   if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido.' });
   const paymentIntentId = typeof req.query?.payment_intent === 'string' ? req.query.payment_intent : '';
   if (!/^pi_[A-Za-z0-9]+$/.test(paymentIntentId)) return res.status(400).json({ error: 'Referência de pagamento inválida.' });

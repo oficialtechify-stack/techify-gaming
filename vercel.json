@@ -34,6 +34,18 @@
       "source": "/__/auth/:path*",
       "destination": "https://techify-gaming-106fe.firebaseapp.com/__/auth/:path*"
     },
+    {
+      "source": "/api/payments",
+      "destination": "/api/stripe/status?retired=1"
+    },
+    {
+      "source": "/api/payments/:path*",
+      "destination": "/api/stripe/status?retired=1"
+    },
+    {
+      "source": "/api/webhooks/asaas",
+      "destination": "/api/stripe/status?retired=1"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
