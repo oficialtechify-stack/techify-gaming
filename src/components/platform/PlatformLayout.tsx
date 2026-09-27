@@ -1900,9 +1900,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'saques' && (
             <SaquesView
               userProfile={userProfile}
-              withdrawals={withdrawals}
-              onWithdrawSuccess={handleWithdraw}
-              onRefresh={() => {}}
+              roleMode={roleMode}
             />
           )}
           {activeTab === 'assinaturas' && (
@@ -2008,14 +2006,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             plan={liveCheckoutPlan}
             affiliateRef={checkoutAffiliateRef}
             onBack={() => setLiveCheckoutPlan(null)}
-            onPaymentSuccess={(tx) => {
-              setLiveToast({
-                message: 'Venda Aprovada!',
-                sub: `${tx.buyerName} comprou ${tx.platformName}`,
-                amount: `+ R$ ${tx.amount.toFixed(2)}`
-              });
-              setTimeout(() => setLiveToast(null), 5000);
-            }}
           />
         </div>
       )}

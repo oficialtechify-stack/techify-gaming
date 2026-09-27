@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { StripeConnectPanel } from './StripeConnectPanel';
 import { UserSellerProfile, WithdrawalRequest, SaleTransaction, PaymentMethodStat, UserRoleMode, CompanyStartup } from '../../types/platform';
 import { triggerReleaseBalancesCron, requestWithdrawalViaBackend } from '../../services/firestoreService';
 import { 
@@ -178,37 +179,16 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
             {roleMode === 'empresa' && activeCompanyTab === 'faturamento' 
               ? 'Faturamento & Repasses a Afiliados' 
-              : 'Carteira & Saques PIX'}
+              : 'Carteira & Recebimentos'}
           </h1>
           <p className="text-xs text-white/60 mt-1">
             {roleMode === 'empresa'
-              ? 'Monitore saldo em garantia de 9 dias, solicite transferências via PIX e consulte o faturamento corporativo.'
-              : 'Acompanhe suas comissões recebidas, saldo liberado após garantia (D+9) e solicite saques via Pix com segurança.'}
+              ? 'Consulte a atividade financeira e conecte a conta Stripe da empresa para receber os repasses.'
+              : 'Acompanhe as comissões registradas e conecte sua conta Stripe para receber os repasses da plataforma.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSyncCron}
-            disabled={isSyncingCron}
-            className="bg-white/5 hover:bg-white/10 text-white/80 hover:text-white px-3.5 py-2.5 rounded-xl border border-white/10 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
-            title="Executa a verificação no Firestore de transações com mais de 9 dias para migração de saldo"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncingCron ? 'animate-spin text-[#D9F22A]' : ''}`} />
-            <span className="hidden sm:inline">{isSyncingCron ? 'Verificando...' : 'Verificar D+9 (Cron)'}</span>
-          </button>
-
-          {onOpenWithdraw && (
-            <button
-              onClick={onOpenWithdraw}
-              disabled={availableBalance < 50}
-              className="bg-[#D9F22A] hover:bg-[#c8e217] disabled:opacity-40 text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(217,242,42,0.25)] transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <ArrowUpRight className="w-4 h-4" />
-              <span>Sacar via PIX</span>
-            </button>
-          )}
-        </div>
+        <div className="flex items-center gap-3" aria-label="Recebimentos Stripe" />
       </div>
 
       {/* Feedback do Cron */}
@@ -316,233 +296,14 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             </div>
           </div>
 
-          {/* 2. Formulário de Saque PIX Integrado na Tela */}
-          <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-6 sm:p-8 shadow-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 pb-4 border-b border-white/10">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
-                  <ArrowUpRight className="w-4 h-4" />
-                  Transferência Bancária Instantânea
-                </div>
-                <h3 className="text-xl font-bold text-white font-['Syne']">
-                  Solicitar Saque PIX
-                </h3>
-              </div>
-              <div className="text-left sm:text-right">
-                <span className="text-xs text-white/50 block">Saldo liberado:</span>
-                <span className="text-base font-black text-[#D9F22A]">
-                  R$ {availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
+          <StripeConnectPanel roleMode={roleMode} userProfile={userProfile} />
 
-            {/* Aviso Visual Obrigatório de Mínimo e Taxa */}
-            <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-3 text-xs text-amber-300">
-              <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-              <div className="leading-snug">
-                <strong>Aviso de Repasse:</strong> Mínimo <strong>R$ 50,00</strong> | Taxa administrativa de <strong>R$ 2,50</strong> deduzida por transferência PIX.
-              </div>
-            </div>
-
-            {withdrawError && (
-              <div className="mb-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-400 font-semibold flex items-center gap-2 animate-in fade-in duration-200">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{withdrawError}</span>
-              </div>
-            )}
-
-            {withdrawSuccess && (
-              <div className="mb-6 p-4 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 text-xs text-[#D9F22A] font-semibold flex flex-col gap-1.5 animate-in fade-in duration-200">
-                <div className="flex items-center gap-2 font-bold text-sm">
-                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                  <span>{withdrawSuccess}</span>
-                </div>
-                {lastCompletedWithdrawal && (
-                  <p className="text-white/70 pl-7 text-[11px]">
-                    Protocolo: <span className="font-mono text-white">{lastCompletedWithdrawal.id}</span>
-                    {lastCompletedWithdrawal.asaasTransferId && (
-                      <> | Asaas ID: <span className="font-mono text-white">{lastCompletedWithdrawal.asaasTransferId}</span></>
-                    )}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <form onSubmit={handleWithdrawSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-                {/* Campo: Valor do Saque */}
-                <div className="md:col-span-6 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-white/80">
-                      Valor do Saque (R$) *
-                    </label>
-                    <span className="text-[11px] text-white/40">Mínimo R$ 50,00</span>
-                  </div>
-
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-bold text-sm">
-                      R$
-                    </span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="50"
-                      max={availableBalance > 0 ? availableBalance : undefined}
-                      value={withdrawAmount}
-                      onChange={(e) => {
-                        setWithdrawAmount(e.target.value);
-                        setWithdrawError(null);
-                      }}
-                      placeholder="0,00"
-                      className="w-full pl-11 pr-4 py-3.5 bg-[#050811] border border-white/10 rounded-xl text-white font-bold text-lg focus:outline-none focus:border-[#D9F22A] transition-colors"
-                      required
-                    />
-                  </div>
-
-                  {/* Atalhos Rápidos */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <span className="text-[10px] text-white/40">Atalhos:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickAmount(50)}
-                      disabled={availableBalance < 50}
-                      className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-white/70 text-[10px] font-bold border border-white/5 disabled:opacity-30 cursor-pointer"
-                    >
-                      R$ 50
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickAmount(100)}
-                      disabled={availableBalance < 100}
-                      className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-white/70 text-[10px] font-bold border border-white/5 disabled:opacity-30 cursor-pointer"
-                    >
-                      R$ 100
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickAmount(250)}
-                      disabled={availableBalance < 250}
-                      className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-white/70 text-[10px] font-bold border border-white/5 disabled:opacity-30 cursor-pointer"
-                    >
-                      R$ 250
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleMaxAmount}
-                      disabled={availableBalance < 50}
-                      className="px-2.5 py-1 rounded bg-[#D9F22A]/10 hover:bg-[#D9F22A]/20 text-[#D9F22A] text-[10px] font-bold border border-[#D9F22A]/30 disabled:opacity-30 cursor-pointer ml-auto"
-                    >
-                      Saldo Máximo
-                    </button>
-                  </div>
-                </div>
-
-                {/* Campo: Tipo de Chave PIX */}
-                <div className="md:col-span-6 space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-white/80">
-                    Tipo de Chave PIX *
-                  </label>
-                  <select
-                    value={pixKeyType}
-                    onChange={(e) => setPixKeyType(e.target.value)}
-                    className="w-full px-4 py-3.5 bg-[#050811] border border-white/10 rounded-xl text-white text-sm font-semibold focus:outline-none focus:border-[#D9F22A] transition-colors cursor-pointer"
-                  >
-                    <option value="CPF">CPF (Pessoa Física)</option>
-                    <option value="CNPJ">CNPJ (Pessoa Jurídica)</option>
-                    <option value="EMAIL">E-mail</option>
-                    <option value="PHONE">Telefone / Celular</option>
-                    <option value="EVP">Chave Aleatória (EVP)</option>
-                  </select>
-                  <span className="text-[11px] text-white/40 block">
-                    Selecione o formato cadastrado na sua instituição financeira
-                  </span>
-                </div>
-
-                {/* Campo: Chave PIX de Destino */}
-                <div className="md:col-span-12 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-white/80">
-                      Chave PIX de Destino *
-                    </label>
-                    {userProfile?.pixKey && userProfile.pixKey !== pixKey && (
-                      <button
-                        type="button"
-                        onClick={() => setPixKey(userProfile.pixKey || '')}
-                        className="text-[10px] text-[#D9F22A] hover:underline cursor-pointer"
-                      >
-                        Preencher com chave salva no perfil
-                      </button>
-                    )}
-                  </div>
-
-                  <input
-                    type="text"
-                    value={pixKey}
-                    onChange={(e) => {
-                      setPixKey(e.target.value);
-                      setWithdrawError(null);
-                    }}
-                    placeholder={
-                      pixKeyType === 'CPF' ? '000.000.000-00' :
-                      pixKeyType === 'CNPJ' ? '00.000.000/0000-00' :
-                      pixKeyType === 'EMAIL' ? 'seu-email@dominio.com' :
-                      pixKeyType === 'PHONE' ? '(11) 99999-9999' : 'Cole sua chave aleatória (UUID)...'
-                    }
-                    className="w-full px-4 py-3.5 bg-[#050811] border border-white/10 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-[#D9F22A] transition-colors"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Prévia Financeira da Transferência */}
-              <div className="p-4 rounded-xl bg-[#050811] border border-white/5 space-y-2 text-xs">
-                <div className="flex justify-between text-white/60">
-                  <span>Valor bruto solicitado:</span>
-                  <span className="font-bold text-white font-mono">
-                    R$ {parsedWithdrawAmount > 0 ? parsedWithdrawAmount.toFixed(2).replace('.', ',') : '0,00'}
-                  </span>
-                </div>
-                <div className="flex justify-between text-white/60">
-                  <span>Taxa administrativa de repasse:</span>
-                  <span className="font-bold text-amber-400 font-mono">
-                    - R$ {fixedFee.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-                <div className="border-t border-white/10 pt-2 flex justify-between items-center">
-                  <span className="font-bold text-white">Valor Líquido a Receber via PIX:</span>
-                  <span className="text-base font-black text-[#D9F22A] font-['Syne']">
-                    R$ {netWithdrawalEstimate > 0 ? netWithdrawalEstimate.toFixed(2).replace('.', ',') : '0,00'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Botão de Envio */}
-              <button
-                type="submit"
-                disabled={isSubmittingWithdraw || availableBalance < 50 || parsedWithdrawAmount < 50 || parsedWithdrawAmount > availableBalance}
-                className="w-full bg-[#D9F22A] hover:bg-[#c8e217] disabled:opacity-40 text-[#060A15] font-black py-4 px-6 rounded-xl text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                {isSubmittingWithdraw ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Processando Transferência via Asaas...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>Solicitar Saque PIX</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-
-          {/* 3. Tabela de Histórico de Saques PIX */}
+          {/* 3. Tabela de Histórico legado de solicitações (Asaas) */}
           <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
               <div>
                 <h3 className="text-base font-bold text-white font-['Syne']">
-                  Histórico de Saques PIX
+                  Histórico legado de solicitações (Asaas)
                 </h3>
                 <p className="text-xs text-white/50">
                   Todas as transferências bancárias solicitadas através da plataforma LeadsPay.

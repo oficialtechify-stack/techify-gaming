@@ -25,7 +25,6 @@ function MainApp() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [isThankYouPage, setIsThankYouPage] = useState<boolean>(false);
   const [affiliateRef, setAffiliateRef] = useState<string>('');
-  const [checkoutApiKey, setCheckoutApiKey] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -42,10 +41,6 @@ function MainApp() {
           return;
         }
 
-        const rawKey = params.get('apiKey') || params.get('x-api-key') || params.get('key');
-
-        if (rawKey) setCheckoutApiKey(rawKey);
-        
         // 1. Capturar código do afiliado via Cookie de 15 dias e localStorage
         const capturedRef = handleAffiliateTracking();
         if (capturedRef) {
@@ -77,46 +72,11 @@ function MainApp() {
           }
         }
 
-        // 3. Suporte a Valor Livre / Cobrança Dinâmica (sem precisar cadastrar plano no Firestore)
-        const rawAmountParam = params.get('amount') || params.get('valor') || params.get('price');
-        const rawDescParam = params.get('description') || params.get('descricao') || params.get('nome') || params.get('name') || params.get('produto');
-
-        if (rawAmountParam) {
-          const parsedAmount = parseFloat(rawAmountParam.replace(',', '.'));
-          if (!isNaN(parsedAmount) && parsedAmount > 0) {
-            let cleanDesc = 'Pagamento Seguro';
-            if (rawDescParam) {
-              try {
-                cleanDesc = decodeURIComponent(rawDescParam.replace(/\+/g, ' ')).trim();
-              } catch (_) {
-                cleanDesc = rawDescParam.replace(/\+/g, ' ').trim();
-              }
-            }
-
-            const dynamicPlan: CompanyPlan = {
-              id: targetPlanId || 'checkout-dinamico',
-              name: cleanDesc,
-              description: cleanDesc,
-              priceSetup: parsedAmount,
-              priceMonthly: parsedAmount,
-              commissionPercentage: 0,
-              commissionValue: 0,
-              features: ['Acesso Imediato', 'Pagamento PIX Seguro', 'Emissão D+9'],
-              companyId: 'leadspay',
-              companyName: 'LeadsPay',
-              companyLogo: '',
-              bannerImage: '',
-              category: 'Cobrança Dinâmica',
-              paymentType: 'Único',
-              totalSales: 0,
-              status: 'Ativo'
-            };
-
-            setCheckoutPlan(dynamicPlan);
-            setIsLoadingCheckout(false);
-            setCheckoutError(null);
-            return;
-          }
+        // Never trust price/description parameters from the URL for a charge.
+        const hasDynamicAmount = params.has('amount') || params.has('valor') || params.has('price');
+        if (hasDynamicAmount && !targetPlanId) {
+          setCheckoutError('Cobranças com valor livre não estão habilitadas. Use um link de uma oferta cadastrada pela empresa.');
+          return;
         }
 
         // 4. Se houver link de plano/checkout pré-cadastrado, carrega a oferta do Firestore
@@ -174,7 +134,7 @@ function MainApp() {
       <div className="min-h-screen bg-[#060A15] flex flex-col items-center justify-center p-6 text-white text-center">
         <div className="w-12 h-12 border-4 border-[#208b68] border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-xl font-bold font-['Syne']">Carregando Checkout Seguro...</h2>
-        <p className="text-sm text-white/60 mt-1">Ambiente criptografado Asaas & LeadsPay</p>
+        <p className="text-sm text-white/60 mt-1">Checkout seguro da Stripe</p>
       </div>
     );
   }
@@ -203,7 +163,6 @@ function MainApp() {
         <CustomCheckoutPage
           plan={checkoutPlan}
           affiliateRef={affiliateRef}
-          apiKey={checkoutApiKey}
           onBack={() => {
             setCheckoutPlan(null);
             if (typeof window !== 'undefined' && window.history) {

@@ -1,0 +1,110 @@
+import { verifyFirebaseIdentity, getServerAdminFirestore } from '../../lib/firebaseAdminServer';
+import { getLeadspayBaseUrl, getStripeTestClient } from '../../lib/stripeServer';
+
+type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
+type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
+type Role = 'empresa' | 'afiliado';
+
+function setHeaders(req: RequestLike, res: ResponseLike): void {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vary', 'Origin');
+  const rawBase = process.env.LEADSPAY_BASE_URL?.trim();
+  const allowedOrigin = rawBase ? new URL(rawBase).origin : '';
+  if (typeof req.headers.origin === 'string' && req.headers.origin === allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  }
+}
+
+function fail(res: ResponseLike, status: number, error: string) {
+  return res.status(status).json({ error });
+}
+
+export default async function handler(req: RequestLike, res: ResponseLike) {
+  setHeaders(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'POST') return fail(res, 405, 'Método não permitido.');
+
+  try {
+    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined);
+    const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
+    const role = body.role as Role;
+    if (role !== 'empresa' && role !== 'afiliado') return fail(res, 400, 'Selecione a conta de Empresa ou Afiliado.');
+
+    const db = getServerAdminFirestore();
+    const profileRef = db.collection('user_profiles').doc(identity.uid);
+    const profileSnap = await profileRef.get();
+    if (!profileSnap.exists) return fail(res, 404, 'Perfil LeadsPay não encontrado.');
+    const profile = profileSnap.data()!;
+    if (profile.banned || profile.status === 'banned') return fail(res, 403, 'Esta conta não pode conectar recebimentos.');
+    if (role === 'afiliado' && profile.accountType !== 'afiliado' && profile.hasAffiliateProfile !== true && !profile.affiliateId) {
+      return fail(res, 403, 'O perfil autenticado não possui conta de Afiliado aprovada.');
+    }
+    if (role === 'empresa' && profile.accountType !== 'empresa' && profile.hasCompanyProfile !== true && !profile.companyId) {
+      return fail(res, 403, 'O perfil autenticado não possui conta de Empresa.');
+    }
+    if (profile.verified !== true && profile.verificationStatus !== 'approved') {
+      return fail(res, 403, 'Conclua a verificação da conta LeadsPay antes de conectar recebimentos.');
+    }
+
+    let companyRef: any;
+    let company: Record<string, unknown> | undefined;
+    if (role === 'empresa') {
+      const companyId = String(profile.companyId || `comp-${identity.uid}`);
+      companyRef = db.collection('companies').doc(companyId);
+      const companySnap = await companyRef.get();
+      if (!companySnap.exists) return fail(res, 404, 'Cadastro de Empresa não encontrado.');
+      company = companySnap.data() as Record<string, unknown>;
+      if (company.ownerId !== identity.uid) return fail(res, 403, 'A empresa não pertence à conta autenticada.');
+      if (company.verified !== true || company.status !== 'approved') {
+        return fail(res, 403, 'A aprovação da Empresa é necessária antes do onboarding Stripe.');
+      }
+    }
+
+    const stripe = getStripeTestClient();
+    const roleAccounts = (profile.stripeAccounts && typeof profile.stripeAccounts === 'object') ? profile.stripeAccounts as Record<string, string> : {};
+    const priorId = String(roleAccounts[role] || (role === 'empresa' ? company?.stripeAccountId || '' : ''));
+    let accountId = priorId;
+
+    if (accountId) {
+      const account = await stripe.accounts.retrieve(accountId);
+      if (account.metadata?.firebase_uid !== identity.uid || account.metadata?.leadspay_role !== role) {
+        return fail(res, 409, 'A conta Stripe vinculada não corresponde a este perfil.');
+      }
+    } else {
+      const docType = String(profile.companyDocType || profile.documentType || profile.docType || '').toUpperCase();
+      const businessType = role === 'empresa' && ['CNPJ', 'MEI'].includes(docType) ? 'company' : 'individual';
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'BR',
+        email: identity.email || undefined,
+        business_type: businessType,
+        capabilities: { transfers: { requested: true } },
+        metadata: { firebase_uid: identity.uid, leadspay_role: role },
+      }, { idempotencyKey: `leadspay-connect-${role}-${identity.uid}` });
+      accountId = account.id;
+      const updatedAccounts = { ...roleAccounts, [role]: accountId };
+      await profileRef.set({
+        stripeAccounts: updatedAccounts,
+        stripeConnect: { ...(profile.stripeConnect || {}), [role]: { accountId, createdAt: new Date().toISOString(), onboardingStatus: 'pending' } },
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      if (companyRef && role === 'empresa') {
+        await companyRef.set({ stripeAccountId: accountId, stripeOnboardingStatus: 'pending', updatedAt: new Date().toISOString() }, { merge: true });
+      }
+    }
+
+    const baseUrl = getLeadspayBaseUrl();
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${baseUrl}/?stripe_connect=refresh&role=${role}`,
+      return_url: `${baseUrl}/?stripe_connect=return&role=${role}`,
+      type: 'account_onboarding',
+    });
+    return res.status(200).json({ url: accountLink.url, role, accountId });
+  } catch (error) {
+    console.error('[Stripe Connect onboarding]', error instanceof Error ? error.message : 'Erro desconhecido');
+    return fail(res, 503, 'Não foi possível iniciar o onboarding Stripe. Verifique a configuração de teste e tente novamente.');
+  }
+}
