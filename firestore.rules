@@ -19,12 +19,6 @@ service cloud.firestore {
       );
     }
 
-    // Isolamento estrito multi-tenant: proibir leitura/escrita caso o request.auth.uid não pertença à empresa solicitante
-    match /companies/{companyId}/{document=**} {
-      allow read, write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
-    }
-
     // Documento raiz da empresa
     match /companies/{companyId} {
       allow read: if (request.auth != null && (
@@ -35,29 +29,60 @@ service cloud.firestore {
       )) || (resource.data.status == 'approved' || resource.data.verified == true);
 
       allow create: if isAuthenticated() && (
-        request.resource.data.ownerId == request.auth.uid ||
-        request.resource.data.userId == request.auth.uid ||
-        request.resource.data.submittedBy == request.auth.uid ||
-        isAdmin()
+        isAdmin() || (
+          (request.resource.data.ownerId == request.auth.uid ||
+           request.resource.data.userId == request.auth.uid ||
+           request.resource.data.submittedBy == request.auth.uid) &&
+          request.resource.data.status == 'draft' &&
+          (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+          (!('banned' in request.resource.data) || request.resource.data.banned == false) &&
+          !('stripeAccountId' in request.resource.data) &&
+          !('stripeOnboardingStatus' in request.resource.data) &&
+          (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status == 'pending')
+        )
       );
 
       allow update, delete: if isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == companyId) ||
-        resource.data.ownerId == request.auth.uid ||
-        resource.data.userId == request.auth.uid ||
-        isAdmin()
+        isAdmin() || ((resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus', 'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt', 'ownerId', 'userId', 'submittedBy']))
       );
     }
 
     // Perfis de Usuário
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        (!('role' in request.resource.data) || request.resource.data.role != 'admin') &&
+        (!('accountType' in request.resource.data) || request.resource.data.accountType != 'admin') &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+        (!('banned' in request.resource.data) || request.resource.data.banned == false)
+      ));
+      allow update: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType', 'verified', 'verificationStatus', 'banned', 'banReason', 'companyId', 'isAdmin', 'activeRoleMode'])
+      ));
+      allow delete: if isAdmin();
     }
 
     match /user_profiles/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        request.resource.data.accountType in ['afiliado', 'empresa', 'ambos'] &&
+        request.resource.data.role != 'Administrador do Sistema' &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+        (!('banned' in request.resource.data) || request.resource.data.banned == false) &&
+        (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['draft', 'unsubmitted'])
+      ));
+      allow update: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'role', 'partnerLevel', 'hasAffiliateProfile', 'hasCompanyProfile', 'activeRoleMode', 'banned', 'banReason', 'verificationReviewedAt', 'isAdmin', 'verified', 'verificationStatus', 'verificationSubmittedAt', 'kyc_status']) &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+        (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['draft', 'unsubmitted']) &&
+        (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status == 'pending')
+      ));
+      allow delete: if isAdmin();
     }
 
     // Planos e Produtos com vínculo multi-tenant
@@ -137,7 +162,7 @@ service cloud.firestore {
     // Solicitações de Verificação KYC
     match /verification_requests/{requestId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if isAuthenticated() && (request.auth.uid == requestId || request.resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAdmin(); // Solicitudes KYC sólo se crean/actualizan desde funciones de servidor autenticadas.
     }
 
     // Cupons de desconto

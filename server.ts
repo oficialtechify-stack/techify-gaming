@@ -50,11 +50,11 @@ import { sendFulfillmentEmail, sendBillingEmail, sendRemarketingEmail } from './
 import { setupMcpRoutes } from './server/mcpRoutes';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json());
 app.use((req, res, next) => {
-  const retiredAsaasRoute = /^\/(?:api\/(?:payments(?:\/|$)|checkout(?:\/|$)|pix(?:\/|$)|subaccounts(?:\/|$)|asaas(?:\/|$)|withdrawals?(?:\/|$)|subscriptions?(?:\/|$)|plans\/checkout(?:\/|$)|v3\/(?:accounts|payments|subaccounts)(?:\/|$)|webhooks\/asaas(?:\/|$))|webhooks\/asaas(?:\/|$)|webhook\/asaas(?:\/|$))/i.test(req.path);
+  const retiredAsaasRoute = /^\/(?:api\/(?:payments(?:\/|$)|checkout(?:\/|$)|pix(?:\/|$)|subaccounts(?:\/|$)|asaas(?:\/|$)|withdrawals?(?:\/|$)|subscriptions?(?:\/|$)|plans\/checkout(?:\/|$)|cron\/release-balances(?:\/|$)|v3\/(?:accounts|payments|subaccounts)(?:\/|$)|webhooks\/asaas(?:\/|$)|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity)(?:\/|$))|webhooks\/asaas(?:\/|$)|webhook\/asaas(?:\/|$))/i.test(req.path);
   if (!retiredAsaasRoute) return next();
   return res.status(410).json({
     error: true,
@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 
 // Asaas API v3 Configuration
 const { apiUrl: ASAAS_ACTIVE_URL, apiKey: ASAAS_ACTIVE_KEY } = getAsaasConfig();
-console.log(`⚡ LeadsPay Gateway: Operando exclusivamente com Asaas v3 (${ASAAS_ACTIVE_URL})`);
+console.log('⚡ LeadsPay: rotas financeiras legadas aposentadas; Stripe Connect é servido pelas funções seguras em /api/stripe.');
 
 // Firebase Configuration for Backend
 const firebaseConfig = {
@@ -258,14 +258,8 @@ async function processBalanceReleases(): Promise<{ releasedCount: number; detail
   }
 }
 
-// Inicia verificação 5s após startup e agenda execução diária (24 horas)
-setTimeout(() => {
-  processBalanceReleases();
-}, 5000);
-
-setInterval(() => {
-  processBalanceReleases();
-}, 24 * 60 * 60 * 1000);
+// O cron legado de saldo local está desativado. A liberação D+9 oficial é
+// executada exclusivamente por /api/crons/stripe-releases no modelo Connect.
 
 // Endpoint Serverless / Cron para acionar ou consultar a liberação de saldos D+9
 app.all('/api/cron/release-balances', async (req, res) => {
@@ -308,8 +302,8 @@ app.get('/api/finances/summary', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    gateway: 'Asaas API v3 Active',
-    cron: 'Rotina de 9 dias ativa',
+    gateway: 'Stripe Connect',
+    cron: 'Liberação Stripe Connect D+9 ativa',
     time: new Date().toISOString() 
   });
 });
@@ -1458,18 +1452,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
       partnerInfo = partner;
 
-      // Injete automaticamente os dados de subconta resolvidos da empresa vinculada àquela API Key
-      if (partner.asaasSubaccountId || partner.subaccountId) {
-        sellerSubaccountId = partner.asaasSubaccountId || partner.subaccountId;
-        body.subaccountId = sellerSubaccountId;
-      }
-      if (partner.asaasWalletId || partner.walletId) {
-        sellerWalletId = partner.asaasWalletId || partner.walletId;
-      }
-      if (partner.asaasApiKey || partner.subaccountApiKey) {
-        sellerApiKey = partner.asaasApiKey || partner.subaccountApiKey;
-      }
-      console.log(`🔑 [API Partner] Autenticado com sucesso para ${partner.companyName || partner.userId} (Subconta: ${sellerSubaccountId || 'Master'}, Wallet: ${sellerWalletId || 'Master'})`);
+      console.log(`🔑 [API Partner] Autenticado para ${partner.companyName || partner.userId}. A rota financeira legada está aposentada.`);
     }
 
     // Se amount não foi informado diretamente, mas planId foi passado, busca preço do plano

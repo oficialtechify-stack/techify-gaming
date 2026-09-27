@@ -498,9 +498,23 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         <p className="text-xs text-white/60 mt-1 max-w-2xl">
           {roleMode === 'empresa'
             ? 'Preencha os dados oficiais da sua empresa (Razão Social, Responsável, CNPJ, WhatsApp, Categoria, Slogan e Endereço). Após envio, a Administração analisará seu cadastro. Uma vez aprovada, a empresa poderá cadastrar produtos e planos livremente.'
-            : 'Mantenha seus dados pessoais atualizados. A conta de recebimento e a verificação de identidade são concluídas com segurança no onboarding Stripe Connect.'}
+            : 'Mantenha seus dados pessoais atualizados. A conta de recebimento e a verificação de identidade são concluídas no fluxo seguro da plataforma de pagamentos.'}
         </p>
       </div>
+
+      <section className="lp-profile-tutorial" aria-labelledby="lp-profile-tutorial-title">
+        <div className="lp-profile-tutorial-copy">
+          <span className="lp-profile-tutorial-kicker">GUIA DE PRIMEIRO ACESSO · 1 MIN 30 S</span>
+          <h2 id="lp-profile-tutorial-title">Como preencher e enviar seu perfil</h2>
+          <p>Veja os campos obrigatórios, como salvar um rascunho e o que acontece depois do envio para análise.</p>
+        </div>
+        <video className="lp-profile-tutorial-video" controls playsInline preload="metadata" poster="/tutorials/perfil-inicial.jpg" aria-label="Tutorial de preenchimento do perfil LeadsPay, narrado em português">
+          <source src="/tutorials/perfil-inicial.mp4" type="video/mp4" />
+          <track kind="captions" src="/tutorials/perfil-inicial.vtt" srcLang="pt-BR" label="Português" default />
+          Seu navegador não oferece suporte ao vídeo. Consulte o guia de preenchimento nesta página.
+        </video>
+        <p className="lp-profile-tutorial-note">O tutorial é demonstrativo. Não use dados reais de terceiros nem compartilhe senhas bancárias.</p>
+      </section>
 
       {/* ================= STATUS BANNER ================= */}
       <div className="mb-6">

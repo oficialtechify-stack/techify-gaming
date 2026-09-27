@@ -20,7 +20,7 @@ export const SaquesView: React.FC<SaquesViewProps> = ({ userProfile, roleMode = 
     <StripeConnectPanel roleMode={roleMode} userProfile={userProfile} />
     <aside className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
       <Clock3 className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
-      <p>O repasse depende da confirmação do pagamento, do prazo de disponibilidade configurado e das verificações da Stripe. Solicitações antigas do Asaas são apenas histórico e não serão enviadas novamente.</p>
+      <p>O repasse depende da confirmação do pagamento, do prazo de disponibilidade D+9 e das verificações da conta de recebimento. Solicitações registradas no provedor anterior permanecem apenas como histórico e não serão reenviadas.</p>
     </aside>
   </div>
 );

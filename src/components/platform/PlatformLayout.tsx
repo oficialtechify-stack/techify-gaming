@@ -55,6 +55,7 @@ import { SaquesView } from './SaquesView';
 import { PlanosAssinaturasView } from './PlanosAssinaturasView';
 import { ComunidadeAfiliadosView } from './ComunidadeAfiliadosView';
 import { AffiliateOnboardingModal } from './AffiliateOnboardingModal';
+import { TabGuideModal } from './TabGuideModal';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
@@ -94,6 +95,7 @@ import {
   User,
   Bot,
   CheckCircle2,
+  BookOpen,
   GraduationCap,
   Menu,
   X,
@@ -124,7 +126,7 @@ const ADMIN_EMAILS = [
 ];
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
-  const { currentUser, userProfile, userRole, setUserRole, logout } = useAuth();
+  const { currentUser, userProfile, userRole, setUserRole, logout, loading } = useAuth();
 
   // Guard: O painel só pode ser acessado se o usuário estiver autenticado em uma conta real.
   // Nenhum perfil fake pode existir ou ser exibido.
@@ -133,10 +135,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       onBackToHome();
     }
   }, [currentUser, onBackToHome]);
-
-  if (!currentUser) {
-    return null;
-  }
 
   // Detect mobile screen (<768px)
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
@@ -155,18 +153,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const [roleMode, setRoleMode] = useState<UserRoleMode>(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      return 'afiliado';
-    }
-    return userRole || 'afiliado';
-  });
+  const [roleMode, setRoleMode] = useState<UserRoleMode>(() => userRole || 'afiliado');
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase().trim();
   const isSuperAdmin = ADMIN_EMAILS.includes(userEmail);
+  const requiresProfileApproval = !isSuperAdmin && userProfile.verified !== true && userProfile.verificationStatus !== 'approved';
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -256,6 +250,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Modal de Boas-vindas & Onboarding de Primeiro Login do Afiliado
   const [isAffiliateOnboardingOpen, setIsAffiliateOnboardingOpen] = useState<boolean>(false);
+  const [isTabGuideOpen, setIsTabGuideOpen] = useState(false);
 
   // Detecta primeiro acesso do afiliado para exibir as boas-vindas e o guia
   useEffect(() => {
@@ -279,6 +274,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Travar completamente o scroll do fundo quando modais, popups ou drawers estiverem abertos
   const isAnyModalOrDrawerOpen = Boolean(
     isMobileMenuOpen ||
+    isTabGuideOpen ||
     isRegisterAffiliateModalOpen ||
     isCreateCompanyModalOpen ||
     isCreatePlanModalOpen ||
@@ -303,16 +299,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Role Security & Tab Guard
   useEffect(() => {
-    if (isMobileScreen) {
-      if (roleMode !== 'afiliado') {
-        setRoleMode('afiliado');
-      }
-      return;
-    }
     if (userRole && userRole !== roleMode) {
       setRoleMode(userRole);
     }
-  }, [userRole, isMobileScreen]);
+  }, [userRole, roleMode]);
 
   useEffect(() => {
     if ((activeTab === 'database' || activeTab === 'modal_backgrounds') && !isSuperAdmin) {
@@ -985,6 +975,55 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
 
+  if (!currentUser) return null;
+
+  if (loading) {
+    return <div className="lp-profile-gate-loading" role="status" aria-live="polite">Carregando seu perfil seguro…</div>;
+  }
+
+  // Enquanto o cadastro não for aprovado, o formulário é a única área acessível.
+  if (requiresProfileApproval) {
+    return (
+      <div className="leadspay-platform lp-profile-gate" data-theme={isDarkMode ? 'dark' : 'light'}>
+        <header className="lp-profile-gate-header">
+          <TechifyLogo size="sm" />
+          <div className="lp-profile-gate-actions">
+            <button
+              type="button"
+              className="lp-guide-trigger"
+              onClick={() => {
+                const nextTheme = isDarkMode ? 'light' : 'dark';
+                setIsDarkMode(nextTheme === 'dark');
+                try { window.localStorage.setItem('leadspay-landing-theme', nextTheme); } catch { /* Tema ativo nesta sessão. */ }
+                window.dispatchEvent(new CustomEvent('leadspay-theme-change', { detail: nextTheme }));
+              }}
+              aria-label={`Ativar tema ${isDarkMode ? 'claro' : 'escuro'}`}
+              aria-pressed={isDarkMode}
+            >
+              {isDarkMode ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+              <span className="hidden sm:inline">{isDarkMode ? 'Tema claro' : 'Tema escuro'}</span>
+            </button>
+            <button type="button" className="lp-guide-trigger" onClick={() => setIsTabGuideOpen(true)} aria-haspopup="dialog">
+              <BookOpen size={16} aria-hidden="true" /> Guia do perfil
+            </button>
+            <button type="button" className="lp-profile-exit" onClick={() => void logout()}>Sair</button>
+          </div>
+        </header>
+        <main className="lp-profile-gate-main">
+          <MeuPerfilView
+            userProfile={userProfile}
+            onSaveProfile={handleSaveProfile}
+            onSubmitForVerification={handleSubmitForVerification}
+            onNavigateToTab={setActiveTab}
+            roleMode={roleMode}
+            company={activeCompany}
+          />
+        </main>
+        {isTabGuideOpen && <TabGuideModal tab="meu_perfil" roleMode={roleMode} onClose={() => setIsTabGuideOpen(false)} onNavigate={setActiveTab} />}
+      </div>
+    );
+  }
+
   return (
     <div className="leadspay-platform min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]" data-theme={isDarkMode ? 'dark' : 'light'}>
       {/* Background Ambience */}
@@ -1330,13 +1369,24 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 roleMode === 'afiliado' ? 'bg-[#D9F22A] shadow-[0_0_8px_#D9F22A]' : 'bg-indigo-400 shadow-[0_0_8px_#818cf8]'
               }`} />
               <span className="text-[11px] sm:text-xs font-bold tracking-wide text-white/90">
-                {roleMode === 'afiliado' ? 'Painel do Afiliado' : 'Painel da Empresa / Startup'}
+                {isSuperAdmin ? 'Painel Administrativo LeadsPay' : roleMode === 'afiliado' ? 'Painel do Afiliado' : 'Painel da Empresa / Startup'}
               </span>
             </div>
           </div>
 
           {/* Right Top Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 ml-auto flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTabGuideOpen(true)}
+              className="hidden sm:flex items-center gap-2 min-h-9 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/85 text-xs font-bold cursor-pointer"
+              aria-haspopup="dialog"
+              aria-label={`Abrir guia da aba ${activeTab}`}
+            >
+              <BookOpen className="w-4 h-4" aria-hidden="true" />
+              Guia desta aba
+            </button>
+
             {/* Dark / Light Mode Switcher */}
             <button 
               onClick={() => {
@@ -1581,7 +1631,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   userName={userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuário'}
                   userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
                   userEmail={userEmail || currentUser?.email || undefined}
-                  onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
+                  onOpenOnboardingTour={() => setIsTabGuideOpen(true)}
                   onBackToHome={onBackToHome}
                   notificationItems={inAppNotifications}
                   onOpenNotifications={markNotificationsAsRead}
@@ -1591,7 +1641,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               {activeTab === 'comunidade' && (
                 <ComunidadeAfiliadosView
                   userName={userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Afiliado'}
-                  onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
+                  onOpenOnboardingTour={() => setIsTabGuideOpen(true)}
                   onNavigateToVitrine={() => setActiveTab('vitrine')}
                 />
               )}
@@ -1974,6 +2024,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           setTimeout(() => setLiveToast(null), 4000);
         }}
       />
+
+      {isTabGuideOpen && <TabGuideModal tab={activeTab} roleMode={roleMode} onClose={() => setIsTabGuideOpen(false)} onNavigate={setActiveTab} />}
     </div>
   );
 };

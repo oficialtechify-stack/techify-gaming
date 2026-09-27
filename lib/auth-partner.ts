@@ -36,12 +36,6 @@ export interface PartnerAuthResult {
   companyName?: string;
   companySlug?: string;
   email?: string;
-  asaasSubaccountId?: string;
-  subaccountId?: string;
-  asaasWalletId?: string;
-  walletId?: string;
-  asaasApiKey?: string;
-  subaccountApiKey?: string;
   webhookUrl?: string;
   status?: string;
   isApproved?: boolean;
@@ -60,6 +54,14 @@ export function generatePartnerApiKey(): string {
   return `lp_live_${timestamp}${randomPart1.slice(0, 8)}${randomPart2.slice(0, 8)}`;
 }
 
+function safePartnerData(data: Record<string, any>): Record<string, any> {
+  const safe = { ...data };
+  for (const key of ['apiKey', 'asaasApiKey', 'subaccountApiKey', 'asaasSubaccountId', 'asaasWalletId', 'subaccountId', 'subaccount_id', 'walletId']) {
+    delete safe[key];
+  }
+  return safe;
+}
+
 /**
  * Helper interno para resolver dados do parceiro (usuário + empresa vinculada)
  */
@@ -68,9 +70,6 @@ async function resolvePartnerDetails(
   data: Record<string, any>,
   db: Firestore
 ): Promise<PartnerAuthResult> {
-  let asaasSubaccountId = data.asaasSubaccountId || data.subaccountId || data.subaccount_id || null;
-  let asaasWalletId = data.asaasWalletId || data.walletId || null;
-  let asaasApiKey = data.asaasApiKey || data.subaccountApiKey || null;
   let webhookUrl = data.webhookUrl || data.postbackUrl || null;
   let companyId = data.companyId || null;
   let companyName = data.companyName || data.name || 'Parceiro LeadsPay';
@@ -84,15 +83,6 @@ async function resolvePartnerDetails(
       const compDoc = await getDoc(doc(db, 'companies', String(companyId)));
       if (compDoc.exists()) {
         const cData = compDoc.data();
-        if (!asaasSubaccountId) {
-          asaasSubaccountId = cData.asaasSubaccountId || cData.subaccountId || null;
-        }
-        if (!asaasWalletId) {
-          asaasWalletId = cData.asaasWalletId || cData.walletId || null;
-        }
-        if (!asaasApiKey) {
-          asaasApiKey = cData.asaasApiKey || cData.subaccountApiKey || null;
-        }
         if (!webhookUrl) {
           webhookUrl = cData.webhookUrl || cData.postbackUrl || null;
         }
@@ -114,15 +104,6 @@ async function resolvePartnerDetails(
         const compDoc = compSnap.docs[0];
         const cData = compDoc.data();
         companyId = compDoc.id;
-        if (!asaasSubaccountId) {
-          asaasSubaccountId = cData.asaasSubaccountId || cData.subaccountId || null;
-        }
-        if (!asaasWalletId) {
-          asaasWalletId = cData.asaasWalletId || cData.walletId || null;
-        }
-        if (!asaasApiKey) {
-          asaasApiKey = cData.asaasApiKey || cData.subaccountApiKey || null;
-        }
         if (!webhookUrl) {
           webhookUrl = cData.webhookUrl || cData.postbackUrl || null;
         }
@@ -144,21 +125,15 @@ async function resolvePartnerDetails(
     companyName,
     companySlug,
     email: data.email || '',
-    asaasSubaccountId: asaasSubaccountId || undefined,
-    subaccountId: asaasSubaccountId || undefined,
-    asaasWalletId: asaasWalletId || undefined,
-    walletId: asaasWalletId || undefined,
-    asaasApiKey: asaasApiKey || undefined,
-    subaccountApiKey: asaasApiKey || undefined,
     webhookUrl: webhookUrl || undefined,
     status,
     isApproved,
-    raw: data
+    raw: safePartnerData(data)
   };
 }
 
 /**
- * Valida se a chave de API do parceiro existe e retorna seus dados de conta e subconta Asaas.
+ * Valida uma chave de API LeadsPay e retorna somente dados necessários à integração.
  * Suporta busca nas coleções users, user_profiles e companies.
  */
 export async function validateApiKey(
@@ -211,16 +186,10 @@ export async function validateApiKey(
         companyName: cData.name || 'Empresa LeadsPay',
         companySlug: cData.slug || '',
         email: cData.email || '',
-        asaasSubaccountId: cData.asaasSubaccountId || cData.subaccountId || undefined,
-        subaccountId: cData.asaasSubaccountId || cData.subaccountId || undefined,
-        asaasWalletId: cData.asaasWalletId || cData.walletId || undefined,
-        walletId: cData.asaasWalletId || cData.walletId || undefined,
-        asaasApiKey: cData.asaasApiKey || cData.subaccountApiKey || undefined,
-        subaccountApiKey: cData.asaasApiKey || cData.subaccountApiKey || undefined,
         webhookUrl: cData.webhookUrl || cData.postbackUrl || undefined,
         status: cData.status || 'approved',
         isApproved: cData.verified === true || cData.status === 'approved',
-        raw: cData
+        raw: safePartnerData(cData)
       };
     }
 

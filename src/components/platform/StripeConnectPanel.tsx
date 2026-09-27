@@ -10,6 +10,12 @@ type Props = {
   userProfile: UserSellerProfile;
 };
 
+async function readApiJson(response: Response): Promise<Record<string, any>> {
+  const data = await response.clone().json().catch(() => null);
+  if (data && typeof data === 'object' && !Array.isArray(data)) return data;
+  throw new Error(`O servidor retornou uma resposta inválida (${response.status}). Confirme se esta implantação inclui a API de recebimentos.`);
+}
+
 export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) => {
   const role: StripeRole = roleMode === 'empresa' ? 'empresa' : 'afiliado';
   const [status, setStatus] = useState<'loading' | 'not_connected' | 'onboarding_incomplete' | 'connected' | 'error'>('loading');
@@ -20,18 +26,18 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
     const token = await auth.currentUser?.getIdToken();
     if (!token) {
       setStatus('error');
-      setMessage('Entre novamente na sua conta para consultar a Stripe.');
+      setMessage('Entre novamente na sua conta para consultar recebimentos.');
       return;
     }
     try {
       const response = await fetch(`/api/stripe/connect-status?role=${role}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Não foi possível consultar a conta Stripe.');
+      const result = await readApiJson(response);
+      if (!response.ok) throw new Error(result.error || 'Não foi possível consultar a conta de recebimento.');
       setStatus(result.status);
       setMessage('');
     } catch (error) {
       setStatus('error');
-      setMessage(error instanceof Error ? error.message : 'Não foi possível consultar a conta Stripe.');
+      setMessage(error instanceof Error ? error.message : 'Não foi possível consultar a conta de recebimento.');
     }
   }, [role]);
 
@@ -48,11 +54,11 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
       });
-      const result = await response.json();
-      if (!response.ok || !result.url) throw new Error(result.error || 'Não foi possível abrir o cadastro Stripe.');
+      const result = await readApiJson(response);
+      if (!response.ok || !result.url) throw new Error(result.error || 'Não foi possível abrir o cadastro de recebimentos.');
       window.location.assign(result.url);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Erro ao iniciar cadastro Stripe.');
+      setMessage(error instanceof Error ? error.message : 'Erro ao iniciar cadastro de recebimentos.');
       setBusy(false);
     }
   };
@@ -68,11 +74,11 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
       });
-      const result = await response.json();
-      if (!response.ok || !result.url) throw new Error(result.error || 'Não foi possível abrir o painel Stripe.');
+      const result = await readApiJson(response);
+      if (!response.ok || !result.url) throw new Error(result.error || 'Não foi possível abrir o painel de recebimentos.');
       window.location.assign(result.url);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Erro ao abrir painel Stripe.');
+      setMessage(error instanceof Error ? error.message : 'Erro ao abrir painel de recebimentos.');
       setBusy(false);
     }
   };
@@ -104,7 +110,7 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
           </button>
         ) : (
           <button type="button" onClick={() => void startOnboarding()} disabled={busy || status === 'loading'} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{status === 'onboarding_incomplete' ? 'Continuar cadastro Stripe' : 'Conectar conta Stripe'}<ArrowUpRight className="h-4 w-4" />
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{status === 'onboarding_incomplete' ? 'Continuar cadastro' : 'Conectar recebimentos'}<ArrowUpRight className="h-4 w-4" />
           </button>
         )}
         {status === 'error' && <button type="button" onClick={() => void fetchStatus()} className="min-h-10 rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50">Tentar novamente</button>}

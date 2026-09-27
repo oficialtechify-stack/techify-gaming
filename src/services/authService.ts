@@ -159,32 +159,11 @@ export function isValidCNPJ(cnpj: string = ''): boolean {
 export async function checkCpfAlreadyExists(cpf: string, currentUserId?: string): Promise<boolean> {
   const clean = cleanDigits(cpf);
   if (!clean || clean.length !== 11) return false;
-
-  try {
-    const formatted = formatCPF(clean);
-    const profilesColl = collection(db, COLLECTIONS.PROFILES);
-    
-    // Query by cleanCpf
-    const q1 = query(profilesColl, where('cleanCpf', '==', clean));
-    const snap1 = await getDocs(q1);
-    const conflictingDocs1 = snap1.docs.filter(d => 
-      d.id !== DEFAULT_USER_ID && (!currentUserId || d.id !== currentUserId)
-    );
-    if (conflictingDocs1.length > 0) return true;
-
-    // Query by formatted cpf
-    const q2 = query(profilesColl, where('cpf', '==', formatted));
-    const snap2 = await getDocs(q2);
-    const conflictingDocs2 = snap2.docs.filter(d => 
-      d.id !== DEFAULT_USER_ID && (!currentUserId || d.id !== currentUserId)
-    );
-    if (conflictingDocs2.length > 0) return true;
-
-    return false;
-  } catch (err) {
-    console.warn('Verificação de CPF secundária:', err);
-    return false;
-  }
+  const token = await auth.currentUser?.getIdToken();
+  if (!token || (currentUserId && auth.currentUser?.uid !== currentUserId)) throw new Error('Entre novamente para validar o CPF com segurança.');
+  const response = await fetch('/api/profile/check-document', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'cpf', document: clean }) });
+  if (!response.ok) throw new Error('Não foi possível validar este CPF agora. Tente novamente.');
+  return Boolean((await response.json() as { exists?: boolean }).exists);
 }
 
 /**
@@ -193,29 +172,30 @@ export async function checkCpfAlreadyExists(cpf: string, currentUserId?: string)
 export async function checkCnpjAlreadyExists(cnpj: string, currentOwnerId?: string): Promise<boolean> {
   const clean = cleanDigits(cnpj);
   if (!clean || clean.length !== 14) return false;
+  const token = await auth.currentUser?.getIdToken();
+  if (!token || (currentOwnerId && auth.currentUser?.uid !== currentOwnerId)) throw new Error('Entre novamente para validar o CNPJ com segurança.');
+  const response = await fetch('/api/profile/check-document', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'cnpj', document: clean }) });
+  if (!response.ok) throw new Error('Não foi possível validar este CNPJ agora. Tente novamente.');
+  return Boolean((await response.json() as { exists?: boolean }).exists);
+}
 
+async function lookupOwnLegacyProfile(email: string): Promise<UserSellerProfile | null> {
+  const currentUser = auth.currentUser;
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!currentUser || currentUser.email?.toLowerCase() !== normalizedEmail) return null;
   try {
-    const formatted = formatCNPJ(clean);
-    const companiesColl = collection(db, COLLECTIONS.COMPANIES);
-    
-    const q1 = query(companiesColl, where('cleanCnpj', '==', clean));
-    const snap1 = await getDocs(q1);
-    const conflictingDocs1 = snap1.docs.filter(d => 
-      !currentOwnerId || (d.data() as any).ownerId !== currentOwnerId
-    );
-    if (conflictingDocs1.length > 0) return true;
-
-    const q2 = query(companiesColl, where('cnpj', '==', formatted));
-    const snap2 = await getDocs(q2);
-    const conflictingDocs2 = snap2.docs.filter(d => 
-      !currentOwnerId || (d.data() as any).ownerId !== currentOwnerId
-    );
-    if (conflictingDocs2.length > 0) return true;
-
-    return false;
-  } catch (err) {
-    console.warn('Verificação de CNPJ secundária:', err);
-    return false;
+    const token = await currentUser.getIdToken();
+    const response = await fetch('/api/profile/legacy-lookup', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+    if (!response.ok) return null;
+    const result = await response.json() as { profile?: UserSellerProfile | null };
+    return result.profile || null;
+  } catch (error) {
+    console.warn('Consulta segura do perfil legado indisponível:', error);
+    return null;
   }
 }
 
@@ -320,28 +300,6 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
   const cleanCpf = data.cpf ? cleanDigits(data.cpf) : '';
   const formattedCpf = cleanCpf ? formatCPF(cleanCpf) : '';
 
-  // 0. Pre-verificação: Garantir que não existe conta cadastrada como EMPRESA com este e-mail
-  try {
-    const compQ = query(collection(db, COLLECTIONS.PROFILES), where('email', '==', normalizedEmail));
-    const compSnap = await getDocs(compQ);
-    if (!compSnap.empty) {
-      const existing = compSnap.docs[0].data() as UserSellerProfile;
-      const isCompany = existing.accountType === 'empresa' || 
-                        existing.hasCompanyProfile === true || 
-                        Boolean(existing.companyId) || 
-                        existing.activeRoleMode === 'empresa';
-      if (isCompany) {
-        const err = new Error('custom/company-cannot-create-affiliate');
-        (err as any).code = 'custom/company-cannot-create-affiliate';
-        throw err;
-      }
-    }
-  } catch (checkErr: any) {
-    if (checkErr.code === 'custom/company-cannot-create-affiliate') {
-      throw checkErr;
-    }
-  }
-
   // 1. Validar CPF se fornecido completo
   if (cleanCpf && cleanCpf.length === 11) {
     if (!isValidCPF(cleanCpf)) {
@@ -398,6 +356,7 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
   const existingSnap = await getDoc(profileRef);
   const existingData = existingSnap.exists() ? (existingSnap.data() as UserSellerProfile) : null;
+  const affiliateVerificationStatus = existingData?.verificationStatus || (existingData?.verified ? 'approved' : 'unsubmitted');
 
   if (existingData) {
     const isCompany = existingData.accountType === 'empresa' || 
@@ -439,15 +398,15 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     cleanCnpj: undefined,
     verificationRoleType: 'afiliado',
     verified: existingData?.verified ?? false,
-    verificationStatus: existingData?.verificationStatus ?? 'pending',
+    verificationStatus: affiliateVerificationStatus,
     updatedAt: now
   };
 
   // Salvar perfil atualizado no Firestore
   await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
 
-  // Criar ou atualizar verificação do afiliado
-  try {
+  // Só cria a solicitação de análise após o envio explícito do perfil.
+  if (affiliateVerificationStatus !== 'unsubmitted') try {
     const verifRef = doc(db, COLLECTIONS.VERIFICATIONS, user.uid);
     const verifData = {
       id: user.uid,
@@ -459,9 +418,9 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
       pixKey: data.pixKey?.trim() || formattedCpf || '',
       pixKeyType: data.pixKeyType || 'CPF',
       roleType: 'afiliado',
-      status: existingData?.verificationStatus || 'pending',
+      status: affiliateVerificationStatus,
       avatar,
-      submittedAt: now
+      ...(affiliateVerificationStatus === 'pending' ? { submittedAt: now } : {})
     };
     await setDoc(verifRef, sanitizeForFirestore(verifData), { merge: true });
   } catch (verifErr) {
@@ -582,15 +541,15 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
       companyCnpj: existingCompany.cnpj || (docType === 'CNPJ' ? formattedCnpj : (docType === 'CPF' ? formattedCpf : '')),
       verificationRoleType: 'empresa',
       verified: existingCompany.verified ?? existingData?.verified ?? false,
-      verificationStatus: existingCompany.status === 'approved' ? 'approved' : (existingData?.verificationStatus || 'pending'),
-      kyc_status: existingCompany.status === 'approved' ? 'verified' : 'submitted',
+      verificationStatus: existingCompany.status === 'approved' ? 'approved' : (existingData?.verificationStatus || (existingCompany.status === 'pending' ? 'pending' : 'unsubmitted')),
+      kyc_status: existingCompany.status === 'approved' ? 'verified' : (existingCompany.status === 'pending' ? 'submitted' : 'pending'),
       updatedAt: now
     };
 
     await setDoc(profileRef, sanitizeForFirestore(updatedProfile), { merge: true });
 
-    // Atualizar verificação vinculada
-    try {
+    // Recriar a solicitação somente se a empresa já tiver sido enviada.
+    if (existingCompany.status !== 'draft') try {
       const verifData = {
         id: user.uid,
         userId: user.uid,
@@ -607,7 +566,6 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
         submittedAt: now
       };
       await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, user.uid), sanitizeForFirestore(verifData), { merge: true });
-      await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, existingCompany.id), sanitizeForFirestore(verifData), { merge: true });
     } catch (vErr) {}
 
     return {
@@ -664,7 +622,8 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     totalSalesVolume: 0,
     commissionRange: '30% - 50%',
     verified: false,
-    status: 'pending',
+    status: existingData?.verificationStatus === 'pending' ? 'pending' : 'draft',
+    kyc_status: existingData?.verificationStatus === 'pending' ? 'submitted' : 'pending',
     ownerId: user.uid,
     submittedBy: user.uid,
     submittedByName: data.ownerName.trim(),
@@ -717,17 +676,17 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     cleanCpf: docType === 'CPF' ? cleanCpf : '',
     cnpj: docType === 'CNPJ' ? formattedCnpj : '',
     verificationRoleType: 'empresa',
-    verificationStatus: 'pending',
-    kyc_status: 'submitted',
+    verificationStatus: existingData?.verificationStatus === 'pending' ? 'pending' : 'unsubmitted',
+    kyc_status: existingData?.verificationStatus === 'pending' ? 'submitted' : 'pending',
     verified: false,
-    verificationSubmittedAt: now,
+    ...(existingData?.verificationStatus === 'pending' ? { verificationSubmittedAt: existingData.verificationSubmittedAt || now } : {}),
     updatedAt: now
   };
 
   await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
 
-  // 3. Criar registro de verificação para a fila de "Aprovação de Empresas" do Super Painel Admin
-  try {
+  // A fila de aprovação é alimentada pelo envio explícito do perfil em Meu Perfil.
+  if (profile.verificationStatus === 'pending') try {
     const verifData = {
       id: user.uid,
       userId: user.uid,
@@ -753,7 +712,6 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     };
 
     await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, user.uid), sanitizeForFirestore(verifData), { merge: true });
-    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId), sanitizeForFirestore(verifData), { merge: true });
   } catch (vErr) {
     console.warn('Erro ao salvar registro de verificação de empresa:', vErr);
   }
@@ -838,13 +796,11 @@ export async function loginUser(email: string, password: string, preferredRole?:
       await setDoc(profileRef, sanitizeForFirestore(profile), { merge: true });
     }
   } else {
-    // Tentar localizar por e-mail em caso de migração
-    const profilesColl = collection(db, COLLECTIONS.PROFILES);
-    const q = query(profilesColl, where('email', '==', normalizedEmail));
-    const snap = await getDocs(q);
+    // Migração segura por e-mail: o servidor só consulta o e-mail da própria conta autenticada.
+    const legacyProfile = await lookupOwnLegacyProfile(normalizedEmail);
 
-    if (!snap.empty) {
-      profile = snap.docs[0].data() as UserSellerProfile;
+    if (legacyProfile) {
+      profile = legacyProfile;
       const isAdm = isSuperAdminEmail(normalizedEmail) || profile.accountType === 'admin' || profile.role === 'Administrador do Sistema';
       
       if (isAdm) {
@@ -927,7 +883,9 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
 
   try {
     const profileSnap = await getDoc(profileRef);
-    const existing = profileSnap.exists() ? (profileSnap.data() as UserSellerProfile) : null;
+    const existing = profileSnap.exists()
+      ? profileSnap.data() as UserSellerProfile
+      : await lookupOwnLegacyProfile(normalizedEmail);
 
     if (isAdm) {
       profile = {
@@ -993,7 +951,7 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
           totalSalesVolume: 0,
           commissionRange: '30% - 50%',
           verified: false,
-          status: 'pending',
+          status: 'draft',
           ownerId: user.uid,
           submittedBy: user.uid,
           submittedByName: user.displayName || 'Produtor',
@@ -1002,25 +960,7 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         };
         await setDoc(doc(db, COLLECTIONS.COMPANIES, companyId), sanitizeForFirestore(newCompany), { merge: true });
 
-        // Criar registro na fila de verificação de empresas
-        const verifData = {
-          id: user.uid,
-          userId: user.uid,
-          name: companyName,
-          firstName: user.displayName || 'Produtor',
-          email: normalizedEmail,
-          phone: '',
-          avatar: companyLogo,
-          roleType: 'empresa',
-          companyId: companyId,
-          companyName: companyName,
-          companyCategory: 'SaaS / B2B',
-          status: 'pending',
-          kyc_status: 'submitted',
-          submittedAt: now
-        };
-        await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, user.uid), sanitizeForFirestore(verifData), { merge: true });
-        await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId), sanitizeForFirestore(verifData), { merge: true });
+        // O pedido de análise só será criado após o envio do perfil completo.
       }
 
       profile = {
@@ -1040,7 +980,7 @@ export async function loginWithGoogle(preferredRole: UserRoleMode = 'afiliado'):
         companyId: companyId,
         companyName: companyName,
         verificationRoleType: 'empresa',
-        verificationStatus: existing?.verificationStatus || 'pending',
+        verificationStatus: existing?.verificationStatus || 'unsubmitted',
         verified: existing?.verified ?? false,
         updatedAt: now
       };

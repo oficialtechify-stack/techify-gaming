@@ -266,6 +266,16 @@
 
 .leadspay-auth-screen .auth-card .auth-google-button > span { color: var(--auth-ink) !important; }
 
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button {
+  border-color: #537b44;
+  background: #edf8e8;
+  color: #18382b !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button:hover {
+  border-color: #77aa61;
+  background: #fff;
+}
+
 .leadspay-auth-screen .auth-card .auth-submit-button {
   min-height: 48px;
   border: 1px solid #8ecb69;

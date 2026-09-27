@@ -666,7 +666,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return monthlyChartPoints[midIdx] || monthlyChartPoints[0];
   }, [hoveredPointIndex, monthlyChartPoints, chartHasSales]);
 
-  // Derive transfer states from webhook-confirmed Stripe sales; never trust cached Asaas balances.
+  // Derive transfer states from webhook-confirmed Stripe sales; never trust cached balance values.
   const { available: availableBalance, pending: pendingBalance } = useMemo(() => transactions.reduce((totals, sale) => {
     if (!['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(String(sale.status || '').toLowerCase())) return totals;
     const record = sale as SaleTransaction & { transferStatus?: string };
@@ -1002,7 +1002,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 onClick={onOpenOnboardingTour}
                 className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/90 border border-white/10 text-xs font-bold font-['Syne'] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
-                <span>Ver Guia da Plataforma</span>
+                <span>Guia desta aba</span>
               </button>
             )}
             <button

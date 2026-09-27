@@ -8,8 +8,16 @@ type Role = 'empresa' | 'afiliado';
 function setHeaders(req: RequestLike, res: ResponseLike): void {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Vary', 'Origin');
-  const rawBase = process.env.LEADSPAY_BASE_URL?.trim();
-  const allowedOrigin = rawBase ? new URL(rawBase).origin : '';
+  const configuredBase = process.env.LEADSPAY_BASE_URL?.trim();
+  const vercelBase = process.env.VERCEL_URL?.trim();
+  let allowedOrigin = '';
+  try {
+    const rawBase = configuredBase || (vercelBase ? `https://${vercelBase}` : '');
+    if (rawBase) allowedOrigin = new URL(rawBase).origin;
+  } catch {
+    // A malformed optional base URL must not crash the function before its
+    // normal JSON error handling. Same-origin requests do not require CORS.
+  }
   if (typeof req.headers.origin === 'string' && req.headers.origin === allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -25,6 +33,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   setHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return fail(res, 405, 'Método não permitido.');
+  if (typeof req.headers.authorization !== 'string' || !/^Bearer\s+\S+/i.test(req.headers.authorization)) {
+    return fail(res, 401, 'Faça login novamente para configurar recebimentos.');
+  }
 
   try {
     const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined);
@@ -58,7 +69,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       company = companySnap.data() as Record<string, unknown>;
       if (company.ownerId !== identity.uid) return fail(res, 403, 'A empresa não pertence à conta autenticada.');
       if (company.verified !== true || company.status !== 'approved') {
-        return fail(res, 403, 'A aprovação da Empresa é necessária antes do onboarding Stripe.');
+        return fail(res, 403, 'A aprovação da Empresa é necessária antes de configurar recebimentos.');
       }
     }
 
@@ -104,7 +115,15 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     });
     return res.status(200).json({ url: accountLink.url, role, accountId });
   } catch (error) {
-    console.error('[Stripe Connect onboarding]', error instanceof Error ? error.message : 'Erro desconhecido');
-    return fail(res, 503, 'Não foi possível iniciar o onboarding Stripe. Verifique a configuração de teste e tente novamente.');
+    const detail = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('[Stripe Connect onboarding]', detail);
+    const unauthorized = /token ausente|token inválido|token expir|invalid.*token|permission denied/i.test(detail);
+    const configMissing = /não configurad|precisa conter JSON válido|credencial.*incompleta|de outro projeto|STRIPE indisponível|LEADSPAY_BASE_URL/i.test(detail);
+    return res.status(unauthorized ? 401 : 503).json({
+      error: configMissing
+        ? 'A conexão de recebimentos ainda não está configurada neste ambiente. Revise as variáveis privadas do servidor e tente novamente.'
+        : 'Não foi possível iniciar a conexão de recebimentos. Tente novamente; se o erro continuar, contate o suporte da plataforma.',
+      code: unauthorized ? 'AUTHENTICATION_REQUIRED' : configMissing ? 'PAYMENTS_CONFIGURATION_REQUIRED' : 'PAYMENTS_ONBOARDING_UNAVAILABLE',
+    });
   }
 }
