@@ -203,7 +203,9 @@ export const DatabaseManagerView: React.FC = () => {
         if (!cancelled) setValidAuthUids(verified);
       } catch {
         if (!cancelled) {
-          setValidAuthUids(new Set());
+          // An audit outage is not proof that all Firebase users are missing.
+          // Preserve Firestore records for read-only admin inspection.
+          setValidAuthUids(null);
           setIdentityAuditError(true);
         }
       }
@@ -256,7 +258,6 @@ export const DatabaseManagerView: React.FC = () => {
           </p>
           <div className="bg-[#050811] border border-white/10 rounded-xl px-4 py-2.5 font-mono text-xs text-[#D9F22A] font-bold space-y-1">
             <div>rickmarketing81@gmail.com</div>
-            <div>leadspay.oficial@gmail.com</div>
           </div>
           <p className="text-[11px] text-white/40 mt-1">
             Seu usuário atual ({currentUser?.email || 'Visitante'}) não possui privilégios de superadministrador.
@@ -268,8 +269,16 @@ export const DatabaseManagerView: React.FC = () => {
 
   // ================= AÇÕES DE APROVAÇÃO E RECUSA =================
 
+  const identityAuditReady = validAuthUids !== null && !identityAuditError;
+  const requireIdentityAudit = () => {
+    if (identityAuditReady) return true;
+    setErrorMessage('A ação foi pausada: a auditoria Firebase Admin ainda não confirmou as contas neste ambiente. Os cadastros permanecem visíveis e inalterados.');
+    return false;
+  };
+
   // Aprovar Usuário / Afiliado
   const handleApproveUser = async (userId: string, userName: string) => {
+    if (!requireIdentityAudit()) return;
     setProcessingId(userId);
     try {
       await approveVerificationInFirebase(userId);
@@ -331,6 +340,7 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Confirmar Recusa através do Modal Seguro
   const handleConfirmReject = async () => {
+    if (!requireIdentityAudit()) return;
     if (!rejectModal.target) return;
     const { id, name, type } = rejectModal.target;
     const reason = rejectModal.reason.trim() || 'Dados cadastrais necessitam de ajuste ou confirmação.';
@@ -369,6 +379,7 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Aprovar Empresa (Startup / Produtor)
   const handleApproveCompany = async (companyId: string, companyName: string) => {
+    if (!requireIdentityAudit()) return;
     setProcessingId(companyId);
     try {
       await approveCompanyInFirebase(companyId);
@@ -442,6 +453,7 @@ export const DatabaseManagerView: React.FC = () => {
   };
 
   const handleConfirmBan = async () => {
+    if (!requireIdentityAudit()) return;
     if (!banModal.target) return;
     setBanModal(prev => ({ ...prev, isProcessing: true }));
 
@@ -468,6 +480,7 @@ export const DatabaseManagerView: React.FC = () => {
   };
 
   const handleUnban = async (target: SecurityTarget) => {
+    if (!requireIdentityAudit()) return;
     if (!confirm(`Deseja realmente desbanir e restaurar o acesso de "${target.name}"?`)) return;
     setProcessingId(target.id);
 
@@ -503,6 +516,7 @@ export const DatabaseManagerView: React.FC = () => {
   };
 
   const handleConfirmArchive = async () => {
+    if (!requireIdentityAudit()) return;
     if (!purgeModal.target) return;
     const inputUpper = purgeModal.confirmationInput.trim().toUpperCase();
     if (inputUpper !== 'ARQUIVAR') {
@@ -533,6 +547,7 @@ export const DatabaseManagerView: React.FC = () => {
   };
 
   const handleRestoreArchive = async (target: SecurityTarget) => {
+    if (!requireIdentityAudit()) return;
     setProcessingId(target.id);
     try {
       await restoreArchivedEntityInFirebase(target.id, target.type);
@@ -568,7 +583,7 @@ export const DatabaseManagerView: React.FC = () => {
     // 1. Verificações explícitas (apenas afiliados)
     verifications.forEach((v) => {
       const key = (v.userId || v.id || '').trim();
-      if (!key || key.startsWith('comp-') || key === 'undefined' || key === 'null' || !validAuthUids?.has(key)) return;
+      if (!key || key.startsWith('comp-') || key === 'undefined' || key === 'null' || (validAuthUids !== null && !validAuthUids.has(key))) return;
       if (!(v.email || '').includes('@') || !(v.name || '').trim()) return;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
       if (v.status === 'pending' && !v.submittedAt) return;
@@ -595,7 +610,7 @@ export const DatabaseManagerView: React.FC = () => {
     // 2. Perfis de usuários cadastrados
     registeredProfiles.forEach((p) => {
       const key = (p.userId || p.id || '').trim();
-      if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id) || !validAuthUids?.has(key)) return;
+      if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id) || (validAuthUids !== null && !validAuthUids.has(key))) return;
       if (!key || key.startsWith('comp-') || key === 'undefined' || key === 'null') return;
       if (p.verificationStatus === 'unsubmitted' || p.verificationStatus === 'draft') return;
       
@@ -706,7 +721,7 @@ export const DatabaseManagerView: React.FC = () => {
     // 1. Agrupar documentos duplicados pela identidade do proprietário.
     companies.forEach((c) => {
       const companyOwnerId = c.ownerId || c.submittedBy;
-      if (deletedEntityIds.has(c.id) || (companyOwnerId && deletedEntityIds.has(companyOwnerId)) || !validAuthUids?.has(companyOwnerId || '')) return;
+      if (deletedEntityIds.has(c.id) || (companyOwnerId && deletedEntityIds.has(companyOwnerId)) || (validAuthUids !== null && !validAuthUids.has(companyOwnerId || ''))) return;
       if (c.status === 'draft') return;
       if (c.status === 'pending' && !c.submittedAt && !c.verificationSubmittedAt) return;
       // Pula registros órfãos ou corrompidos sem nenhum dado identificável
@@ -740,7 +755,7 @@ export const DatabaseManagerView: React.FC = () => {
         const requestOwnerId = String(v.userId || v.id || '').trim();
         const ownerProfile = registeredProfiles.find((profile) => (profile.userId || profile.id) === requestOwnerId);
         const key = ownerProfile ? requestOwnerId : String(v.companyId || requestOwnerId || '').trim();
-        if (!key || !validAuthUids?.has(requestOwnerId) || deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
+        if (!key || (validAuthUids !== null && !validAuthUids.has(requestOwnerId)) || deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
         if (v.status === 'pending' && !v.submittedAt) return;
         
         const existing = map.get(key);
@@ -798,7 +813,7 @@ export const DatabaseManagerView: React.FC = () => {
                       p.partnerLevel === 'Super Administrador';
       if (isAdmin && !p.companyId && !p.companyName) return;
       const profileOwnerId = String(p.userId || p.id || '').trim();
-      if (!profileOwnerId || !validAuthUids?.has(profileOwnerId)) return;
+      if (!profileOwnerId || (validAuthUids !== null && !validAuthUids.has(profileOwnerId))) return;
 
       const isCompanyProfile = p.accountType === 'empresa' ||
                                p.hasCompanyProfile === true ||
@@ -964,7 +979,7 @@ export const DatabaseManagerView: React.FC = () => {
             Gestão de Cadastros, Segurança & Banco de Dados
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Fila separada de Afiliados e Empresas, validação de identidade e revisão segura dos cadastros.
+            Filas separadas de Afiliados e Empresas, cadastros agrupados por conta e revisão segura dos registros.
           </p>
         </div>
 
@@ -999,6 +1014,12 @@ export const DatabaseManagerView: React.FC = () => {
         </div>
       )}
 
+      {identityAuditError && (
+        <div className="lp-admin-audit-warning" role="status">
+          <strong>Auditoria de identidade não configurada.</strong> Os registros encontrados no Firestore continuam visíveis para conferência, mas ações de moderação ficam pausadas até configurar Firebase Admin no Vercel. Nenhum cadastro foi removido.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Resumo dos cadastros">
         <div className="rounded-2xl border border-white/10 bg-[#080d1a] p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-white/55">Afiliados · cadastros únicos</div>
@@ -1012,8 +1033,8 @@ export const DatabaseManagerView: React.FC = () => {
         </div>
         <div className="rounded-2xl border border-[#8ecb69]/25 bg-[#8ecb69]/[0.06] p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-[#b5ec76]">Integridade dos cadastros</div>
-          <div className="mt-1 text-sm font-semibold text-white">{validAuthUids === null ? 'Validando identidades…' : identityAuditError ? 'Validação indisponível' : `${validAuthUids.size} contas confirmadas`}</div>
-          <div className="mt-1 text-xs text-white/60">{identityAuditError ? 'Cadastros ocultos até configurar a auditoria segura.' : 'Rascunhos fora da fila; duplicados agrupados pelo UID.'}</div>
+          <div className="mt-1 text-sm font-semibold text-white">{identityAuditError ? 'Auditoria indisponível' : validAuthUids === null ? 'Validando identidades…' : `${validAuthUids.size} contas confirmadas`}</div>
+          <div className="mt-1 text-xs text-white/60">{identityAuditError ? `${allAffiliates.length + allCompanies.length} cadastros visíveis em modo somente leitura.` : 'Rascunhos fora da fila; duplicados agrupados pelo UID.'}</div>
         </div>
       </div>
 

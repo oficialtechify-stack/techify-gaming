@@ -39,10 +39,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
   if (typeof req.headers.authorization !== 'string' || !/^Bearer\s+\S+/i.test(req.headers.authorization)) {
-    return res.status(401).json({ error: 'Faça login novamente para enviar seu perfil.' });
-  }
-  if (typeof req.headers.authorization !== 'string' || !/^Bearer\s+\S+/i.test(req.headers.authorization)) {
-    return res.status(401).json({ error: 'Faça login novamente para enviar seu perfil.' });
+    return res.status(401).json({ code: 'AUTH_REQUIRED', error: 'Faça login novamente para enviar seu perfil.' });
   }
 
   try {
@@ -176,6 +173,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('[Profile submission]', detail);
-    return res.status(503).json({ error: 'Não foi possível enviar o cadastro neste momento. Tente novamente mais tarde.' });
+    const missingAdminConfig = /Credencial privada Firebase Admin não configurada|FIREBASE_SERVICE_ACCOUNT_JSON precisa conter|Credencial Firebase Admin (incompleta|de outro projeto|inválida)/i.test(detail);
+    const invalidIdentity = /Firebase ID token (ausente|inválido)|Firebase ID token has|ID token has expired/i.test(detail);
+    if (invalidIdentity) return res.status(401).json({ code: 'AUTH_INVALID', error: 'Sua sessão expirou. Entre novamente e reenvie o perfil.' });
+    if (missingAdminConfig) return res.status(503).json({ code: 'FIREBASE_ADMIN_NOT_CONFIGURED', error: 'O serviço de validação ainda não está configurado neste ambiente.' });
+    return res.status(503).json({ code: 'PROFILE_SUBMISSION_UNAVAILABLE', error: 'Não foi possível enviar o cadastro neste momento. Nenhum dado foi enviado para validação.' });
   }
 }

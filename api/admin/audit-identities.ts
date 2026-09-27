@@ -2,11 +2,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getServerAdminApp, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer';
 
 const ADMIN_EMAILS = new Set([
-  'leadspay.oficial@gmail.com',
   'rickmarketing81@gmail.com',
-  'agencyosoficial@gmail.com',
-  'aigerakabane81983521523@gmail.com',
-  'admin@leadspay.com',
 ]);
 
 type RequestLike = {

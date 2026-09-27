@@ -258,7 +258,7 @@ export function TabGuideModal({ tab, roleMode, onClose, onNavigate }: TabGuideMo
             <div><strong>Pratique com segurança</strong><p>{content.exercise}</p></div>
           </div>
           {tab === 'meu_perfil' && (
-            <a className="lp-guide-video-link" href="/leadspay-primeiros-passos.mp4" target="_blank" rel="noreferrer">
+            <a className="lp-guide-video-link" href="/tutorials/perfil-inicial.mp4" target="_blank" rel="noreferrer">
               <PlayCircle size={17} aria-hidden="true" /> Assistir vídeo de introdução <ArrowRight size={15} aria-hidden="true" />
             </a>
           )}

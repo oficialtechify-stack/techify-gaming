@@ -11,12 +11,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin') ||
-        (exists(/databases/$(database)/documents/user_profiles/$(request.auth.uid)) && get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.accountType == 'admin') ||
-        (exists(/databases/$(database)/documents/user_profiles/$(request.auth.uid)) && get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.role == 'Administrador do Sistema') ||
-        request.auth.token.email in ['leadspay.oficial@gmail.com', 'rickmarketing81@gmail.com', 'agencyosoficial@gmail.com', 'aigerakabane81983521523@gmail.com', 'admin@leadspay.com']
-      );
+      return isAuthenticated() && request.auth.token.email == 'rickmarketing81@gmail.com';
     }
 
     // Documento raiz da empresa

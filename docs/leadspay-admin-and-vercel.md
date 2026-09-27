@@ -2,9 +2,9 @@
 
 ## O que mudou nesta revisão
 
-- A lista administrativa exige que cada UID de cadastro exista no Firebase Authentication. Solicitações e perfis repetidos são agrupados pelo UID; cadastros sem envio explícito e registros órfãos deixam de aparecer como pedidos pendentes.
+- Quando a auditoria Firebase Admin está configurada, a lista exige que cada UID exista no Firebase Authentication. Solicitações e perfis repetidos são agrupados pelo UID; rascunhos não enviados ficam fora da fila. Se a auditoria estiver indisponível, os documentos Firestore continuam visíveis em modo somente leitura — uma falha de configuração nunca é tratada como “zero usuários”.
 - Empresa e afiliado continuam em filas e áreas distintas. O envio de perfil agora é autenticado no servidor, valida dados/documentos, grava perfil + solicitação + empresa em uma operação atômica e usa o UID como identificador canônico da solicitação.
-- Usuários só leem seus próprios documentos de perfil/usuário. As regras bloqueiam autopromoção a administrador, autoaprovação, alteração de status de empresa e gravação direta de pedidos KYC; ações de revisão dependem de administrador autenticado.
+- Usuários só leem seus próprios documentos de perfil/usuário. As regras bloqueiam autopromoção a administrador, autoaprovação, alteração de status de empresa e gravação direta de pedidos KYC. O único administrador autorizado é `rickmarketing81@gmail.com`; ações de revisão ficam pausadas se a auditoria de identidade não concluir.
 - O botão de atualização do painel volta a carregar as fontes em tempo real. A ferramenta de limpeza global do banco foi removida; os dados financeiros e históricos não são apagados por uma ação ampla.
 - O onboarding de recebimentos retorna JSON claro, valida autorização e informa quando a configuração do servidor falta; a interface não deve tentar converter uma página HTML de erro em JSON.
 - O tutorial em português tem legendas WebVTT e foi ligado ao formulário de primeiro acesso.
@@ -48,7 +48,7 @@ A rotina usa chave de idempotência e verifica transferências anteriores, além
 ## Validar painel e filas
 
 1. Faça login com uma conta administradora já autorizada no projeto Firebase.
-2. Confirme que o indicador de integridade valida as identidades; se mostrar “Validação indisponível”, revise `FIREBASE_SERVICE_ACCOUNT_JSON` e os logs de funções.
+2. Confirme que o indicador de integridade valida as identidades; se mostrar “Auditoria indisponível”, os registros permanecem visíveis sem moderação. Configure `FIREBASE_SERVICE_ACCOUNT_JSON` em Preview e consulte os logs das funções antes de retomar ações administrativas.
 3. Envie um perfil de teste completo de afiliado e depois um perfil de empresa, usando contas Firebase de teste separadas; verifique que cada pedido aparece apenas na fila correta.
 4. Recarregue o painel e confirme que cada pedido aparece uma única vez e mantém status/nome; confira que perfis não enviados e UIDs inexistentes ficam ocultos.
 5. Aprove/rejeite somente contas de teste. Não execute uma exclusão global nem movimentos com dinheiro real durante homologação.

@@ -735,7 +735,7 @@ export async function loginUser(email: string, password: string, preferredRole?:
 
   if (profileSnap.exists()) {
     profile = profileSnap.data() as UserSellerProfile;
-    const isAdm = isSuperAdminEmail(normalizedEmail) || profile.accountType === 'admin' || profile.role === 'Administrador do Sistema';
+    const isAdm = isSuperAdminEmail(normalizedEmail);
     
     if (isAdm) {
       profile.accountType = 'admin';
@@ -801,7 +801,7 @@ export async function loginUser(email: string, password: string, preferredRole?:
 
     if (legacyProfile) {
       profile = legacyProfile;
-      const isAdm = isSuperAdminEmail(normalizedEmail) || profile.accountType === 'admin' || profile.role === 'Administrador do Sistema';
+      const isAdm = isSuperAdminEmail(normalizedEmail);
       
       if (isAdm) {
         profile.accountType = 'admin';

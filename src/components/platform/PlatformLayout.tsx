@@ -121,8 +121,7 @@ interface PlatformLayoutProps {
 }
 
 const ADMIN_EMAILS = [
-  'rickmarketing81@gmail.com',
-  'leadspay.oficial@gmail.com'
+  'rickmarketing81@gmail.com'
 ];
 
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
@@ -299,10 +298,15 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Role Security & Tab Guard
   useEffect(() => {
+    if (isSuperAdmin) {
+      if (userRole !== 'admin') setUserRole('admin');
+      if (roleMode !== 'admin') setRoleMode('admin');
+      return;
+    }
     if (userRole && userRole !== roleMode) {
       setRoleMode(userRole);
     }
-  }, [userRole, roleMode]);
+  }, [isSuperAdmin, userRole, roleMode, setUserRole]);
 
   useEffect(() => {
     if ((activeTab === 'database' || activeTab === 'modal_backgrounds') && !isSuperAdmin) {
@@ -316,6 +320,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Robust Role Switcher with Strict Role Separation
   const handleSwitchRole = (targetRole: UserRoleMode) => {
+    if (isSuperAdmin) {
+      setRoleMode('admin');
+      setUserRole('admin');
+      return;
+    }
     if (targetRole === roleMode) return;
 
     if (isMobileScreen && targetRole === 'empresa') {

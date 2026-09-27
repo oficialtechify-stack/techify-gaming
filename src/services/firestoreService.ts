@@ -164,7 +164,10 @@ export async function submitVerificationRequestInFirebase(
   try {
     result = await response.json() as typeof result;
   } catch {
-    throw new Error('O serviço de cadastro está indisponível. Atualize a página e tente novamente.');
+    throw new Error(`O servidor de validação respondeu de forma inesperada (HTTP ${response.status}). Nenhum cadastro foi enviado. Tente novamente mais tarde.`);
+  }
+  if (response.status === 503 && result.error) {
+    throw new Error(`${result.error} Nenhum cadastro foi enviado; avise o suporte da LeadsPay para configurar o serviço de validação.`);
   }
   if (!response.ok || !result.success) throw new Error(result.error || 'Não foi possível enviar o perfil.');
   return result;
