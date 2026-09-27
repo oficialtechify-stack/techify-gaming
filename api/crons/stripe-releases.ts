@@ -69,24 +69,61 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         const orderSnap = await orderRef.get();
         const order = orderSnap.data()!;
         if (!order.stripeChargeId || !order.companyAccountId) throw new Error('Faltam referências Stripe do pedido.');
+        const grossAmountCents = Number(order.amountCents);
+        const platformFeeCents = Number(order.platformFeeCents);
+        const companyAmountCents = Number(order.companyAmountCents);
+        const affiliateAmountCents = Number(order.affiliateAmountCents || 0);
+        if (![grossAmountCents, platformFeeCents, companyAmountCents, affiliateAmountCents].every(Number.isSafeInteger)) {
+          throw new Error('Valores do pedido não são centavos inteiros seguros.');
+        }
+        if (grossAmountCents <= 0 || platformFeeCents < 0 || companyAmountCents <= 0 || affiliateAmountCents < 0 || companyAmountCents + affiliateAmountCents + platformFeeCents !== grossAmountCents) {
+          throw new Error('A divisão do pedido não fecha com o valor cobrado.');
+        }
+        if (affiliateAmountCents > 0 && !order.affiliateAccountId) {
+          throw new Error('Pedido com comissão sem conta Stripe do afiliado.');
+        }
         const recipients: Recipient[] = [
-          { key: 'company', accountId: String(order.companyAccountId), amountCents: Number(order.companyAmountCents) },
-          ...(Number(order.affiliateAmountCents) > 0 && order.affiliateAccountId
+          { key: 'company', accountId: String(order.companyAccountId), amountCents: companyAmountCents },
+          ...(affiliateAmountCents > 0 && order.affiliateAccountId
             ? [{ key: 'affiliate' as const, accountId: String(order.affiliateAccountId), amountCents: Number(order.affiliateAmountCents) }]
             : []),
         ];
         const transferIds: Record<string, string> = {};
         for (const recipient of recipients) {
+          const latest = await orderRef.get();
+          const latestOrder = latest.data();
+          if (!latest.exists || latestOrder?.status !== 'paid' || latestOrder?.riskStatus || latestOrder?.transferStatus !== 'processing') {
+            throw new Error('Pedido mudou para revisão ou risco antes do repasse.');
+          }
           if (!Number.isSafeInteger(recipient.amountCents) || recipient.amountCents <= 0) throw new Error('Valor de repasse inválido.');
           transferIds[recipient.key] = await transferOnce(stripe, { orderId, chargeId: String(order.stripeChargeId), group: `LP_${orderId}`, recipient });
           await orderRef.set({ transferIds, updatedAt: new Date().toISOString() }, { merge: true });
         }
-        await orderRef.set({ transferStatus: 'completed', transfersCompletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
-        await db.collection('sales').doc(`stripe_${orderId}`).set({ releaseStatus: 'disponivel', releasedAt: new Date().toISOString(), stripeTransferIds: transferIds }, { merge: true });
-        released += 1;
+        const completedAt = new Date().toISOString();
+        const completed = await db.runTransaction(async (tx) => {
+          const latest = await tx.get(orderRef);
+          if (!latest.exists) return false;
+          const current = latest.data()!;
+          if (current.status !== 'paid' || current.riskStatus || current.transferStatus !== 'processing') {
+            tx.set(orderRef, { transferStatus: 'manual_review', updatedAt: completedAt }, { merge: true });
+            return false;
+          }
+          tx.set(orderRef, { transferStatus: 'completed', transfersCompletedAt: completedAt, updatedAt: completedAt }, { merge: true });
+          tx.set(db.collection('sales').doc(`stripe_${orderId}`), { releaseStatus: 'disponivel', releasedAt: completedAt, stripeTransferIds: transferIds }, { merge: true });
+          return true;
+        });
+        if (completed) released += 1;
+        else failed += 1;
       } catch (error) {
         console.error('[Stripe release]', orderId, error instanceof Error ? error.message : 'Falha desconhecida');
-        await orderRef.set({ transferStatus: 'retry', transferError: error instanceof Error ? error.message.slice(0, 300) : 'Falha desconhecida', updatedAt: new Date().toISOString() }, { merge: true });
+        await db.runTransaction(async (tx) => {
+          const latest = await tx.get(orderRef);
+          if (!latest.exists) return;
+          const current = latest.data()!;
+          if (current.status === 'paid' && !current.riskStatus && current.transferStatus === 'processing') {
+            tx.set(orderRef, { transferStatus: 'retry', transferError: error instanceof Error ? error.message.slice(0, 300) : 'Falha desconhecida', updatedAt: new Date().toISOString() }, { merge: true });
+          }
+        });
         failed += 1;
       }
     }

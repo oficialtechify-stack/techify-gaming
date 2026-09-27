@@ -1,527 +1,168 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, Clock3, CreditCard, Receipt, ShieldCheck, Wallet } from 'lucide-react';
+import { UserRoleMode, UserSellerProfile, SaleTransaction, CompanyStartup } from '../../types/platform';
 import { StripeConnectPanel } from './StripeConnectPanel';
-import { UserSellerProfile, WithdrawalRequest, SaleTransaction, PaymentMethodStat, UserRoleMode, CompanyStartup } from '../../types/platform';
-import { triggerReleaseBalancesCron, requestWithdrawalViaBackend } from '../../services/firestoreService';
-import { 
-  DollarSign, 
-  ArrowUpRight, 
-  CheckCircle2, 
-  Clock, 
-  Wallet, 
-  ShieldCheck, 
-  Sparkles, 
-  Building2,
-  TrendingUp,
-  CreditCard,
-  Layers,
-  ArrowDownRight,
-  Receipt,
-  RefreshCw,
-  AlertCircle,
-  Send,
-  HelpCircle
-} from 'lucide-react';
+
+type StripeSale = SaleTransaction & {
+  source?: string;
+  stripePaymentIntentId?: string;
+  stripeTransferIds?: Record<string, string>;
+  transferStatus?: string;
+};
 
 interface FinanceiroViewProps {
   roleMode?: UserRoleMode;
   userProfile: UserSellerProfile;
   company?: CompanyStartup | null;
-  withdrawals: WithdrawalRequest[];
   transactions?: SaleTransaction[];
-  paymentStats?: PaymentMethodStat[];
-  onOpenWithdraw?: () => void;
 }
+
+const money = (value: number) => Number.isFinite(value)
+  ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  : 'R$ 0,00';
+
+const isPaid = (sale: StripeSale) => ['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(String(sale.status || '').toLowerCase());
+const isStripeSale = (sale: StripeSale) => sale.source === 'stripe' || sale.id.startsWith('stripe_') || Boolean(sale.stripePaymentIntentId);
 
 export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   roleMode = 'afiliado',
   userProfile,
   company = null,
-  withdrawals = [],
   transactions = [],
-  paymentStats = [],
-  onOpenWithdraw
 }) => {
-  // Aba ativa na visão de empresa: 'carteira_saques' ou 'faturamento'
-  const [activeCompanyTab, setActiveCompanyTab] = useState<'carteira_saques' | 'faturamento'>('carteira_saques');
+  const [activeCompanyTab, setActiveCompanyTab] = useState<'resumo' | 'faturamento'>('resumo');
+  const sales = useMemo(
+    () => (transactions as StripeSale[]).filter(isStripeSale).filter(isPaid),
+    [transactions],
+  );
 
-  // Estados do Cron de Liberação D+9
-  const [isSyncingCron, setIsSyncingCron] = useState<boolean>(false);
-  const [cronFeedback, setCronFeedback] = useState<string | null>(null);
+  const totals = useMemo(() => sales.reduce((sum, sale) => {
+    const gross = Number(sale.amount) || 0;
+    const commission = Number(sale.commissionEarned ?? sale.financialBreakdown?.affiliateCommission) || 0;
+    const platformFee = Number(sale.checkoutFee ?? sale.financialBreakdown?.platformFee) || 0;
+    const companyNet = Number(sale.netCompanyAmount ?? sale.financialBreakdown?.netCompanyAmount) || Math.max(0, gross - commission - platformFee);
+    const released = sale.releaseStatus === 'disponivel' || sale.transferStatus === 'completed';
+    const viewerAmount = roleMode === 'afiliado' ? commission : companyNet;
+    sum.gross += gross;
+    sum.commissions += commission;
+    sum.platformFees += platformFee;
+    sum.companyNet += companyNet;
+    sum.pending += released ? 0 : viewerAmount;
+    sum.transferred += released ? viewerAmount : 0;
+    if (released) sum.releasedCount += 1;
+    return sum;
+  }, { gross: 0, commissions: 0, platformFees: 0, companyNet: 0, pending: 0, transferred: 0, releasedCount: 0 }), [sales, roleMode]);
 
-  // Estados do Formulário de Saque PIX Integrado
-  const availableBalance = Number((userProfile?.availableBalance ?? 0).toFixed(2));
-  const pendingBalance = Number((userProfile?.pendingBalance ?? 0).toFixed(2));
-
-  const [withdrawAmount, setWithdrawAmount] = useState<string>(availableBalance >= 50 ? '50' : '');
-  const [pixKeyType, setPixKeyType] = useState<string>(userProfile?.pixKeyType || 'CPF');
-  const [pixKey, setPixKey] = useState<string>(userProfile?.pixKey || userProfile?.cpf || userProfile?.email || '');
-  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState<boolean>(false);
-  const [withdrawError, setWithdrawError] = useState<string | null>(null);
-  const [withdrawSuccess, setWithdrawSuccess] = useState<string | null>(null);
-  const [lastCompletedWithdrawal, setLastCompletedWithdrawal] = useState<WithdrawalRequest | null>(null);
-
-  // Calculations for Company Mode (Fallback dinâmico a partir das transações)
-  const isApprovedStatus = (s: string) => {
-    const lower = (s || '').toLowerCase();
-    return lower === 'aprovado' || lower === 'approved';
-  };
-  const approvedSales = transactions.filter(t => isApprovedStatus(t.status));
-  const fallbackCompanyGross = approvedSales.reduce((acc, t) => acc + (t.amount || 0), 0);
-  const fallbackCompanyCommissions = approvedSales.reduce((acc, t) => acc + (t.commissionEarned || t.financialBreakdown?.affiliateCommission || 0), 0);
-  const fallbackCheckoutFees = approvedSales.reduce((acc, t) => acc + (t.checkoutFee || t.financialBreakdown?.platformFee || 0.99), 0);
-  const fallbackCompanyNet = Math.max(0, fallbackCompanyGross - fallbackCompanyCommissions - fallbackCheckoutFees);
-
-  // Valores acumulados do Firestore (Prioriza campos do documento companies/{companyId} ou user_profiles/{sellerId})
-  const grossRevenue = company?.grossRevenue !== undefined ? company.grossRevenue : (userProfile?.grossRevenue !== undefined ? userProfile.grossRevenue : fallbackCompanyGross);
-  const totalSalesCount = company?.totalSalesCount !== undefined ? company.totalSalesCount : (userProfile?.totalSalesCount !== undefined ? userProfile.totalSalesCount : approvedSales.length);
-  const totalCheckoutFees = company?.totalCheckoutFees !== undefined ? company.totalCheckoutFees : (userProfile?.totalCheckoutFees !== undefined ? userProfile.totalCheckoutFees : fallbackCheckoutFees);
-  const totalAffiliateCommissions = company?.totalAffiliateCommissions !== undefined ? company.totalAffiliateCommissions : (userProfile?.totalAffiliateCommissions !== undefined ? userProfile.totalAffiliateCommissions : fallbackCompanyCommissions);
-  const netRevenue = company?.netRevenue !== undefined ? company.netRevenue : (userProfile?.netRevenue !== undefined ? userProfile.netRevenue : fallbackCompanyNet);
-
-  // Executa o Cron de 9 Dias
-  const handleSyncCron = async () => {
-    setIsSyncingCron(true);
-    setCronFeedback(null);
-    try {
-      const res = await triggerReleaseBalancesCron();
-      setCronFeedback(res.message || 'Verificação concluída!');
-      setTimeout(() => setCronFeedback(null), 5000);
-    } catch (err: any) {
-      setCronFeedback('Erro ao acionar rotina cron de 9 dias no servidor');
-      setTimeout(() => setCronFeedback(null), 5000);
-    } finally {
-      setIsSyncingCron(false);
+  const methods = useMemo(() => {
+    const grouped = new Map<string, { count: number; amount: number }>();
+    for (const sale of sales) {
+      const label = String(sale.method || 'Stripe');
+      const item = grouped.get(label) || { count: 0, amount: 0 };
+      item.count += 1;
+      item.amount += roleMode === 'afiliado'
+        ? Number(sale.commissionEarned || 0)
+        : Number(sale.amount || 0);
+      grouped.set(label, item);
     }
-  };
+    return Array.from(grouped.entries()).sort((a, b) => b[1].amount - a[1].amount);
+  }, [sales, roleMode]);
 
-  // Submissão do Formulário de Saque PIX
-  const parsedWithdrawAmount = parseFloat(withdrawAmount) || 0;
-  const fixedFee = 2.50;
-  const netWithdrawalEstimate = Math.max(0, parsedWithdrawAmount - fixedFee);
-
-  const handleWithdrawSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setWithdrawError(null);
-    setWithdrawSuccess(null);
-    setLastCompletedWithdrawal(null);
-
-    // Validação 1: Valor Mínimo R$ 50,00
-    if (parsedWithdrawAmount < 50) {
-      setWithdrawError('O valor mínimo para solicitação de saque via Pix é de R$ 50,00.');
-      return;
-    }
-
-    // Validação 2: Saldo Disponível
-    if (parsedWithdrawAmount > availableBalance) {
-      setWithdrawError(`Saldo disponível insuficiente. Seu saldo para saque é de R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
-      return;
-    }
-
-    // Validação 3: Chave PIX
-    if (!pixKey.trim()) {
-      setWithdrawError('Chave PIX válida é obrigatória para processar o saque.');
-      return;
-    }
-
-    setIsSubmittingWithdraw(true);
-
-    try {
-      const targetUserId = userProfile?.userId || userProfile?.id || (company ? company.id : 'usr_leadspay_main');
-      const targetUserName = userProfile?.name || company?.name || 'Parceiro LeadsPay';
-
-      const response = await requestWithdrawalViaBackend(
-        parsedWithdrawAmount,
-        pixKey.trim(),
-        pixKeyType,
-        targetUserId,
-        targetUserName
-      );
-
-      if (response.success && response.withdrawal) {
-        setWithdrawSuccess(`Saque PIX de R$ ${response.withdrawal.netAmount?.toFixed(2) || netWithdrawalEstimate.toFixed(2)} transferido com sucesso!`);
-        setLastCompletedWithdrawal(response.withdrawal);
-        setWithdrawAmount('');
-      } else {
-        setWithdrawError(response.message || 'Erro inesperado ao processar saque.');
-      }
-    } catch (err: any) {
-      console.error('Erro na solicitação de saque:', err);
-      setWithdrawError(err.message || 'Erro ao processar solicitação de saque no servidor.');
-    } finally {
-      setIsSubmittingWithdraw(false);
-    }
-  };
-
-  // Seletor de Atalho de Valores Rápidos
-  const handleQuickAmount = (value: number) => {
-    if (value <= availableBalance) {
-      setWithdrawAmount(value.toString());
-      setWithdrawError(null);
-    }
-  };
-
-  const handleMaxAmount = () => {
-    if (availableBalance >= 50) {
-      setWithdrawAmount(availableBalance.toFixed(2));
-      setWithdrawError(null);
-    }
-  };
+  const isCompany = roleMode === 'empresa';
+  const title = isCompany ? 'Financeiro da empresa' : 'Comissões e repasses';
+  const displayName = isCompany ? (company?.name || userProfile.name || 'Empresa') : (userProfile.name || 'Afiliado');
+  const viewerLabel = isCompany ? 'Líquido previsto para a empresa' : 'Comissões registradas';
 
   return (
-    <div className="flex flex-col gap-6" id="leadspay-financeiro-view">
-      {/* Header Principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6" id="leadspay-financeiro-view">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
-            <Wallet className="w-3.5 h-3.5" />
-            {roleMode === 'empresa' ? 'Gestão Financeira & Carteira Empresa' : 'Carteira & Comissões de Afiliado'}
+          <div className="mb-1 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#5ba63c]">
+            <Wallet className="h-4 w-4" aria-hidden="true" /> Stripe Connect · {displayName}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-            {roleMode === 'empresa' && activeCompanyTab === 'faturamento' 
-              ? 'Faturamento & Repasses a Afiliados' 
-              : 'Carteira & Recebimentos'}
-          </h1>
-          <p className="text-xs text-white/60 mt-1">
-            {roleMode === 'empresa'
-              ? 'Consulte a atividade financeira e conecte a conta Stripe da empresa para receber os repasses.'
-              : 'Acompanhe as comissões registradas e conecte sua conta Stripe para receber os repasses da plataforma.'}
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+            A atividade abaixo vem de pagamentos confirmados pelo webhook Stripe. Dados legados de saldo e saques Pix não são tratados como repasses Stripe.
           </p>
         </div>
+        {isCompany && (
+          <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="Visão financeira">
+            <button type="button" role="tab" aria-selected={activeCompanyTab === 'resumo'} onClick={() => setActiveCompanyTab('resumo')} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${activeCompanyTab === 'resumo' ? 'bg-[#e8f4df] text-[#3f7f33]' : 'text-slate-500 hover:bg-slate-50'}`}>Resumo</button>
+            <button type="button" role="tab" aria-selected={activeCompanyTab === 'faturamento'} onClick={() => setActiveCompanyTab('faturamento')} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${activeCompanyTab === 'faturamento' ? 'bg-[#e8f4df] text-[#3f7f33]' : 'text-slate-500 hover:bg-slate-50'}`}>Detalhamento</button>
+          </div>
+        )}
+      </header>
 
-        <div className="flex items-center gap-3" aria-label="Recebimentos Stripe" />
+      <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900" role="status">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <p><strong>Ambiente Stripe de teste.</strong> Os valores apresentados são registros de teste; não representam dinheiro real disponível para saque. Conclua o onboarding da conta conectada para testar o fluxo.</p>
       </div>
 
-      {/* Feedback do Cron */}
-      {cronFeedback && (
-        <div className="p-3.5 bg-[#D9F22A]/10 border border-[#D9F22A]/30 rounded-xl text-xs text-[#D9F22A] font-semibold flex items-center gap-2 animate-in fade-in duration-200">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>{cronFeedback}</span>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label={isCompany ? 'Vendas brutas Stripe' : 'Vendas atribuídas'} value={money(totals.gross)} detail={`${sales.length} pagamento(s) confirmado(s)`} icon={<Receipt className="h-4 w-4" />} />
+        <MetricCard label={viewerLabel} value={money(isCompany ? totals.companyNet : totals.commissions)} detail={isCompany ? 'Após comissão de afiliado e taxa LeadsPay' : 'Comissão conforme o split registrado'} icon={<ArrowDownRight className="h-4 w-4" />} accent />
+        <MetricCard label="Em prazo D+9" value={money(totals.pending)} detail="Aguardando liberação de transferência Stripe" icon={<Clock3 className="h-4 w-4" />} />
+        <MetricCard label="Repassado à conta Stripe" value={money(totals.transferred)} detail={`${totals.releasedCount} venda(s) com transferência concluída`} icon={<ArrowUpRight className="h-4 w-4" />} />
+      </div>
+
+      {isCompany && activeCompanyTab === 'faturamento' && (
+        <section className="grid gap-4 md:grid-cols-3" aria-label="Detalhamento financeiro">
+          <MetricCard label="Taxas LeadsPay registradas" value={money(totals.platformFees)} detail="Taxa da plataforma por pagamento" icon={<CreditCard className="h-4 w-4" />} />
+          <MetricCard label="Comissões de afiliados" value={money(totals.commissions)} detail="Parte destinada aos afiliados" icon={<ArrowDownRight className="h-4 w-4" />} />
+          <MetricCard label="Receita líquida calculada" value={money(totals.companyNet)} detail="Derivada das vendas Stripe confirmadas" icon={<Wallet className="h-4 w-4" />} accent />
+        </section>
       )}
 
-      {/* Toggle de Abas para Empresas */}
-      {roleMode === 'empresa' && (
-        <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-          <button
-            onClick={() => setActiveCompanyTab('carteira_saques')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeCompanyTab === 'carteira_saques'
-                ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.25)]'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Wallet className="w-4 h-4" />
-            <span>Carteira & Saques PIX</span>
-          </button>
-          <button
-            onClick={() => setActiveCompanyTab('faturamento')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeCompanyTab === 'faturamento'
-                ? 'bg-[#D9F22A] text-[#060A15] shadow-[0_0_15px_rgba(217,242,42,0.25)]'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Receipt className="w-4 h-4" />
-            <span>Faturamento & Taxas LeadsPay</span>
-          </button>
+      <StripeConnectPanel roleMode={roleMode} userProfile={userProfile} />
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">Pagamentos e repasses Stripe</h2>
+            <p className="mt-1 text-xs text-slate-500">A liberação D+9 inicia a transferência para sua conta Stripe Connect. O payout bancário segue o cronograma e as verificações da Stripe.</p>
+          </div>
+          <span className="inline-flex items-center gap-2 self-start rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 sm:self-auto"><CreditCard className="h-3.5 w-3.5" /> {methods.length} forma(s) de pagamento</span>
         </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* SEÇÃO 1: CARTEIRA & SAQUES PIX (Cards D+9, Formulário e Histórico)       */}
-      {/* ========================================================================= */}
-      {(roleMode === 'afiliado' || activeCompanyTab === 'carteira_saques') && (
-        <div className="space-y-6">
-          {/* 1. Cards de Saldos (Saldo Pendente Garantia 9 dias & Saldo Disponível) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Saldo Pendente (Garantia 9 dias) */}
-            <div className="bg-[#080d1a] border-l-4 border-l-amber-500 border-y border-r border-white/10 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between text-white/60 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Saldo Pendente (Garantia 9 dias)</span>
-                <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
-                  <Clock className="w-4 h-4 text-amber-400" />
-                </div>
-              </div>
-              <div className="text-3xl font-black text-amber-400 font-['Syne'] tracking-tight">
-                R$ {pendingBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[11px] text-white/50 block mt-2">
-                Retido temporariamente contra contestações e estornos (D+9)
-              </span>
-            </div>
-
-            {/* Saldo Disponível para Saque */}
-            <div className="bg-[#080d1a] border-l-4 border-l-[#D9F22A] border-y border-r border-white/10 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between text-white/60 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Saldo Disponível para Saque</span>
-                <div className="w-8 h-8 rounded-full bg-[#D9F22A]/10 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4 text-[#D9F22A]" />
-                </div>
-              </div>
-              <div className="text-3xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-                R$ {availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[11px] text-white/50 block mt-2">
-                Liberado e apto para transferência imediata via PIX
-              </span>
-            </div>
-
-            {/* Total Histórico */}
-            <div className="bg-[#080d1a] border-l-4 border-l-blue-500 border-y border-r border-white/10 rounded-2xl p-6 shadow-xl">
-              <div className="flex items-center justify-between text-white/60 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">
-                  {roleMode === 'empresa' ? 'Receita Líquida Acumulada' : 'Total de Comissões Ganhas'}
-                </span>
-                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <Wallet className="w-4 h-4 text-blue-400" />
-                </div>
-              </div>
-              <div className="text-3xl font-black text-white font-['Syne'] tracking-tight">
-                R$ {(roleMode === 'empresa' ? netRevenue : (userProfile?.totalEarned ?? 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[11px] text-white/50 block mt-2">
-                Volume financeiro total acumulado na LeadsPay
-              </span>
-            </div>
+        {methods.length > 0 && (
+          <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3">
+            {methods.map(([method, item]) => <span key={method} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600">{method}: <strong className="text-slate-900">{money(item.amount)}</strong> · {item.count}</span>)}
           </div>
-
-          {/* Banner Informativo da Regra D+9 */}
-          <div className="p-4 rounded-2xl bg-[#080d1a] border border-white/10 flex items-start gap-3">
-            <Clock className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs">
-              <h4 className="font-bold text-white mb-0.5">Como funciona a Regra de Liberação em D+9?</h4>
-              <p className="text-white/60 leading-relaxed">
-                Cada venda aprovada tem seus valores (líquido da empresa e comissão do afiliado) alocados inicialmente em <strong>Saldo Pendente</strong>. Após decorridos exatamente 9 dias da data de pagamento, o <strong>Cron de Liberação do Servidor</strong> migra o valor automaticamente para o <strong>Saldo Disponível</strong>, possibilitando transferências bancárias instantâneas via Pix.
-              </p>
-            </div>
+        )}
+        {sales.length === 0 ? (
+          <div className="px-5 py-14 text-center">
+            <Receipt className="mx-auto h-9 w-9 text-slate-300" aria-hidden="true" />
+            <h3 className="mt-3 text-sm font-semibold text-slate-800">Nenhum pagamento Stripe confirmado</h3>
+            <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Quando o webhook Stripe confirmar uma compra, ela aparecerá aqui. Vendas antigas de outros meios não são misturadas com os dados Stripe.</p>
           </div>
-
-          <StripeConnectPanel roleMode={roleMode} userProfile={userProfile} />
-
-          {/* 3. Tabela de Histórico legado de solicitações (Asaas) */}
-          <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
-              <div>
-                <h3 className="text-base font-bold text-white font-['Syne']">
-                  Histórico legado de solicitações (Asaas)
-                </h3>
-                <p className="text-xs text-white/50">
-                  Todas as transferências bancárias solicitadas através da plataforma LeadsPay.
-                </p>
-              </div>
-              <span className="text-xs text-white/40 bg-white/5 px-2.5 py-1 rounded-lg">
-                {withdrawals.length} repasse(s)
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-white/40 bg-[#050811] border-b border-white/10 uppercase tracking-wider text-[11px]">
-                    <th className="py-3 px-4 font-bold">ID do Saque</th>
-                    <th className="py-3 px-4 font-bold">Data / Hora</th>
-                    <th className="py-3 px-4 font-bold">Chave de Destino</th>
-                    <th className="py-3 px-4 font-bold">Valor Solicitado</th>
-                    <th className="py-3 px-4 font-bold text-amber-400">Taxa PIX</th>
-                    <th className="py-3 px-4 font-bold text-emerald-400">Valor Líquido</th>
-                    <th className="py-3 px-4 font-bold text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {withdrawals.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-white/40">
-                        <Wallet className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                        <span>Nenhum saque realizado até o momento.</span>
-                      </td>
-                    </tr>
-                  ) : (
-                    withdrawals.map((w) => {
-                      const fee = w.fee !== undefined ? w.fee : (w.feeAmount !== undefined ? w.feeAmount : 2.50);
-                      const requestedAmt = w.requestedAmount !== undefined ? w.requestedAmount : (w.amount || 0);
-                      const net = w.netAmount !== undefined ? w.netAmount : Math.max(0, requestedAmt - fee);
-                      const isDone = w.status === 'COMPLETED' || w.status === 'concluido' || w.status === 'Concluído';
-
-                      return (
-                        <tr key={w.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 px-4 font-mono font-bold text-white">
-                            {w.id}
-                            {w.asaasTransferId && (
-                              <span className="block text-[9px] text-white/40 font-normal truncate max-w-[130px]" title={w.asaasTransferId}>
-                                Asaas: {w.asaasTransferId}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 text-white/70">
-                            {w.requestedAt || (w.createdAt ? new Date(w.createdAt).toLocaleString('pt-BR') : 'Recentemente')}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-white/80">
-                            {w.pixKey} <span className="text-[10px] text-white/40">({w.pixKeyType || 'CPF'})</span>
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-white">
-                            R$ {requestedAmt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3.5 px-4 font-semibold text-amber-400">
-                            - R$ {fee.toFixed(2).replace('.', ',')}
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-emerald-400">
-                            R$ {net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                              isDone 
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                            }`}>
-                              <CheckCircle2 className="w-3 h-3" />
-                              {isDone ? 'Concluído' : 'Processando'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-medium">Data</th><th className="px-5 py-3 font-medium">Produto</th><th className="px-5 py-3 font-medium">Pagamento</th><th className="px-5 py-3 font-medium">Valor da conta</th><th className="px-5 py-3 font-medium">Repasse</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {sales.slice(0, 50).map((sale) => {
+                  const released = sale.releaseStatus === 'disponivel' || sale.transferStatus === 'completed';
+                  const amount = isCompany ? Number(sale.netCompanyAmount ?? sale.financialBreakdown?.netCompanyAmount ?? 0) : Number(sale.commissionEarned || 0);
+                  return <tr key={sale.id} className="hover:bg-slate-50/70">
+                    <td className="whitespace-nowrap px-5 py-3 text-xs text-slate-600">{sale.paidAt ? new Date(sale.paidAt).toLocaleDateString('pt-BR') : sale.date || '—'}</td>
+                    <td className="px-5 py-3"><div className="font-medium text-slate-900">{sale.platformName || 'Produto'}</div><div className="mt-0.5 text-xs text-slate-500">{sale.id}</div></td>
+                    <td className="px-5 py-3 text-xs text-slate-600">{sale.method || 'Stripe'}</td>
+                    <td className="whitespace-nowrap px-5 py-3 text-sm font-semibold text-slate-900">{money(amount)}</td>
+                    <td className="px-5 py-3"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${released ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><span className={`h-1.5 w-1.5 rounded-full ${released ? 'bg-emerald-500' : 'bg-amber-500'}`} />{released ? 'Transferido para Connect' : 'Em prazo D+9'}</span></td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+            {sales.length > 50 && <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">Mostrando os 50 pagamentos mais recentes.</p>}
           </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* SEÇÃO 2: FATURAMENTO & TAXAS CORPORATIVAS (Visão Exclusiva para Empresas) */}
-      {/* ========================================================================= */}
-      {roleMode === 'empresa' && activeCompanyTab === 'faturamento' && (
-        <div className="space-y-6">
-          {/* Company Financial KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Faturamento Bruto */}
-            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
-              <div className="flex items-center justify-between text-white/60 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Faturamento Bruto</span>
-                <Receipt className="w-4 h-4 text-blue-400" />
-              </div>
-              <div className="text-2xl font-black text-white font-['Syne']">
-                R$ {grossRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[11px] text-white/50 block mt-1">
-                {totalSalesCount} venda(s) aprovada(s)
-              </span>
-            </div>
-
-            {/* Taxas de Checkout Plataforma (R$ 0,99 por venda) */}
-            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
-              <div className="flex items-center justify-between text-white/60 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Taxas Checkout LeadsPay</span>
-                <DollarSign className="w-4 h-4 text-indigo-400" />
-              </div>
-              <div className="text-2xl font-black text-indigo-400 font-['Syne']">
-                R$ {totalCheckoutFees.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[11px] text-white/50 block mt-1">
-                R$ 0,99 por checkout aprovado
-              </span>
-            </div>
-
-            {/* Comissões Pagas aos Afiliados */}
-            <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
-              <div className="flex items-center justify-between text-white/60 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Comissões a Afiliados</span>
-                <ArrowDownRight className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="text-2xl font-black text-amber-400 font-['Syne']">
-                R$ {totalAffiliateCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[11px] text-white/50 block mt-1">
-                Repasse aos afiliados vendedores
-              </span>
-            </div>
-
-            {/* Receita Líquida da Empresa */}
-            <div className="bg-[#080d1a] border-l-4 border-l-[#D9F22A] border-y border-r border-white/10 rounded-2xl p-5 shadow-xl">
-              <div className="flex items-center justify-between text-white/60 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Receita Líquida da Empresa</span>
-                <DollarSign className="w-4 h-4 text-[#D9F22A]" />
-              </div>
-              <div className="text-2xl font-black text-[#D9F22A] font-['Syne']">
-                R$ {netRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </div>
-              <span className="text-[11px] text-white/50 block mt-1">
-                Líquido retido após comissões e taxas
-              </span>
-            </div>
-          </div>
-
-          {/* Métodos de Liquidação & Divisão */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-6 bg-[#080d1a] border border-white/10 rounded-2xl p-6 shadow-xl">
-              <h3 className="text-base font-bold text-white font-['Syne'] mb-3 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-[#D9F22A]" />
-                Distribuição por Meio de Pagamento
-              </h3>
-              <p className="text-xs text-white/60 mb-4">
-                Volume recebido através dos canais de pagamento integrados à plataforma.
-              </p>
-
-              <div className="space-y-3">
-                {paymentStats.map((stat, idx) => (
-                  <div key={idx} className="p-3.5 rounded-xl bg-[#050811] border border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-[#D9F22A] font-bold text-xs">
-                        {idx + 1}
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-white block">{stat.method}</span>
-                        <span className="text-[10px] text-white/50">{stat.count} transações ({stat.conversionRate} conversão)</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-[#D9F22A] block">
-                        R$ {stat.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
-                      <span className="text-[10px] text-white/40">{stat.percentage || 0}% do volume</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="lg:col-span-6 bg-[#080d1a] border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <ShieldCheck className="w-5 h-5 text-[#D9F22A]" />
-                  <h3 className="text-base font-bold text-white font-['Syne']">
-                    Split Automático de Pagamentos & Taxas da Plataforma
-                  </h3>
-                </div>
-                <p className="text-xs text-white/70 leading-relaxed mb-4">
-                  Quando um cliente adquire uma solução, o LeadsPay retém R$ 0,99 da taxa de checkout, credita a comissão acordada para o afiliado, e o montante líquido da empresa é garantido e liberado após o período de 9 dias.
-                </p>
-
-                <div className="space-y-2 text-xs text-white/60">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#D9F22A]" />
-                    <span>Taxa de Checkout fixa: R$ 0,99 por transação aprovada</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#D9F22A]" />
-                    <span>Taxa de Saque Pix: R$ 2,50 por repasse solicitado</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#D9F22A]" />
-                    <span>Rotina cron diária de migração de saldos (Garantia de 9 dias)</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3.5 rounded-xl bg-white/[0.02] border border-white/5 text-[11px] text-white/50 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#D9F22A] flex-shrink-0" />
-                <span>Painel corporativo exclusivo para Startups e Produtores homologados.</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </section>
     </div>
   );
 };
+
+const MetricCard: React.FC<{ label: string; value: string; detail: string; icon: React.ReactNode; accent?: boolean }> = ({ label, value, detail, icon, accent }) => (
+  <article className={`rounded-2xl border bg-white p-5 shadow-sm ${accent ? 'border-[#b9dda8]' : 'border-slate-200'}`}>
+    <div className="flex items-center justify-between gap-3 text-xs font-medium text-slate-500"><span>{label}</span><span className={`rounded-lg p-2 ${accent ? 'bg-[#e8f4df] text-[#3f7f33]' : 'bg-slate-100 text-slate-600'}`}>{icon}</span></div>
+    <div className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{value}</div>
+    <p className="mt-1 text-xs text-slate-500">{detail}</p>
+  </article>
+);

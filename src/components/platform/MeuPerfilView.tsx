@@ -314,52 +314,6 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
       const formattedCompanyPhone = formatPhone(cleanPhoneDigits);
 
-      // Criação e vinculação imediata da subconta no Asaas v3
-      let subaccountId: string | undefined = userProfile.asaasSubaccountId || (company as any)?.asaasSubaccountId;
-      let walletId: string | undefined = userProfile.asaasWalletId || (company as any)?.asaasWalletId;
-      let resolvedDocType: 'CNPJ' | 'MEI' | 'CPF' = cleanCnpjDigits.length === 14
-        ? (companyDocType === 'CPF' ? 'MEI' : 'CNPJ')
-        : 'CPF';
-
-      try {
-        console.log('[MeuPerfilView] Gerando e vinculando subconta Asaas...');
-        const subRes = await fetch('/api/subaccounts/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: userProfile.userId || (userProfile as any).id || (userProfile as any).uid || '',
-            ownerId: userProfile.userId || (userProfile as any).id || (userProfile as any).uid || '',
-            companyId: company?.id,
-            companyName: companyName.trim(),
-            companyLegalName: companyName.trim(),
-            ownerName: companyOwnerName.trim() || userProfile.name,
-            companyOwnerName: companyOwnerName.trim() || userProfile.name,
-            email: companyEmail.trim(),
-            companyEmail: companyEmail.trim(),
-            phone: formattedCompanyPhone,
-            companyPhone: formattedCompanyPhone,
-            document: cleanCnpjDigits,
-            documentType: resolvedDocType,
-            cep: cep.trim(),
-            address: endereco.trim(),
-            state: estado.trim(),
-            city: cidade.trim()
-          })
-        });
-
-        const subData = await subRes.json().catch(() => null);
-        if (subRes.ok && subData?.asaasSubaccountId) {
-          subaccountId = subData.asaasSubaccountId;
-          walletId = subData.asaasWalletId;
-          resolvedDocType = subData.documentType || resolvedDocType;
-          console.log('✅ [MeuPerfilView] Subconta Asaas vinculada com sucesso:', subaccountId);
-        } else if (!subRes.ok) {
-          console.warn('⚠️ [MeuPerfilView] Aviso ao criar subconta no Asaas:', subData?.message);
-        }
-      } catch (subErr) {
-        console.warn('⚠️ [MeuPerfilView] Erro ao conectar com /api/subaccounts/create:', subErr);
-      }
-
       updates = {
         name: companyOwnerName.trim() || userProfile.name,
         companyName: companyName.trim(),
@@ -367,9 +321,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         companyCnpj: formattedDoc,
         cleanCnpj: cleanCnpjDigits,
         companyDocType: companyDocType,
-        asaasSubaccountId: subaccountId,
-        asaasWalletId: walletId,
-        documentType: resolvedDocType,
+        documentType: companyDocType,
         companyPhone: formattedCompanyPhone,
         whatsapp: formattedCompanyPhone,
         phone: formattedCompanyPhone,
@@ -546,7 +498,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         <p className="text-xs text-white/60 mt-1 max-w-2xl">
           {roleMode === 'empresa'
             ? 'Preencha os dados oficiais da sua empresa (Razão Social, Responsável, CNPJ, WhatsApp, Categoria, Slogan e Endereço). Após envio, a Administração analisará seu cadastro. Uma vez aprovada, a empresa poderá cadastrar produtos e planos livremente.'
-            : 'Mantenha seus dados pessoais e de recebimento atualizados para garantir a homologação de sua conta e saques via PIX instantâneos.'}
+            : 'Mantenha seus dados pessoais atualizados. A conta de recebimento e a verificação de identidade são concluídas com segurança no onboarding Stripe Connect.'}
         </p>
       </div>
 

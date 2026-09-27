@@ -666,11 +666,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return monthlyChartPoints[midIdx] || monthlyChartPoints[0];
   }, [hoveredPointIndex, monthlyChartPoints, chartHasSales]);
 
-  // Available balance and Pending balance
-  const availableBalance = Number(userProfile?.availableBalance) || 0;
-  const pendingBalance = userProfile?.pendingBalance !== undefined
-    ? Number(userProfile.pendingBalance)
-    : filteredSales.filter(s => s.status === 'pending').reduce((acc, s) => acc + (s.amount || 0), 0);
+  // Derive transfer states from webhook-confirmed Stripe sales; never trust cached Asaas balances.
+  const { available: availableBalance, pending: pendingBalance } = useMemo(() => transactions.reduce((totals, sale) => {
+    if (!['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(String(sale.status || '').toLowerCase())) return totals;
+    const record = sale as SaleTransaction & { transferStatus?: string };
+    const amount = roleMode === 'afiliado'
+      ? Number(record.commissionEarned || 0)
+      : Number(record.netCompanyAmount ?? record.financialBreakdown?.netCompanyAmount ?? 0);
+    const released = record.releaseStatus === 'disponivel' || record.transferStatus === 'completed';
+    if (released) totals.available += amount;
+    else totals.pending += amount;
+    return totals;
+  }, { available: 0, pending: 0 }), [transactions, roleMode]);
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-6 text-white min-w-0" id="leadspay-dashboard-exact">
@@ -890,7 +897,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
                     >
                       <User className="w-3.5 h-3.5 text-[#D9F22A]" />
-                      <span>Meu Perfil & Chave PIX</span>
+                      <span>Meu Perfil</span>
                     </button>
 
                     <button
@@ -1387,7 +1394,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {showValues ? `R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
                     </div>
                     <div className="text-[9px] sm:text-xs text-gray-400 font-medium mt-0.5 sm:mt-1.5 truncate">
-                      <span>Liquidação D+9</span>
+                      <span>Transferido à conta Stripe Connect</span>
                     </div>
                   </div>
 
@@ -1396,13 +1403,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
               </div>
 
-              {/* Button: SACAR VIA PIX (Slim py-2 with text-xs font-bold in neon green) */}
+              {/* Stripe Connect account shortcut */}
               <button
                 onClick={onOpenWithdraw}
                 className="mt-2.5 sm:mt-6 w-full bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-bold py-2 sm:py-3.5 px-2.5 sm:px-4 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(217,242,42,0.3)] transition-all cursor-pointer active:scale-95 whitespace-nowrap"
               >
                 <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] flex-shrink-0" />
-                <span className="truncate">SACAR VIA PIX</span>
+                <span className="truncate">GERENCIAR RECEBIMENTOS</span>
               </button>
             </motion.div>
 
@@ -1421,7 +1428,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <Clock className="w-3.5 h-3.5" />
                     </div>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-white truncate">
-                      Saldo Futuro
+                      A liberar em D+9
                     </h3>
                   </div>
 
@@ -1441,7 +1448,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {showValues ? `R$ ${pendingBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
                     </div>
                     <div className="text-[9px] sm:text-xs text-gray-400 font-medium mt-0.5 sm:mt-1.5 truncate">
-                      <span>A liberar em D+30</span>
+                      <span>Transferência após o prazo de liberação</span>
                     </div>
                   </div>
 

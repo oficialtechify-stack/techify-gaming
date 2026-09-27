@@ -18,6 +18,16 @@ function header(req: RequestLike, name: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function paymentMethodLabel(methodType?: string | null): string {
+  const labels: Record<string, string> = {
+    pix: 'PIX', card: 'Cartão', boleto: 'Boleto', link: 'Link',
+    us_bank_account: 'Conta bancária (EUA)', sepa_debit: 'Débito SEPA',
+    ideal: 'iDEAL', klarna: 'Klarna', cashapp: 'Cash App', paypal: 'PayPal', affirm: 'Affirm',
+  };
+  if (!methodType) return 'Stripe';
+  return labels[methodType] || `Stripe · ${methodType.replace(/_/g, ' ')}`;
+}
+
 async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, eventIntent: Stripe.PaymentIntent) {
   const orderId = eventIntent.metadata?.orderId;
   if (!orderId) throw new Error('PaymentIntent sem referência interna.');
@@ -54,10 +64,10 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       companyName: order.companyName,
       companyOwnerId: order.companyOwnerId,
       companyStripeAccountId: order.companyAccountId,
-      affiliateId: order.affiliateId || undefined,
-      affiliateName: order.affiliateName || undefined,
-      affiliateCode: order.affiliateCode || undefined,
-      affiliateStripeAccountId: order.affiliateAccountId || undefined,
+      ...(order.affiliateId ? { affiliateId: String(order.affiliateId) } : {}),
+      ...(order.affiliateName ? { affiliateName: String(order.affiliateName) } : {}),
+      ...(order.affiliateCode ? { affiliateCode: String(order.affiliateCode) } : {}),
+      ...(order.affiliateAccountId ? { affiliateStripeAccountId: String(order.affiliateAccountId) } : {}),
       platformId: order.planId,
       platformName: order.planName,
       buyerName: order.buyerName,
@@ -68,7 +78,7 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       commissionEarned: Number(order.affiliateAmountCents) / 100,
       checkoutFee: Number(order.platformFeeCents) / 100,
       netCompanyAmount: Number(order.companyAmountCents) / 100,
-      method: charge.payment_method_details?.type === 'pix' ? 'PIX' : (charge.payment_method_details?.type || 'Stripe'),
+      method: paymentMethodLabel(charge.payment_method_details?.type),
       status: 'Aprovado',
       releaseStatus: 'pendente',
       availableAt: availableAt.toISOString(),
@@ -85,7 +95,8 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
         netCompanyAmount: Number(order.companyAmountCents) / 100,
       },
     };
-    tx.create(salesRef, sale);
+    const safeSale = Object.fromEntries(Object.entries(sale).filter(([, value]) => value !== undefined));
+    tx.create(salesRef, safeSale);
     tx.set(orderRef, {
       status: 'paid',
       transferStatus: 'scheduled',
@@ -110,6 +121,8 @@ async function updateOrderRisk(event: Stripe.Event, paymentIntentId: string | nu
     if (!orderSnap.exists) return;
     const order = orderSnap.data()!;
     const wasReleased = order.transferStatus === 'completed';
+    const saleRef = db.collection('sales').doc(`stripe_${orderSnap.id}`);
+    const saleSnap = await tx.get(saleRef);
     tx.set(orderRef, {
       status,
       riskStatus: status,
@@ -117,8 +130,6 @@ async function updateOrderRisk(event: Stripe.Event, paymentIntentId: string | nu
       riskEventId: event.id,
       updatedAt: new Date().toISOString(),
     }, { merge: true });
-    const saleRef = db.collection('sales').doc(`stripe_${orderSnap.id}`);
-    const saleSnap = await tx.get(saleRef);
     if (saleSnap.exists) tx.set(saleRef, { status: status === 'refunded' ? 'Estornado' : 'Em análise', releaseStatus: 'cancelado', riskEventId: event.id }, { merge: true });
   });
 }
@@ -134,11 +145,19 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
       const orderId = intent.metadata?.orderId;
       if (!orderId) return;
       const db = getServerAdminFirestore();
-      await db.collection('stripe_checkout_orders').doc(orderId).set({
-        status: event.type.endsWith('.canceled') ? 'payment_canceled' : 'payment_failed',
-        transferStatus: 'cancelled',
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      const orderRef = db.collection('stripe_checkout_orders').doc(orderId);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(orderRef);
+        if (!snap.exists) return;
+        const order = snap.data()!;
+        if (order.status === 'paid' || order.status === 'refunded' || order.status === 'disputed') return;
+        if (order.stripePaymentIntentId && order.stripePaymentIntentId !== intent.id) return;
+        tx.set(orderRef, {
+          status: event.type.endsWith('.canceled') ? 'payment_canceled' : 'payment_failed',
+          transferStatus: 'cancelled',
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      });
       return;
     }
     case 'charge.refunded':

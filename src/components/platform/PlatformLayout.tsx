@@ -7,14 +7,10 @@ import {
   UserAffiliation,
   SaleTransaction, 
   UserSellerProfile, 
-  PaymentMethodStat, 
-  WithdrawalRequest,
+  PaymentMethodStat,
   UserRoleMode
 } from '../../types/platform';
-import { 
-  INITIAL_USER_PROFILE, 
-  INITIAL_PAYMENT_STATS 
-} from '../../data/platformData';
+import { INITIAL_USER_PROFILE } from '../../data/platformData';
 import { 
   seedFirestoreIfEmpty,
   subscribeUserProfile,
@@ -23,7 +19,6 @@ import {
   subscribeUserAffiliations,
   subscribeAllAffiliations,
   subscribeSales,
-  subscribeWithdrawals,
   createCompanyInFirebase,
   deleteCompanyInFirebase,
   createCompanyPlanInFirebase,
@@ -31,8 +26,6 @@ import {
   deleteCompanyPlanInFirebase,
   createAffiliationInFirebase,
   deleteAffiliationInFirebase,
-  createSaleTransactionInFirebase,
-  createWithdrawalInFirebase,
   updateUserProfileInFirebase,
   submitVerificationRequestInFirebase,
   updateCompanyEnvironmentInFirebase,
@@ -65,7 +58,6 @@ import { AffiliateOnboardingModal } from './AffiliateOnboardingModal';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
-import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
 import { ProductEditorView } from './ProductEditorView';
 import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
@@ -183,8 +175,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [allAffiliations, setAllAffiliations] = useState<UserAffiliation[]>([]);
   const [transactions, setTransactions] = useState<SaleTransaction[]>([]);
   const [salesDataLoaded, setSalesDataLoaded] = useState(false);
-  const [paymentStats, setPaymentStats] = useState<PaymentMethodStat[]>(INITIAL_PAYMENT_STATS);
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [dbConnected, setDbConnected] = useState<boolean>(false);
 
   // Filter states
@@ -202,7 +192,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [editingPlan, setEditingPlan] = useState<CompanyPlan | null>(null);
   const [detailedEditingPlan, setDetailedEditingPlan] = useState<CompanyPlan | null>(null);
   const [liveCheckoutPlan, setLiveCheckoutPlan] = useState<CompanyPlan | null>(null);
-  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState<boolean>(false);
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<CompanyPlan | null>(null);
   const [companyAuthModal, setCompanyAuthModal] = useState<ActiveModal>(null);
 
@@ -290,7 +279,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Travar completamente o scroll do fundo quando modais, popups ou drawers estiverem abertos
   const isAnyModalOrDrawerOpen = Boolean(
     isMobileMenuOpen ||
-    isWithdrawModalOpen ||
     isRegisterAffiliateModalOpen ||
     isCreateCompanyModalOpen ||
     isCreatePlanModalOpen ||
@@ -427,8 +415,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const handleCompleteAffiliateProfile = async (data: {
     name: string;
     cpf: string;
-    pixKey: string;
-    pixKeyType: string;
     whatsapp?: string;
   }) => {
     if (!currentUser?.uid) return;
@@ -438,7 +424,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     setActiveTab('dashboard');
     setLiveToast({
       message: 'Cadastro de Afiliado Concluído!',
-      sub: 'Conta ativada com repasse PIX D+9',
+      sub: 'Perfil atualizado. Conecte sua conta Stripe para receber.',
       amount: 'Sucesso'
     });
     setTimeout(() => setLiveToast(null), 4500);
@@ -468,10 +454,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setAllAffiliations(allAffList);
     }, effectiveCompanyId);
 
+    const salesRole = roleMode === 'admin' && isSuperAdmin ? 'admin' : roleMode === 'empresa' ? 'empresa' : 'afiliado';
     const unsubSales = subscribeSales((salesList) => {
       setTransactions(salesList);
       setSalesDataLoaded(true);
-    }, effectiveCompanyId);
+    }, { role: salesRole, userId: effectiveUserId });
 
     return () => {
       unsubCompanies();
@@ -479,9 +466,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       unsubAllAffiliations();
       unsubSales();
     };
-  }, [effectiveCompanyId, effectiveUserId]);
+  }, [effectiveCompanyId, effectiveUserId, roleMode, isSuperAdmin]);
 
-  // 2. User-specific subscriptions (user affiliations, user withdrawals strictly isolated to this account)
+  // 2. User-specific subscriptions (affiliate records only; Stripe releases are derived from confirmed sales)
   useEffect(() => {
     if (!effectiveUserId) return;
 
@@ -490,15 +477,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setAffiliations(affList);
     }, effectiveUserId);
 
-    const unsubWith = subscribeWithdrawals((withList) => {
-      setWithdrawals(withList);
-    }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId, effectiveCompanyId);
-
     return () => {
       unsubAffiliations();
-      unsubWith();
     };
-  }, [effectiveUserId, isSuperAdmin, roleMode, effectiveCompanyId]);
+  }, [effectiveUserId]);
 
   // Affiliate Codes belonging strictly to THIS user
   const userAffiliationCodes = useMemo(() => {
@@ -517,8 +499,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   }, [companies, effectiveUserId, userProfile?.companyId, roleMode, isSuperAdmin]);
 
   const activeCompany = useMemo(() => {
-    return myCompanies[0] || companies[0] || null;
-  }, [myCompanies, companies]);
+    return myCompanies[0] || null;
+  }, [myCompanies]);
 
   // Strict User Verification State
   const isUserVerified = useMemo(() => {
@@ -596,6 +578,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return [];
   }, [transactions, effectiveUserId, roleMode, isSuperAdmin, userAffiliationCodes, myCompanyIds, myCompanyPlanIds]);
 
+  const userStripeTransactions = useMemo(() => userVisibleTransactions.filter((sale) => {
+    const record = sale as SaleTransaction & { source?: string; stripePaymentIntentId?: string };
+    return record.source === 'stripe' || record.id.startsWith('stripe_') || Boolean(record.stripePaymentIntentId);
+  }), [userVisibleTransactions]);
+
   useEffect(() => {
     const storageKey = `leadspay-in-app-notifications:${effectiveUserId}`;
     try {
@@ -616,7 +603,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     const added: Array<{ id: string; title: string; body: string; createdAt: string; unread: boolean }> = [];
     const nextStatuses = { ...processedSalesStatuses.current };
 
-    for (const sale of userVisibleTransactions) {
+    for (const sale of userStripeTransactions) {
       const id = String(sale.id || '');
       if (!id) continue;
       const currentStatus = String(sale.status || '');
@@ -655,7 +642,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       }
       return merged;
     });
-  }, [transactions, userVisibleTransactions, effectiveUserId, salesDataLoaded, userProfile.communicationPreferences?.inApp?.enabled, roleMode]);
+  }, [transactions, userStripeTransactions, effectiveUserId, salesDataLoaded, userProfile.communicationPreferences?.inApp?.enabled, roleMode]);
 
   const unreadNotificationCount = inAppNotifications.filter(item => item.unread).length;
   const markNotificationsAsRead = () => {
@@ -671,65 +658,28 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   };
 
   // Dynamic payment stats derived strictly from real transactions
-  const userPaymentStats = useMemo(() => {
-    let pixVal = 0, pixCount = 0;
-    let cardVal = 0, cardCount = 0;
-    let picpayVal = 0, picpayCount = 0;
-    let cryptoVal = 0, cryptoCount = 0;
-
-    userVisibleTransactions.forEach((s) => {
-      // Apenas transações aprovadas contabilizam valor e faturamento no painel
-      const isApproved = s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED';
-      if (!isApproved) return;
-      const amount = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
-      if (s.method === 'PIX') { pixVal += amount; pixCount++; }
-      else if (s.method === 'Cartão de Crédito') { cardVal += amount; cardCount++; }
-      else if (s.method === 'PicPay') { picpayVal += amount; picpayCount++; }
-      else if (s.method === 'Crypto USDT') { cryptoVal += amount; cryptoCount++; }
-    });
-
-    const totalCount = pixCount + cardCount + picpayCount + cryptoCount;
-    const totalVol = pixVal + cardVal + picpayVal + cryptoVal || (totalCount > 0 ? 1 : 0);
-
-    return [
-      {
-        method: 'PIX Instantâneo',
-        count: pixCount,
-        totalValue: pixVal,
-        percentage: totalVol > 0 ? Number(((pixVal / totalVol) * 100).toFixed(1)) : 0,
-        conversionRate: totalCount > 0 ? `${((pixCount / totalCount) * 100).toFixed(1)}%` : '0%',
-        badge: 'D+9 Direto',
-        iconType: 'pix' as const
-      },
-      {
-        method: 'Cartão de Crédito',
-        count: cardCount,
-        totalValue: cardVal,
-        percentage: totalVol > 0 ? Number(((cardVal / totalVol) * 100).toFixed(1)) : 0,
-        conversionRate: totalCount > 0 ? `${((cardCount / totalCount) * 100).toFixed(1)}%` : '0%',
-        badge: '12x Sem Juros',
-        iconType: 'credit-card' as const
-      },
-      {
-        method: 'PicPay Carteira',
-        count: picpayCount,
-        totalValue: picpayVal,
-        percentage: totalVol > 0 ? Number(((picpayVal / totalVol) * 100).toFixed(1)) : 0,
-        conversionRate: totalCount > 0 ? `${((picpayCount / totalCount) * 100).toFixed(1)}%` : '0%',
-        badge: 'QR Code',
-        iconType: 'picpay' as const
-      },
-      {
-        method: 'Crypto USDT (TRC-20)',
-        count: cryptoCount,
-        totalValue: cryptoVal,
-        percentage: totalVol > 0 ? Number(((cryptoVal / totalVol) * 100).toFixed(1)) : 0,
-        conversionRate: totalCount > 0 ? `${((cryptoCount / totalCount) * 100).toFixed(1)}%` : '0%',
-        badge: 'Global Web3',
-        iconType: 'crypto' as const
-      }
-    ];
-  }, [userVisibleTransactions, roleMode]);
+  const userPaymentStats = useMemo<PaymentMethodStat[]>(() => {
+    const grouped = new Map<string, { count: number; totalValue: number }>();
+    for (const sale of userStripeTransactions) {
+      if (!['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(String(sale.status || '').toLowerCase())) continue;
+      const method = String(sale.method || 'Stripe');
+      const current = grouped.get(method) || { count: 0, totalValue: 0 };
+      current.count += 1;
+      current.totalValue += Number(roleMode === 'afiliado' ? sale.commissionEarned || 0 : sale.amount || 0);
+      grouped.set(method, current);
+    }
+    const totalCount = Array.from(grouped.values()).reduce((sum, item) => sum + item.count, 0);
+    const totalValue = Array.from(grouped.values()).reduce((sum, item) => sum + item.totalValue, 0);
+    return Array.from(grouped, ([method, item]) => ({
+      method,
+      count: item.count,
+      totalValue: item.totalValue,
+      percentage: totalValue > 0 ? Number(((item.totalValue / totalValue) * 100).toFixed(1)) : 0,
+      conversionRate: totalCount > 0 ? `${((item.count / totalCount) * 100).toFixed(1)}%` : '0%',
+      badge: 'Stripe',
+      iconType: /pix/i.test(method) ? 'pix' : /boleto|oxxo/i.test(method) ? 'oxxo' : 'credit-card',
+    }));
+  }, [userStripeTransactions, roleMode]);
 
   // Handle Join Affiliate (1 Click)
   const handleJoinAffiliate = async (plan: CompanyPlan) => {
@@ -800,7 +750,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   };
 
   // Handle create plan
-  const handleCreatePlan = async (planData: Omit<CompanyPlan, 'id' | 'createdAt'>) => {
+  const handleCreatePlan = async (planData: Omit<CompanyPlan, 'id' | 'createdAt'>): Promise<boolean> => {
     const isCompanyVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
     if (!isCompanyVerified) {
       setLiveToast({
@@ -809,19 +759,19 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         amount: 'Requer Verificação'
       });
       setActiveTab('meu_perfil');
-      return;
+      return false;
     }
 
     try {
-      const targetCompany = companies.find(c => c.id === planData.companyId) || myCompanies[0];
+      const availableCompanies = roleMode === 'admin' && isSuperAdmin ? companies : myCompanies;
+      const targetCompany = availableCompanies.find(c => c.id === planData.companyId) || availableCompanies[0];
+      if (!targetCompany) throw new Error('Nenhuma empresa vinculada a esta conta.');
       const sanitizedPlan = {
         ...planData,
-        companyId: targetCompany?.id || planData.companyId,
-        companyName: targetCompany?.companyName || targetCompany?.name || planData.companyName,
-        companyLogo: targetCompany?.logo || planData.companyLogo,
-        ownerId: targetCompany?.ownerId || targetCompany?.submittedBy || effectiveUserId,
-        asaasWalletId: targetCompany?.asaasWalletId || targetCompany?.walletId || null,
-        asaasSubaccountId: targetCompany?.asaasSubaccountId || targetCompany?.subaccountId || null
+        companyId: targetCompany.id,
+        companyName: targetCompany.companyName || targetCompany.name || planData.companyName,
+        companyLogo: targetCompany.logo || planData.companyLogo,
+        ownerId: targetCompany.ownerId || targetCompany.submittedBy || effectiveUserId,
       };
 
       const created = await createCompanyPlanInFirebase(sanitizedPlan);
@@ -831,6 +781,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         amount: `R$ ${created.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
       setTimeout(() => setLiveToast(null), 4000);
+      return true;
     } catch (err: any) {
       console.error('Error creating plan:', err);
       setLiveToast({
@@ -839,6 +790,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         amount: 'Erro'
       });
       setTimeout(() => setLiveToast(null), 5000);
+      return false;
     }
   };
 
@@ -950,66 +902,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   };
 
-  // Handle new sale registered
-  const handleSaleCreated = async (newSale: SaleTransaction) => {
-    try {
-      const isAffiliate = roleMode === 'afiliado';
-      const saved = await createSaleTransactionInFirebase({
-        companyId: newSale.companyId,
-        companyName: newSale.companyName,
-        platformId: newSale.platformId,
-        platformName: newSale.platformName,
-        buyerName: newSale.buyerName,
-        buyerEmail: newSale.buyerEmail,
-        buyerCompany: newSale.buyerCompany,
-        amount: newSale.amount,
-        commissionEarned: newSale.commissionEarned,
-        method: newSale.method,
-        status: newSale.status,
-        utmSource: newSale.utmSource || (isAffiliate ? 'link_afiliado' : 'direto_empresa'),
-        date: newSale.date,
-        time: newSale.time,
-        sellerId: newSale.sellerId || effectiveUserId,
-        affiliateId: newSale.affiliateId || (isAffiliate ? effectiveUserId : undefined),
-        affiliateName: newSale.affiliateName || (isAffiliate ? (userProfile.name || 'Afiliado') : undefined),
-        affiliateCode: newSale.affiliateCode || (isAffiliate ? userAffiliationCodes[0] : undefined),
-        companyOwnerId: newSale.companyOwnerId || (!isAffiliate ? effectiveUserId : undefined)
-      });
-
-      // Trigger toast
-      setLiveToast({
-        message: `Venda aprovada com sucesso (${saved.method})!`,
-        sub: `${saved.platformName} - Registrada na sua conta`,
-        amount: isAffiliate 
-          ? `+ R$ ${saved.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-          : `+ R$ ${saved.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-      });
-
-      setTimeout(() => {
-        setLiveToast(null);
-      }, 5000);
-    } catch (err: any) {
-      console.error('Error saving sale:', err);
-      alert(`Erro ao salvar venda: ${err.message}`);
-    }
-  };
-
-  // Handle withdrawal
-  const handleWithdraw = async (amount: number, pixKey: string, pixKeyType: string) => {
-    try {
-      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, currentUser?.displayName || userProfile?.name || 'Minha Conta');
-      setLiveToast({
-        message: 'Saque PIX D+9 processado com sucesso!',
-        sub: `Chave ${pixKey} (${pixKeyType})`,
-        amount: `- R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-      });
-      setTimeout(() => setLiveToast(null), 4500);
-    } catch (err: any) {
-      console.error('Error creating withdrawal:', err);
-      alert(`Erro no saque PIX: ${err.message}`);
-    }
-  };
-
   // Handle save profile
   const handleSaveProfile = async (updates: Partial<UserSellerProfile>) => {
     try {
@@ -1050,7 +942,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'cupons' as PlatformTab, label: 'Cupons', icon: Tag },
     { id: 'clientes' as PlatformTab, label: 'Clientes', icon: Users },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
-    { id: 'cobrancas' as PlatformTab, label: 'Cobranças', icon: CreditCard, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
+    { id: 'cobrancas' as PlatformTab, label: 'Cobranças', icon: CreditCard, badge: userStripeTransactions.length > 0 ? `${userStripeTransactions.length}` : undefined },
     { id: 'links_pagamento' as PlatformTab, label: 'Link de pagamentos', icon: Link2 },
     { id: 'saques' as PlatformTab, label: 'Saques', icon: ArrowUpRight },
   ];
@@ -1058,7 +950,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const affiliateAccordionItems: { id: PlatformTab; label: string; icon: any; badge?: string }[] = [
     { id: 'afiliados' as PlatformTab, label: 'Links & Redes Sociais', icon: Share2, badge: 'Links' },
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações', icon: Link2, badge: affiliations.length > 0 ? `${affiliations.length}` : undefined },
-    { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
+    { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: userStripeTransactions.length > 0 ? `${userStripeTransactions.length}` : undefined },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
     { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
     { id: 'saques' as PlatformTab, label: 'Saques & Transferências', icon: ArrowUpRight },
@@ -1148,28 +1040,24 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             </div>
           </div>
 
-          {/* Balance / Sales Milestone Box */}
+          {/* Stripe Connect payout account shortcut */}
           {!sidebarCollapsed && (
             <div className="p-3.5 m-3 rounded-2xl bg-[#080d1a] border border-white/10 shadow-lg">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
-                  {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'CARTEIRA EMPRESA (PIX)'}
+                  Conta de recebimento
                 </span>
-                <span className="text-[10px] text-[#D9F22A] font-black">D+9</span>
+                <span className="text-[10px] text-[#D9F22A] font-black">STRIPE</span>
               </div>
-              <div className="text-xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-                {`R$ ${(userProfile?.availableBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-              </div>
-
               <button
                 onClick={() => {
-                  setIsWithdrawModalOpen(true);
+                  setActiveTab('saques');
                   setIsMobileMenuOpen(false);
                 }}
                 className="w-full mt-2.5 bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 py-2 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
               >
                 <Wallet className="w-3 h-3 text-[#D9F22A]" />
-                SACAR VIA PIX
+                GERENCIAR RECEBIMENTOS
               </button>
             </div>
           )}
@@ -1676,11 +1564,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 <DashboardView
                   roleMode={roleMode}
                   userProfile={userProfile}
-                  transactions={userVisibleTransactions}
+                  transactions={userStripeTransactions}
                   paymentStats={userPaymentStats}
                   platforms={roleMode === 'empresa' && !isSuperAdmin ? myCompanyPlans : plans}
                   setActiveTab={setActiveTab}
-                  onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
+                  onOpenWithdraw={() => setActiveTab('saques')}
                   onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
                   onSwitchRole={!isMobileScreen ? handleSwitchRole : undefined}
                   onLogout={logout}
@@ -1690,7 +1578,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setSelectedProductFilter={setSelectedProductFilter}
                   selectedTypeFilter={selectedTypeFilter}
                   setSelectedTypeFilter={setSelectedTypeFilter}
-                  userName={userProfile?.name || currentUser?.displayName || 'Marcos Henrique'}
+                  userName={userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuário'}
                   userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
                   userEmail={userEmail || currentUser?.email || undefined}
                   onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
@@ -1702,7 +1590,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
               {activeTab === 'comunidade' && (
                 <ComunidadeAfiliadosView
-                  userName={userProfile?.name || currentUser?.displayName || 'Afiliado'}
+                  userName={userProfile?.name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Afiliado'}
                   onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
                   onNavigateToVitrine={() => setActiveTab('vitrine')}
                 />
@@ -1715,7 +1603,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onSubmitForVerification={handleSubmitForVerification}
               onNavigateToTab={setActiveTab}
               roleMode={roleMode}
-              company={myCompanies[0] || companies[0]}
+              company={activeCompany}
             />
           )}
 
@@ -1732,7 +1620,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               companies={myCompanies}
               plans={myCompanyPlans}
               affiliations={myCompanyAffiliations}
-              sales={userVisibleTransactions}
+              sales={userStripeTransactions}
               userProfile={userProfile}
               isCompanyVerified={isUserVerified}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
@@ -1838,7 +1726,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'vendas' && (
             <VendasView
               roleMode={roleMode}
-              transactions={userVisibleTransactions}
+              transactions={userStripeTransactions}
             />
           )}
 
@@ -1846,10 +1734,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <FinanceiroView
               roleMode={roleMode}
               userProfile={userProfile}
-              company={myCompanies[0] || companies[0] || null}
-              transactions={userVisibleTransactions}
-              withdrawals={withdrawals}
-              onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
+              company={activeCompany}
+              transactions={userStripeTransactions}
             />
           )}
 
@@ -1862,38 +1748,30 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onRemoveAffiliate={handleCompanyRemoveAffiliate}
             />
           )}
-          {activeTab === 'relatorios' && <RelatoriosView transactions={userVisibleTransactions} />}
+          {activeTab === 'relatorios' && <RelatoriosView transactions={userStripeTransactions} />}
           {activeTab === 'integracoes' && (
             <IntegracoesView 
               plans={myCompanyPlans} 
               company={myCompanies[0] || null} 
+              onNavigateToReceipts={() => setActiveTab('saques')}
             />
           )}
           {activeTab === 'clientes' && (
             <ClientesView
-              companies={myCompanies.length > 0 ? myCompanies : companies}
-              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
-              userRole={roleMode}
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
+              sales={userStripeTransactions}
             />
           )}
           {activeTab === 'cobrancas' && (
             <CobrancasView
-              sales={userVisibleTransactions}
-              companies={myCompanies.length > 0 ? myCompanies : companies}
-              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
-              onRefresh={() => {}}
-              onAddSale={(newTx) => setTransactions(prev => [newTx, ...prev])}
-              onDeleteSale={(saleId) => setTransactions(prev => prev.filter(t => t.id !== saleId))}
+              sales={userStripeTransactions}
+              onGoToPaymentLinks={() => setActiveTab('links_pagamento')}
             />
           )}
           {activeTab === 'links_pagamento' && (
             <LinksPagamentoView
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
-              companies={myCompanies.length > 0 ? myCompanies : companies}
-              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
-              onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
+              plans={myCompanyPlans}
+              companies={myCompanies}
+              activeCompanyId={activeCompany?.id || ''}
               onCreateCustomPlan={handleCreatePlan}
             />
           )}
@@ -1905,8 +1783,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'assinaturas' && (
             <AssinaturasView 
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
-              sales={userVisibleTransactions} 
+              plans={myCompanyPlans}
+              sales={userStripeTransactions}
               userProfile={userProfile}
               onNavigateToProducts={() => setActiveTab('produtos')}
               onOpenCreatePlan={() => {
@@ -1919,8 +1797,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'cupons' && (
             <CuponsView 
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
-              affiliations={myCompanyAffiliations.length > 0 ? myCompanyAffiliations : allAffiliations}
+              plans={myCompanyPlans}
+              affiliations={myCompanyAffiliations}
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
@@ -2036,8 +1914,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         onClose={() => setIsRegisterAffiliateModalOpen(false)}
         onComplete={handleCompleteAffiliateProfile}
         initialName={userProfile?.name || ''}
-        initialPixKey={userProfile?.pixKey || ''}
-        initialPixType={userProfile?.pixKeyType || 'CPF'}
         initialWhatsapp={userProfile?.whatsapp || ''}
       />
 
@@ -2060,13 +1936,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         initialData={editingPlan}
         onPlanCreated={handleCreatePlan}
         onPlanUpdated={handleUpdatePlan}
-      />
-
-      <WithdrawModal
-        isOpen={isWithdrawModalOpen}
-        onClose={() => setIsWithdrawModalOpen(false)}
-        userProfile={userProfile}
-        onWithdraw={handleWithdraw}
       />
 
       <ProductDetailModal

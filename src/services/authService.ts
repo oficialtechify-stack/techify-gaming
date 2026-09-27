@@ -1097,8 +1097,6 @@ export async function completeAffiliateProfile(
   data: {
     name: string;
     cpf: string;
-    pixKey: string;
-    pixKeyType: string;
     whatsapp?: string;
   }
 ): Promise<UserSellerProfile> {
@@ -1129,8 +1127,6 @@ export async function completeAffiliateProfile(
     email: existing?.email || '',
     role: 'Afiliado de Alta Performance',
     avatar: existing?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userId)}`,
-    pixKey: data.pixKey.trim(),
-    pixKeyType: data.pixKeyType,
     availableBalance: existing?.availableBalance ?? 0,
     pendingBalance: existing?.pendingBalance ?? 0,
     totalEarned: existing?.totalEarned ?? 0,

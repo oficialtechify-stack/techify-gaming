@@ -259,6 +259,7 @@ export interface SaleTransaction {
   buyerPhone?: string;
   buyerDocument?: string;
   buyerCpf?: string;
+  source?: 'stripe' | 'legacy' | string;
   dueDate?: string;
   paymentUrl?: string;
   ticket_url?: string;
@@ -336,8 +337,8 @@ export interface UserSellerProfile {
   email: string;
   role: string;
   avatar: string;
-  pixKey: string;
-  pixKeyType: string;
+  pixKey?: string;
+  pixKeyType?: string;
   availableBalance: number;
   pendingBalance: number;
   totalEarned: number;

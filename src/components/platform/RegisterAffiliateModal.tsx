@@ -5,9 +5,7 @@ import {
   X, 
   Sparkles, 
   AlertCircle, 
-  ArrowRight, 
-  Wallet,
-  CheckCircle2
+  ArrowRight
 } from 'lucide-react';
 import { 
   formatCPF, 
@@ -20,23 +18,16 @@ interface RegisterAffiliateModalProps {
   isOpen: boolean;
   onClose: () => void;
   userName?: string;
-  userEmail?: string;
   initialName?: string;
-  initialPixKey?: string;
-  initialPixType?: string;
   initialWhatsapp?: string;
   onSuccess?: (data: {
     name: string;
     cpf: string;
-    pixKey: string;
-    pixKeyType: string;
     whatsapp?: string;
   }) => Promise<void>;
   onComplete?: (data: {
     name: string;
     cpf: string;
-    pixKey: string;
-    pixKeyType: string;
     whatsapp?: string;
   }) => Promise<void>;
 }
@@ -45,20 +36,15 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
   isOpen,
   onClose,
   userName = '',
-  userEmail = '',
   initialName,
-  initialPixKey = '',
-  initialPixType = 'CPF',
   initialWhatsapp = '',
   onSuccess,
   onComplete
 }) => {
   const [name, setName] = useState(initialName || userName);
   const [cpf, setCpf] = useState('');
-  const [pixKey, setPixKey] = useState(initialPixKey);
-  const [pixKeyType, setPixKeyType] = useState(initialPixType);
   const [whatsapp, setWhatsapp] = useState(initialWhatsapp);
-  const [acceptedTerms, setAcceptedTerms] = useState(true);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -67,21 +53,6 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatCPF(e.target.value);
     setCpf(formatted);
-    // If pixKeyType is CPF and user hasn't typed custom pixKey, keep in sync
-    if (pixKeyType === 'CPF' && (!pixKey || pixKey === cpf)) {
-      setPixKey(formatted);
-    }
-  };
-
-  const handlePixKeyTypeChange = (type: string) => {
-    setPixKeyType(type);
-    if (type === 'CPF' && cpf) {
-      setPixKey(cpf);
-    } else if (type === 'E-mail' && userEmail) {
-      setPixKey(userEmail);
-    } else if (type === 'Celular' && whatsapp) {
-      setPixKey(whatsapp);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,11 +67,6 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
 
     if (!isValidCPF(cleanCpf)) {
       setErrorMsg('O CPF informado é inválido. Verifique os números digitados.');
-      return;
-    }
-
-    if (!pixKey.trim()) {
-      setErrorMsg('Informe sua chave PIX para recebimento de comissões instantâneas.');
       return;
     }
 
@@ -121,8 +87,6 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
         await callback({
           name: name.trim(),
           cpf: cpf.trim(),
-          pixKey: pixKey.trim(),
-          pixKeyType,
           whatsapp: whatsapp.trim()
         });
       }
@@ -156,7 +120,7 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
           Cadastrar Perfil de Afiliado
         </h3>
         <p className="text-xs text-white/70 mb-5 leading-relaxed">
-          Para acessar a visão de Afiliado, divulgar startups e receber comissões automáticas via PIX D+9, complete seus dados cadastrais e bancários.
+          Para acessar a visão de Afiliado, complete seu cadastro. Seus dados bancários e a validação de identidade serão solicitados com segurança pela Stripe Connect.
         </p>
 
         {errorMsg && (
@@ -214,43 +178,8 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
             </div>
           </div>
 
-          <div className="p-4 bg-[#050811] border border-white/10 rounded-2xl flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#D9F22A]">
-              <Wallet className="w-4 h-4" />
-              Chave PIX para Recebimento de Comissões (D+9)
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-white/70 mb-1">
-                  Tipo de Chave PIX
-                </label>
-                <select
-                  value={pixKeyType}
-                  onChange={(e) => handlePixKeyTypeChange(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
-                >
-                  <option value="CPF">CPF</option>
-                  <option value="E-mail">E-mail</option>
-                  <option value="Celular">Celular</option>
-                  <option value="Chave Aleatória">Chave Aleatória (EVP)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-white/70 mb-1">
-                  Chave PIX Cadastrada *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={pixKey}
-                  onChange={(e) => setPixKey(e.target.value)}
-                  placeholder="Informe sua chave PIX"
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-mono placeholder-white/40 focus:outline-none focus:border-[#D9F22A]"
-                />
-              </div>
-            </div>
+          <div className="rounded-xl border border-slate-600 bg-slate-800/70 px-4 py-3 text-xs leading-5 text-slate-200">
+            A LeadsPay não armazena chave Pix para repasses. Para receber, conecte sua conta Stripe Express na aba Recebimentos e conclua a verificação de CPF diretamente com a Stripe.
           </div>
 
           <label className="flex items-start gap-2.5 text-xs text-white/70 cursor-pointer pt-1">
@@ -261,7 +190,7 @@ export const RegisterAffiliateModal: React.FC<RegisterAffiliateModalProps> = ({
               className="mt-0.5 accent-[#D9F22A] w-4 h-4 rounded cursor-pointer"
             />
             <span>
-              Concordo com os Termos do Programa de Afiliados LeadsPay e confirmo que os dados bancários pertencem ao meu CPF.
+              Concordo com os Termos do Programa de Afiliados LeadsPay. A conta de recebimento Stripe deve estar em meu nome e será verificada pela Stripe.
             </span>
           </label>
 

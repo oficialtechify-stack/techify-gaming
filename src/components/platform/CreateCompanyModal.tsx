@@ -71,7 +71,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
     // Validação estrita de Documento Fiscal (CNPJ ou CPF) - Obrigatório!
     if (docType === 'CNPJ') {
       if (!cleanCnpj) {
-        setErrorMsg('O CNPJ da empresa é estritamente obrigatório para emissão de notas e recebimento no Asaas.');
+        setErrorMsg('Informe um CNPJ válido para o tipo de cadastro selecionado.');
         return;
       }
       if (cleanCnpj.length !== 14 || !isValidCNPJ(cleanCnpj) || /^0+$/.test(cleanCnpj)) {
@@ -80,7 +80,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       }
     } else {
       if (!cleanCpf) {
-        setErrorMsg('O CPF ou MEI é estritamente obrigatório para emissão de notas e recebimento no Asaas.');
+        setErrorMsg('Informe um CPF válido para o cadastro individual selecionado.');
         return;
       }
       if (cleanCpf.length !== 11 || !isValidCPF(cleanCpf) || /^0+$/.test(cleanCpf)) {
@@ -108,7 +108,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
 
     const cleanPostal = postalCode.replace(/\D/g, '');
     if (!cleanPostal || cleanPostal.length !== 8) {
-      setErrorMsg('O CEP fiscal é obrigatório com 8 dígitos para criação da subconta no Asaas.');
+      setErrorMsg('Informe um CEP válido com 8 dígitos para o cadastro.');
       return;
     }
 
@@ -331,7 +331,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             )}
             <p className="text-[10px] text-white/40 mt-1.5 flex items-center gap-1">
               <ShieldAlert className="w-3 h-3 text-[#D9F22A]" />
-              O documento fiscal é exigido para criação automática da subconta homologada no Asaas.
+              O documento informado será usado no cadastro. A Stripe fará sua própria validação durante o onboarding da conta conectada.
             </p>
           </div>
 
@@ -367,11 +367,11 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             </div>
           </div>
 
-          {/* Endereço Fiscal Asaas (CEP e Número Obrigatórios) */}
+          {/* Endereço cadastral */}
           <div className="bg-[#050811]/80 border border-white/10 rounded-2xl p-3.5">
             <div className="flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider text-white/80">
               <MapPin className="w-3.5 h-3.5 text-[#D9F22A]" />
-              <span>Endereço Fiscal (Subconta Asaas) *</span>
+              <span>Endereço cadastral *</span>
             </div>
             <div className="grid grid-cols-3 gap-2.5">
               <div className="col-span-1">

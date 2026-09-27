@@ -53,6 +53,15 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+app.use((req, res, next) => {
+  const retiredAsaasRoute = /^\/(?:api\/(?:payments(?:\/|$)|checkout(?:\/|$)|pix(?:\/|$)|subaccounts(?:\/|$)|asaas(?:\/|$)|withdrawals?(?:\/|$)|subscriptions?(?:\/|$)|plans\/checkout(?:\/|$)|v3\/(?:accounts|payments|subaccounts)(?:\/|$)|webhooks\/asaas(?:\/|$))|webhooks\/asaas(?:\/|$)|webhook\/asaas(?:\/|$))/i.test(req.path);
+  if (!retiredAsaasRoute) return next();
+  return res.status(410).json({
+    error: true,
+    code: 'PAYMENT_PROVIDER_MIGRATED',
+    message: 'Rota de pagamento legada aposentada. Use os endpoints Stripe da LeadsPay.',
+  });
+});
 
 // Asaas API v3 Configuration
 const { apiUrl: ASAAS_ACTIVE_URL, apiKey: ASAAS_ACTIVE_KEY } = getAsaasConfig();

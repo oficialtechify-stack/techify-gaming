@@ -1,130 +1,60 @@
-import React from 'react';
-import { Globe, BarChart3, Target, DollarSign, TrendingUp, Layers } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { BarChart3, CreditCard, DollarSign, Globe, Receipt } from 'lucide-react';
 import { SaleTransaction } from '../../types/platform';
 
-interface RelatoriosViewProps {
-  transactions?: SaleTransaction[];
-}
+type StripeSale = SaleTransaction & { source?: string; stripePaymentIntentId?: string };
+interface RelatoriosViewProps { transactions?: SaleTransaction[]; }
+const formatBRL = (value: number) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export const RelatoriosView: React.FC<RelatoriosViewProps> = ({ transactions = [] }) => {
-  const approvedSales = transactions.filter(t => t.status === 'Aprovado');
-  const totalGrossRevenue = approvedSales.reduce((acc, t) => acc + t.amount, 0);
-  const totalCommissions = approvedSales.reduce((acc, t) => acc + t.commissionEarned, 0);
-  const salesCount = approvedSales.length;
-  const averageTicket = salesCount > 0 ? totalGrossRevenue / salesCount : 0;
-
-  // Group by UTM Source
-  const utmMap: Record<string, { clicks: number; conversions: number; revenue: number }> = {};
-
-  approvedSales.forEach(t => {
-    const source = t.utmSource || 'direto';
-    if (!utmMap[source]) {
-      utmMap[source] = { clicks: 0, conversions: 0, revenue: 0 };
+  const paidSales = useMemo(() => (transactions as StripeSale[]).filter((sale) => {
+    const fromStripe = sale.source === 'stripe' || sale.id.startsWith('stripe_') || Boolean(sale.stripePaymentIntentId);
+    const paid = ['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(String(sale.status || '').toLowerCase());
+    return fromStripe && paid;
+  }), [transactions]);
+  const totalGrossRevenue = paidSales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+  const totalCommissions = paidSales.reduce((sum, sale) => sum + Number(sale.commissionEarned || 0), 0);
+  const averageTicket = paidSales.length ? totalGrossRevenue / paidSales.length : 0;
+  const sources = useMemo(() => {
+    const grouped = new Map<string, { count: number; revenue: number; commission: number }>();
+    for (const sale of paidSales) {
+      const source = String(sale.utmSource || 'Direto').trim() || 'Direto';
+      const current = grouped.get(source) || { count: 0, revenue: 0, commission: 0 };
+      current.count += 1;
+      current.revenue += Number(sale.amount || 0);
+      current.commission += Number(sale.commissionEarned || 0);
+      grouped.set(source, current);
     }
-    utmMap[source].conversions += 1;
-    utmMap[source].revenue += t.amount;
-  });
-
-  const trafficSources = Object.keys(utmMap).map(source => {
-    const data = utmMap[source];
-    return {
-      source: source.toUpperCase(),
-      clicks: data.conversions * 8 + 4, // realistic clicks
-      conversions: data.conversions,
-      rate: `${((data.conversions / (data.conversions * 8 + 4)) * 100).toFixed(2)}%`,
-      revenue: `R$ ${data.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-    };
-  });
+    return Array.from(grouped, ([source, values]) => ({ source, ...values })).sort((a, b) => b.revenue - a.revenue);
+  }, [paidSales]);
 
   return (
-    <div className="flex flex-col gap-6" id="leadspay-relatorios-view">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-          Relatórios & Performance de Tráfego
-        </h1>
-        <p className="text-xs text-white/60 mt-1">
-          Métricas reais consolidadas de contratos fechados, faturamento por canal e taxas de conversão em tempo real.
-        </p>
-      </div>
+    <main className="space-y-6" id="leadspay-relatorios-view">
+      <header>
+        <div className="mb-1 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#5ba63c]"><BarChart3 className="h-4 w-4" aria-hidden="true" /> Relatórios Stripe</div>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Desempenho de vendas</h1>
+        <p className="mt-1 text-sm leading-6 text-slate-600">Indicadores derivados de pagamentos Stripe confirmados. Cliques e taxas de conversão não são mostrados porque ainda não há um coletor de visitas persistido.</p>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-[#080d1a] border border-white/10 p-5 rounded-2xl">
-          <span className="text-xs text-white/50 uppercase font-bold">Contratos Fechados</span>
-          <div className="text-2xl font-black text-white font-['Syne'] mt-1">{salesCount} Vendas</div>
-          <span className="text-[11px] text-white/50 mt-1 block">
-            {salesCount > 0 ? 'Dados sincronizados em tempo real' : 'Nenhuma venda ainda'}
-          </span>
-        </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo de pagamentos">
+        <Metric label="Vendas confirmadas" value={String(paidSales.length)} note="Webhook Stripe" icon={<Receipt className="h-4 w-4" />} />
+        <Metric label="Faturamento bruto" value={formatBRL(totalGrossRevenue)} note="Valor processado em teste" icon={<DollarSign className="h-4 w-4" />} accent />
+        <Metric label="Ticket médio" value={formatBRL(averageTicket)} note="Média por pagamento confirmado" icon={<CreditCard className="h-4 w-4" />} />
+        <Metric label="Comissões registradas" value={formatBRL(totalCommissions)} note="Conforme o split salvo no pedido" icon={<DollarSign className="h-4 w-4" />} />
+      </section>
 
-        <div className="bg-[#080d1a] border border-white/10 p-5 rounded-2xl">
-          <span className="text-xs text-white/50 uppercase font-bold">Faturamento Total Bruto</span>
-          <div className="text-2xl font-black text-white font-['Syne'] mt-1">
-            R$ {totalGrossRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
-          <span className="text-[11px] text-[#D9F22A] mt-1 block">Volume transacionado</span>
-        </div>
-
-        <div className="bg-[#080d1a] border border-white/10 p-5 rounded-2xl">
-          <span className="text-xs text-white/50 uppercase font-bold">Ticket Médio</span>
-          <div className="text-2xl font-black text-white font-['Syne'] mt-1">
-            R$ {averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
-          <span className="text-[11px] text-white/50 mt-1 block">Média por contrato fechado</span>
-        </div>
-
-        <div className="bg-[#080d1a] border border-[#D9F22A]/30 bg-[#D9F22A]/5 p-5 rounded-2xl">
-          <span className="text-xs text-[#D9F22A] uppercase font-bold">Total em Comissões</span>
-          <div className="text-2xl font-black text-[#D9F22A] font-['Syne'] mt-1">
-            R$ {totalCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
-          <span className="text-[11px] text-white/60 mt-1 block">Repasses D+9 aos parceiros</span>
-        </div>
-      </div>
-
-      {/* Traffic Table */}
-      <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
-        <h3 className="text-base font-bold text-white font-['Syne'] mb-4 flex items-center gap-2">
-          <Globe className="w-4 h-4 text-[#D9F22A]" />
-          Desempenho por Origem de Tráfego (UTM Source)
-        </h3>
-
-        {trafficSources.length === 0 ? (
-          <div className="text-center py-10 px-4 bg-[#050811] rounded-xl border border-white/5">
-            <Globe className="w-10 h-10 text-white/20 mx-auto mb-3" />
-            <h4 className="text-sm font-bold text-white">Nenhum tráfego registrado ainda</h4>
-            <p className="text-xs text-white/50 max-w-sm mx-auto mt-1">
-              Gere seus links de afiliado com UTMs na aba "Programa de Afiliados" para rastrear cliques e origens de conversão.
-            </p>
-          </div>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-5 py-4"><h2 className="flex items-center gap-2 font-semibold text-slate-900"><Globe className="h-4 w-4 text-[#5ba63c]" aria-hidden="true" /> Vendas por origem atribuída</h2><p className="mt-1 text-xs text-slate-500">A origem vem do código UTM recebido pelo checkout. Não representa contagem de cliques.</p></div>
+        {sources.length === 0 ? (
+          <div className="px-5 py-14 text-center"><BarChart3 className="mx-auto h-9 w-9 text-slate-300" aria-hidden="true" /><h3 className="mt-3 text-sm font-semibold text-slate-800">Ainda não há vendas Stripe confirmadas</h3><p className="mt-1 text-xs text-slate-500">Quando uma compra for confirmada, seus dados aparecerão nesta seção.</p></div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="text-white/40 bg-[#050811] border-b border-white/10 uppercase tracking-wider">
-                  <th className="py-3 px-4 font-bold">Canal / Origem</th>
-                  <th className="py-3 px-4 font-bold text-center">Cliques Estimados</th>
-                  <th className="py-3 px-4 font-bold text-center">Vendas Fechadas</th>
-                  <th className="py-3 px-4 font-bold text-center">Taxa de Conversão</th>
-                  <th className="py-3 px-4 font-bold text-right">Faturamento Gerado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {trafficSources.map((t, idx) => (
-                  <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-white">{t.source}</td>
-                    <td className="py-3.5 px-4 text-center text-white/80">{t.clicks}</td>
-                    <td className="py-3.5 px-4 text-center font-bold text-[#D9F22A]">{t.conversions}</td>
-                    <td className="py-3.5 px-4 text-center">
-                      <span className="px-2 py-0.5 rounded bg-white/5 font-mono">{t.rate}</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-bold text-white">{t.revenue}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-medium">Origem</th><th className="px-5 py-3 text-right font-medium">Vendas</th><th className="px-5 py-3 text-right font-medium">Faturamento bruto</th><th className="px-5 py-3 text-right font-medium">Comissões</th></tr></thead><tbody className="divide-y divide-slate-100">{sources.map((item) => <tr key={item.source} className="hover:bg-slate-50/70"><td className="px-5 py-3 font-medium text-slate-900">{item.source}</td><td className="px-5 py-3 text-right text-slate-700">{item.count}</td><td className="px-5 py-3 text-right font-semibold text-slate-900">{formatBRL(item.revenue)}</td><td className="px-5 py-3 text-right text-slate-700">{formatBRL(item.commission)}</td></tr>)}</tbody></table></div>
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };
+
+const Metric: React.FC<{ label: string; value: string; note: string; icon: React.ReactNode; accent?: boolean }> = ({ label, value, note, icon, accent }) => (
+  <article className={`rounded-2xl border bg-white p-5 shadow-sm ${accent ? 'border-[#b9dda8]' : 'border-slate-200'}`}><div className="flex items-center justify-between gap-3 text-xs font-medium text-slate-500"><span>{label}</span><span className={`rounded-lg p-2 ${accent ? 'bg-[#e8f4df] text-[#3f7f33]' : 'bg-slate-100 text-slate-600'}`}>{icon}</span></div><div className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{value}</div><p className="mt-1 text-xs text-slate-500">{note}</p></article>
+);
