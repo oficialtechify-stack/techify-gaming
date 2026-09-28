@@ -18,8 +18,8 @@ function setHeaders(req: RequestLike, res: ResponseLike): void {
   }
 }
 
-function fail(res: ResponseLike, status: number, error: string) {
-  return res.status(status).json({ error });
+function fail(res: ResponseLike, status: number, error: string, code?: string) {
+  return res.status(status).json({ error, ...(code ? { code } : {}) });
 }
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
@@ -53,7 +53,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!companySnap?.exists) return fail(res, 422, 'A empresa responsável por esta oferta não foi encontrada.');
     const company = companySnap.data()!;
     const companyOwnerId = String(plan.ownerId || company.ownerId || '');
-    if (!companyOwnerId || company.ownerId !== companyOwnerId || company.verified !== true || company.status !== 'approved') {
+    if (!companyOwnerId || company.ownerId !== companyOwnerId || company.verified !== true || company.status !== 'approved' || company.archived === true || company.isArchived === true) {
       return fail(res, 409, 'A empresa ainda não está aprovada para receber pela Stripe.');
     }
 
@@ -120,9 +120,24 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const existing = await orderRef.get();
     if (existing.exists) {
       const saved = existing.data()!;
-      if (saved.planId !== planId || saved.buyerEmail !== buyerEmail) return fail(res, 409, 'Esta tentativa de checkout não pode ser reutilizada.');
+      const immutableSnapshotMatches = saved.planId === planId &&
+        saved.buyerName === buyerName && saved.buyerEmail === buyerEmail &&
+        saved.companyId === companyId && saved.companyOwnerId === companyOwnerId &&
+        saved.companyAccountId === companyAccountId &&
+        (saved.affiliateId || '') === (affiliateId || '') &&
+        (saved.affiliateAccountId || '') === (affiliateAccountId || '') &&
+        Number(saved.affiliatePercent || 0) === affiliatePercent &&
+        Number(saved.amountCents) === split.grossAmountCents &&
+        Number(saved.productAmountCents) === productAmountCents &&
+        Number(saved.platformFeeCents) === split.platformFeeCents &&
+        Number(saved.companyAmountCents) === split.companyAmountCents &&
+        Number(saved.affiliateAmountCents || 0) === split.affiliateAmountCents;
+      if (!immutableSnapshotMatches) return fail(res, 409, 'Esta tentativa tem dados de preço, empresa ou comissão diferentes e não pode ser reutilizada. Inicie um novo checkout.', 'CHECKOUT_SNAPSHOT_MISMATCH');
       if (saved.stripePaymentIntentId) {
         const existingIntent = await stripe.paymentIntents.retrieve(String(saved.stripePaymentIntentId));
+        if (existingIntent.status === 'succeeded' && saved.status === 'paid') return fail(res, 409, 'Este pagamento já foi concluído. Não tente pagar novamente; confira a confirmação da compra.', 'PAYMENT_ALREADY_COMPLETED');
+        if (existingIntent.status === 'succeeded') return fail(res, 503, 'O pagamento foi recebido e está aguardando a confirmação do sistema. Não tente pagar novamente; atualize em alguns instantes.', 'PAYMENT_PROCESSING');
+        if (existingIntent.status === 'canceled') return fail(res, 409, 'Esta tentativa foi cancelada. Inicie uma nova tentativa de pagamento.', 'PAYMENT_ATTEMPT_CANCELED');
         if (existingIntent.client_secret) return res.status(200).json({ clientSecret: existingIntent.client_secret, orderId });
       }
     } else {

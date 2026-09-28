@@ -21,6 +21,9 @@ export interface CompanyStartup {
   phone?: string;
   mobilePhone?: string;
   postalCode?: string;
+  city?: string;
+  state?: string;
+  country?: string;
   addressNumber?: string;
   address?: string;
   hasNoCnpj?: boolean;
@@ -193,6 +196,8 @@ export interface CompanyPlan {
   };
   checkoutUrl?: string;
   status: 'Ativo' | 'Pausado';
+  archived?: boolean;
+  archivedAt?: string;
   createdAt?: string;
 }
 

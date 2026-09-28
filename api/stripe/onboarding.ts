@@ -69,7 +69,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       if (!companySnap.exists) return fail(res, 404, 'Cadastro de Empresa não encontrado.');
       company = companySnap.data() as Record<string, unknown>;
       if (company.ownerId !== identity.uid) return fail(res, 403, 'A empresa não pertence à conta autenticada.');
-      if (company.verified !== true || company.status !== 'approved') {
+      if (company.verified !== true || company.status !== 'approved' || company.archived === true || company.isArchived === true) {
         return fail(res, 403, 'A aprovação da Empresa é necessária antes de configurar recebimentos.');
       }
     }

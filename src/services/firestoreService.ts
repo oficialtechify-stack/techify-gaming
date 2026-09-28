@@ -563,77 +563,60 @@ export async function findCompanyByOwnerId(userId: string, companyId?: string): 
  * Create a new Company / Startup in Firestore (Sent to Admin for approval)
  */
 export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 'id' | 'createdAt'>) {
-  const id = `comp-${Date.now()}`;
-  const now = new Date().toISOString();
-  const slug = companyData.name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-');
+  const identity = auth.currentUser;
+  if (!identity) throw new Error('Faça login novamente antes de cadastrar sua empresa.');
+  const targetUserId = companyData.ownerId || companyData.submittedBy || identity.uid;
+  if (targetUserId !== identity.uid) throw new Error('A empresa deve ser enviada pela conta que será sua titular.');
 
-  const newCompany: CompanyStartup = {
+  const profileSnapshot = await getDoc(doc(db, COLLECTIONS.PROFILES, identity.uid));
+  if (!profileSnapshot.exists()) throw new Error('Seu perfil pessoal precisa ser criado antes do cadastro da empresa.');
+  const profile = profileSnapshot.data() as Partial<UserSellerProfile> & Record<string, unknown>;
+  const companyName = String(companyData.name || companyData.companyName || '').trim();
+  const fullAddress = [companyData.address || profile.companyAddress || profile.address, companyData.addressNumber]
+    .filter(Boolean).join(', ');
+
+  const submitted = await submitVerificationRequestInFirebase({
+    name: String(companyData.submittedByName || profile.name || identity.displayName || '').trim(),
+    email: String(companyData.email || profile.email || identity.email || '').trim(),
+    phone: String(companyData.phone || companyData.whatsapp || profile.phone || profile.whatsapp || '').trim(),
+    whatsapp: String(companyData.whatsapp || profile.whatsapp || '').trim(),
+    cep: String(companyData.postalCode || profile.companyCep || profile.cep || ''),
+    state: String(companyData.state || profile.companyState || profile.state || ''),
+    city: String(companyData.city || profile.companyCity || profile.city || ''),
+    address: fullAddress,
+    companyName,
+    companyLegalName: String(companyData.companyName || companyName),
+    companyCnpj: String(companyData.cnpj || companyData.cpf || companyData.cpfCnpj || ''),
+    cleanCnpj: String(companyData.cleanCnpj || companyData.cleanCpf || String(companyData.cpfCnpj || '').replace(/\D/g, '')),
+    companyDocType: companyData.companyDocType || companyData.docType || companyData.documentType || 'CNPJ',
+    companyPhone: String(companyData.phone || companyData.whatsapp || profile.phone || profile.whatsapp || ''),
+    companyCep: String(companyData.postalCode || profile.companyCep || profile.cep || ''),
+    companyState: String(companyData.state || profile.companyState || profile.state || ''),
+    companyCity: String(companyData.city || profile.companyCity || profile.city || ''),
+    companyAddress: fullAddress,
+    companyCategory: companyData.category,
+    companyTagline: companyData.tagline,
+    companyWebsite: companyData.website,
+    companyLogo: companyData.logo,
+    companyCountry: 'Brasil',
+    verificationRoleType: 'empresa',
+    activeRoleMode: 'empresa',
+  }, identity.uid);
+
+  const id = String(profile.companyId || `comp-${identity.uid.slice(0, 10)}`);
+  const slug = companyName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+  return {
     ...companyData,
     id,
+    name: companyName,
     slug: slug || id,
-    totalPlansCount: 0,
-    totalAffiliatesCount: 0,
-    totalSalesVolume: 0,
-    verified: companyData.verified ?? false,
-    environment: 'production',
-    kyc_status: companyData.kyc_status || (companyData.verified ? 'verified' : 'pending'),
-    status: companyData.status ?? 'pending',
-    submittedAt: companyData.submittedAt || now,
-    submittedBy: companyData.submittedBy || DEFAULT_USER_ID,
-    ownerId: companyData.ownerId || DEFAULT_USER_ID,
-    createdAt: now
-  };
-
-  const docRef = doc(db, COLLECTIONS.COMPANIES, id);
-  await setDoc(docRef, sanitizeForFirestore(newCompany));
-
-  // Sincroniza também com verification_requests para que o admin visualize a solicitação de homologação
-  try {
-    const verifRef = doc(db, COLLECTIONS.VERIFICATIONS, id);
-    await setDoc(verifRef, sanitizeForFirestore({
-      id,
-      userId: newCompany.ownerId || DEFAULT_USER_ID,
-      name: newCompany.submittedByName || newCompany.name,
-      companyName: newCompany.name,
-      companyId: id,
-      companyCnpj: newCompany.cnpj || newCompany.cpf || '',
-      companyCategory: newCompany.category || 'SaaS / B2B',
-      companyTagline: newCompany.tagline || '',
-      companyWebsite: newCompany.website || '',
-      companyLogo: newCompany.logo || '',
-      email: newCompany.email || '',
-      phone: newCompany.whatsapp || newCompany.phone || '',
-      roleType: 'empresa',
-      status: 'pending',
-      kyc_status: 'submitted',
-      submittedAt: now
-    }), { merge: true });
-  } catch (e) {
-    console.warn('Could not sync verification request on company creation:', e);
-  }
-
-  if (newCompany.ownerId && newCompany.ownerId !== DEFAULT_USER_ID) {
-    try {
-      await updateDoc(doc(db, COLLECTIONS.PROFILES, newCompany.ownerId), {
-        companyId: id,
-        companyName: newCompany.name,
-        hasCompanyProfile: true,
-        accountType: 'empresa',
-        activeRoleMode: 'empresa',
-        environment: newCompany.environment,
-        kyc_status: newCompany.kyc_status
-      });
-    } catch (e) {
-      console.warn('Could not update user profile on company creation:', e);
-    }
-  }
-
-  return newCompany;
+    ownerId: identity.uid,
+    submittedBy: identity.uid,
+    status: 'pending' as const,
+    verified: false,
+    kyc_status: 'submitted' as const,
+    submittedAt: submitted.submittedAt,
+  } as CompanyStartup;
 }
 
 /**
@@ -877,34 +860,15 @@ export async function updateCompanyInFirebase(companyId: string, updates: Partia
 }
 
 /**
- * Delete a Company and its plans in Firestore
+ * Archive a Company reversibly; plans, sales, affiliations, and financial history stay intact.
  */
 export async function deleteCompanyInFirebase(companyId: string) {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
   const snap = await getDoc(docRef);
-  const ownerId = snap.exists() ? snap.data()?.ownerId : null;
-  await deleteDoc(docRef);
-
-  // Also delete company plans
-  const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
-  for (const p of plansSnap.docs) {
-    if (p.data().companyId === companyId) {
-      await deleteDoc(p.ref);
-    }
-  }
-
-  // If owner exists, clear company link from user profile
-  if (ownerId) {
-    try {
-      await updateDoc(doc(db, COLLECTIONS.PROFILES, ownerId), {
-        companyId: null,
-        companyName: null,
-        hasCompanyProfile: false
-      });
-    } catch (e) {
-      console.warn('Profile cleanup error:', e);
-    }
-  }
+  if (!snap.exists()) throw new Error('A empresa não foi encontrada. Atualize a página e tente novamente.');
+  if (snap.data()?.archived === true) return { success: true, archived: true };
+  await updateDoc(docRef, { archived: true, archivedAt: new Date().toISOString() });
+  return { success: true, archived: true };
 }
 
 // ==========================================
@@ -1207,40 +1171,22 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile
 }
 
 /**
- * Remove an Affiliation
+ * End an affiliation reversibly. Checkout ignores every non-active status.
  */
 export async function deleteAffiliationInFirebase(affiliationId: string, planId?: string, companyId?: string) {
-  await deleteDoc(doc(db, COLLECTIONS.AFFILIATIONS, affiliationId));
-
-  if (planId) {
-    try {
-      const planRef = doc(db, COLLECTIONS.PLANS, planId);
-      const planSnap = await getDoc(planRef);
-      if (planSnap.exists()) {
-        const pData = planSnap.data() as CompanyPlan;
-        await updateDoc(planRef, sanitizeForFirestore({
-          affiliatesCount: Math.max(0, (pData.affiliatesCount || 1) - 1)
-        }));
-      }
-    } catch (e) {
-      console.warn('Erro ao atualizar contador de afiliados do plano:', e);
-    }
-  }
-
-  if (companyId) {
-    try {
-      const compRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-      const compSnap = await getDoc(compRef);
-      if (compSnap.exists()) {
-        const cData = compSnap.data() as CompanyStartup;
-        await updateDoc(compRef, sanitizeForFirestore({
-          totalAffiliatesCount: Math.max(0, (cData.totalAffiliatesCount || 1) - 1)
-        }));
-      }
-    } catch (e) {
-      console.warn('Erro ao atualizar contador de afiliados da empresa:', e);
-    }
-  }
+  const affiliationRef = doc(db, COLLECTIONS.AFFILIATIONS, affiliationId);
+  const affiliationSnapshot = await getDoc(affiliationRef);
+  if (!affiliationSnapshot.exists()) throw new Error('A afiliação não foi encontrada. Atualize a página e tente novamente.');
+  const current = affiliationSnapshot.data() as UserAffiliation;
+  if (planId && (current.planId || current.plan_id) !== planId) throw new Error('A afiliação não corresponde ao plano selecionado.');
+  if (companyId && current.companyId !== companyId) throw new Error('A afiliação não pertence a esta empresa.');
+  const status = String(current.status || '').toLowerCase();
+  if (status !== 'ativo' && status !== 'active') return;
+  await updateDoc(affiliationRef, sanitizeForFirestore({
+    status: 'Encerrada',
+    endedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
 }
 
 /**
@@ -1378,112 +1324,25 @@ export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]
  * Request Withdrawal via Secure Backend Endpoint (/api/withdrawals/request)
  */
 export async function requestWithdrawalViaBackend(
-  amount: number,
-  pixKey: string,
-  pixKeyType: string,
-  userId: string = DEFAULT_USER_ID,
-  userName?: string,
-  isDevMode?: boolean,
-  environment?: 'development' | 'production'
-): Promise<{ success: boolean; withdrawal: WithdrawalRequest; message?: string }> {
-  const response = await fetch('/api/withdrawals/request', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-dev-mode': isDevMode ? 'true' : 'false',
-      'x-environment': environment || (isDevMode ? 'development' : 'production')
-    },
-    body: JSON.stringify({
-      amount,
-      requestedAmount: amount,
-      pixKey,
-      pixKeyType,
-      userId,
-      userName,
-      isDevMode,
-      environment: environment || (isDevMode ? 'development' : 'production')
-    })
-  });
-
-  const data = await response.json();
-
-  if (!response.ok || data.error === true) {
-    const errorMsg = data.message || (typeof data.error === 'string' ? data.error : 'Erro ao processar solicitação de saque');
-    throw new Error(errorMsg);
-  }
-
-  return data;
+  ..._legacyArgs: unknown[]
+): Promise<never> {
+  throw new Error('Saques manuais via PIX foram desativados. Os repasses D+9 entram no saldo da conta Stripe Connect; configure o payout bancário pelo painel Stripe Express.');
 }
 
 /**
  * Trigger 9-day balance release cron manually or scheduled
  */
 export async function triggerReleaseBalancesCron(): Promise<{ releasedCount: number; message: string }> {
-  const response = await fetch('/api/cron/release-balances', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error('Falha ao acionar rotina de liberação de saldos');
-  }
-
-  return response.json();
+  throw new Error('O cron legado foi aposentado. A liberação Stripe D+9 é executada pelo endpoint seguro de cron; não acione a partir do navegador.');
 }
 
 /**
  * Direct Cashout fallback if offline/client-only
  */
 export async function createWithdrawalInFirebase(
-  amount: number, 
-  pixKey: string, 
-  pixKeyType: string,
-  userId: string = DEFAULT_USER_ID,
-  userName?: string
-) {
-  const id = `WTH-${Math.floor(1000 + Math.random() * 9000)}`;
-  const now = new Date();
-  const formattedDate = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-  const feeAmount = 2.50; // Taxa de saque fixa LeadsPay
-  const netAmount = Number(Math.max(0, amount - feeAmount).toFixed(2));
-  const endToEndId = `E31522339${Date.now()}${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-  const newWth: WithdrawalRequest = {
-    id,
-    userId: userId || DEFAULT_USER_ID,
-    userName: userName || INITIAL_USER_PROFILE.name,
-    amount,
-    feeAmount,
-    netAmount,
-    pixKey,
-    pixKeyType,
-    status: 'concluido',
-    requestedAt: formattedDate,
-    completedAt: now.toISOString(),
-    endToEndId
-  };
-
-  // 1. Save withdrawal doc
-  await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, id), sanitizeForFirestore(newWth));
-
-  // 2. Decrement full amount from available balance
-  const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
-  const profileSnap = await getDoc(profileRef);
-  if (profileSnap.exists()) {
-    const current = profileSnap.data() as UserSellerProfile;
-    const newAvailable = Math.max(0, (current.availableBalance || 0) - amount);
-    await updateDoc(profileRef, sanitizeForFirestore({
-      availableBalance: newAvailable,
-      updatedAt: now.toISOString()
-    }));
-  }
-
-  // 3. Credit R$ 2,50 to platform global account
-  await creditPlatformFinances('withdrawal', feeAmount);
-
-  return newWth;
+  ..._legacyArgs: unknown[]
+): Promise<never> {
+  throw new Error('Nenhum saque foi criado. Solicitações manuais PIX não são suportadas neste fluxo Stripe Connect; use a conta de recebimento Stripe Express.');
 }
 
 // ==========================================

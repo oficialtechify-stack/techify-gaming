@@ -15,6 +15,7 @@ interface CustomCheckoutPageProps {
 export const PLATFORM_CHECKOUT_FEE = 0.99;
 const stripePublishableKey = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim();
 const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+const createAttemptId = () => (window.crypto?.randomUUID?.() || `${Date.now()}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`).replace(/-/g, '');
 const stripeAppearance = {
   theme: 'stripe' as const,
   variables: {
@@ -94,7 +95,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     setIsProcessing(true);
     try {
       if (!stripeAttemptId.current) {
-        stripeAttemptId.current = (window.crypto?.randomUUID?.() || `${Date.now()}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`).replace(/-/g, '');
+        stripeAttemptId.current = createAttemptId();
       }
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -108,7 +109,17 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         }),
       });
       const result = await response.json().catch(() => ({}));
+      if (response.ok && result.paid === true && result.orderId) {
+        const confirmation = new URL('/?thank-you=true', window.location.origin);
+        confirmation.searchParams.set('plan', plan.id);
+        confirmation.searchParams.set('order_id', String(result.orderId));
+        window.location.assign(confirmation.toString());
+        return;
+      }
       if (!response.ok || !result.clientSecret || !result.orderId) {
+        if (result.code === 'PAYMENT_ATTEMPT_CANCELED' || result.code === 'CHECKOUT_SNAPSHOT_MISMATCH') {
+          stripeAttemptId.current = '';
+        }
         setFormError(result.error || 'Não foi possível preparar o pagamento. Nenhuma cobrança foi iniciada.');
         return;
       }
@@ -248,7 +259,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                     <h2 className="text-sm font-semibold text-[#202327]">Forma de pagamento</h2>
                     <p className="mt-1 text-xs leading-5 text-[#777c82]">Métodos disponibilizados pela Stripe para sua compra.</p>
                   </div>
-                  <button type="button" onClick={() => { setClientSecret(''); setOrderId(''); setFormError(null); }} className="text-xs font-medium text-[#555a60] underline underline-offset-4">Editar dados</button>
+                  <button type="button" onClick={() => { setClientSecret(''); setOrderId(''); stripeAttemptId.current = createAttemptId(); setFormError(null); }} className="text-xs font-medium text-[#555a60] underline underline-offset-4">Editar dados</button>
                 </div>
                 <Elements stripe={stripePromise} options={{ clientSecret, appearance: stripeAppearance }}>
                   <EmbeddedPaymentForm returnUrl={returnUrl} onError={setFormError} isProcessing={isProcessing} setIsProcessing={setIsProcessing} />

@@ -24,7 +24,6 @@ import {
   createCompanyPlanInFirebase,
   updateCompanyPlanInFirebase,
   deleteCompanyPlanInFirebase,
-  createAffiliationInFirebase,
   deleteAffiliationInFirebase,
   updateUserProfileInFirebase,
   submitVerificationRequestInFirebase,
@@ -65,6 +64,7 @@ import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
 import { Modals } from '../Modals';
 import { ActiveModal } from '../../types';
 import { completeAffiliateProfile } from '../../services/authService';
+import { joinAffiliateOffer } from '../../services/affiliateJoinService';
 import { 
   LayoutDashboard, 
   Store, 
@@ -689,10 +689,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
 
     try {
-      const aff = await createAffiliationInFirebase(plan, userProfile);
+      const aff = await joinAffiliateOffer(plan.id, currentUser);
       setLiveToast({
         message: 'Afiliação realizada com sucesso!',
-        sub: `Código liberado: ${aff.affiliateCode} (${plan.name})`,
+        sub: `Código liberado: ${aff.affiliateCode || aff.affiliate_code} (${plan.name})`,
         amount: `${plan.commissionPercentage}% de comissão`
       });
       setTimeout(() => setLiveToast(null), 5000);
@@ -728,18 +728,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Handle delete company
   const handleDeleteCompany = async (companyId: string) => {
-    if (!confirm('Deseja realmente remover esta empresa e seus planos?')) return;
+    if (!confirm('Arquivar esta empresa? As ofertas deixarão de aceitar novas vendas, mas planos, vínculos e histórico financeiro serão preservados e poderão ser restaurados.')) return;
     try {
       await deleteCompanyInFirebase(companyId);
       setLiveToast({
-        message: 'Empresa removida com sucesso',
-        sub: 'Registro excluído',
-        amount: 'Concluído'
+        message: 'Empresa arquivada com sucesso',
+        sub: 'Planos, vínculos e histórico financeiro foram preservados.',
+        amount: 'Arquivada'
       });
       setTimeout(() => setLiveToast(null), 3000);
     } catch (err: any) {
       console.error('Error deleting company:', err);
-      alert(`Erro ao excluir: ${err.message}`);
+      alert(`Erro ao arquivar: ${err.message}`);
     }
   };
 

@@ -189,28 +189,42 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   const signature = header(req, 'stripe-signature');
   if (!signature) return res.status(400).json({ error: 'Assinatura Stripe ausente.' });
 
+  let eventRef: FirebaseFirestore.DocumentReference | undefined;
+  let signatureValidated = false;
   try {
     const stripe = getStripeTestClient();
     const event = stripe.webhooks.constructEvent(await readRawBody(req), signature, getStripeWebhookSecret());
+    signatureValidated = true;
     const db = getServerAdminFirestore();
-    const eventRef = db.collection('stripe_webhook_events').doc(event.id);
+    eventRef = db.collection('stripe_webhook_events').doc(event.id);
     const now = Date.now();
     const claim = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(eventRef);
+      const snap = await tx.get(eventRef!);
       if (snap.exists) {
         const saved = snap.data()!;
-        if (saved.status === 'completed') return false;
-        if (saved.status === 'processing' && now - Number(saved.startedAtMs || now) < 120_000) return false;
+        if (saved.status === 'completed') return 'completed' as const;
+        if (saved.status === 'processing' && now - Number(saved.startedAtMs || now) < 120_000) return 'processing' as const;
       }
-      tx.set(eventRef, { status: 'processing', type: event.type, startedAtMs: now, updatedAt: new Date(now).toISOString() }, { merge: true });
-      return true;
+      tx.set(eventRef!, { status: 'processing', type: event.type, startedAtMs: now, updatedAt: new Date(now).toISOString() }, { merge: true });
+      return 'claimed' as const;
     });
-    if (!claim) return res.status(200).json({ received: true, duplicate: true });
+    if (claim === 'completed') return res.status(200).json({ received: true, duplicate: true });
+    if (claim === 'processing') {
+      res.setHeader('Retry-After', '10');
+      return res.status(503).json({ received: false, retry: true });
+    }
     await processEvent(stripe, event);
     await eventRef.set({ status: 'completed', completedAt: new Date().toISOString() }, { merge: true });
     return res.status(200).json({ received: true });
   } catch (error) {
     console.error('[Stripe webhook]', error instanceof Error ? error.message : 'Erro desconhecido');
-    return res.status(400).json({ error: 'Webhook Stripe inválido ou não processado.' });
+    if (eventRef && signatureValidated) {
+      try {
+        await eventRef.set({ status: 'retry', retryAt: new Date().toISOString() }, { merge: true });
+      } catch (markError) {
+        console.error('[Stripe webhook] Não foi possível liberar claim para retry.');
+      }
+    }
+    return res.status(signatureValidated ? 503 : 400).json({ error: signatureValidated ? 'Evento válido, mas não processado; a Stripe pode tentar novamente.' : 'Webhook Stripe inválido.' });
   }
 }

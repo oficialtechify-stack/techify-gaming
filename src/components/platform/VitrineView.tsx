@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CompanyPlan, CompanyStartup, UserAffiliation, UserRoleMode } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
 import { formatAffiliatePlanUrl, getAppBaseUrl } from '../../utils/affiliateTracking';
+import { joinAffiliateOffer } from '../../services/affiliateJoinService';
 import { 
   Sparkles, 
   Copy, 
@@ -78,6 +79,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   const [selectedAffModal, setSelectedAffModal] = useState<{ plan: CompanyPlan; aff: UserAffiliation } | null>(null);
   const [localAffiliations, setLocalAffiliations] = useState<UserAffiliation[]>([]);
   const [joiningPlanId, setJoiningPlanId] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
   const [showCompanyVerificationModal, setShowCompanyVerificationModal] = useState<boolean>(false);
 
@@ -102,6 +104,9 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   ];
 
   const filteredPlatforms = platforms.filter(p => {
+    if (p.archived === true || (p as any).isArchived === true) return false;
+    const parentCompany = companies.find(company => company.id === p.companyId);
+    if (parentCompany?.archived === true || (parentCompany as any)?.isArchived === true) return false;
     if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
     if (minCommission > 0 && p.commissionPercentage < minCommission) return false;
     if (searchTerm) {
@@ -115,83 +120,15 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
   const effectiveUserId = userProfile?.id || userProfile?.userId || currentUser?.uid || '';
 
-  // Load permanent local affiliations on mount (strictly isolated to current verified user)
-  useEffect(() => {
-    if (!effectiveUserId || !isVerified) {
-      setLocalAffiliations([]);
-      return;
-    }
-    try {
-      // Limpeza de chaves não isoladas para evitar pré-afiliação acidental
-      Object.keys(localStorage).forEach(k => {
-        if (k.startsWith('leadspay_aff_') && !k.endsWith(`_${effectiveUserId}`)) {
-          localStorage.removeItem(k);
-        }
-      });
-
-      const userPrefix = `leadspay_aff_`;
-      const userSuffix = `_${effectiveUserId}`;
-      const storedKeys = Object.keys(localStorage).filter(k => k.startsWith(userPrefix) && k.endsWith(userSuffix));
-      const storedAffs: UserAffiliation[] = [];
-      storedKeys.forEach(k => {
-        try {
-          const item = JSON.parse(localStorage.getItem(k) || '');
-          if (item && (item.planId || item.plan_id) && (item.userId === effectiveUserId || item.user_id === effectiveUserId)) {
-            storedAffs.push(item);
-          }
-        } catch (e) {}
-      });
-
-      if (storedAffs.length > 0) {
-        setLocalAffiliations(prev => {
-          const merged = [...prev];
-          storedAffs.forEach(st => {
-            const planId = st.planId || st.plan_id;
-            if (!merged.some(m => (m.planId || m.plan_id) === planId)) {
-              merged.push(st);
-            }
-          });
-          return merged;
-        });
-      }
-    } catch (err) {
-      console.warn('Erro ao carregar afiliações persistentes do localStorage:', err);
-    }
-  }, [effectiveUserId, isVerified]);
-
   const isAffiliated = (planId: string) => {
-    // Usuários não verificados NUNCA estão afiliados
     if (!isVerified) return false;
-
-    // 1. Checa estado reativo
-    const inState = localAffiliations.some(a => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId));
-    if (inState) return true;
-
-    // 2. Checa persistência permanente local exclusiva do usuário
-    try {
-      if (typeof window !== 'undefined' && effectiveUserId) {
-        const stored = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`);
-        if (stored) return true;
-      }
-    } catch (e) {}
-    return false;
+    return localAffiliations.some(a => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId) && ['ativo', 'active'].includes(String(a.status || '').toLowerCase()));
   };
 
   const getAffiliation = (planId: string): UserAffiliation | undefined => {
     if (!isVerified) return undefined;
 
-    const inState = localAffiliations.find(a => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId));
-    if (inState) return inState;
-
-    try {
-      if (typeof window !== 'undefined' && effectiveUserId) {
-        const storedStr = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`);
-        if (storedStr) {
-          return JSON.parse(storedStr) as UserAffiliation;
-        }
-      }
-    } catch (e) {}
-    return undefined;
+    return localAffiliations.find(a => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId) && ['ativo', 'active'].includes(String(a.status || '').toLowerCase()));
   };
 
   const handleCopyLink = (text: string, id: string) => {
@@ -202,6 +139,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
   const handleAffiliateClick = async (product: CompanyPlan) => {
     if (joiningPlanId) return;
+    setJoinError(null);
 
     // BLOQUEIO ESTRITO: Apenas usuários verificados podem se afiliar
     if (!isVerified) {
@@ -211,100 +149,15 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
     try {
       setJoiningPlanId(product.id);
-
-      const effectiveName = userProfile?.name || currentUser?.displayName || 'Afiliado LeadsPay';
-      const effectiveEmail = userProfile?.email || currentUser?.email || 'afiliado@leadspay.com';
-
-      // Cria afiliação imediata para feedback instantâneo e permanência garantida
-      const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const userPart = effectiveUserId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
-      const generatedCode = `AFF-${userPart || 'USR'}-${randPart}`;
-      const tempAff: UserAffiliation = {
-        id: `aff_${effectiveUserId}_${product.id}`,
-        userId: effectiveUserId,
-        user_id: effectiveUserId,
-        userName: effectiveName,
-        userEmail: effectiveEmail,
-        companyId: product.companyId,
-        companyName: product.companyName,
-        companyLogo: product.companyLogo,
-        planId: product.id,
-        plan_id: product.id,
-        planName: product.name,
-        priceSetup: product.priceSetup,
-        commissionPercentage: product.commissionPercentage,
-        commissionValue: product.commissionValue,
-        affiliateCode: generatedCode,
-        affiliate_code: generatedCode,
-        affiliateLink: formatAffiliatePlanUrl(product.id, generatedCode),
-        clicks: 0,
-        salesCount: 0,
-        totalEarned: 0,
-        status: 'Ativo',
-        createdAt: new Date().toISOString()
-      };
-
-      // Grava no localStorage para permanência instantânea
-      try {
-        localStorage.setItem(`leadspay_aff_${product.id}_${effectiveUserId}`, JSON.stringify(tempAff));
-        localStorage.setItem(`leadspay_aff_${product.id}`, JSON.stringify(tempAff));
-      } catch (e) {}
-
-      // Atualiza o estado visual instantaneamente
-      setLocalAffiliations(prev => {
-        const filtered = prev.filter(a => (a.planId || a.plan_id) !== product.id);
-        return [...filtered, tempAff];
-      });
-
-      const response = await fetch('/api/affiliates/join', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          planId: product.id,
-          userId: effectiveUserId,
-          userName: effectiveName,
-          userEmail: effectiveEmail
-        })
-      });
-
-      const text = await response.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(text);
-      } catch (parseErr) {
-        console.warn('Resposta não-JSON de /api/affiliates/join:', text);
-      }
-
-      if (response.ok && data.success && data.affiliation) {
-        const newAff = data.affiliation as UserAffiliation;
-        try {
-          localStorage.setItem(`leadspay_aff_${product.id}_${effectiveUserId}`, JSON.stringify(newAff));
-          localStorage.setItem(`leadspay_aff_${product.id}`, JSON.stringify(newAff));
-        } catch (e) {}
-
-        setLocalAffiliations(prev => {
-          return prev.map(a => ((a.planId || a.plan_id) === product.id ? newAff : a));
-        });
-
-        if (onJoinAffiliate) {
-          onJoinAffiliate(product);
-        }
-
-        // Abre o modal de divulgação exibindo imediatamente o link formatado com ?ref=MEU_CODIGO
-        setSelectedAffModal({ plan: product, aff: newAff });
-      } else {
-        if (onJoinAffiliate) {
-          onJoinAffiliate(product);
-        }
-        setSelectedAffModal({ plan: product, aff: tempAff });
-      }
+      const newAff = await joinAffiliateOffer(product.id, currentUser) as UserAffiliation;
+      setLocalAffiliations(prev => [
+        ...prev.filter(a => (a.planId || a.plan_id) !== product.id),
+        newAff,
+      ]);
+      setSelectedAffModal({ plan: product, aff: newAff });
     } catch (err) {
       console.error('Erro na requisição /api/affiliates/join:', err);
-      if (onJoinAffiliate) {
-        onJoinAffiliate(product);
-      }
+      setJoinError(err instanceof Error ? err.message : 'Não foi possível confirmar a afiliação. Tente novamente.');
     } finally {
       setJoiningPlanId(null);
     }
@@ -667,6 +520,12 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                             </>
                           )}
                         </button>
+                      )}
+
+                      {joinError && joiningPlanId === null && (
+                        <p role="alert" className="mt-2 rounded-lg border border-red-300/40 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-950/30 dark:text-red-200">
+                          {joinError}
+                        </p>
                       )}
 
                       <button

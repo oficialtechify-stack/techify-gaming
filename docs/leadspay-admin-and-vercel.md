@@ -2,33 +2,39 @@
 
 ## Estado confirmado nesta continuação
 
-- Projeto Vercel encontrado: **`techify-gaming`**, no plano **Hobby**.
-- O conector Vercel desta sessão não teve permissão para ler as variáveis ou listar os deployments deste projeto. Portanto, ainda não foi possível confirmar quais valores já existem. Nenhum segredo foi lido ou alterado nesta sessão.
+- Projeto correto para esta homologação: **`techify-gaming`**, ligado ao repositório `oficialtechify-stack/techify-gaming` e branch **`feature/leadspay-stripe-connect`**. Não é necessário criar outro projeto.
+- Em 28/09/2026, confirmei que os nomes `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_PROJECT_ID`, `STRIPE_TEST_SECRET_KEY` e `STRIPE_WEBHOOK_SECRET` já existem no target **Preview** desse projeto; a Vercel não revelou os valores (nem tentei descriptografá-los). Você informou que já rotacionou a chave privada Firebase e o secret do webhook.
+- Ainda não aparecem no target Preview `VITE_STRIPE_PUBLISHABLE_KEY` nem `CRON_SECRET`/`STRIPE_RELEASE_CRON_SECRET`. O primeiro é necessário para montar o formulário Stripe; o segundo apenas para invocar manualmente o cron protegido de releases.
+- Os segredos acima estão no target Preview sem filtro explícito por branch, portanto podem ser usados pela Preview da branch `feature/leadspay-stripe-connect`. `LEADSPAY_ADMIN_UIDS` que aparece na lista está limitado a outra branch (`feature/leadspay-landing`) e não substitui a verificação do Admin no backend.
+- Deployment original mais recente verificado: `READY`, commit `ab40943` (`fix: align affiliate approval and Stripe Connect flows`), URL estável de branch `techify-gaming-git-feature-leadspay-dca63e-rickzinxxxs-projects.vercel.app`.
+- **`preview.techify.sbs` não resolvia via DNS** quando testei. Até corrigir o DNS e apontar o domínio para o projeto certo, use a URL Preview estável da branch acima. Não altere Production.
+- Há um projeto Vercel separado chamado `leadspay-stripe-connect-preview`; não use esse projeto para esta rodada. Também existe `leadspaybank`, mas ele não tem as variáveis de Stripe/Firebase necessárias.
 - A aplicação Firebase que o backend aceita é **`techify-gaming-106fe`**.
 - O backend Stripe desta branch é deliberadamente **somente teste**: a chave precisa começar por `sk_test_`. Não use chaves live.
 - Nenhum valor de chave deve ser enviado no chat, e-mail, issue ou commit.
 
 ## Variáveis para homologação no Preview
 
-No Vercel Dashboard, abra o time → projeto **`techify-gaming`** → **Settings → Environment Variables**. Cadastre as variáveis abaixo marcando **Preview**. Não use `VITE_` nos nomes; são segredos do servidor.
+No Vercel Dashboard, abra o time → projeto **`techify-gaming`** → **Settings → Environment Variables**. Use **Preview**. As quatro credenciais acima já existem; confira apenas os nomes e o target, sem compartilhar valores. Não coloque segredos em `VITE_*`; a chave pública Stripe é a exceção.
 
 | Nome | Obrigatória? | Valor/origem |
 |---|---:|---|
 | `STRIPE_TEST_SECRET_KEY` | Sim | Chave secreta de teste `sk_test_…` do sandbox Stripe selecionado. O código atual rejeita chaves live e também não aceita uma restricted key `rk_test_…`. |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | Sim para abrir o formulário Stripe | Chave pública de teste `pk_test_…`; esta variável é incorporada ao frontend e não é segredo. Nunca use `pk_live_…` nesta branch. |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Sim | O JSON completo de uma service account dedicada do projeto Firebase `techify-gaming-106fe`. Cole o conteúdo integral no campo Value, sem envolver o JSON inteiro em aspas adicionais. Preserve as aspas e os `\\n` internos de `private_key`. |
 | `FIREBASE_PROJECT_ID` | Recomendável | Valor literal `techify-gaming-106fe`. O código usa esse projeto por padrão, mas rejeita credenciais de outro projeto. |
 | `STRIPE_WEBHOOK_SECRET` | Sim para webhooks | Signing secret `whsec_…` gerado para o endpoint Stripe de teste que aponta para a URL deste Preview. Cada endpoint tem seu próprio segredo. |
-| `LEADSPAY_BASE_URL` | Opcional/recomendável | URL HTTPS exata do deployment Preview (sem caminho final). Se omitida, o backend usa `VERCEL_URL`; para evitar retorno ao domínio de Production, confirme que o valor é realmente o host Preview. |
+| `LEADSPAY_BASE_URL` | Recomendável | URL HTTPS estável da branch Preview: `https://techify-gaming-git-feature-leadspay-dca63e-rickzinxxxs-projects.vercel.app` enquanto o DNS de `preview.techify.sbs` não resolver. |
 | `CRON_SECRET` | Sim para autenticação de Cron da Vercel | String aleatória de alta entropia, criada/guardada diretamente no Vercel ou gerenciador de senhas. A Vercel a envia no cabeçalho `Authorization: Bearer …` quando chama o cron. |
 | `STRIPE_RELEASE_CRON_SECRET` | Opcional se `CRON_SECRET` estiver definido | Se cadastrar, use **exatamente o mesmo valor** de `CRON_SECRET`. O handler prioriza `STRIPE_RELEASE_CRON_SECRET`; valores diferentes fazem a chamada automática da Vercel falhar em 401. Também é aceito manualmente como alternativa a `CRON_SECRET`. |
 
-Marque a opção de segredo/Sensitive se ela estiver disponível. Depois de salvar as variáveis, faça um **redeploy novo da branch Preview**: alterações de variáveis não mudam deployments existentes. Não configure valores de Production durante esta primeira rodada de homologação.
+Marque a opção de segredo/Sensitive para valores privados. `VITE_STRIPE_PUBLISHABLE_KEY` pode ser plain, mas deve continuar sendo `pk_test_…`. Depois de salvar qualquer valor ausente, faça um **redeploy novo da branch Preview**: alterações de variáveis não mudam deployments existentes. Não configure valores de Production durante esta rodada.
 
 ## 1. Obter a chave de teste Stripe
 
 1. Entre no [Dashboard Stripe](https://dashboard.stripe.com/) e selecione o **sandbox** que usará para homologar; não use o modo live.
 2. Abra **Workbench/Developers → API keys** (a rota pode aparecer como **Developers → API keys**).
-3. Copie a **Secret key** de teste com prefixo `sk_test_` e coloque-a diretamente em `STRIPE_TEST_SECRET_KEY` no Vercel, com target **Preview**.
+3. A secret key `sk_test_…` já consta na lista do target Preview; **não crie outra nem envie seu valor aqui**. Confirme que é chave do sandbox Stripe de teste. Copie a chave pública `pk_test_…` para `VITE_STRIPE_PUBLISHABLE_KEY` se ainda não estiver configurada.
 4. Nunca coloque a secret key no código, em `VITE_*`, navegador ou chat. A chave pública `pk_test_…` pode ser exposta no cliente, mas esta etapa específica pede a chave secreta do servidor.
 
 ## 2. Criar a service account Firebase com privilégio mínimo
@@ -91,9 +97,11 @@ O handler está em **`POST /api/stripe/webhook`**. Primeiro pegue a URL completa
 - A implementação atual não chama a API Stripe `payouts.create`: a rotina D+9 faz `transfers.create` para o saldo conectado. O endpoint LeadsPay `/api/stripe/express-dashboard` gera um link de login do Express para a empresa/afiliado; o que o titular pode fazer ali depende das permissões e da configuração da conta Stripe.
 - Em Preview, use apenas chaves/test data. Como o cron automático roda em Production, só considere ligar o cron de produção depois de testar e verificar explicitamente o endpoint, a conta Stripe, os secrets de Production e a política de risco. A branch continua recusando chaves live até mudança deliberada de implementação.
 
-## 8. O que ainda depende de você
+## 8. Rotação de credenciais e o que ainda depende de você
 
-Você precisa entrar nos painéis Stripe, Google Cloud/Firebase e Vercel para obter e cadastrar os segredos; não envie esses valores aqui. A integração Vercel desta sessão encontrou o projeto `techify-gaming`, mas recusou leitura das variáveis e deployments por falta de permissão, então não consegui preencher ou redeployar pelo conector. Depois que você cadastrar as variáveis e criar um novo Preview, posso orientar a validação pelos códigos/logs de erro (sem que você revele os segredos).
+Você informou que já rotacionou a chave privada do Firebase e o signing secret do webhook. Obrigado: **não reutilize os valores anteriores**. Os nomes dessas variáveis estão configurados em Preview no projeto `techify-gaming`, sem que seus valores tenham sido exibidos. Se a chave Firebase antiga também era usada em Production ou outro serviço, atualize cada consumidor legítimo antes de revogá-la; esta homologação não altera Production.
+
+As verificações restantes são cadastrar `VITE_STRIPE_PUBLISHABLE_KEY` com uma chave pública de teste `pk_test_…`, gerar `CRON_SECRET` se for necessário testar manualmente o endpoint D+9, e aguardar o redeploy desta branch. O DNS de `preview.techify.sbs` ainda precisa ser corrigido antes de voltar a usar esse hostname. Não envie valores de chaves aqui.
 
 ## Referências oficiais
 

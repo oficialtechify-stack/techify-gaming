@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient } from '../../lib/stripeServer.js';
 
@@ -44,7 +44,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const now = new Date();
     const due = await db.collection('stripe_checkout_orders')
       .where('status', '==', 'paid')
-      .where('transferStatus', 'in', ['scheduled', 'retry'])
+      .where('transferStatus', 'in', ['scheduled', 'retry', 'processing'])
       .where('availableAt', '<=', now.toISOString())
       .limit(25).get();
     let released = 0;
@@ -54,13 +54,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       const orderId = doc.id;
       const orderRef = doc.ref;
       const claimAt = Date.now();
+      const lockToken = randomUUID();
       const claimed = await db.runTransaction(async (tx) => {
         const snap = await tx.get(orderRef);
         if (!snap.exists) return false;
         const order = snap.data()!;
-        if (order.status !== 'paid' || !['scheduled', 'retry'].includes(order.transferStatus) || order.riskStatus) return false;
+        if (order.status !== 'paid' || !['scheduled', 'retry', 'processing'].includes(order.transferStatus) || order.riskStatus) return false;
         if (order.transferStatus === 'processing' && claimAt - Number(order.transferLockAtMs || claimAt) < 120_000) return false;
-        tx.set(orderRef, { transferStatus: 'processing', transferLockAtMs: claimAt, updatedAt: now.toISOString() }, { merge: true });
+        tx.set(orderRef, { transferStatus: 'processing', transferLockAtMs: claimAt, transferLockToken: lockToken, updatedAt: now.toISOString() }, { merge: true });
         return true;
       });
       if (!claimed) continue;
@@ -92,7 +93,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         for (const recipient of recipients) {
           const latest = await orderRef.get();
           const latestOrder = latest.data();
-          if (!latest.exists || latestOrder?.status !== 'paid' || latestOrder?.riskStatus || latestOrder?.transferStatus !== 'processing') {
+          if (!latest.exists || latestOrder?.status !== 'paid' || latestOrder?.riskStatus || latestOrder?.transferStatus !== 'processing' || latestOrder?.transferLockToken !== lockToken) {
             throw new Error('Pedido mudou para revisão ou risco antes do repasse.');
           }
           if (!Number.isSafeInteger(recipient.amountCents) || recipient.amountCents <= 0) throw new Error('Valor de repasse inválido.');
@@ -104,8 +105,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           const latest = await tx.get(orderRef);
           if (!latest.exists) return false;
           const current = latest.data()!;
-          if (current.status !== 'paid' || current.riskStatus || current.transferStatus !== 'processing') {
-            tx.set(orderRef, { transferStatus: 'manual_review', updatedAt: completedAt }, { merge: true });
+          if (current.status !== 'paid' || current.riskStatus || current.transferStatus !== 'processing' || current.transferLockToken !== lockToken) {
             return false;
           }
           tx.set(orderRef, { transferStatus: 'completed', transfersCompletedAt: completedAt, updatedAt: completedAt }, { merge: true });
@@ -120,7 +120,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           const latest = await tx.get(orderRef);
           if (!latest.exists) return;
           const current = latest.data()!;
-          if (current.status === 'paid' && !current.riskStatus && current.transferStatus === 'processing') {
+          if (current.status === 'paid' && !current.riskStatus && current.transferStatus === 'processing' && current.transferLockToken === lockToken) {
             tx.set(orderRef, { transferStatus: 'retry', transferError: error instanceof Error ? error.message.slice(0, 300) : 'Falha desconhecida', updatedAt: new Date().toISOString() }, { merge: true });
           }
         });
