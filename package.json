@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
@@ -12,6 +15,8 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@stripe/react-stripe-js": "^6.12.0",
+    "@stripe/stripe-js": "^9.17.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/js-cookie": "^3.0.6",
     "@vitejs/plugin-react": "^5.0.4",
@@ -19,6 +24,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^12.18.0",
+    "firebase-admin": "^14.5.0",
     "js-cookie": "^3.0.8",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -26,7 +32,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3",
+    "stripe": "^22.6.2",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

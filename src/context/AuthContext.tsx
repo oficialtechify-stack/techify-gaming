@@ -48,13 +48,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentUser(user);
 
       if (user) {
+        // Resolve the sole administrator from Firebase Auth immediately rather
+        // than waiting for a possibly slow Firestore snapshot. This prevents a
+        // stale tenant mode from briefly replacing the admin workspace.
+        if (isSuperAdminEmail(user.email)) setUserRole('admin');
         // Escutar perfil no Firestore em tempo real
         const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
         unsubProfile = onSnapshot(profileRef, async (snap) => {
           if (snap.exists()) {
             const data = snap.data() as Partial<UserSellerProfile>;
-            const userEmail = data.email || user.email || '';
-            const isAdminAccount = isSuperAdminEmail(userEmail) || data.accountType === 'admin' || data.role === 'Administrador do Sistema';
+            const userEmail = (user.email || data.email || '').trim().toLowerCase();
+            const isAdminAccount = isSuperAdminEmail(userEmail);
 
             // Identificar se a conta é estritamente Empresa ou Afiliado
             const isCompanyAccount = !isAdminAccount && (

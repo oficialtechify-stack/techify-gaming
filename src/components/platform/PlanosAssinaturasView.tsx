@@ -50,22 +50,6 @@ interface SubscriptionPlanCard {
   ctaText: string;
 }
 
-interface CheckoutData {
-  paymentId: string;
-  userId: string;
-  planId: string;
-  planName: string;
-  value: number;
-  externalReference: string;
-  invoiceUrl: string;
-  pixQrCode?: {
-    encodedImage?: string;
-    payload?: string;
-    expirationDate?: string;
-  };
-  webhookEndpoint?: string;
-}
-
 export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
   roleMode,
   userProfile,
@@ -74,10 +58,8 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
 }) => {
   const [selectedPlanModal, setSelectedPlanModal] = useState<SubscriptionPlanCard | null>(null);
   const [isGeneratingCheckout, setIsGeneratingCheckout] = useState(false);
-  const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null);
-  const [pixCopied, setPixCopied] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [activationSuccess, setActivationSuccess] = useState<string | null>(null);
-  const [showWebhookGuide, setShowWebhookGuide] = useState(false);
 
   // Estado sincronizado em tempo real via Firestore onSnapshot
   const [liveUserData, setLiveUserData] = useState<{
@@ -92,7 +74,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
 
   // ──────────────────────────────────────────────────────────────────────────
   // 4. ESCUTA EM TEMPO REAL NO FIRESTORE (onSnapshot)
-  // Sincroniza o estado do plano instantaneamente assim que o Webhook do Asaas atualiza o banco
+  // Mantém o estado do plano sincronizado com atualizações do backend.
   // ──────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUserId || currentUserId === 'user_demo') return;
@@ -111,10 +93,10 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         // Se a janela de checkout estava aberta e o plano foi confirmado via webhook
         if (data.planStatus === 'active' && data.plan) {
           if (selectedPlanModal && (selectedPlanModal.id === data.plan || selectedPlanModal.id === data.subscriptionTier)) {
-            setActivationSuccess(`🎉 Pagamento confirmado via Webhook Asaas! Plano ${data.subscriptionName || selectedPlanModal.name} ativado com sucesso!`);
+            setActivationSuccess(`Plano ${data.subscriptionName || selectedPlanModal.name} ativado com sucesso!`);
             setTimeout(() => {
               setSelectedPlanModal(null);
-              setCheckoutData(null);
+              setCheckoutError(null);
             }, 2500);
           }
 
@@ -277,14 +259,11 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
 
   const currentPlans = isAffiliate ? affiliatePlans : companyPlans;
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // 1. FRONT-END: REDIRECIONAMENTO / INÍCIO DE CHECKOUT
-  // Ao clicar em "Ativar Plano", passa o userId e planId para vincular a cobrança no Asaas
-  // ──────────────────────────────────────────────────────────────────────────
+  // Assinaturas mensais só podem ser ativadas depois de o Stripe Billing e os
+  // webhooks de ciclo de vida estarem configurados. Não simular cobranças.
   const handleOpenCheckoutFlow = async (plan: SubscriptionPlanCard) => {
     setSelectedPlanModal(plan);
-    setCheckoutData(null);
-    setPixCopied(false);
+    setCheckoutError(null);
 
     if (plan.price === 0) {
       // Ativação do plano gratuito direto
@@ -307,55 +286,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
       return;
     }
 
-    // Gerar checkout vinculando userId e planId via externalReference
-    setIsGeneratingCheckout(true);
-    try {
-      const res = await fetch('/api/plans/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUserId,
-          planId: plan.id,
-          customerName: userProfile.name || userProfile.email?.split('@')[0] || 'Afiliado LeadsPay',
-          customerEmail: userProfile.email || 'afiliado@leadspay.com',
-          customerCpfCnpj: userProfile.cpf || userProfile.cnpj || '00000000000',
-          billingType: 'PIX'
-        })
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCheckoutData(data);
-      } else {
-        throw new Error(data.error || 'Falha ao iniciar checkout');
-      }
-    } catch (err: any) {
-      console.error('Erro ao gerar checkout do plano:', err);
-      // Fallback gracioso com dados de pagamento simulados para teste imediato
-      setCheckoutData({
-        paymentId: `pay_${Date.now()}`,
-        userId: currentUserId,
-        planId: plan.id,
-        planName: plan.name,
-        value: plan.price,
-        externalReference: `${currentUserId}:${plan.id}`,
-        invoiceUrl: `https://leadspay.com/checkout/plan/${plan.id}?ref=${currentUserId}`,
-        pixQrCode: {
-          payload: `00020126580014br.gov.bcb.pix0136leadspay-${plan.id}-${currentUserId.slice(0, 8)}520400005303986540${plan.price.toFixed(2)}5802BR5910LEADSPAY6009SAOPAULO62140510pay_${Date.now()}6304`
-        },
-        webhookEndpoint: '/webhooks/asaas'
-      });
-    } finally {
-      setIsGeneratingCheckout(false);
-    }
-  };
-
-  const handleCopyPix = () => {
-    if (checkoutData?.pixQrCode?.payload) {
-      navigator.clipboard.writeText(checkoutData.pixQrCode.payload);
-      setPixCopied(true);
-      setTimeout(() => setPixCopied(false), 2500);
-    }
+    setCheckoutError('Assinaturas mensais pagas ainda não estão habilitadas no piloto Stripe. Nenhuma cobrança foi iniciada. As vendas de produtos no Marketplace usam o checkout Stripe próprio.');
   };
 
   return (
@@ -620,65 +551,15 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         </div>
       )}
 
-      {/* ──────────────────────────────────────────────────────────────────────────
-          GUIA TÉCNICO & INTEGRAÇÃO DE WEBHOOK ASAAS (Documentação de Produção)
-         ────────────────────────────────────────────────────────────────────────── */}
-      <div className="max-w-4xl mx-auto rounded-3xl bg-[#080d1a] border border-white/10 p-6 sm:p-8 mt-6">
-        <button
-          onClick={() => setShowWebhookGuide(!showWebhookGuide)}
-          className="w-full flex items-center justify-between text-left cursor-pointer group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#D9F22A]">
-              <Code2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-white group-hover:text-[#D9F22A] transition-colors">
-                Configuração do Webhook no Asaas (Guia Passo a Passo)
-              </div>
-              <div className="text-xs text-white/50">
-                Notificação instantânea de confirmação (PAYMENT_RECEIVED / PAYMENT_CONFIRMED)
-              </div>
-            </div>
+      <section className="max-w-4xl mx-auto rounded-3xl bg-[#080d1a] border border-white/10 p-6 sm:p-8 mt-6" aria-labelledby="billing-status-heading">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#D9F22A] shrink-0"><Info className="w-5 h-5" /></div>
+          <div>
+            <h2 id="billing-status-heading" className="text-sm font-bold text-white">Assinaturas pagas ainda não estão habilitadas</h2>
+            <p className="mt-1 text-xs text-white/60 leading-relaxed">Os planos gratuitos podem ser ativados. Stripe Billing, recorrência, cancelamentos e webhooks de assinatura ainda precisam de configuração e homologação; nenhum pagamento recorrente será iniciado nesta prévia.</p>
           </div>
-          <span className="text-xs font-bold uppercase tracking-wider text-[#D9F22A] bg-[#D9F22A]/10 px-3 py-1.5 rounded-lg border border-[#D9F22A]/20">
-            {showWebhookGuide ? 'Ocultar Detalhes' : 'Ver Instruções'}
-          </span>
-        </button>
-
-        {showWebhookGuide && (
-          <div className="mt-6 pt-6 border-t border-white/10 space-y-4 text-xs text-white/70 leading-relaxed animate-fadeIn">
-            <p>
-              Para liberação 100% automatizada das assinaturas, cadastre o endpoint no painel do Asaas em <strong>Configurações &gt; Integrações &gt; Webhooks para Cobranças</strong>:
-            </p>
-
-            <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">URL do Webhook:</span>
-                <span className="font-mono text-white select-all bg-white/5 px-2 py-1 rounded">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/webhooks/asaas` : 'https://api.leadspay.com/webhooks/asaas'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">Eventos Obrigatórios:</span>
-                <span className="font-mono text-[#D9F22A]">PAYMENT_RECEIVED, PAYMENT_CONFIRMED</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">Cabeçalho de Segurança:</span>
-                <span className="font-mono text-white">asaas-access-token</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-white/50">Vinculação de Usuário:</span>
-                <span className="font-mono text-white">externalReference: {'{userId}:{planId}'}</span>
-              </div>
-            </div>
-
-            <div className="text-[11px] text-white/50 bg-[#050811] p-3 rounded-lg border border-white/5 font-mono">
-              // O backend recebe o POST, valida o token, lê o externalReference e atualiza users/{'{userId}'} com planStatus: 'active'. O frontend React sincroniza imediatamente via Firestore onSnapshot.
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      </section>
 
       {/* ──────────────────────────────────────────────────────────────────────────
           MODAL DE ATIVAÇÃO & CHECKOUT (VINCULANDO USER ID E PLAN ID)
@@ -689,7 +570,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
             <button
               onClick={() => {
                 setSelectedPlanModal(null);
-                setCheckoutData(null);
+                setCheckoutError(null);
               }}
               className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer"
             >
@@ -698,7 +579,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
 
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D9F22A] mb-1">
               <Sparkles className="w-4 h-4 fill-current" />
-              <span>Checkout Oficial de Ativação</span>
+              <span>Plano LeadsPay</span>
             </div>
 
             <h3 className="text-2xl sm:text-3xl font-black text-white font-['Syne'] mb-1">
@@ -727,84 +608,8 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
               </div>
             </div>
 
-            {/* Status do Checkout / PIX Asaas */}
-            {isGeneratingCheckout ? (
-              <div className="p-8 rounded-2xl bg-[#050811] border border-white/10 flex flex-col items-center justify-center gap-3 text-center my-4">
-                <RefreshCw className="w-8 h-8 text-[#D9F22A] animate-spin" />
-                <div className="text-sm font-bold text-white">Gerando cobrança Asaas vinculada ao seu usuário...</div>
-                <div className="text-xs text-white/50">Aguarde um instante...</div>
-              </div>
-            ) : checkoutData ? (
-              <div className="space-y-4 mb-6">
-                {/* QR Code PIX e Copia e Cola Real da API Asaas */}
-                <div className="p-5 sm:p-6 rounded-2xl bg-[#050811] border border-[#D9F22A]/30 flex flex-col items-center text-center">
-                  <div className="text-xs font-bold uppercase tracking-wider text-[#D9F22A] mb-3 flex items-center gap-1.5">
-                    <QrCode className="w-4 h-4" />
-                    <span>Pague via PIX para Ativação Automática</span>
-                  </div>
-
-                  {checkoutData.pixQrCode?.encodedImage ? (
-                    <div className="p-4 bg-white rounded-2xl shadow-xl mb-4 flex items-center justify-center">
-                      <img 
-                        src={
-                          checkoutData.pixQrCode.encodedImage.startsWith('data:')
-                            ? checkoutData.pixQrCode.encodedImage
-                            : `data:image/png;base64,${checkoutData.pixQrCode.encodedImage}`
-                        }
-                        alt="QR Code PIX Asaas" 
-                        className="w-48 h-48 sm:w-56 sm:h-56 object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center text-white/40 mb-4 gap-2">
-                      <QrCode className="w-12 h-12 text-[#D9F22A]" />
-                      <span className="text-[11px] text-white/50">Carregando QR Code...</span>
-                    </div>
-                  )}
-
-                  {checkoutData.pixQrCode?.payload && (
-                    <div className="w-full">
-                      <button
-                        type="button"
-                        onClick={handleCopyPix}
-                        className="w-full py-3 px-4 rounded-xl bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(217,242,42,0.3)] hover:scale-101"
-                      >
-                        {pixCopied ? (
-                          <>
-                            <Check className="w-4 h-4 text-black stroke-[3]" />
-                            <span>Código PIX Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4 text-black" />
-                            <span>Copiar Código Pix Copia e Cola</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Opção de Checkout / Fatura Direta Asaas em Nova Aba */}
-                {checkoutData.invoiceUrl && (
-                  <a
-                    href={checkoutData.invoiceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-white/10 hover:border-[#D9F22A]/40 group text-center"
-                  >
-                    <span>Abrir Fatura / Checkout no Asaas</span>
-                    <ExternalLink className="w-4 h-4 text-[#D9F22A] group-hover:translate-x-0.5 transition-transform" />
-                  </a>
-                )}
-
-                {/* Indicador visual discreto aguardando confirmação via Webhook no Firestore */}
-                <div className="flex items-center justify-center gap-2.5 text-xs text-white/70 bg-white/5 px-4 py-3 rounded-2xl border border-white/10">
-                  <Radio className="w-3.5 h-3.5 text-[#D9F22A] animate-pulse flex-shrink-0" />
-                  <span>Aguardando confirmação do pagamento... Seu plano será ativado automaticamente.</span>
-                </div>
-              </div>
-            ) : null}
+            {isGeneratingCheckout && <p className="text-sm text-white/60" aria-live="polite">Ativando o plano gratuito…</p>}
+            {checkoutError && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-200" role="status">{checkoutError}</div>}
 
             {/* Ações do Modal */}
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -812,7 +617,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedPlanModal(null);
-                  setCheckoutData(null);
+                  setCheckoutError(null);
                 }}
                 className="w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer text-center"
               >

@@ -7,13 +7,14 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc, 
+  writeBatch,
   onSnapshot,
   query,
   where,
   orderBy,
   limit
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { 
   CompanyStartup,
   CompanyPlan,
@@ -102,36 +103,6 @@ export async function seedFirestoreIfEmpty() {
 }
 
 /**
- * Clear ALL documents in Firebase Firestore
- */
-export async function clearAllFirestoreData() {
-  try {
-    const collectionsToClear = [
-      COLLECTIONS.COMPANIES,
-      COLLECTIONS.PLANS,
-      COLLECTIONS.AFFILIATIONS,
-      COLLECTIONS.SALES,
-      COLLECTIONS.WITHDRAWALS,
-      COLLECTIONS.AFFILIATE_LINKS,
-      COLLECTIONS.TEAM
-    ];
-
-    for (const collName of collectionsToClear) {
-      const collRef = collection(db, collName);
-      const snap = await getDocs(collRef);
-      for (const d of snap.docs) {
-        await deleteDoc(d.ref);
-      }
-    }
-
-    return { success: true, message: 'Todas as coleções e dados foram zerados com sucesso!' };
-  } catch (error: any) {
-    console.error('Erro ao limpar Firestore:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
  * Realtime Profile Listener
  */
 export function subscribeUserProfile(callback: (profile: UserSellerProfile) => void, userId: string = DEFAULT_USER_ID) {
@@ -180,122 +151,26 @@ export async function submitVerificationRequestInFirebase(
   profileData: Partial<UserSellerProfile>, 
   userId: string = DEFAULT_USER_ID
 ) {
-  const now = new Date().toISOString();
+  const identity = auth.currentUser;
   const effectiveUserId = userId || DEFAULT_USER_ID;
-  const isCompany = profileData.verificationRoleType === 'empresa' || profileData.activeRoleMode === 'empresa' || !!profileData.companyName;
-  
-  // 1. Update the User's Profile to 'pending' and locked
-  const profileRef = doc(db, COLLECTIONS.PROFILES, effectiveUserId);
-  await setDoc(profileRef, sanitizeForFirestore({
-    ...profileData,
-    hasCompanyProfile: isCompany ? true : profileData.hasCompanyProfile,
-    verificationStatus: 'pending',
-    kyc_status: 'submitted',
-    verified: false,
-    verificationSubmittedAt: now,
-    updatedAt: now
-  }), { merge: true });
-
-  // 2. Add / Update document in verification_requests collection
-  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, effectiveUserId);
-  const fullName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || profileData.name || 'Usuário LeadsPay';
-  
-  await setDoc(requestRef, sanitizeForFirestore({
-    id: effectiveUserId,
-    userId: effectiveUserId,
-    name: fullName,
-    firstName: profileData.firstName || '',
-    lastName: profileData.lastName || '',
-    email: profileData.email || '',
-    cpf: profileData.cpf || '',
-    phone: profileData.phone || profileData.whatsapp || '',
-    avatar: profileData.avatar || '',
-    roleType: isCompany ? 'empresa' : 'afiliado',
-    companyName: profileData.companyName || '',
-    companyLegalName: profileData.companyLegalName || '',
-    companyCnpj: profileData.companyCnpj || profileData.cnpj || '',
-    companyCategory: profileData.companyCategory || 'SaaS / B2B',
-    companyTagline: profileData.companyTagline || '',
-    companyWebsite: profileData.companyWebsite || '',
-    companyLogo: profileData.companyLogo || profileData.avatar || '',
-    companyPhone: profileData.companyPhone || profileData.whatsapp || '',
-    companyAddress: profileData.companyAddress || profileData.address || '',
-    companyCep: profileData.companyCep || profileData.cep || '',
-    companyState: profileData.companyState || profileData.state || '',
-    companyCity: profileData.companyCity || profileData.city || '',
-    companyCountry: profileData.companyCountry || profileData.country || 'Brazil',
-    companyDocType: profileData.companyDocType || 'CNPJ',
-    cep: profileData.cep || '',
-    country: profileData.country || 'Brazil',
-    state: profileData.state || '',
-    city: profileData.city || '',
-    address: profileData.address || '',
-    status: 'pending',
-    kyc_status: 'submitted',
-    pixKey: profileData.pixKey || '',
-    pixKeyType: profileData.pixKeyType || 'CPF',
-    submittedAt: now
-  }), { merge: true });
-
-  // 3. If Company profile, create/update company in COMPANIES collection as pending
-  if (isCompany && (profileData.companyName || profileData.name)) {
-    const compName = profileData.companyName || profileData.name || 'Minha Startup';
-    const compId = profileData.companyId || `comp-${effectiveUserId}`;
-    const compRef = doc(db, COLLECTIONS.COMPANIES, compId);
-    const compSnap = await getDoc(compRef);
-
-    const slug = compName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-');
-
-    const companyData: Partial<CompanyStartup> = {
-      name: compName,
-      slug: slug || compId,
-      tagline: profileData.companyTagline || 'Startup homologada na plataforma',
-      logo: profileData.companyLogo || profileData.avatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=200&fit=crop',
-      bannerImage: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=400&fit=crop',
-      category: profileData.companyCategory || 'SaaS / B2B',
-      description: profileData.companyTagline || `Startup e soluções digitais de ${compName}`,
-      website: profileData.companyWebsite || '',
-      email: profileData.email || '',
-      whatsapp: profileData.companyPhone || profileData.whatsapp || '',
-      cnpj: profileData.companyCnpj || profileData.cnpj || '',
-      cleanCnpj: (profileData.companyCnpj || profileData.cnpj || '').replace(/\D/g, ''),
-      docType: profileData.companyDocType || 'CNPJ',
-      status: 'pending',
-      verified: false,
-      submittedBy: effectiveUserId,
-      submittedByName: fullName,
-      submittedByEmail: profileData.email || '',
-      submittedAt: now,
-      ownerId: effectiveUserId
-    };
-
-    if (compSnap.exists()) {
-      await updateDoc(compRef, sanitizeForFirestore(companyData));
-    } else {
-      await setDoc(compRef, sanitizeForFirestore({
-        ...companyData,
-        id: compId,
-        totalPlansCount: 0,
-        totalAffiliatesCount: 0,
-        totalSalesVolume: 0,
-        commissionRange: '10% - 50%',
-        createdAt: now
-      }));
-    }
-
-    // Link companyId back to profile
-    await updateDoc(profileRef, sanitizeForFirestore({
-      companyId: compId,
-      companyName: compName
-    }));
+  if (!identity || identity.uid !== effectiveUserId) throw new Error('Faça login novamente antes de enviar o perfil.');
+  const role = profileData.verificationRoleType === 'empresa' || profileData.activeRoleMode === 'empresa' || !!profileData.companyName ? 'empresa' : 'afiliado';
+  const response = await fetch('/api/profile/submit-verification', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await identity.getIdToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...profileData, role }),
+  });
+  let result: { success?: boolean; submittedAt?: string; error?: string };
+  try {
+    result = await response.json() as typeof result;
+  } catch {
+    throw new Error(`O servidor de validação respondeu de forma inesperada (HTTP ${response.status}). Nenhum cadastro foi enviado. Tente novamente mais tarde.`);
   }
-
-  return { success: true, submittedAt: now };
+  if (response.status === 503 && result.error) {
+    throw new Error(`${result.error} Nenhum cadastro foi enviado; avise o suporte da LeadsPay para configurar o serviço de validação.`);
+  }
+  if (!response.ok || !result.success) throw new Error(result.error || 'Não foi possível enviar o perfil.');
+  return result;
 }
 
 /**
@@ -346,22 +221,12 @@ export async function approveVerificationInFirebase(userId: string) {
     } catch (e) {}
   }
 
-  // 1. Identifica se o usuário é um afiliado para preservar categoricamente suas permissões
-  const isAffiliate = pData.accountType === 'afiliado' || 
-                      pData.hasAffiliateProfile === true || 
-                      (!pData.accountType && !pData.hasCompanyProfile && !pData.companyCnpj);
-  const resolvedAccountType = pData.accountType || (isAffiliate ? 'afiliado' : 'empresa');
-
-  // Atualiza perfil do usuário (user_profiles) PRESERVANDO perfil de afiliado
+  // Aprova somente o perfil submetido; não altera tipo de conta ou permissões.
+  const approvedRoleType = pData.accountType === 'empresa' || pData.roleType === 'empresa' ? 'empresa' : 'afiliado';
   await setDoc(profileRef, {
     verified: true,
     verificationStatus: 'approved',
     kyc_status: 'verified',
-    accountType: resolvedAccountType,
-    hasAffiliateProfile: isAffiliate || pData.hasAffiliateProfile === true,
-    hasCompanyProfile: Boolean(pData.hasCompanyProfile),
-    activeRoleMode: pData.activeRoleMode || (isAffiliate ? 'afiliado' : 'empresa'),
-    role: pData.role || (isAffiliate ? 'Afiliado de Alta Performance' : 'Fundador / Startup'),
     verificationReviewedAt: now,
     verificationRejectionReason: null,
     rejectionReason: null,
@@ -395,7 +260,7 @@ export async function approveVerificationInFirebase(userId: string) {
       cep: pData.cep || '',
       pixKey: pData.pixKey || '',
       pixKeyType: pData.pixKeyType || 'CPF',
-      roleType: isAffiliate ? 'afiliado' : (pData.accountType === 'empresa' ? 'empresa' : 'afiliado'),
+      roleType: approvedRoleType,
       status: 'approved',
       verified: true,
       kyc_status: 'verified',
@@ -405,11 +270,16 @@ export async function approveVerificationInFirebase(userId: string) {
     }, { merge: true });
   } catch (e) {}
 
-  // 4. Busca e atualiza quaisquer outras solicitações vinculadas por userId
+  // Consolidate same-UID/same-role legacy duplicates under the canonical UID key.
   try {
     const vQ = query(collection(db, COLLECTIONS.VERIFICATIONS), where('userId', '==', userId));
     const vSnap = await getDocs(vQ);
     for (const vDoc of vSnap.docs) {
+      if (vDoc.id !== userId && vDoc.data().roleType === approvedRoleType) {
+        await deleteDoc(vDoc.ref);
+        continue;
+      }
+      if (vDoc.data().roleType && vDoc.data().roleType !== approvedRoleType) continue;
       await setDoc(vDoc.ref, {
         status: 'approved',
         verified: true,
@@ -420,36 +290,7 @@ export async function approveVerificationInFirebase(userId: string) {
     }
   } catch (e) {}
 
-  // 5. Se e SOMENTE SE o usuário for comprovadamente uma empresa/produtor, aprova empresas cadastradas
-  // JAMAIS converte usuários afiliados em empresas!
-  try {
-    const isCompanyUser = !isAffiliate && (pData.accountType === 'empresa' || pData.roleType === 'empresa');
-    if (isCompanyUser) {
-      const approvedCompIds = new Set<string>();
-
-      const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
-      const compSnap = await getDocs(compQ);
-      for (const cDoc of compSnap.docs) {
-        if (cDoc.id !== userId) {
-          approvedCompIds.add(cDoc.id);
-          await approveCompanyInFirebase(cDoc.id);
-        }
-      }
-
-      const compQ2 = query(collection(db, COLLECTIONS.COMPANIES), where('submittedBy', '==', userId));
-      const compSnap2 = await getDocs(compQ2);
-      for (const cDoc of compSnap2.docs) {
-        if (cDoc.id !== userId && !approvedCompIds.has(cDoc.id)) {
-          approvedCompIds.add(cDoc.id);
-          await approveCompanyInFirebase(cDoc.id);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Aviso ao auto-aprovar empresas vinculadas:', err);
-  }
-
-  return { success: true, message: 'Usuário e empresa aprovados com sucesso!' };
+  return { success: true, message: 'Perfil aprovado com sucesso!' };
 }
 
 /**
@@ -457,20 +298,6 @@ export async function approveVerificationInFirebase(userId: string) {
  */
 export async function rejectVerificationInFirebase(userId: string, reason: string = 'Dados cadastrais necessitam de correção') {
   const now = new Date().toISOString();
-
-  // 1. Aciona endpoint seguro do backend para garantir execução com privilégio administrativo
-  try {
-    const res = await fetch('/api/admin/reject-entity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId, type: 'user', reason })
-    });
-    if (res.ok) {
-      console.log('[rejectVerificationInFirebase] Sincronizado via backend.');
-    }
-  } catch (apiErr) {
-    console.warn('[rejectVerificationInFirebase] Aviso na chamada do backend:', apiErr);
-  }
 
   let pData: any = {};
   try {
@@ -527,22 +354,6 @@ export async function rejectVerificationInFirebase(userId: string, reason: strin
     updatedAt: now
   }, { merge: true });
 
-  // 3. Also update company status
-  try {
-    const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
-    const compSnap = await getDocs(compQ);
-    for (const cDoc of compSnap.docs) {
-      await updateDoc(cDoc.ref, {
-        status: 'rejected',
-        verified: false,
-        rejectionReason: reason,
-        reviewedAt: now
-      });
-    }
-  } catch (err) {
-    console.warn('Could not update rejected status on owned companies:', err);
-  }
-
   return { success: true };
 }
 
@@ -550,30 +361,25 @@ export async function rejectVerificationInFirebase(userId: string, reason: strin
  * Ban / Suspend a User or Company in Firebase
  */
 export async function banEntityInFirebase(id: string, type: 'user' | 'company', reason: string) {
-  try {
-    const res = await fetch('/api/admin/ban-entity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, type, reason })
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (apiErr) {
-    console.warn('Backend ban API fallback to direct Firestore:', apiErr);
-  }
-
-  // Fallback direto
   const now = new Date().toISOString();
   if (type === 'company' || id.startsWith('comp-')) {
+    const ref = doc(db, COLLECTIONS.COMPANIES, id);
+    const current = await getDoc(ref);
     await setDoc(doc(db, COLLECTIONS.COMPANIES, id), {
+      statusBeforeBan: current.exists() ? current.data().status || 'pending' : 'pending',
+      verifiedBeforeBan: current.exists() ? current.data().verified === true : false,
+      banReason: reason,
+      bannedAt: now,
+      banned: true,
       status: 'banned',
       verified: false,
-      banReason: reason,
-      bannedAt: now
     }, { merge: true });
   } else {
+    const ref = doc(db, COLLECTIONS.PROFILES, id);
+    const current = await getDoc(ref);
     await setDoc(doc(db, COLLECTIONS.PROFILES, id), {
+      statusBeforeBan: current.exists() ? current.data().status || current.data().verificationStatus || 'pending' : 'pending',
+      verifiedBeforeBan: current.exists() ? current.data().verified === true : false,
       status: 'banned',
       banned: true,
       banReason: reason,
@@ -593,37 +399,40 @@ export async function banEntityInFirebase(id: string, type: 'user' | 'company', 
  * Unban / Reactivate a User or Company in Firebase
  */
 export async function unbanEntityInFirebase(id: string, type: 'user' | 'company') {
-  try {
-    const res = await fetch('/api/admin/unban-entity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, type })
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (apiErr) {
-    console.warn('Backend unban API fallback to direct Firestore:', apiErr);
-  }
-
   const now = new Date().toISOString();
   if (type === 'company' || id.startsWith('comp-')) {
+    const ref = doc(db, COLLECTIONS.COMPANIES, id);
+    const current = await getDoc(ref);
+    const data = current.data();
+    const restoredStatus = String(data?.statusBeforeBan || (data?.verifiedBeforeBan ? 'approved' : 'pending'));
     await setDoc(doc(db, COLLECTIONS.COMPANIES, id), {
-      status: 'approved',
-      verified: true,
+      status: restoredStatus,
+      verified: data?.verifiedBeforeBan === true,
+      banned: false,
       banReason: null,
+      statusBeforeBan: null,
+      verifiedBeforeBan: null,
       unbannedAt: now
     }, { merge: true });
   } else {
+    const ref = doc(db, COLLECTIONS.PROFILES, id);
+    const current = await getDoc(ref);
+    const data = current.data();
+    const restoredStatus = String(data?.statusBeforeBan || data?.verificationStatus || 'pending');
+    const restoredVerified = data?.verifiedBeforeBan === true;
     await setDoc(doc(db, COLLECTIONS.PROFILES, id), {
-      status: 'approved',
+      status: restoredStatus,
       banned: false,
+      verified: restoredVerified,
+      verificationStatus: restoredVerified ? 'approved' : restoredStatus,
       banReason: null,
+      statusBeforeBan: null,
+      verifiedBeforeBan: null,
       unbannedAt: now
     }, { merge: true });
 
     await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, id), {
-      status: 'approved',
+      status: restoredStatus,
       banReason: null,
       reviewedAt: now
     }, { merge: true });
@@ -631,126 +440,34 @@ export async function unbanEntityInFirebase(id: string, type: 'user' | 'company'
   return { success: true };
 }
 
-/**
- * Permanently Purge / Delete User or Company from Database
- */
-export async function purgeEntityInFirebase(id: string, type: 'user' | 'company', confirmation: string = 'EXCLUIR') {
-  try {
-    const res = await fetch('/api/admin/purge-entity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, type, confirmation })
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-    const err = await res.json();
-    throw new Error(err.error || 'Falha ao excluir entidade do banco.');
-  } catch (apiErr: any) {
-    console.warn('Backend purge API fallback, proceeding with direct Firestore:', apiErr);
-    
-    // Direct Firestore cascading purge fallback
-    const isCompany = type === 'company' || id.startsWith('comp-');
-    if (isCompany) {
-      try {
-        await deleteDoc(doc(db, COLLECTIONS.COMPANIES, id));
-      } catch (e) {}
-
-      try {
-        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('companyId', '==', id));
-        const compSnap = await getDocs(compQ);
-        for (const c of compSnap.docs) await deleteDoc(c.ref);
-      } catch (e) {}
-
-      try {
-        const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
-        for (const p of plansSnap.docs) {
-          if (p.data().companyId === id || p.data().producerId === id) await deleteDoc(p.ref);
-        }
-      } catch (e) {}
-
-      try {
-        const verifSnap = await getDocs(collection(db, COLLECTIONS.VERIFICATIONS));
-        for (const v of verifSnap.docs) {
-          if (v.data().companyId === id || v.id === id || v.data().userId === id) await deleteDoc(v.ref);
-        }
-      } catch (e) {}
-
-      try {
-        const affSnap = await getDocs(collection(db, COLLECTIONS.AFFILIATIONS));
-        for (const a of affSnap.docs) {
-          if (a.data().companyId === id) await deleteDoc(a.ref);
-        }
-      } catch (e) {}
-
-      try {
-        const profQ = query(collection(db, COLLECTIONS.PROFILES), where('companyId', '==', id));
-        const profSnap = await getDocs(profQ);
-        for (const p of profSnap.docs) {
-          await updateDoc(p.ref, {
-            companyId: null,
-            companyName: null,
-            hasCompanyProfile: false
-          });
-        }
-      } catch (e) {}
-    } else {
-      try {
-        await deleteDoc(doc(db, COLLECTIONS.PROFILES, id));
-      } catch (e) {}
-      try {
-        await deleteDoc(doc(db, 'users', id));
-      } catch (e) {}
-      try {
-        await deleteDoc(doc(db, COLLECTIONS.VERIFICATIONS, id));
-      } catch (e) {}
-      try {
-        const verifSnap = await getDocs(collection(db, COLLECTIONS.VERIFICATIONS));
-        for (const v of verifSnap.docs) {
-          if (v.data().userId === id) await deleteDoc(v.ref);
-        }
-      } catch (e) {}
-
-      // Clean any owned company
-      try {
-        const compQ = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', id));
-        const compSnap = await getDocs(compQ);
-        for (const c of compSnap.docs) {
-          await deleteDoc(c.ref);
-          const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
-          for (const p of plansSnap.docs) {
-            if (p.data().companyId === c.id) await deleteDoc(p.ref);
-          }
-        }
-      } catch (e) {}
-
-      try {
-        const affSnap = await getDocs(collection(db, COLLECTIONS.AFFILIATIONS));
-        for (const a of affSnap.docs) {
-          if (a.data().userId === id || a.data().affiliateId === id) await deleteDoc(a.ref);
-        }
-      } catch (e) {}
-
-      try {
-        const salesSnap = await getDocs(collection(db, COLLECTIONS.SALES));
-        for (const s of salesSnap.docs) {
-          if (s.data().userId === id || s.data().affiliateId === id) await deleteDoc(s.ref);
-        }
-      } catch (e) {}
-    }
-
-    // Limpa caches do localStorage
-    try {
-      if (typeof window !== 'undefined') {
-        const keysToRemove = Object.keys(localStorage).filter(k => 
-          k.includes(id) || k.includes('company') || k.includes('affiliat') || k.includes('verification')
-        );
-        keysToRemove.forEach(k => localStorage.removeItem(k));
-      }
-    } catch (e) {}
-
-    return { success: true };
+/** Reversibly archive a user/company registration without touching money or auth history. */
+export async function archiveEntityInFirebase(id: string, type: 'user' | 'company', confirmation: string = 'ARQUIVAR') {
+  if (confirmation !== 'ARQUIVAR') throw new Error('Confirmação inválida. Digite ARQUIVAR.');
+  const now = new Date().toISOString();
+  if (type === 'company' || id.startsWith('comp-')) {
+    await setDoc(doc(db, COLLECTIONS.COMPANIES, id), { archived: true, archivedAt: now }, { merge: true });
+  } else {
+    await setDoc(doc(db, COLLECTIONS.PROFILES, id), { archived: true, archivedAt: now }, { merge: true });
+    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, id), { archived: true, archivedAt: now }, { merge: true });
   }
+  return { success: true, message: 'Cadastro arquivado. Vendas, repasses, vínculos e autenticação foram preservados.' };
+}
+
+export async function restoreArchivedEntityInFirebase(id: string, type: 'user' | 'company') {
+  const now = new Date().toISOString();
+  const updates = { archived: false, restoredAt: now };
+  if (type === 'company' || id.startsWith('comp-')) {
+    const companyRef = doc(db, COLLECTIONS.COMPANIES, id);
+    const companySnap = await getDoc(companyRef);
+    if (!companySnap.exists()) throw new Error('Cadastro de empresa não encontrado.');
+    const ownerId = String(companySnap.data().ownerId || companySnap.data().submittedBy || '');
+    await setDoc(companyRef, updates, { merge: true });
+    if (ownerId) await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, ownerId), updates, { merge: true });
+  } else {
+    await setDoc(doc(db, COLLECTIONS.PROFILES, id), updates, { merge: true });
+    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, id), updates, { merge: true });
+  }
+  return { success: true };
 }
 
 // ==========================================
@@ -941,27 +658,9 @@ export async function updateCompanyEnvironmentInFirebase(
   }
 }
 
-/**
- * Approve a Company in Firestore & Provision Asaas Subaccount (Admin Action)
- */
+/** Approve one company record. Connect onboarding remains a separate owner action. */
 export async function approveCompanyInFirebase(companyId: string) {
   const now = new Date().toISOString();
-  let backendResult: any = null;
-
-  try {
-    // 1. Aciona a rota oficial do backend para criar/homologar a subconta no Asaas v3
-    const res = await fetch('/api/admin/approve-company', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId })
-    });
-
-    if (res.ok) {
-      backendResult = await res.json();
-    }
-  } catch (apiErr: any) {
-    console.warn('Aviso na chamada da rota de aprovação do backend, aplicando contingência direta:', apiErr);
-  }
 
   // 2. Garante atualização no documento da empresa no Firestore
   try {
@@ -971,17 +670,18 @@ export async function approveCompanyInFirebase(companyId: string) {
 
     // Se o documento não existir na coleção companies
     if (!compData || (!compData.name && !compData.companyName)) {
-      // 1. Verifica se este ID na verdade pertence a um perfil de AFILIADO
-      try {
-        const profCheckSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, companyId));
-        if (profCheckSnap.exists()) {
-          const profCheck = profCheckSnap.data();
-          if (profCheck.accountType === 'afiliado' || profCheck.hasAffiliateProfile === true || (!profCheck.hasCompanyProfile && !profCheck.companyCnpj)) {
-            console.warn(`[approveCompanyInFirebase] Operação prevenida: ID ${companyId} pertence a um afiliado. Não converter em empresa.`);
-            return { success: true, message: 'Identificado como afiliado. Perfil protegido contra conversão indevida.' };
-          }
+      // 1. Verifica se este ID na verdade pertence a um perfil de AFILIADO.
+      // Se a identidade não puder ser confirmada, a aprovação falha em vez de
+      // converter silenciosamente um registro de afiliado em empresa.
+      const profCheckSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, companyId));
+      if (profCheckSnap.exists()) {
+        const profCheck = profCheckSnap.data();
+        const isAffiliateOnly = profCheck.accountType === 'afiliado' && profCheck.hasCompanyProfile !== true && !profCheck.companyId;
+        if (isAffiliateOnly) {
+          console.warn(`[approveCompanyInFirebase] Operação prevenida: ID ${companyId} pertence a um afiliado. Não converter em empresa.`);
+          throw new Error('Este cadastro pertence a um perfil de afiliado, não pode ser aprovado como empresa.');
         }
-      } catch (e) {}
+      }
 
       // Buscar em verification_requests
       let verifData: any = null;
@@ -992,7 +692,7 @@ export async function approveCompanyInFirebase(companyId: string) {
 
       if (verifData?.roleType === 'afiliado') {
         console.warn(`[approveCompanyInFirebase] Operação prevenida: Verificação ${companyId} é de afiliado.`);
-        return { success: true, message: 'Solicitação pertence a afiliado. Perfil protegido.' };
+        throw new Error('A solicitação pertence a um afiliado, não pode ser aprovada como empresa.');
       }
 
       // Buscar em user_profiles
@@ -1047,22 +747,20 @@ export async function approveCompanyInFirebase(companyId: string) {
       rejectionReason: null
     };
 
-    if (backendResult?.asaasWalletId) payload.asaasWalletId = backendResult.asaasWalletId;
-    if (backendResult?.asaasSubaccountId) payload.asaasSubaccountId = backendResult.asaasSubaccountId;
+    const ownerIdForApproval = String(compData?.ownerId || compData?.submittedBy || companyId);
+    const ownerProfileSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, ownerIdForApproval));
+    const ownerProfile = ownerProfileSnap.exists() ? ownerProfileSnap.data() : null;
+    if (ownerProfile?.accountType === 'afiliado' && ownerProfile?.hasCompanyProfile !== true && !ownerProfile?.companyId) {
+      throw new Error('O titular desta solicitação está cadastrado apenas como afiliado; o tipo de cadastro da empresa precisa ser corrigido.');
+    }
 
     await setDoc(docRef, sanitizeForFirestore(payload), { merge: true });
 
     // 3. Atualiza perfil do proprietário (ownerId ou submittedBy) SEM DESTRUIR perfil de afiliado
-    const ownerId = compData?.ownerId || compData?.submittedBy;
-    if (ownerId && ownerId !== companyId) {
+    const ownerId = ownerIdForApproval;
+    if (ownerId) {
       try {
         const profRef = doc(db, COLLECTIONS.PROFILES, String(ownerId));
-        const profSnap = await getDoc(profRef);
-        const currentProf = profSnap.exists() ? profSnap.data() : null;
-
-        const isAffiliate = currentProf?.hasAffiliateProfile === true || 
-                            currentProf?.accountType === 'afiliado' || 
-                            currentProf?.accountType === 'ambos';
 
         const updateProf: Record<string, any> = {
           verified: true,
@@ -1073,18 +771,6 @@ export async function approveCompanyInFirebase(companyId: string) {
           companyName: compData?.name || compData?.companyName,
           updatedAt: now
         };
-
-        if (isAffiliate) {
-          updateProf.hasAffiliateProfile = true;
-          updateProf.accountType = 'ambos'; // Mantém ambos os papéis com segurança!
-          updateProf.activeRoleMode = currentProf?.activeRoleMode || 'afiliado';
-          updateProf.role = currentProf?.role || 'Afiliado & Fundador';
-        } else {
-          updateProf.accountType = currentProf?.accountType || 'empresa';
-          updateProf.hasAffiliateProfile = false;
-          updateProf.activeRoleMode = currentProf?.activeRoleMode || 'empresa';
-          updateProf.role = currentProf?.role || 'Fundador / Startup';
-        }
 
         await setDoc(profRef, updateProf, { merge: true });
 
@@ -1108,6 +794,10 @@ export async function approveCompanyInFirebase(companyId: string) {
       }, { merge: true });
     } catch (vErr) {}
 
+    if (ownerId && ownerId !== companyId) {
+      try { await deleteDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId)); } catch (e) {}
+    }
+
     return { success: true, message: 'Empresa e cadastro aprovados com sucesso!' };
   } catch (firestoreErr: any) {
     console.error('Erro crítico ao atualizar empresa no Firestore:', firestoreErr);
@@ -1121,20 +811,6 @@ export async function approveCompanyInFirebase(companyId: string) {
 export async function rejectCompanyInFirebase(companyId: string, reason: string = 'Dados da empresa necessitam de revisão') {
   const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
   const now = new Date().toISOString();
-
-  // 1. Aciona endpoint seguro do backend para garantir execução com privilégio administrativo
-  try {
-    const res = await fetch('/api/admin/reject-entity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: companyId, type: 'company', reason })
-    });
-    if (res.ok) {
-      console.log('[rejectCompanyInFirebase] Sincronizado com sucesso via backend.');
-    }
-  } catch (apiErr) {
-    console.warn('[rejectCompanyInFirebase] Aviso na chamada do backend:', apiErr);
-  }
 
   let ownerId: string | null = null;
   try {
@@ -1329,8 +1005,6 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
     companyName: compData.companyName || compData.name || planData.companyName,
     companyLogo: compData.logo || planData.companyLogo,
     ownerId: compData.ownerId || compData.submittedBy,
-    asaasSubaccountId: compData.asaasSubaccountId || compData.subaccountId || compData.asaasWalletId || null,
-    asaasWalletId: compData.asaasWalletId || compData.walletId || null,
     commissionValue: commissionVal,
     affiliatesCount: 0,
     totalSales: 0,
@@ -1588,12 +1262,18 @@ export async function findAffiliationByCode(code: string): Promise<UserAffiliati
 // ==========================================
 
 /**
- * Realtime Sales Listener
+ * Realtime Stripe sales listener, scoped to the authenticated dashboard role.
  */
-export function subscribeSales(callback: (sales: SaleTransaction[]) => void, companyId?: string) {
-  const q = companyId 
-    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId))
-    : collection(db, COLLECTIONS.SALES);
+export function subscribeSales(
+  callback: (sales: SaleTransaction[]) => void,
+  scope: { role: 'afiliado' | 'empresa' | 'admin'; userId: string },
+) {
+  const salesCollection = collection(db, COLLECTIONS.SALES);
+  const q = scope.role === 'admin'
+    ? salesCollection
+    : scope.role === 'empresa'
+      ? query(salesCollection, where('companyOwnerId', '==', scope.userId))
+      : query(salesCollection, where('affiliateId', '==', scope.userId));
   return onSnapshot(q, (snap) => {
     const list: SaleTransaction[] = [];
     snap.forEach((d) => {
@@ -1645,150 +1325,6 @@ export async function creditPlatformFinances(type: 'checkout' | 'withdrawal', fe
   } catch (err) {
     console.warn('[Platform Finances] Warning updating global summary:', err);
   }
-}
-
-/**
- * Record a New Sale in Firebase Firestore & apply 9 days release hold + R$ 0.99 platform fee
- */
-export async function createSaleTransactionInFirebase(saleData: Omit<SaleTransaction, 'id' | 'createdAt'> & { id?: string }) {
-  const id = saleData.id || `TX-${Math.floor(100000 + Math.random() * 900000)}`;
-  const now = new Date();
-  const checkoutFee = 0.99; // Taxa de checkout retida pela plataforma LeadsPay
-  const netCompanyAmount = Number(Math.max(0, saleData.amount - saleData.commissionEarned - checkoutFee).toFixed(2));
-  const availableAt = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000).toISOString(); // Garantia de 9 dias
-
-  const isTest = saleData.is_test ?? (saleData.environment === 'development' || !saleData.environment);
-  const env = saleData.environment || (isTest ? 'development' : 'production');
-
-  // Resolve company owner if not provided
-  let resolvedCompanyOwnerId = saleData.companyOwnerId || null;
-  if (!resolvedCompanyOwnerId && saleData.companyId) {
-    try {
-      const compSnap = await getDoc(doc(db, COLLECTIONS.COMPANIES, saleData.companyId));
-      if (compSnap.exists()) {
-        resolvedCompanyOwnerId = compSnap.data().ownerId || compSnap.data().submittedBy || null;
-      }
-    } catch (e) {
-      console.warn('Erro ao resolver companyOwnerId:', e);
-    }
-  }
-
-  const fullSale: SaleTransaction = {
-    ...saleData,
-    id,
-    companyOwnerId: resolvedCompanyOwnerId || undefined,
-    checkoutFee,
-    netCompanyAmount,
-    releaseStatus: 'pendente',
-    availableAt,
-    is_test: isTest,
-    environment: env,
-    createdAt: now.toISOString()
-  };
-
-  // 1. Save sale document
-  const saleRef = doc(db, COLLECTIONS.SALES, id);
-  await setDoc(saleRef, sanitizeForFirestore(fullSale));
-
-  // 2. Credit platform fee in global revenue account
-  await creditPlatformFinances('checkout', checkoutFee);
-
-  // 3. Update Profile Balances
-  // Credit the affiliate if this sale was made by an affiliate
-  const targetAffiliateId = saleData.affiliateId || saleData.sellerId || null;
-  if (targetAffiliateId) {
-    try {
-      const profileRef = doc(db, COLLECTIONS.PROFILES, targetAffiliateId);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
-        const current = profileSnap.data() as UserSellerProfile;
-        const newTotalEarned = (current.totalEarned || 0) + fullSale.commissionEarned;
-        const newPending = (current.pendingBalance || 0) + fullSale.commissionEarned;
-        const newCount = (current.totalSalesCount || 0) + 1;
-        const target = current.targetGoal || 100000;
-        const progress = Math.min(100, (newTotalEarned / target) * 100);
-
-        let level = current.partnerLevel || 'Afiliado Starter';
-        if (newTotalEarned >= 100000) level = 'Master Elite Black';
-        else if (newTotalEarned >= 50000) level = 'Parceiro Gold';
-        else if (newTotalEarned >= 20000) level = 'Parceiro Silver';
-
-        await updateDoc(profileRef, sanitizeForFirestore({
-          totalEarned: newTotalEarned,
-          pendingBalance: newPending, // Entra como pendente durante os 9 dias de garantia
-          totalSalesCount: newCount,
-          partnerLevel: level,
-          currentSalesProgress: Number(progress.toFixed(1)),
-          updatedAt: now.toISOString()
-        }));
-      }
-    } catch (profErr) {
-      console.warn('Aviso ao creditar perfil do afiliado:', profErr);
-    }
-  }
-
-  // Credit company owner with net amount
-  const companyOwnerId = resolvedCompanyOwnerId;
-
-  if (companyOwnerId) {
-    try {
-      const compProfileRef = doc(db, COLLECTIONS.PROFILES, companyOwnerId);
-      const compProfileSnap = await getDoc(compProfileRef);
-      if (compProfileSnap.exists()) {
-        const compCurrent = compProfileSnap.data() as UserSellerProfile;
-        await updateDoc(compProfileRef, sanitizeForFirestore({
-          totalEarned: Number(((compCurrent.totalEarned || 0) + netCompanyAmount).toFixed(2)),
-          pendingBalance: Number(((compCurrent.pendingBalance || 0) + netCompanyAmount).toFixed(2)),
-          totalSalesCount: (compCurrent.totalSalesCount || 0) + 1,
-          updatedAt: now.toISOString()
-        }));
-      }
-    } catch (compErr) {
-      console.warn('Aviso ao creditar carteira da empresa:', compErr);
-    }
-  }
-
-  // 4. Update Plan total sales
-  if (fullSale.platformId) {
-    const planRef = doc(db, COLLECTIONS.PLANS, fullSale.platformId);
-    const planSnap = await getDoc(planRef);
-    if (planSnap.exists()) {
-      const pData = planSnap.data() as CompanyPlan;
-      await updateDoc(planRef, sanitizeForFirestore({
-        totalSales: (pData.totalSales || 0) + 1
-      }));
-    }
-  }
-
-  // 5. Update Company total sales volume
-  if (fullSale.companyId) {
-    const compRef = doc(db, COLLECTIONS.COMPANIES, fullSale.companyId);
-    const compSnap = await getDoc(compRef);
-    if (compSnap.exists()) {
-      const cData = compSnap.data() as CompanyStartup;
-      await updateDoc(compRef, sanitizeForFirestore({
-        totalSalesVolume: (cData.totalSalesVolume || 0) + fullSale.amount
-      }));
-    }
-  }
-
-  // 6. Update Affiliation salesCount and totalEarned if this affiliate is affiliated
-  if (targetAffiliateId && fullSale.platformId) {
-    try {
-      const affId = `aff_${targetAffiliateId}_${fullSale.platformId}`;
-      const affRef = doc(db, COLLECTIONS.AFFILIATIONS, affId);
-      const affSnap = await getDoc(affRef);
-      if (affSnap.exists()) {
-        const affData = affSnap.data() as UserAffiliation;
-        await updateDoc(affRef, sanitizeForFirestore({
-          salesCount: (affData.salesCount || 0) + 1,
-          totalEarned: Number(((affData.totalEarned || 0) + fullSale.commissionEarned).toFixed(2))
-        }));
-      }
-    } catch (e) {}
-  }
-
-  return fullSale;
 }
 
 // ==========================================
@@ -2012,7 +1548,7 @@ export function subscribeGlobalPlatformMetrics(
   let plansList: CompanyPlan[] = [];
   let salesList: SaleTransaction[] = [];
   let withdrawalsList: WithdrawalRequest[] = [];
-  let userProfilesCount = 1;
+  let userProfilesCount = 0;
 
   const emit = () => {
     const totalCommissionsGenerated = salesList.reduce((acc, s) => acc + (s.commissionEarned || 0), 0);
@@ -2022,7 +1558,7 @@ export function subscribeGlobalPlatformMetrics(
     const totalGrossSales = salesList.reduce((acc, s) => acc + (s.amount || 0), 0);
 
     callback({
-      totalRegisteredUsers: Math.max(userProfilesCount, 1),
+      totalRegisteredUsers: userProfilesCount,
       totalStartups: companiesList.length,
       totalPlans: plansList.length,
       totalCommissionsGenerated,
@@ -2058,163 +1594,12 @@ export function subscribeGlobalPlatformMetrics(
     emit();
   }, (err) => console.error('Error in metrics withdrawals listener:', err));
 
-  // 5. User Profiles count listener
-  const unsubProfiles = onSnapshot(collection(db, COLLECTIONS.PROFILES), (snap) => {
-    userProfilesCount = Math.max(snap.size, 1);
-    emit();
-  }, (err) => console.error('Error in metrics profiles listener:', err));
-
   return () => {
     unsubCompanies();
     unsubPlans();
     unsubSales();
     unsubWithdrawals();
-    unsubProfiles();
   };
-}
-
-/**
- * Busca o ID da subconta Asaas do vendedor/empresa/plano (ex: "acc_...")
- * Prioriza users/{sellerId}.asaasSubaccountId, user_profiles e companies
- */
-export async function fetchSellerSubaccountId(param: string | CompanyPlan | any): Promise<string | null> {
-  if (!param) return null;
-
-  try {
-    // Se for objeto do plano
-    if (typeof param === 'object') {
-      const plan = param as any;
-      if (plan.asaasSubaccountId) return String(plan.asaasSubaccountId).trim();
-      if (plan.subaccountId) return String(plan.subaccountId).trim();
-
-      const candidateIds: string[] = [
-        plan.sellerId,
-        plan.ownerId,
-        plan.userId,
-        plan.companyId
-      ].filter((v): v is string => Boolean(v));
-
-      for (const sellerId of candidateIds) {
-        // 1. users/{sellerId} (conforme requisito específico users/{sellerId}.asaasSubaccountId)
-        try {
-          const userDoc = await getDoc(doc(db, 'users', String(sellerId)));
-          if (userDoc.exists()) {
-            const uData = userDoc.data();
-            const subId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
-            if (subId) return String(subId).trim();
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar users/{sellerId} no Firestore:', e);
-        }
-
-        // 2. user_profiles/{sellerId}
-        try {
-          const profDoc = await getDoc(doc(db, COLLECTIONS.PROFILES, String(sellerId)));
-          if (profDoc.exists()) {
-            const pData = profDoc.data();
-            const subId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
-            if (subId) return String(subId).trim();
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar user_profiles/{sellerId} no Firestore:', e);
-        }
-      }
-
-      // 3. companies/{companyId}
-      if (plan.companyId) {
-        try {
-          const compDoc = await getDoc(doc(db, COLLECTIONS.COMPANIES, String(plan.companyId)));
-          if (compDoc.exists()) {
-            const cData = compDoc.data();
-            const subId = cData?.asaasSubaccountId || cData?.subaccountId;
-            if (subId) return String(subId).trim();
-            if (cData?.ownerId) {
-              const ownerUserDoc = await getDoc(doc(db, 'users', String(cData.ownerId)));
-              if (ownerUserDoc.exists()) {
-                const oData = ownerUserDoc.data();
-                const ownerSubId = oData?.asaasSubaccountId || oData?.subaccountId;
-                if (ownerSubId) return String(ownerSubId).trim();
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar companies/{companyId} no Firestore:', e);
-        }
-      }
-
-      // 4. plans/{plan.id}
-      if (plan.id) {
-        try {
-          const planDoc = await getDoc(doc(db, COLLECTIONS.PLANS, String(plan.id)));
-          if (planDoc.exists()) {
-            const plData = planDoc.data();
-            const subId = plData?.asaasSubaccountId || plData?.subaccountId;
-            if (subId) return String(subId).trim();
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar plans/{plan.id} no Firestore:', e);
-        }
-      }
-
-      return null;
-    }
-
-    // Se for string com sellerId / companyId / planId
-    const sellerId = String(param).trim();
-    if (!sellerId) return null;
-
-    // 1. users/{sellerId}
-    try {
-      const uDoc = await getDoc(doc(db, 'users', sellerId));
-      if (uDoc.exists()) {
-        const uData = uDoc.data();
-        const subId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar users no Firestore:', e);
-    }
-
-    // 2. user_profiles/{sellerId}
-    try {
-      const pDoc = await getDoc(doc(db, COLLECTIONS.PROFILES, sellerId));
-      if (pDoc.exists()) {
-        const pData = pDoc.data();
-        const subId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar user_profiles no Firestore:', e);
-    }
-
-    // 3. companies/{sellerId}
-    try {
-      const cDoc = await getDoc(doc(db, COLLECTIONS.COMPANIES, sellerId));
-      if (cDoc.exists()) {
-        const cData = cDoc.data();
-        const subId = cData?.asaasSubaccountId || cData?.subaccountId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar companies no Firestore:', e);
-    }
-
-    // 4. plans/{sellerId}
-    try {
-      const plDoc = await getDoc(doc(db, COLLECTIONS.PLANS, sellerId));
-      if (plDoc.exists()) {
-        const plData = plDoc.data();
-        const subId = plData?.asaasSubaccountId || plData?.subaccountId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar plans no Firestore:', e);
-    }
-  } catch (err) {
-    console.warn('Erro geral ao buscar subaccountId no Firestore:', err);
-  }
-
-  return null;
 }
 
 // ==========================================
@@ -2850,4 +2235,3 @@ export async function findCouponByCodeInFirebase(code: string): Promise<CouponIt
   }
   return null;
 }
-

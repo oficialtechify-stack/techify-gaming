@@ -1,25 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { 
   COLLECTIONS, 
-  clearAllFirestoreData,
   subscribeVerifications,
   subscribeCompanies,
   approveVerificationInFirebase,
   rejectVerificationInFirebase,
   approveCompanyInFirebase,
   rejectCompanyInFirebase,
-  deleteCompanyInFirebase,
   banEntityInFirebase,
   unbanEntityInFirebase,
-  purgeEntityInFirebase
+  archiveEntityInFirebase,
+  restoreArchivedEntityInFirebase
 } from '../../services/firestoreService';
 import { 
   Database, 
   RefreshCw, 
   CheckCircle2, 
-  Trash2, 
+  Archive,
+  RotateCcw,
   Layers, 
   PlusCircle, 
   Search, 
@@ -64,7 +64,7 @@ import { AdminBrandingManager } from './AdminBrandingManager';
 import { AdminModalImagesManager } from './AdminModalImagesManager';
 
 type MainAdminTab = 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'modal_backgrounds' | 'database_explorer';
-type StatusFilter = 'pending' | 'approved' | 'rejected' | 'banned' | 'all';
+type StatusFilter = 'pending' | 'approved' | 'rejected' | 'banned' | 'archived' | 'all';
 
 interface SecurityTarget {
   id: string;
@@ -93,14 +93,17 @@ export const DatabaseManagerView: React.FC = () => {
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
   const [registeredProfiles, setRegisteredProfiles] = useState<any[]>([]);
+  const [validAuthUids, setValidAuthUids] = useState<Set<string> | null>(null);
+  const [identityAuditError, setIdentityAuditError] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Modais de Segurança (Ban, Exclusão Total e Recusa)
+  // Modais de segurança (banimento, arquivamento reversível e recusa)
   const [banModal, setBanModal] = useState<{
     isOpen: boolean;
     target: SecurityTarget | null;
@@ -167,7 +170,48 @@ export const DatabaseManagerView: React.FC = () => {
       unsubComps();
       unsubProfiles();
     };
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, refreshKey]);
+
+  const identityAuditUids = useMemo(() => [...new Set([
+    ...registeredProfiles.map((profile) => profile.userId || profile.id),
+    ...verifications.map((request) => request.userId || request.id),
+    ...companies.map((company) => company.ownerId || company.submittedBy),
+  ].filter((uid): uid is string => typeof uid === 'string' && Boolean(uid.trim()) && !uid.startsWith('comp-')))].sort(), [registeredProfiles, verifications, companies]);
+
+  useEffect(() => {
+    if (!isSuperAdmin || !currentUser) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setValidAuthUids(null);
+      setIdentityAuditError(false);
+      try {
+        const token = await currentUser.getIdToken();
+        const verified = new Set<string>();
+        const batches = identityAuditUids.length ? Array.from({ length: Math.ceil(identityAuditUids.length / 100) }, (_, index) => identityAuditUids.slice(index * 100, (index + 1) * 100)) : [[]];
+        for (const uids of batches) {
+          const response = await fetch('/api/admin/audit-identities', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uids }),
+          });
+          if (!response.ok) throw new Error('Auditoria indisponível');
+          const result = await response.json() as { existingUids?: unknown };
+          if (Array.isArray(result.existingUids)) result.existingUids.forEach((uid) => {
+            if (typeof uid === 'string') verified.add(uid);
+          });
+        }
+        if (!cancelled) setValidAuthUids(verified);
+      } catch {
+        if (!cancelled) {
+          // An audit outage is not proof that all Firebase users are missing.
+          // Preserve Firestore records for read-only admin inspection.
+          setValidAuthUids(null);
+          setIdentityAuditError(true);
+        }
+      }
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [isSuperAdmin, currentUser, identityAuditUids, refreshKey]);
 
   // Carregar dados brutos quando no explorador
   const fetchExplorerDocs = async (collName: string) => {
@@ -214,7 +258,6 @@ export const DatabaseManagerView: React.FC = () => {
           </p>
           <div className="bg-[#050811] border border-white/10 rounded-xl px-4 py-2.5 font-mono text-xs text-[#D9F22A] font-bold space-y-1">
             <div>rickmarketing81@gmail.com</div>
-            <div>leadspay.oficial@gmail.com</div>
           </div>
           <p className="text-[11px] text-white/40 mt-1">
             Seu usuário atual ({currentUser?.email || 'Visitante'}) não possui privilégios de superadministrador.
@@ -226,8 +269,16 @@ export const DatabaseManagerView: React.FC = () => {
 
   // ================= AÇÕES DE APROVAÇÃO E RECUSA =================
 
+  const identityAuditReady = validAuthUids !== null && !identityAuditError;
+  const requireIdentityAudit = () => {
+    if (identityAuditReady) return true;
+    setErrorMessage('A ação foi pausada: a auditoria Firebase Admin ainda não confirmou as contas neste ambiente. Os cadastros permanecem visíveis e inalterados.');
+    return false;
+  };
+
   // Aprovar Usuário / Afiliado
   const handleApproveUser = async (userId: string, userName: string) => {
+    if (!requireIdentityAudit()) return;
     setProcessingId(userId);
     try {
       await approveVerificationInFirebase(userId);
@@ -289,6 +340,7 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Confirmar Recusa através do Modal Seguro
   const handleConfirmReject = async () => {
+    if (!requireIdentityAudit()) return;
     if (!rejectModal.target) return;
     const { id, name, type } = rejectModal.target;
     const reason = rejectModal.reason.trim() || 'Dados cadastrais necessitam de ajuste ou confirmação.';
@@ -327,6 +379,7 @@ export const DatabaseManagerView: React.FC = () => {
 
   // Aprovar Empresa (Startup / Produtor)
   const handleApproveCompany = async (companyId: string, companyName: string) => {
+    if (!requireIdentityAudit()) return;
     setProcessingId(companyId);
     try {
       await approveCompanyInFirebase(companyId);
@@ -400,6 +453,7 @@ export const DatabaseManagerView: React.FC = () => {
   };
 
   const handleConfirmBan = async () => {
+    if (!requireIdentityAudit()) return;
     if (!banModal.target) return;
     setBanModal(prev => ({ ...prev, isProcessing: true }));
 
@@ -426,6 +480,7 @@ export const DatabaseManagerView: React.FC = () => {
   };
 
   const handleUnban = async (target: SecurityTarget) => {
+    if (!requireIdentityAudit()) return;
     if (!confirm(`Deseja realmente desbanir e restaurar o acesso de "${target.name}"?`)) return;
     setProcessingId(target.id);
 
@@ -451,7 +506,7 @@ export const DatabaseManagerView: React.FC = () => {
 
   // ================= AÇÕES DE EXCLUSÃO TOTAL (PURGE / HARD DELETE DEFINITIVO) =================
 
-  const openPurgeModal = (target: SecurityTarget) => {
+  const openArchiveModal = (target: SecurityTarget) => {
     setPurgeModal({
       isOpen: true,
       target,
@@ -460,11 +515,12 @@ export const DatabaseManagerView: React.FC = () => {
     });
   };
 
-  const handleConfirmPurge = async () => {
+  const handleConfirmArchive = async () => {
+    if (!requireIdentityAudit()) return;
     if (!purgeModal.target) return;
     const inputUpper = purgeModal.confirmationInput.trim().toUpperCase();
-    if (inputUpper !== 'EXCLUIR') {
-      alert('Para confirmar a exclusão definitiva, digite a palavra EXCLUIR.');
+    if (inputUpper !== 'ARQUIVAR') {
+      alert('Para confirmar o arquivamento, digite ARQUIVAR.');
       return;
     }
 
@@ -473,60 +529,43 @@ export const DatabaseManagerView: React.FC = () => {
     try {
       const { id, type, name } = purgeModal.target;
 
-      // 1. Marca imediatamente no conjunto de IDs deletados da sessão para nunca reaparecer
-      setDeletedEntityIds(prev => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
+      // Soft-archive only. Financial and identity records remain intact.
+      await archiveEntityInFirebase(id, type, 'ARQUIVAR');
 
-      // 2. Chama a exclusão profunda e em cascata no servidor / Firestore
-      await purgeEntityInFirebase(id, type, 'EXCLUIR');
+      setVerifications(prev => prev.map(v => (v.userId === id || v.id === id || v.companyId === id) ? { ...v, archived: true, archivedAt: new Date().toISOString() } : v));
+      setCompanies(prev => prev.map(c => (c.id === id || c.ownerId === id) ? { ...c, archived: true, archivedAt: new Date().toISOString() } : c));
+      setRegisteredProfiles(prev => prev.map(p => (p.id === id || p.userId === id) ? { ...p, archived: true, archivedAt: new Date().toISOString() } : p));
+      setDocuments(prev => prev.map(d => (d._id === id || d.userId === id || d.companyId === id) ? { ...d, archived: true, archivedAt: new Date().toISOString() } : d));
 
-      // 3. Remove de TODOS os estados locais
-      setVerifications(prev => prev.filter(v => v.userId !== id && v.id !== id && v.companyId !== id));
-      setCompanies(prev => prev.filter(c => c.id !== id && c.ownerId !== id));
-      setRegisteredProfiles(prev => prev.filter(p => p.id !== id && p.userId !== id).map(p => 
-        p.companyId === id ? { ...p, companyId: null, companyName: null, hasCompanyProfile: false } : p
-      ));
-      setDocuments(prev => prev.filter(d => d._id !== id && d.userId !== id && d.companyId !== id));
-
-      // 4. Limpeza de caches do localStorage
-      try {
-        if (typeof window !== 'undefined') {
-          const keysToRemove = Object.keys(localStorage).filter(k => 
-            k.includes(id) || k.includes('leadspay_') || k.includes('companies') || k.includes('affiliations') || k.includes('verification')
-          );
-          keysToRemove.forEach(k => localStorage.removeItem(k));
-        }
-      } catch (e) {}
-
-      setStatusMessage(`"${name}" e todos os seus vínculos foram COMPLETAMENTE EXCLUÍDOS do banco de dados como se nunca tivessem existido.`);
+      setStatusMessage(`"${name}" foi arquivado. Histórico financeiro, autenticação e vínculos foram preservados.`);
       setTimeout(() => setStatusMessage(''), 8000);
       setPurgeModal({ isOpen: false, target: null, confirmationInput: '', isProcessing: false });
     } catch (err: any) {
-      setErrorMessage(`Falha ao excluir registro: ${err.message}`);
+      setErrorMessage(`Falha ao arquivar cadastro: ${err.message}`);
       setPurgeModal(prev => ({ ...prev, isProcessing: false }));
     }
   };
 
-  // Limpeza Geral do Banco de Dados
-  const handleWipeAllData = async () => {
-    const confirmation = prompt('ZONA DE PERIGO EXTREMO: Para zerar TODOS os dados de testes do banco em nuvem, digite "ZERAR BANCO":');
-    if (confirmation !== 'ZERAR BANCO') return;
-
-    setLoading(true);
-    const res = await clearAllFirestoreData();
-    if (res.success) {
-      setStatusMessage('Banco de dados zerado e sincronizado com sucesso!');
-      if (mainTab === 'database_explorer') {
-        await fetchExplorerDocs(explorerCollection);
-      }
-    } else {
-      setErrorMessage(`Erro ao limpar: ${res.error}`);
+  const handleRestoreArchive = async (target: SecurityTarget) => {
+    if (!requireIdentityAudit()) return;
+    setProcessingId(target.id);
+    try {
+      await restoreArchivedEntityInFirebase(target.id, target.type);
+      setDeletedEntityIds(prev => {
+        const next = new Set(prev);
+        next.delete(target.id);
+        return next;
+      });
+      setVerifications(prev => prev.map(v => (v.userId === target.id || v.id === target.id || v.companyId === target.id) ? { ...v, archived: false } : v));
+      setCompanies(prev => prev.map(c => (c.id === target.id || c.ownerId === target.id) ? { ...c, archived: false } : c));
+      setRegisteredProfiles(prev => prev.map(p => (p.id === target.id || p.userId === target.id) ? { ...p, archived: false } : p));
+      setStatusMessage(`"${target.name}" foi restaurado para a fila de revisão.`);
+      setTimeout(() => setStatusMessage(''), 7000);
+    } catch (err: any) {
+      setErrorMessage(`Falha ao restaurar cadastro: ${err.message}`);
+    } finally {
+      setProcessingId(null);
     }
-    setTimeout(() => setStatusMessage(''), 5000);
-    setLoading(false);
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -543,20 +582,37 @@ export const DatabaseManagerView: React.FC = () => {
 
     // 1. Verificações explícitas (apenas afiliados)
     verifications.forEach((v) => {
-      const key = v.userId || v.id;
+      const key = (v.userId || v.id || '').trim();
+      if (!key || key.startsWith('comp-') || key === 'undefined' || key === 'null' || (validAuthUids !== null && !validAuthUids.has(key))) return;
+      if (!(v.email || '').includes('@') || !(v.name || '').trim()) return;
       if (deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
+      if (v.status === 'pending' && !v.submittedAt) return;
       if (isSuperAdminEmail(v.email)) return;
 
       const isCompanyVerif = v.roleType === 'empresa' || (Boolean(v.companyCnpj) && v.roleType !== 'afiliado');
       if (!isCompanyVerif || v.roleType === 'afiliado') {
-        map.set(key, v);
+        const existing = map.get(key);
+        map.set(key, existing ? {
+          ...v,
+          ...existing,
+          id: key,
+          userId: key,
+          name: existing.name || v.name,
+          email: existing.email || v.email,
+          phone: existing.phone || v.phone,
+          cpf: existing.cpf || v.cpf,
+          avatar: existing.avatar || v.avatar,
+          submittedAt: existing.submittedAt || v.submittedAt
+        } : { ...v, id: key, userId: key });
       }
     });
 
     // 2. Perfis de usuários cadastrados
     registeredProfiles.forEach((p) => {
-      const key = p.userId || p.id;
-      if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id)) return;
+      const key = (p.userId || p.id || '').trim();
+      if (deletedEntityIds.has(key) || deletedEntityIds.has(p.id) || (validAuthUids !== null && !validAuthUids.has(key))) return;
+      if (!key || key.startsWith('comp-') || key === 'undefined' || key === 'null') return;
+      if (p.verificationStatus === 'unsubmitted' || p.verificationStatus === 'draft') return;
       
       // Contas de administrador da plataforma JAMAIS são listadas como afiliados
       const isAdmin = p.accountType === 'admin' || 
@@ -597,12 +653,14 @@ export const DatabaseManagerView: React.FC = () => {
       const existing = map.get(key);
       if (existing) {
         // FUNDE SEMPRE! NUNCA DEIXE NOME, FOTO OU DADOS CADASTRAIS VAZIOS
-        const isApprovedFinal = isVerified || existing.status === 'approved' || (existing as any).verified;
-        const resolvedStatus = isBanned 
-          ? 'banned' 
-          : isApprovedFinal 
-            ? 'approved' 
-            : (existing.status || status);
+        const profileStatus = p.banned === true
+          ? 'banned'
+          : ['approved', 'pending', 'rejected', 'banned'].includes(p.verificationStatus)
+            ? p.verificationStatus
+            : isVerified
+              ? 'approved'
+              : null;
+        const resolvedStatus = profileStatus || existing.status || status;
 
         map.set(key, {
           ...existing,
@@ -627,6 +685,8 @@ export const DatabaseManagerView: React.FC = () => {
           submittedAt: existing.submittedAt || p.submittedAt || p.createdAt || p.updatedAt || new Date().toISOString()
         } as VerificationRequest);
       } else {
+        if (!isVerified && p.verificationStatus !== 'pending' && p.verificationStatus !== 'rejected' && p.verificationStatus !== 'banned') return;
+        if (p.verificationStatus === 'pending' && !p.verificationSubmittedAt && !p.submittedAt) return;
         map.set(key, {
           id: key,
           userId: key,
@@ -652,24 +712,39 @@ export const DatabaseManagerView: React.FC = () => {
     });
 
     return Array.from(map.values());
-  }, [verifications, registeredProfiles, deletedEntityIds]);
+  }, [verifications, registeredProfiles, deletedEntityIds, validAuthUids]);
 
   // Unificação Inteligente: Empresas (Lista de Companies + Solicitações Reais)
   const allCompanies: CompanyStartup[] = useMemo(() => {
     const map = new Map<string, CompanyStartup>();
 
-    // 1. Empresas reais existentes na coleção companies do banco
+    // 1. Agrupar documentos duplicados pela identidade do proprietário.
     companies.forEach((c) => {
-      if (deletedEntityIds.has(c.id) || (c.ownerId && deletedEntityIds.has(c.ownerId))) return;
+      const companyOwnerId = c.ownerId || c.submittedBy;
+      if (deletedEntityIds.has(c.id) || (companyOwnerId && deletedEntityIds.has(companyOwnerId)) || (validAuthUids !== null && !validAuthUids.has(companyOwnerId || ''))) return;
+      if (c.status === 'draft') return;
+      if (c.status === 'pending' && !c.submittedAt && !c.verificationSubmittedAt) return;
       // Pula registros órfãos ou corrompidos sem nenhum dado identificável
       if (!c.name && !c.companyName && !c.ownerId && !c.submittedBy && !c.email) return;
-
-      map.set(c.id, {
+      const ownerId = String(c.ownerId || c.submittedBy || c.id).trim();
+      const ownerProfile = registeredProfiles.find((profile) => (profile.userId || profile.id) === ownerId);
+      const preferredDocumentId = c.id.startsWith('comp-') ? c.id : ownerProfile?.companyId || c.id;
+      const existing = map.get(ownerId);
+      const normalizedCompany = {
         ...c,
+        id: preferredDocumentId,
         name: c.name || c.companyName || 'Empresa Cadastrada',
         category: c.category || 'SaaS / B2B',
         status: (c.status || (c.verified ? 'approved' : 'pending')) as any
-      });
+      };
+      map.set(ownerId, existing ? {
+        ...normalizedCompany,
+        ...existing,
+        id: preferredDocumentId,
+        name: existing.name || normalizedCompany.name,
+        status: existing.status === 'approved' || existing.status === 'rejected' || existing.status === 'banned' ? existing.status : normalizedCompany.status,
+        verified: Boolean(existing.verified || normalizedCompany.verified)
+      } : normalizedCompany);
     });
 
     // 2. Solicitações de verificação genuínas de empresa (NUNCA converte afiliados em empresas)
@@ -677,8 +752,11 @@ export const DatabaseManagerView: React.FC = () => {
       const isCompanyVerif = v.roleType === 'empresa' || 
                              (Boolean(v.companyCnpj) && v.roleType !== 'afiliado' && Boolean(v.companyName));
       if (isCompanyVerif) {
-        const key = v.companyId || (v.roleType === 'empresa' ? (v.userId || v.id) : null);
-        if (!key || deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
+        const requestOwnerId = String(v.userId || v.id || '').trim();
+        const ownerProfile = registeredProfiles.find((profile) => (profile.userId || profile.id) === requestOwnerId);
+        const key = ownerProfile ? requestOwnerId : String(v.companyId || requestOwnerId || '').trim();
+        if (!key || (validAuthUids !== null && !validAuthUids.has(requestOwnerId)) || deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
+        if (v.status === 'pending' && !v.submittedAt) return;
         
         const existing = map.get(key);
         if (existing) {
@@ -695,12 +773,12 @@ export const DatabaseManagerView: React.FC = () => {
             email: existing.email || v.email || '',
             whatsapp: existing.whatsapp || v.phone || '',
             ownerId: existing.ownerId || v.userId || v.id,
-            status: existing.status || v.status || 'pending',
+            status: existing.status === 'approved' || existing.status === 'rejected' || existing.status === 'banned' ? existing.status : (v.status || existing.status || 'pending'),
             verified: Boolean(existing.verified || v.status === 'approved')
           });
         } else {
           map.set(key, {
-            id: key,
+            id: ownerProfile?.companyId || key,
             name: v.companyName || v.name || 'Empresa Cadastrada',
             slug: (v.companyName || v.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
             tagline: v.companyTagline || '',
@@ -734,6 +812,8 @@ export const DatabaseManagerView: React.FC = () => {
                       p.role === 'Administrador do Sistema' || 
                       p.partnerLevel === 'Super Administrador';
       if (isAdmin && !p.companyId && !p.companyName) return;
+      const profileOwnerId = String(p.userId || p.id || '').trim();
+      if (!profileOwnerId || (validAuthUids !== null && !validAuthUids.has(profileOwnerId))) return;
 
       const isCompanyProfile = p.accountType === 'empresa' ||
                                p.hasCompanyProfile === true ||
@@ -749,10 +829,11 @@ export const DatabaseManagerView: React.FC = () => {
                                )) ||
                                (typeof p.partnerLevel === 'string' && p.partnerLevel.toLowerCase().includes('empresa'));
 
-      if (!isCompanyProfile) return;
+      if (!isCompanyProfile || p.verificationStatus === 'unsubmitted' || p.verificationStatus === 'draft') return;
 
-      const compId = p.companyId || (p.userId || p.id);
-      if (compId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
+        const ownerId = String(p.userId || p.id || '').trim();
+      const compId = ownerId || p.companyId;
+      if (compId && p.companyId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
         const existing = map.get(compId);
         const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
         const companyDisplayName = p.companyName?.trim() || p.name?.trim() || 'Empresa Cadastrada';
@@ -774,8 +855,10 @@ export const DatabaseManagerView: React.FC = () => {
             verified: Boolean(existing.verified || isApprv)
           });
         } else {
+          if (!isApprv && p.verificationStatus !== 'pending' && p.verificationStatus !== 'rejected' && p.verificationStatus !== 'banned') return;
+          if (p.verificationStatus === 'pending' && !p.verificationSubmittedAt && !p.submittedAt) return;
           map.set(compId, {
-            id: compId,
+            id: p.companyId || compId,
             name: companyDisplayName,
             slug: companyDisplayName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
             tagline: p.companyTagline || p.tagline || '',
@@ -802,10 +885,11 @@ export const DatabaseManagerView: React.FC = () => {
     });
 
     return Array.from(map.values());
-  }, [companies, verifications, registeredProfiles, deletedEntityIds]);
+  }, [companies, verifications, registeredProfiles, deletedEntityIds, validAuthUids]);
 
   // Helper para verificar status de um registro
   const getStatusOfVerification = (v: VerificationRequest): StatusFilter => {
+    if (v.archived) return 'archived';
     if (v.banned) return 'banned';
     if (v.status === 'approved' || (v as any).status === 'active' || (v as any).verified || (v as any).kyc_status === 'verified') return 'approved';
     if (v.status === 'rejected') return 'rejected';
@@ -813,6 +897,7 @@ export const DatabaseManagerView: React.FC = () => {
   };
 
   const getStatusOfCompany = (c: CompanyStartup): StatusFilter => {
+    if (c.archived) return 'archived';
     if (c.banned) return 'banned';
     if (c.status === 'approved' || (c.status as string) === 'active' || c.verified || (c as any).kyc_status === 'verified') return 'approved';
     if (c.status === 'rejected') return 'rejected';
@@ -823,6 +908,7 @@ export const DatabaseManagerView: React.FC = () => {
   const filteredAffiliates = allAffiliates.filter(v => {
     const vId = v.userId || v.id;
     if (deletedEntityIds.has(vId) || deletedEntityIds.has(v.id)) return false;
+    if (Boolean(v.archived) !== (statusFilter === 'archived')) return false;
 
     const currentStatus = getStatusOfVerification(v);
     const isRecentlyApproved = recentlyApprovedIds.has(vId) || recentlyApprovedIds.has(v.id);
@@ -845,6 +931,7 @@ export const DatabaseManagerView: React.FC = () => {
   // Empresas filtradas
   const filteredCompanies = allCompanies.filter(c => {
     if (deletedEntityIds.has(c.id) || (c.ownerId && deletedEntityIds.has(c.ownerId))) return false;
+    if (Boolean(c.archived) !== (statusFilter === 'archived')) return false;
 
     const currentStatus = getStatusOfCompany(c);
     const isRecentlyApproved = recentlyApprovedIds.has(c.id);
@@ -869,11 +956,13 @@ export const DatabaseManagerView: React.FC = () => {
   const approvedAffiliatesCount = allAffiliates.filter(v => getStatusOfVerification(v) === 'approved').length;
   const rejectedAffiliatesCount = allAffiliates.filter(v => getStatusOfVerification(v) === 'rejected').length;
   const bannedAffiliatesCount = allAffiliates.filter(v => getStatusOfVerification(v) === 'banned').length;
+  const archivedAffiliatesCount = allAffiliates.filter(v => v.archived).length;
 
   const pendingCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'pending').length;
   const approvedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'approved').length;
   const rejectedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'rejected').length;
   const bannedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'banned').length;
+  const archivedCompaniesCount = allCompanies.filter(c => c.archived).length;
 
   return (
     <div className="flex flex-col gap-6" id="leadspay-database-view">
@@ -890,7 +979,7 @@ export const DatabaseManagerView: React.FC = () => {
             Gestão de Cadastros, Segurança & Banco de Dados
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Aprovação separada de Afiliados e Empresas, controle de suspensão/banimento e expurgo total com segurança reforçada.
+            Filas separadas de Afiliados e Empresas, cadastros agrupados por conta e revisão segura dos registros.
           </p>
         </div>
 
@@ -898,6 +987,7 @@ export const DatabaseManagerView: React.FC = () => {
           <button
             onClick={() => {
               if (mainTab === 'database_explorer') fetchExplorerDocs(explorerCollection);
+              else setRefreshKey((value) => value + 1);
             }}
             disabled={loading}
             className="bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
@@ -906,15 +996,6 @@ export const DatabaseManagerView: React.FC = () => {
             <span>Atualizar</span>
           </button>
 
-          <button
-            onClick={handleWipeAllData}
-            disabled={loading}
-            className="bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
-            title="Limpeza geral para testes"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Zerar Banco</span>
-          </button>
         </div>
       </div>
 
@@ -932,6 +1013,30 @@ export const DatabaseManagerView: React.FC = () => {
           <span>{errorMessage}</span>
         </div>
       )}
+
+      {identityAuditError && (
+        <div className="lp-admin-audit-warning" role="status">
+          <strong>Auditoria de identidade não configurada.</strong> Os registros encontrados no Firestore continuam visíveis para conferência, mas ações de moderação ficam pausadas até configurar Firebase Admin no Vercel. Nenhum cadastro foi removido.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Resumo dos cadastros">
+        <div className="rounded-2xl border border-white/10 bg-[#080d1a] p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-white/55">Afiliados · cadastros únicos</div>
+          <div className="mt-1 text-2xl font-bold text-white">{allAffiliates.length}</div>
+          <div className="mt-1 text-xs text-white/55">{pendingAffiliatesCount} aguardando análise</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-[#080d1a] p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-white/55">Empresas · cadastros únicos</div>
+          <div className="mt-1 text-2xl font-bold text-white">{allCompanies.length}</div>
+          <div className="mt-1 text-xs text-white/55">{pendingCompaniesCount} aguardando análise</div>
+        </div>
+        <div className="rounded-2xl border border-[#8ecb69]/25 bg-[#8ecb69]/[0.06] p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-[#b5ec76]">Integridade dos cadastros</div>
+          <div className="mt-1 text-sm font-semibold text-white">{identityAuditError ? 'Auditoria indisponível' : validAuthUids === null ? 'Validando identidades…' : `${validAuthUids.size} contas confirmadas`}</div>
+          <div className="mt-1 text-xs text-white/60">{identityAuditError ? `${allAffiliates.length + allCompanies.length} cadastros visíveis em modo somente leitura.` : 'Rascunhos fora da fila; duplicados agrupados pelo UID.'}</div>
+        </div>
+      </div>
 
       {/* NAVEGAÇÃO PRINCIPAL (SEPARAÇÃO CLARA ENTRE AFILIADOS, EMPRESAS, LOGO E IMAGENS) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -1182,6 +1287,17 @@ export const DatabaseManagerView: React.FC = () => {
                 </span>
               </button>
 
+              <button
+                onClick={() => setStatusFilter('archived')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${statusFilter === 'archived' ? 'bg-slate-300 text-slate-950' : 'text-slate-300/70 hover:text-slate-100 hover:bg-white/5'}`}
+              >
+                <Archive className="w-3.5 h-3.5" />
+                <span>Arquivados</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/30 font-mono">
+                  {mainTab === 'affiliates_approval' ? archivedAffiliatesCount : archivedCompaniesCount}
+                </span>
+              </button>
+
               {/* Todos */}
               <button
                 onClick={() => setStatusFilter('all')}
@@ -1206,7 +1322,7 @@ export const DatabaseManagerView: React.FC = () => {
                 <div className="py-16 text-center text-white/50 text-xs bg-[#080d1a] border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center">
                   <ShieldCheck className="w-10 h-10 text-white/20 mb-3" />
                   <p className="font-bold text-white/80 text-sm">
-                    Nenhum cadastro de afiliado encontrado nesta aba ({statusFilter === 'pending' ? 'Pendentes' : statusFilter === 'approved' ? 'Aprovados' : statusFilter === 'rejected' ? 'Recusados' : statusFilter === 'banned' ? 'Banidos' : 'Todos'}).
+                    Nenhum cadastro de afiliado encontrado nesta aba ({statusFilter === 'pending' ? 'Pendentes' : statusFilter === 'approved' ? 'Aprovados' : statusFilter === 'rejected' ? 'Recusados' : statusFilter === 'banned' ? 'Banidos' : statusFilter === 'archived' ? 'Arquivados' : 'Todos'}).
                   </p>
                   <p className="text-white/40 mt-1 max-w-md">
                     {statusFilter === 'pending'
@@ -1223,12 +1339,15 @@ export const DatabaseManagerView: React.FC = () => {
                     const isRejected = currentStatus === 'rejected';
                     const isBanned = currentStatus === 'banned';
                     const targetId = req.userId || req.id;
+                    const isArchived = Boolean(req.archived);
 
                     return (
                       <div
                         key={req.id}
                         className={`bg-[#080d1a] border rounded-2xl p-6 shadow-xl flex flex-col justify-between transition-all ${
-                          isBanned
+                          isArchived
+                            ? 'border-slate-500/40 opacity-90'
+                            : isBanned
                             ? 'border-red-600/50 bg-red-950/10'
                             : isPending
                               ? 'border-amber-500/40 hover:border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.08)]'
@@ -1266,7 +1385,11 @@ export const DatabaseManagerView: React.FC = () => {
 
                             {/* Badge de Status */}
                             <div>
-                              {isBanned ? (
+                              {isArchived ? (
+                                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-500/15 text-slate-300 border border-slate-400/30 flex items-center gap-1.5">
+                                  <Archive className="w-3 h-3" /> Arquivado
+                                </span>
+                              ) : isBanned ? (
                                 <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600/20 text-red-400 border border-red-500/50 flex items-center gap-1.5 shadow-sm">
                                   <Ban className="w-3 h-3" />
                                   Conta Banida
@@ -1361,14 +1484,24 @@ export const DatabaseManagerView: React.FC = () => {
 
                         {/* Barra de Ações com Segurança */}
                         <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-2.5">
-                          {/* Botão de Excluir Totalmente (Sempre acessível ao Admin) */}
+                          {req.archived ? (
+                            <button
+                              onClick={() => void handleRestoreArchive({ id: targetId, name: req.name, email: req.email, type: 'user' })}
+                              disabled={processingId === targetId}
+                              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-60 flex items-center gap-2"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" /> Restaurar cadastro
+                            </button>
+                          ) : (
+                            <>
+                          {/* Arquivamento reversível — preserva dados financeiros e autenticação. */}
                           <button
-                            onClick={() => openPurgeModal({ id: targetId, name: req.name, email: req.email, type: 'user', document: req.cpf })}
-                            className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                            title="Expurgar do banco de dados"
+                            onClick={() => openArchiveModal({ id: targetId, name: req.name, email: req.email, type: 'user', document: req.cpf })}
+                            className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 border border-white/10 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                            title="Arquivar cadastro sem apagar vendas ou autenticação"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Excluir Total</span>
+                            <Archive className="w-3.5 h-3.5" />
+                            <span>Arquivar</span>
                           </button>
 
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1432,6 +1565,8 @@ export const DatabaseManagerView: React.FC = () => {
                               </button>
                             )}
                           </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     );
@@ -1448,7 +1583,7 @@ export const DatabaseManagerView: React.FC = () => {
                 <div className="py-16 text-center text-white/50 text-xs bg-[#080d1a] border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center">
                   <Building2 className="w-10 h-10 text-white/20 mb-3" />
                   <p className="font-bold text-white/80 text-sm">
-                    Nenhuma empresa encontrada nesta aba ({statusFilter === 'pending' ? 'Pendentes' : statusFilter === 'approved' ? 'Aprovadas' : statusFilter === 'rejected' ? 'Recusadas' : statusFilter === 'banned' ? 'Banidas' : 'Todas'}).
+                    Nenhuma empresa encontrada nesta aba ({statusFilter === 'pending' ? 'Pendentes' : statusFilter === 'approved' ? 'Aprovadas' : statusFilter === 'rejected' ? 'Recusadas' : statusFilter === 'banned' ? 'Banidas' : statusFilter === 'archived' ? 'Arquivadas' : 'Todas'}).
                   </p>
                   <p className="text-white/40 mt-1 max-w-md">
                     {statusFilter === 'pending'
@@ -1464,12 +1599,15 @@ export const DatabaseManagerView: React.FC = () => {
                     const isApproved = currentStatus === 'approved';
                     const isRejected = currentStatus === 'rejected';
                     const isBanned = currentStatus === 'banned';
+                    const isArchived = Boolean(comp.archived);
 
                     return (
                       <div
                         key={comp.id}
                         className={`bg-[#080d1a] border rounded-2xl p-6 shadow-xl flex flex-col justify-between transition-all ${
-                          isBanned
+                          isArchived
+                            ? 'border-slate-500/40 opacity-90'
+                            : isBanned
                             ? 'border-red-600/50 bg-red-950/10'
                             : isPending
                               ? 'border-amber-500/40 hover:border-amber-500/70 shadow-[0_0_30px_rgba(245,158,11,0.09)]'
@@ -1504,7 +1642,11 @@ export const DatabaseManagerView: React.FC = () => {
 
                             {/* Badge de Status da Empresa */}
                             <div className="flex-shrink-0">
-                              {isBanned ? (
+                              {isArchived ? (
+                                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-500/15 text-slate-300 border border-slate-400/30 flex items-center gap-1.5">
+                                  <Archive className="w-3 h-3" /> Arquivada
+                                </span>
+                              ) : isBanned ? (
                                 <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600/20 text-red-400 border border-red-500/50 flex items-center gap-1.5 shadow-sm">
                                   <Ban className="w-3 h-3" />
                                   Empresa Banida
@@ -1633,14 +1775,24 @@ export const DatabaseManagerView: React.FC = () => {
 
                         {/* Ações da Empresa */}
                         <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
-                          {/* Exclusão Total da Empresa */}
+                          {comp.archived ? (
+                            <button
+                              onClick={() => void handleRestoreArchive({ id: comp.id, name: comp.name, email: comp.email, type: 'company' })}
+                              disabled={processingId === comp.id}
+                              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-60 flex items-center gap-2"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" /> Restaurar empresa
+                            </button>
+                          ) : (
+                            <>
+                          {/* Arquivamento reversível da empresa */}
                           <button
-                            onClick={() => openPurgeModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company', document: comp.cnpj || comp.cpf })}
-                            className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                            title="Excluir Empresa Definitivamente"
+                            onClick={() => openArchiveModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company', document: comp.cnpj || comp.cpf })}
+                            className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 border border-white/10 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                            title="Arquivar cadastro sem apagar vendas ou autenticação"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Excluir Empresa</span>
+                            <Archive className="w-3.5 h-3.5" />
+                            <span>Arquivar</span>
                           </button>
 
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1701,6 +1853,8 @@ export const DatabaseManagerView: React.FC = () => {
                               </button>
                             )}
                           </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     );
@@ -1785,17 +1939,6 @@ export const DatabaseManagerView: React.FC = () => {
                             title="Copiar JSON"
                           >
                             <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (!confirm(`Excluir documento ${item._id}?`)) return;
-                              await deleteDoc(doc(db, explorerCollection, item._id));
-                              setDocuments(prev => prev.filter(d => d._id !== item._id));
-                            }}
-                            className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer"
-                            title="Excluir Documento"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -1906,43 +2049,36 @@ export const DatabaseManagerView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= MODAL DE SEGURANÇA 2: EXCLUSÃO TOTAL (PURGE) ================= */}
+      {/* ================= MODAL DE ARQUIVAMENTO REVERSÍVEL ================= */}
       {purgeModal.isOpen && purgeModal.target && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-[#0c0507] border-2 border-red-600 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-[0_0_50px_rgba(220,38,38,0.3)] space-y-5">
-            {/* Header de Perigo */}
+          <div className="bg-[#0c1220] border border-emerald-500/40 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-5">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-red-600/20 border-2 border-red-500 flex items-center justify-center text-red-500 flex-shrink-0 animate-pulse">
-                <AlertTriangle className="w-7 h-7" />
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-300 flex-shrink-0">
+                <Archive className="w-7 h-7" />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-white bg-red-600 px-2.5 py-0.5 rounded-full shadow-sm">
-                  ZONA DE PERIGO EXTREMO
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-200 bg-emerald-500/15 px-2.5 py-0.5 rounded-full">
+                  AÇÃO REVERSÍVEL
                 </span>
                 <h3 className="text-xl font-black text-white font-['Syne'] mt-1">
-                  Exclusão Total e Permanente
+                  Arquivar cadastro
                 </h3>
-                <p className="text-xs text-red-300/80 mt-0.5">
-                  Esta ação é irreversível e expurgará todos os dados do banco.
+                <p className="text-xs text-white/65 mt-0.5">
+                  O registro sai da fila de revisão, sem apagar dados da conta.
                 </p>
               </div>
             </div>
 
-            {/* O que será apagado */}
-            <div className="p-4 rounded-2xl bg-red-950/30 border border-red-600/30 text-xs space-y-2 text-red-200">
-              <span className="font-bold block uppercase tracking-wider text-[11px] text-red-400">
-                Os seguintes dados serão apagados para sempre:
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 text-xs space-y-2 text-white/80">
+              <span className="font-bold block uppercase tracking-wider text-[11px] text-emerald-200">
+                Os seguintes registros serão preservados:
               </span>
-              <ul className="list-disc list-inside space-y-1 text-[11px] text-white/80">
-                <li>Perfil e credenciais de acesso ({purgeModal.target.email || 'E-mail cadastrado'})</li>
-                <li>Documentos e registros de KYC no Firestore</li>
-                {purgeModal.target.type === 'company' && (
-                  <>
-                    <li>Registro da empresa e dados cadastrais no catálogo</li>
-                    <li>Planos, produtos e links de afiliação vinculados</li>
-                  </>
-                )}
-                <li>Histórico de afiliações e comissões da conta</li>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-white/70">
+                <li>Conta e credenciais Firebase Auth ({purgeModal.target.email || 'E-mail cadastrado'})</li>
+                <li>Vendas, comissões, repasses e trilha de auditoria</li>
+                <li>Vínculos de afiliado, empresa, planos e catálogo</li>
+                <li>Documentos de cadastro e histórico de revisão</li>
               </ul>
             </div>
 
@@ -1956,21 +2092,21 @@ export const DatabaseManagerView: React.FC = () => {
             {/* Input de Confirmação por Texto */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-white">
-                <span>Confirmação de Segurança:</span>
+                <span>Digite ARQUIVAR para confirmar:</span>
                 <button
                   type="button"
-                  onClick={() => setPurgeModal(prev => ({ ...prev, confirmationInput: 'EXCLUIR' }))}
-                  className="text-[10px] text-red-400 hover:text-red-300 underline cursor-pointer normal-case"
+                  onClick={() => setPurgeModal(prev => ({ ...prev, confirmationInput: 'ARQUIVAR' }))}
+                  className="text-[10px] text-emerald-300 hover:text-emerald-200 underline cursor-pointer normal-case"
                 >
-                  ⚡ Preencher "EXCLUIR"
+                  Preencher “ARQUIVAR”
                 </button>
               </div>
               <input
                 type="text"
                 value={purgeModal.confirmationInput}
                 onChange={(e) => setPurgeModal(prev => ({ ...prev, confirmationInput: e.target.value }))}
-                placeholder="Digite EXCLUIR para liberar o botão"
-                className="w-full px-4 py-3 bg-black border-2 border-red-500/40 rounded-xl text-white font-mono font-bold text-center tracking-widest text-sm focus:outline-none focus:border-red-500 transition-colors uppercase"
+                placeholder="Digite ARQUIVAR para continuar"
+                className="w-full px-4 py-3 bg-black/40 border border-white/15 rounded-xl text-white font-mono font-bold text-center tracking-widest text-sm focus:outline-none focus:border-emerald-400 transition-colors uppercase"
               />
             </div>
 
@@ -1987,19 +2123,19 @@ export const DatabaseManagerView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={handleConfirmPurge}
-                disabled={purgeModal.isProcessing || purgeModal.confirmationInput.trim().toUpperCase() !== 'EXCLUIR'}
-                className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:hover:bg-red-600 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(220,38,38,0.5)] transition-all cursor-pointer flex items-center gap-2"
+                onClick={handleConfirmArchive}
+                disabled={purgeModal.isProcessing || purgeModal.confirmationInput.trim().toUpperCase() !== 'ARQUIVAR'}
+                className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
               >
                 {purgeModal.isProcessing ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Excluindo do Banco...</span>
+                    <span>Arquivando cadastro...</span>
                   </>
                 ) : (
                   <>
-                    <Trash2 className="w-4 h-4" />
-                    <span>Excluir Definitivamente</span>
+                    <Archive className="w-4 h-4" />
+                    <span>Arquivar com segurança</span>
                   </>
                 )}
               </button>

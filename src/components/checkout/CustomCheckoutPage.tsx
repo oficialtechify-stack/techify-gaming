@@ -1,1723 +1,362 @@
-import React, { useState, useEffect, useRef, startTransition } from 'react';
-import { CompanyPlan, SaleTransaction } from '../../types/platform';
-import { 
-  CreditCard, 
-  QrCode, 
-  Lock, 
-  ShieldCheck, 
-  Copy, 
-  Check, 
-  CheckCircle2, 
-  ArrowLeft, 
-  Tag, 
-  AlertCircle,
-  Clock,
-  RefreshCw,
-  Zap,
-  Sparkles,
-  ChevronDown,
-  FileText,
-  XCircle
-} from 'lucide-react';
-import { 
-  createSaleTransactionInFirebase, 
-  fetchSellerSubaccountId,
-  createOrUpdateClientInFirebase,
-  findCouponByCodeInFirebase,
-  findAffiliationByCode,
-  updateSaleStatusInFirebase
-} from '../../services/firestoreService';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, CheckCircle2, LockKeyhole, ShieldCheck, Store } from 'lucide-react';
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { CompanyPlan } from '../../types/platform';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
-import { ThankYouPage } from './ThankYouPage';
 
 interface CustomCheckoutPageProps {
-
   plan: CompanyPlan;
   checkoutSlug?: string;
   affiliateRef?: string;
-  apiKey?: string;
   onBack?: () => void;
-  onPaymentSuccess?: (transaction: SaleTransaction) => void;
 }
 
-export const PLATFORM_CHECKOUT_FEE = 0.99; // Taxa de serviço R$ 0,99 cobrada pela plataforma LeadsPay
+export const PLATFORM_CHECKOUT_FEE = 0.99;
+const stripePublishableKey = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim();
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+const stripeAppearance = {
+  theme: 'stripe' as const,
+  variables: {
+    colorPrimary: '#17191c',
+    colorBackground: '#ffffff',
+    colorText: '#17191c',
+    colorDanger: '#b42318',
+    fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+    borderRadius: '12px',
+  },
+};
+const stripePaymentElementOptions = {
+  layout: { type: 'accordion' as const, defaultCollapsed: false },
+  business: { name: 'LeadsPay' },
+};
+
+const formatBRL = (value: number) => value.toLocaleString('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+});
 
 export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   plan,
-  checkoutSlug,
   affiliateRef,
-  apiKey,
   onBack,
-  onPaymentSuccess
 }) => {
-  // Query param apiKey fallback (?apiKey=lp_live_...)
-  const queryApiKey = typeof window !== 'undefined' 
-    ? (new URLSearchParams(window.location.search).get('apiKey') || 
-       new URLSearchParams(window.location.search).get('x-api-key') || 
-       new URLSearchParams(window.location.search).get('key'))
-    : null;
-  const effectiveApiKey = apiKey || queryApiKey || undefined;
-
-  // Form customer state
-  const [fullName, setFullName] = useState<string>('');
-  const [email, setEmail] = useState<string>('');
-  const [phone, setPhone] = useState<string>('');
-  const [documentNumber, setDocumentNumber] = useState<string>('');
-  
-  // Payment selection state ('pix' | 'boleto' | 'credit_card' | 'pix_automatico')
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'pix_automatico' | 'boleto'>('pix');
-  const [boletoData, setBoletoData] = useState<{
-    bankSlipUrl?: string;
-    identificationField?: string;
-    barCode?: string;
-    dueDate?: string;
-    paymentId?: string;
-  } | null>(null);
-  const [boletoCopied, setBoletoCopied] = useState<boolean>(false);
-  
-  // Credit card fields
-  const [cardNumber, setCardNumber] = useState<string>('');
-  const [cardHolderName, setCardHolderName] = useState<string>('');
-  const [cardExpiry, setCardExpiry] = useState<string>('');
-  const [cardCvv, setCardCvv] = useState<string>('');
-  const [installments, setInstallments] = useState<number>(1);
-
-  // Coupon state (Closed by default as requested, opens on user click or URL param)
-  const [isCouponOpen, setIsCouponOpen] = useState<boolean>(false);
-  const [couponInput, setCouponInput] = useState<string>('');
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; type: 'percentage' | 'fixed' } | null>(null);
-  const [couponError, setCouponError] = useState<string>('');
-  const [couponSuccess, setCouponSuccess] = useState<string>('');
-  const [isApplyingCoupon, setIsApplyingCoupon] = useState<boolean>(false);
-
-  // Order bump addon state
-  const [includeOrderBump, setIncludeOrderBump] = useState<boolean>(false);
-
-  // Minimum amount alert inline banner
-  const [minAmountAlert, setMinAmountAlert] = useState<string | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [clientSecret, setClientSecret] = useState('');
+  const [orderId, setOrderId] = useState('');
+  const stripeAttemptId = useRef('');
 
-  // Real PIX state from Asaas v3 API
-  const [pixData, setPixData] = useState<{
-    id: string;
-    qrCodeBase64: string | null;
-    copyAndPaste: string;
-    ticket_url?: string;
-    status?: string;
-  } | null>(null);
-  const [isGeneratingPix, setIsGeneratingPix] = useState<boolean>(false);
-  const [isCheckingPixStatus, setIsCheckingPixStatus] = useState<boolean>(false);
-  const [pixCopied, setPixCopied] = useState<boolean>(false);
-  const [pixSecondsLeft, setPixSecondsLeft] = useState<number>(300); // 5:00 min timer estrito
-  const [isPixExpired, setIsPixExpired] = useState<boolean>(false);
-  const [activePendingTxId, setActivePendingTxId] = useState<string | null>(null);
-  const [pixError, setPixError] = useState<string | null>(null);
-  const [subaccountId, setSubaccountId] = useState<string | null>(
-    (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null
-  );
+  const basePrice = Number(plan.priceSetup ?? plan.price ?? plan.priceMonthly ?? 0);
+  const finalTotal = Number((basePrice + PLATFORM_CHECKOUT_FEE).toFixed(2));
 
-  // Busca ID da subconta Asaas do vendedor/empresa no Firestore (users/{sellerId}.asaasSubaccountId)
-  useEffect(() => {
-    let isMounted = true;
-    fetchSellerSubaccountId(plan).then((foundId) => {
-      if (isMounted && foundId) {
-        setSubaccountId(foundId);
-      }
-    }).catch((err) => {
-      console.warn('Aviso ao consultar subaccountId no Firestore:', err);
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, [plan]);
-
-  // Processing & completion states
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [isPaid, setIsPaid] = useState<boolean>(false);
-  const [completedTransaction, setCompletedTransaction] = useState<SaleTransaction | null>(null);
-
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Calculation values
-  const basePrice = plan.priceSetup || plan.priceMonthly || (plan as any).price || (plan as any).amount || (plan as any).valor || 157.00;
-  const originalStrikePrice = Number((basePrice * 1.25).toFixed(2)) || 197.00;
-  const bumpPrice = plan.orderBumps?.[0]?.active ? plan.orderBumps[0].price : 29.90;
-  
-  let discountAmount = 0;
-  if (appliedCoupon) {
-    if (appliedCoupon.type === 'percentage') {
-      discountAmount = (basePrice * appliedCoupon.discount) / 100;
-    } else {
-      discountAmount = appliedCoupon.discount;
-    }
-  }
-
-  const subtotal = Math.max(0, basePrice - discountAmount + (includeOrderBump ? bumpPrice : 0));
-  const finalTotal = Number((subtotal + PLATFORM_CHECKOUT_FEE).toFixed(2));
-  
-  // Installment price calculation
-  const installment12xValue = Number(((finalTotal * 1.24) / 12).toFixed(2));
-
-  // Determine billing frequency label
-  const isAnnual = (plan.paymentType === 'Recorrente' || (plan as any).billingType === 'recorrente') && 
-    ((plan as any).billingInterval === 'yearly' || plan.name?.toLowerCase().includes('anual') || (plan as any).interval === 'yearly');
-  const isMonthly = (plan.paymentType === 'Recorrente' || (plan as any).billingType === 'recorrente') && 
-    ((plan as any).billingInterval === 'monthly' || plan.name?.toLowerCase().includes('mensal') || (plan as any).interval === 'monthly');
-  const billingSuffix = isAnnual ? ' / ano' : isMonthly ? ' / mês' : '';
-  const billingPeriodName = isAnnual ? 'Renovação anual' : isMonthly ? 'Renovação mensal' : 'Pagamento único';
-
-  // Format phone
-  const handlePhoneChange = (val: string) => {
-    const clean = val.replace(/\D/g, '').slice(0, 11);
-    if (clean.length <= 10) {
-      setPhone(clean.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').trim());
-    } else {
-      setPhone(clean.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').trim());
-    }
-  };
-
-  // Format CPF/CNPJ
-  const handleDocChange = (val: string) => {
-    const clean = val.replace(/\D/g, '').slice(0, 14);
-    if (clean.length <= 11) {
-      setDocumentNumber(clean.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4').trim());
-    } else {
-      setDocumentNumber(clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5').trim());
-    }
-  };
-
-  // Format Card Number
-  const handleCardNumberChange = (val: string) => {
-    const clean = val.replace(/\D/g, '').slice(0, 16);
-    setCardNumber(clean.replace(/(\d{4})(?=\d)/g, '$1 ').trim());
-  };
-
-  // Format Expiry
-  const handleExpiryChange = (val: string) => {
-    const clean = val.replace(/\D/g, '').slice(0, 4);
-    if (clean.length <= 2) {
-      setCardExpiry(clean);
-    } else {
-      setCardExpiry(`${clean.slice(0, 2)}/${clean.slice(2, 4)}`);
-    }
-  };
-
-  // Live 5-minute countdown timer & auto-transição de Pendente para Recusado
-  useEffect(() => {
-    if (isPaid || !pixData) return;
-    const timer = setInterval(() => {
-      setPixSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isPaid, pixData]);
-
-  // Quando o tempo de 5 minutos acaba, sai de Pendente para Recusado
-  useEffect(() => {
-    if (pixSecondsLeft === 0 && pixData && !isPaid && !isPixExpired) {
-      setIsPixExpired(true);
-      // Para o polling de verificação
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-
-      const txIdToRefuse = activePendingTxId || pixData.id;
-      if (txIdToRefuse) {
-        updateSaleStatusInFirebase(
-          txIdToRefuse, 
-          'Recusado', 
-          'Tempo limite de 5 minutos esgotado no QR Code Pix.'
-        ).catch((err) => console.warn('Aviso ao recusar transação após 5 minutos:', err));
-      }
-
-      if (email.trim()) {
-        createOrUpdateClientInFirebase({
-          store_id: plan.companyId || (plan as any).store_id || 'store_default',
-          name: fullName.trim() || 'Cliente LeadsPay',
-          email: email.trim().toLowerCase(),
-          phone: phone.trim(),
-          document: documentNumber.trim(),
-          status_compra: 'RECUSADO',
-          status: 'RECUSADO',
-          is_test: false,
-          environment: 'production'
-        }).catch((err) => console.warn('Aviso ao atualizar cliente para recusado:', err));
-      }
-    }
-  }, [pixSecondsLeft, pixData, isPaid, isPixExpired, activePendingTxId, email, fullName, phone, documentNumber, plan]);
-
-  // Affiliate tracking & auto-coupon from URL
   useEffect(() => {
     handleAffiliateTracking();
-
-    try {
-      if (typeof window !== 'undefined') {
-        const searchParams = new URLSearchParams(window.location.search);
-        const urlCoupon = searchParams.get('coupon') || searchParams.get('cupom');
-        if (urlCoupon) {
-          setIsCouponOpen(true);
-          setCouponInput(urlCoupon.toUpperCase());
-          executeApplyCoupon(urlCoupon.toUpperCase());
-        }
-      }
-    } catch (_) {}
-  }, [affiliateRef, plan.id]);
+  }, []);
 
   const getActiveAffiliateCode = (): string | null => {
-    if (affiliateRef && affiliateRef.trim()) return affiliateRef.trim();
+    if (affiliateRef?.trim()) return affiliateRef.trim();
     return getActiveAffiliateRef();
   };
 
-  const formatCountdown = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} min`;
-  };
-
-  // Trigger Real PIX Generation via Asaas API
-  const generateRealPixPayment = async () => {
-    // 1. Validação no Frontend: Regra de valor mínimo exigida pela API do Asaas (R$ 5,00)
-    if (finalTotal < 5.00) {
-      setMinAmountAlert("O valor mínimo para cobranças via Asaas é de R$ 5,00");
-      setFormError("O valor mínimo para cobranças via Asaas é de R$ 5,00");
-      return;
-    }
-
-    if (isGeneratingPix) return;
-    setIsGeneratingPix(true);
-    setPixError(null);
+  const handleProcessPayment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setFormError(null);
-    setMinAmountAlert(null);
 
-    try {
-      const activeAffiliate = getActiveAffiliateCode();
-      const cleanDoc = documentNumber.replace(/\D/g, '');
-      const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
-      const cleanEmail = email.trim();
-      const cleanName = fullName.trim();
-      const cleanPhone = phone.replace(/\D/g, '');
-
-      if (!cleanDoc || cleanDoc.length < 11) {
-        setPixError('Por favor, informe seu CPF ou CNPJ no formulário acima para gerar o Pix.');
-        setPixData(null);
-        setIsGeneratingPix(false);
-        return;
-      }
-
-      // Garante resolução do ID da subconta Asaas do vendedor/empresa antes da chamada
-      let activeSubaccountId = subaccountId || (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null;
-      if (!activeSubaccountId) {
-        try {
-          activeSubaccountId = await fetchSellerSubaccountId(plan);
-          if (activeSubaccountId) {
-            setSubaccountId(activeSubaccountId);
-          }
-        } catch (e) {
-          console.warn('Erro ao resolver subaccountId no momento do Pix:', e);
-        }
-      }
-
-      const cleanDescription = plan.name || 'Cobrança LeadsPay';
-      const effectivePlanId = (plan.id && plan.id !== 'checkout-dinamico' && plan.id !== 'checkout-direto') ? plan.id : undefined;
-
-      const response = await fetch('/api/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
-        },
-        body: JSON.stringify({
-          paymentMethod: 'PIX',
-          is_test: false,
-          environment: 'production',
-          apiKey: effectiveApiKey,
-          amount: cleanTotal,
-          valorTotal: cleanTotal,
-          total_amount: cleanTotal,
-          subaccountId: activeSubaccountId || undefined,
-          description: cleanDescription,
-          customer: {
-            name: cleanName || 'Cliente LeadsPay',
-            email: cleanEmail || 'cliente@leadspay.com',
-            cpfCnpj: cleanDoc,
-            phone: cleanPhone || '11999999999'
-          },
-          user: {
-            name: cleanName || 'Cliente LeadsPay',
-            email: cleanEmail || 'cliente@leadspay.com',
-            cpfCnpj: cleanDoc,
-            phone: cleanPhone || '11999999999'
-          },
-          email: cleanEmail || 'cliente@leadspay.com',
-          emailDoCliente: cleanEmail || 'cliente@leadspay.com',
-          nomeDoCliente: cleanName || 'Cliente LeadsPay',
-          cpfLimpo: cleanDoc,
-          planId: effectivePlanId,
-          plan_id: effectivePlanId,
-          companyId: plan.companyId,
-          company_id: plan.companyId,
-          sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
-          refCode: activeAffiliate,
-          affiliateRef: activeAffiliate,
-          affiliate_code: activeAffiliate
-        })
-      });
-
-      let data: any = {};
-      const responseText = await response.text();
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseErr) {
-        console.warn('[Checkout Pix] Falha no parse JSON de /api/payments:', responseText);
-      }
-
-      const qrCodeBase64 = data.qrCodeBase64 || data.encodedImage || data.qr_code_base64;
-      const copyAndPaste = data.copyAndPaste || data.payload || data.qr_code;
-      const activePaymentId = data.paymentId || data.payment_id || data.id;
-
-      if (response.ok && !data.error && (copyAndPaste || qrCodeBase64)) {
-        setPixData({
-          id: String(activePaymentId),
-          qrCodeBase64: qrCodeBase64 || null,
-          copyAndPaste: copyAndPaste || '',
-          ticket_url: data.invoiceUrl || data.ticket_url,
-          status: data.status || 'pending'
-        });
-        setPixError(null);
-        setPixSecondsLeft(300); // 5 minutos exatos
-        setIsPixExpired(false);
-        setActivePendingTxId(String(activePaymentId));
-
-        // Auto-captura imediata do Lead e Cobrança Pendente no momento que aperta Gerar Pix
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
-        const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-        try {
-          await createOrUpdateClientInFirebase({
-            store_id: plan.companyId || (plan as any).store_id || 'store_default',
-            name: cleanName || 'Cliente LeadsPay',
-            email: cleanEmail,
-            phone: cleanPhone,
-            document: cleanDoc,
-            total_spent: cleanTotal,
-            valor_pedido: cleanTotal,
-            last_plan_name: plan.name,
-            status_compra: 'PENDENTE',
-            status: 'PENDENTE',
-            is_test: false,
-            environment: 'production'
-          });
-
-          await createSaleTransactionInFirebase({
-            id: String(activePaymentId) || `PIX-${Date.now().toString().slice(-6)}`,
-            platformId: plan.id,
-            platformName: plan.name,
-            companyId: plan.companyId || (plan as any).store_id || undefined,
-            companyName: plan.companyName,
-            companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
-            buyerName: cleanName || 'Cliente LeadsPay',
-            buyerEmail: cleanEmail || 'cliente@leadspay.com',
-            buyerPhone: cleanPhone,
-            buyerDocument: cleanDoc,
-            buyerCompany: plan.companyName,
-            amount: cleanTotal,
-            commissionEarned: 0,
-            method: 'PIX',
-            status: 'Pendente',
-            is_test: false,
-            environment: 'production',
-            affiliateCode: activeAffiliate || undefined,
-            date: dateStr,
-            time: timeStr
-          });
-        } catch (leadErr) {
-          console.warn('Aviso ao capturar lead pendente no Pix:', leadErr);
-        }
-      } else {
-        const asaasDescription = data?.errors?.[0]?.description;
-        const asaasMessage = typeof data?.message === 'string' && data.message ? data.message : null;
-        const errorMsg = 
-          asaasDescription || 
-          asaasMessage || 
-          data?.error || 
-          'Erro ao processar cobrança na API do Asaas.';
-
-        console.error('[Checkout Pix Error Asaas]:', errorMsg, data);
-        setPixError(errorMsg);
-        setPixData(null);
-      }
-    } catch (err: any) {
-      console.error('Erro ao gerar PIX via backend:', err);
-      setPixError(err.message || 'Falha de conexão com o servidor de pagamentos.');
-      setPixData(null);
-    } finally {
-      setIsGeneratingPix(false);
+    if (!stripePromise) {
+      setFormError('O checkout ainda não foi configurado para este ambiente. Nenhuma cobrança foi criada.');
+      return;
     }
-  };
-
-  // Check PIX payment status in Asaas
-  const checkPaymentStatus = async (paymentId: string) => {
-    if (!paymentId || isPaid) return;
-    setIsCheckingPixStatus(true);
-
-    try {
-      const res = await fetch(`/api/payments/asaas/${paymentId}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'RECEIVED' || data.status === 'CONFIRMED' || data.status === 'RECEIVED_IN_CASH' || data.paid) {
-          await finalizeApprovedPayment('PIX', paymentId);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('Erro ao checar status do PIX:', e);
-    } finally {
-      setIsCheckingPixStatus(false);
+    if (!Number.isFinite(basePrice) || basePrice <= 0) {
+      setFormError('Esta oferta tem um preço inválido. Entre em contato com a empresa responsável.');
+      return;
     }
-  };
-
-  // Polling for PIX payment verification
-  useEffect(() => {
-    if (pixData?.id && !isPaid) {
-      pollIntervalRef.current = setInterval(() => {
-        checkPaymentStatus(pixData.id);
-      }, 5000);
+    if (finalTotal < 5) {
+      setFormError('O valor mínimo para pagamento nesta plataforma é de R$ 5,00.');
+      return;
     }
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, [pixData?.id, isPaid]);
-
-  // Finalize payment
-  const finalizeApprovedPayment = async (methodName: string, transactionReference?: string) => {
-    if (isPaid) return;
-
-    const activeAffiliateCode = getActiveAffiliateCode();
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-    let commissionEarned = 0;
-    let resolvedAffiliateId: string | undefined = undefined;
-    let resolvedAffiliateName: string | undefined = undefined;
-
-    if (activeAffiliateCode) {
-      try {
-        const affDoc = await findAffiliationByCode(activeAffiliateCode);
-        const isRecurringPlan = plan.paymentType === 'Recorrente' || 
-                                plan.paymentType === 'Assinatura' || 
-                                (plan as any).billingType === 'recorrente' || 
-                                (plan.priceMonthly && plan.priceMonthly > 0);
-
-        const recurrentPct = plan.recurrentCommissionPercent || 
-                             plan.recurrentCommission || 
-                             (affDoc as any)?.recurrentCommissionPercent;
-
-        if (affDoc) {
-          resolvedAffiliateId = affDoc.userId || affDoc.user_id;
-          resolvedAffiliateName = affDoc.userName;
-          const commPct = (isRecurringPlan && recurrentPct && recurrentPct > 0)
-            ? recurrentPct
-            : (affDoc.commissionPercentage || plan.commissionPercentage || (plan as any).affiliateCommission || 0);
-          commissionEarned = Number(((finalTotal * commPct) / 100).toFixed(2));
-        } else {
-          const commPct = (isRecurringPlan && recurrentPct && recurrentPct > 0)
-            ? recurrentPct
-            : (plan.commissionPercentage || (plan as any).affiliateCommission || 0);
-          if (commPct) {
-            commissionEarned = Number(((finalTotal * commPct) / 100).toFixed(2));
-          }
-        }
-      } catch (e) {
-        console.warn('Erro ao resolver afiliação no checkout:', e);
-      }
+    if (!fullName.trim() || fullName.trim().split(/\s+/).length < 2) {
+      setFormError('Informe nome e sobrenome completos.');
+      return;
     }
-
-    const salePayload: Omit<SaleTransaction, 'id'> = {
-      platformId: plan.id,
-      platformName: plan.name,
-      plan_id: plan.id,
-      companyId: plan.companyId || (plan as any).store_id || undefined,
-      companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
-      buyerName: fullName.trim() || 'Cliente LeadsPay',
-      buyerEmail: email.trim() || 'cliente@leadspay.com',
-      buyerPhone: phone.trim() || undefined,
-      buyerDocument: documentNumber.replace(/\D/g, '') || undefined,
-      buyerCompany: plan.companyName,
-      amount: finalTotal,
-      commissionEarned: commissionEarned,
-      method: methodName,
-      status: 'Aprovado',
-      is_test: false,
-      environment: 'production',
-      affiliateCode: activeAffiliateCode || undefined,
-      affiliateId: resolvedAffiliateId,
-      affiliateName: resolvedAffiliateName,
-      sellerId: resolvedAffiliateId,
-      utmSource: activeAffiliateCode ? `ref_${activeAffiliateCode}` : (affiliateRef ? `ref_${affiliateRef}` : 'checkout_direto_empresa'),
-      date: dateStr,
-      time: timeStr
-    };
-
-    try {
-      const savedSale = await createSaleTransactionInFirebase(salePayload);
-      
-      // Auto-cadastro do cliente na coleção 'clients' da empresa correspondente com status PAGO
-      try {
-        await createOrUpdateClientInFirebase({
-          store_id: plan.companyId || 'store_default',
-          name: fullName.trim() || 'Cliente LeadsPay',
-          email: email.trim(),
-          phone: phone.trim(),
-          document: documentNumber.replace(/\D/g, ''),
-          total_spent: finalTotal,
-          valor_pedido: finalTotal,
-          last_plan_name: plan.name,
-          status_compra: 'PAGO',
-          status: 'PAGO',
-          is_test: false,
-          environment: 'production'
-        });
-      } catch (clientErr) {
-        console.warn('Aviso ao registrar cliente automaticamente:', clientErr);
-      }
-
-      setCompletedTransaction({
-        ...salePayload,
-        id: transactionReference || savedSale.id || `TX-${Date.now().toString().slice(-6)}`,
-        createdAt: now.toISOString()
-      });
-      setIsPaid(true);
-
-      // Disparo em tempo real do e-mail de entrega (Fulfillment) e Webhook Customizado da Empresa
-      try {
-        fetch('/api/fulfillment/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: email.trim(),
-            customerName: fullName.trim() || 'Cliente',
-            planName: plan.name,
-            accessUrl: plan.deliveryUrl || plan.thankYouPageUrl || '',
-            deliveryType: plan.deliveryType || 'redirect',
-            instructions: plan.deliveryInstructions || '',
-            webhookUrl: plan.deliveryWebhookUrl || '',
-            transactionId: transactionReference || savedSale.id || `TX-${Date.now().toString().slice(-6)}`,
-            amount: finalTotal,
-            planId: plan.id
-          })
-        }).catch((err) => console.warn('[Fulfillment Dispatch] Aviso ao disparar entrega:', err));
-      } catch (_) {}
-
-      if (onPaymentSuccess) {
-        onPaymentSuccess({
-          ...salePayload,
-          id: transactionReference || savedSale.id || `TX-${Date.now().toString().slice(-6)}`,
-          createdAt: now.toISOString()
-        });
-      }
-    } catch (err: any) {
-      console.error('Erro ao salvar transação real:', err);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFormError('Informe um e-mail válido.');
+      return;
     }
-  };
-
-
-  // Core Coupon Application with Product & Affiliate Linkage Validation
-  const executeApplyCoupon = async (rawCode: string) => {
-    setCouponError('');
-    setCouponSuccess('');
-
-    const cleanCode = rawCode.trim().toUpperCase();
-    if (!cleanCode) return;
-
-    setIsApplyingCoupon(true);
-
-    try {
-      const planCoupon = plan.coupons?.find(c => c.code.toUpperCase() === cleanCode && c.active);
-      
-      // Buscar na lista de cupons globais da empresa (localStorage)
-      let localCoupon: any = null;
-      try {
-        const storedCoupons = localStorage.getItem('leadspay_coupons_list');
-        if (storedCoupons) {
-          const parsed = JSON.parse(storedCoupons);
-          localCoupon = parsed.find((c: any) => c.code.toUpperCase() === cleanCode && c.status === 'active');
-        }
-      } catch (_) {}
-
-      // Se não encontrou no local, busca no Firestore
-      if (!localCoupon && !planCoupon) {
-        try {
-          const firestoreCoupon = await findCouponByCodeInFirebase(cleanCode);
-          if (firestoreCoupon && firestoreCoupon.status === 'active') {
-            localCoupon = firestoreCoupon;
-          }
-        } catch (fErr) {
-          console.warn('Erro ao consultar cupom no Firestore:', fErr);
-        }
-      }
-
-      const activeAffiliate = getActiveAffiliateCode();
-
-      if (localCoupon) {
-        // 1. Validação de Vínculo com Produtos (Planos que a empresa postou)
-        if (
-          localCoupon.applicablePlans && 
-          Array.isArray(localCoupon.applicablePlans) && 
-          !localCoupon.applicablePlans.includes('all')
-        ) {
-          const isProductAllowed = localCoupon.applicablePlans.includes(plan.id) || 
-            (plan.slug && localCoupon.applicablePlans.includes(plan.slug)) ||
-            (plan.name && localCoupon.applicablePlansNames && localCoupon.applicablePlansNames.includes(plan.name));
-
-          if (!isProductAllowed) {
-            setCouponError('Este cupom não é válido para este produto.');
-            return;
-          }
-        }
-
-        // 2. Validação de Vínculo com Afiliados (Disponibilizado para afiliados parceiros específicos)
-        if (
-          localCoupon.applicableAffiliates && 
-          Array.isArray(localCoupon.applicableAffiliates) && 
-          !localCoupon.applicableAffiliates.includes('all')
-        ) {
-          if (!activeAffiliate || !localCoupon.applicableAffiliates.includes(activeAffiliate)) {
-            setCouponError('Este cupom é exclusivo para compras feitas pelo link de afiliados autorizados.');
-            return;
-          }
-        }
-
-        setAppliedCoupon({
-          code: localCoupon.code,
-          discount: Number(localCoupon.value),
-          type: localCoupon.discountType
-        });
-        setCouponSuccess(
-          localCoupon.discountType === 'percentage'
-            ? `Cupom "${localCoupon.code}" de ${localCoupon.value}% OFF aplicado com sucesso!`
-            : `Cupom "${localCoupon.code}" de R$ ${Number(localCoupon.value).toFixed(2)} OFF aplicado com sucesso!`
-        );
-        return;
-      }
-
-      if (planCoupon) {
-        // Validação de afiliados se configurado no plano
-        if (
-          planCoupon.applicableAffiliates &&
-          Array.isArray(planCoupon.applicableAffiliates) &&
-          !planCoupon.applicableAffiliates.includes('all')
-        ) {
-          if (!activeAffiliate || !planCoupon.applicableAffiliates.includes(activeAffiliate)) {
-            setCouponError('Este cupom é exclusivo para compras via afiliados autorizados.');
-            return;
-          }
-        }
-
-        setAppliedCoupon({
-          code: planCoupon.code,
-          discount: planCoupon.discountValue,
-          type: planCoupon.discountType
-        });
-        setCouponSuccess(`Cupom "${planCoupon.code}" aplicado com sucesso!`);
-      } else {
-        setCouponError('Cupom inválido ou expirado.');
-      }
-    } finally {
-      setIsApplyingCoupon(false);
-    }
-  };
-
-  // Handle Remove Coupon
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponInput('');
-    setCouponError('');
-    setCouponSuccess('');
-  };
-
-  // Handle Apply Coupon Form Submit
-  const handleApplyCoupon = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    executeApplyCoupon(couponInput);
-  };
-
-  // Copy PIX Code
-  const handleCopyPix = () => {
-    const textToCopy = pixData?.copyAndPaste;
-    if (!textToCopy) return;
-    navigator.clipboard.writeText(textToCopy);
-    setPixCopied(true);
-    setTimeout(() => setPixCopied(false), 3000);
-  };
-
-  // Process Payment Submission
-  const handleProcessPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    setFormError(null);
-    setMinAmountAlert(null);
-
-    // 1. VALIDAÇÃO OBRIGATÓRIA NO FRONTEND: Valor mínimo de cobrança R$ 5,00 conforme regra do Asaas
-    if (finalTotal < 5.00) {
-      const msg = "O valor mínimo para cobranças via Asaas é de R$ 5,00";
-      setMinAmountAlert(msg);
-      setFormError(msg);
+    if (!plan.id || plan.id === 'checkout-dinamico' || plan.id === 'checkout-direto') {
+      setFormError('Esta oferta ainda não está cadastrada para pagamento. Entre em contato com a empresa responsável.');
       return;
     }
 
-    if (!fullName.trim() || fullName.trim().split(' ').length < 2) {
-      setFormError('Por favor, preencha seu nome e sobrenome completos.');
-      return;
-    }
-
-    if (!email.trim() || !email.includes('@')) {
-      setFormError('Por favor, preencha um endereço de email válido.');
-      return;
-    }
-
-    if (!phone || phone.replace(/\D/g, '').length < 10) {
-      setFormError('Por favor, preencha seu celular com DDD.');
-      return;
-    }
-
-    if (!documentNumber || documentNumber.replace(/\D/g, '').length < 11) {
-      setFormError('Por favor, preencha um CPF ou CNPJ válido.');
-      return;
-    }
-
-    if (paymentMethod === 'pix' || paymentMethod === 'pix_automatico') {
-      startTransition(() => {
-        setIsGeneratingPix(true);
-      });
-      await generateRealPixPayment();
-      return;
-    }
-
-    if (paymentMethod === 'credit_card') {
-      if (cardNumber.replace(/\D/g, '').length < 16) {
-        setFormError('Por favor, informe os 16 dígitos do cartão de crédito.');
-        return;
-      }
-      if (!cardExpiry || cardExpiry.length < 5) {
-        setFormError('Por favor, informe a data de vencimento (MM/AA).');
-        return;
-      }
-      if (!cardCvv || cardCvv.length < 3) {
-        setFormError('Por favor, informe o código de segurança (CVV).');
-        return;
-      }
-    }
-
-    // Ativação imediata do estado de loading sem bloquear a thread visual da UI (INP optimization)
     setIsProcessing(true);
-
     try {
-      if (paymentMethod === 'credit_card') {
-        const activeAffiliate = getActiveAffiliateCode();
-        const cleanDoc = documentNumber.replace(/\D/g, '') || '19119119100';
-        const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
-        const cleanEmail = (email || 'cliente@leadspay.com').trim();
-        const cleanName = (fullName || 'Cliente LeadsPay').trim();
-        const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
-        const [expMonth, expYear] = cardExpiry.split('/');
-
-        let activeSubaccountId = subaccountId || (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null;
-        if (!activeSubaccountId) {
-          try {
-            activeSubaccountId = await fetchSellerSubaccountId(plan);
-          } catch (e) {
-            // ignore
-          }
-        }
-
-        const res = await fetch('/api/payments', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
-          },
-          body: JSON.stringify({
-            paymentMethod: 'CREDIT_CARD',
-            is_test: false,
-            environment: 'production',
-            apiKey: effectiveApiKey,
-            amount: cleanTotal,
-            subaccountId: activeSubaccountId || undefined,
-            description: plan.name || 'Cobrança LeadsPay',
-            planId: (plan.id && plan.id !== 'checkout-dinamico' && plan.id !== 'checkout-direto') ? plan.id : undefined,
-            user: {
-              name: cleanName,
-              email: cleanEmail,
-              cpfCnpj: cleanDoc,
-              phone: cleanPhone
-            },
-            creditCard: {
-              holderName: cardHolderName || cleanName,
-              number: cardNumber.replace(/\D/g, ''),
-              expiryMonth: expMonth?.trim(),
-              expiryYear: expYear?.length === 2 ? `20${expYear.trim()}` : expYear?.trim(),
-              ccv: cardCvv.trim()
-            },
-            holderInfo: {
-              name: cardHolderName || cleanName,
-              email: cleanEmail,
-              cpfCnpj: cleanDoc,
-              phone: cleanPhone,
-              postalCode: '01310100',
-              addressNumber: '100'
-            },
-            companyId: plan.companyId,
-            sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
-            refCode: activeAffiliate
-          })
-        });
-
-        const data = await res.json().catch(() => ({ error: true, message: 'Falha ao processar resposta do servidor.' }));
-        if (res.ok && !data.error && (data.status === 'CONFIRMED' || data.status === 'RECEIVED' || data.status === 'approved' || data.success)) {
-          await finalizeApprovedPayment('Cartão de Crédito', data.paymentId || data.id);
-          return;
-        } else {
-          const errMsg = data?.errors?.[0]?.description || data?.message || (typeof data?.error === 'string' ? data.error : null) || 'Cartão não autorizado pela operadora. Verifique os dados e tente novamente.';
-          
-          // Registra lead e cobrança com status RECUSADO para remarketing
-          const now = new Date();
-          const dateStr = now.toISOString().split('T')[0];
-          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          try {
-            await createOrUpdateClientInFirebase({
-              store_id: plan.companyId || (plan as any).store_id || 'store_default',
-              name: cleanName || 'Cliente LeadsPay',
-              email: cleanEmail,
-              phone: cleanPhone,
-              document: cleanDoc,
-              total_spent: cleanTotal,
-              valor_pedido: cleanTotal,
-              last_plan_name: plan.name,
-              status_compra: 'RECUSADO',
-              status: 'RECUSADO',
-              is_test: false,
-              environment: 'production'
-            });
-
-            await createSaleTransactionInFirebase({
-              id: `REC-${Date.now().toString().slice(-6)}`,
-              platformId: plan.id,
-              platformName: plan.name,
-              companyId: plan.companyId || (plan as any).store_id || undefined,
-              companyName: plan.companyName,
-              companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
-              buyerName: cleanName || 'Cliente LeadsPay',
-              buyerEmail: cleanEmail || 'cliente@leadspay.com',
-              buyerPhone: cleanPhone,
-              buyerDocument: cleanDoc,
-              buyerCompany: plan.companyName,
-              amount: cleanTotal,
-              commissionEarned: 0,
-              method: 'Cartão de Crédito',
-              status: 'Cancelado',
-              is_test: false,
-              environment: 'production',
-              affiliateCode: activeAffiliate || undefined,
-              date: dateStr,
-              time: timeStr
-            });
-          } catch (e) {
-            console.warn('Aviso ao registrar status recusado no cartão:', e);
-          }
-
-          alert(errMsg);
-          return;
-        }
+      if (!stripeAttemptId.current) {
+        stripeAttemptId.current = (window.crypto?.randomUUID?.() || `${Date.now()}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`).replace(/-/g, '');
       }
-
-      if (paymentMethod === 'boleto') {
-        const activeAffiliate = getActiveAffiliateCode();
-        const cleanDoc = documentNumber.replace(/\D/g, '') || '19119119100';
-        const cleanTotal = Number(parseFloat(String(finalTotal)).toFixed(2));
-        const cleanEmail = (email || 'cliente@leadspay.com').trim();
-        const cleanName = (fullName || 'Cliente LeadsPay').trim();
-        const cleanPhone = (phone || '11999999999').replace(/\D/g, '');
-
-        let activeSubaccountId = subaccountId || (plan as any)?.asaasSubaccountId || (plan as any)?.subaccountId || null;
-        if (!activeSubaccountId) {
-          try {
-            activeSubaccountId = await fetchSellerSubaccountId(plan);
-          } catch (e) {}
-        }
-
-        const res = await fetch('/api/payments', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(effectiveApiKey ? { 'x-api-key': effectiveApiKey } : {})
-          },
-          body: JSON.stringify({
-            paymentMethod: 'BOLETO',
-            amount: cleanTotal,
-            subaccountId: activeSubaccountId || undefined,
-            description: plan.name || 'Cobrança LeadsPay',
-            planId: (plan.id && plan.id !== 'checkout-dinamico' && plan.id !== 'checkout-direto') ? plan.id : undefined,
-            user: {
-              name: cleanName,
-              email: cleanEmail,
-              cpfCnpj: cleanDoc,
-              phone: cleanPhone
-            },
-            customer: {
-              name: cleanName,
-              email: cleanEmail,
-              cpfCnpj: cleanDoc,
-              phone: cleanPhone
-            },
-            companyId: plan.companyId,
-            sellerId: (plan as any)?.sellerId || (plan as any)?.ownerId || plan.companyId,
-            refCode: activeAffiliate
-          })
-        });
-
-        const data = await res.json().catch(() => ({ error: true, message: 'Falha ao gerar boleto bancário.' }));
-        if (res.ok && !data.error && (data.bankSlipUrl || data.identificationField || data.id)) {
-          setBoletoData({
-            bankSlipUrl: data.bankSlipUrl,
-            identificationField: data.identificationField || data.barCode,
-            barCode: data.barCode || data.identificationField,
-            dueDate: data.dueDate,
-            paymentId: data.paymentId || data.id
-          });
-
-          // Registra lead e cobrança PENDENTE para boleto
-          const now = new Date();
-          const dateStr = now.toISOString().split('T')[0];
-          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          try {
-            await createOrUpdateClientInFirebase({
-              store_id: plan.companyId || (plan as any).store_id || 'store_default',
-              name: cleanName || 'Cliente LeadsPay',
-              email: cleanEmail,
-              phone: cleanPhone,
-              document: cleanDoc,
-              total_spent: cleanTotal,
-              valor_pedido: cleanTotal,
-              last_plan_name: plan.name,
-              status_compra: 'PENDENTE',
-              status: 'PENDENTE',
-              is_test: false,
-              environment: 'production'
-            });
-
-            await createSaleTransactionInFirebase({
-              id: String(data.paymentId || data.id) || `BOL-${Date.now().toString().slice(-6)}`,
-              platformId: plan.id,
-              platformName: plan.name,
-              companyId: plan.companyId || (plan as any).store_id || undefined,
-              companyName: plan.companyName,
-              companyOwnerId: (plan as any).ownerId || (plan as any).companyOwnerId || undefined,
-              buyerName: cleanName || 'Cliente LeadsPay',
-              buyerEmail: cleanEmail || 'cliente@leadspay.com',
-              buyerPhone: cleanPhone,
-              buyerDocument: cleanDoc,
-              buyerCompany: plan.companyName,
-              amount: cleanTotal,
-              commissionEarned: 0,
-              method: 'Boleto Bancário',
-              status: 'Pendente',
-              is_test: false,
-              environment: 'production',
-              affiliateCode: activeAffiliate || undefined,
-              date: dateStr,
-              time: timeStr
-            });
-          } catch (e) {
-            console.warn('Aviso ao registrar boleto pendente:', e);
-          }
-
-          return;
-        } else {
-          const errMsg = data?.errors?.[0]?.description || data?.message || 'Falha ao gerar boleto. Verifique os dados informados.';
-          alert(errMsg);
-          return;
-        }
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId: plan.id,
+          attemptId: stripeAttemptId.current,
+          buyerName: fullName.trim(),
+          buyerEmail: email.trim(),
+          affiliateCode: getActiveAffiliateCode() || affiliateRef || '',
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.clientSecret || !result.orderId) {
+        setFormError(result.error || 'Não foi possível preparar o pagamento. Nenhuma cobrança foi iniciada.');
+        return;
       }
-    } catch (err: any) {
-      console.error('Erro no checkout:', err);
-      alert('Houve um problema ao processar seu pagamento. Tente novamente.');
+      setClientSecret(String(result.clientSecret));
+      setOrderId(String(result.orderId));
+    } catch (error) {
+      console.error('[Stripe Checkout]', error);
+      setFormError('Falha de conexão com o checkout Stripe. Tente novamente.');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // If payment is completed, show the Success Thank You & Delivery Page
-  if (isPaid && completedTransaction) {
-    return (
-      <ThankYouPage
-        plan={plan}
-        planId={plan.id}
-        transactionId={completedTransaction.id}
-        amount={completedTransaction.amount}
-        customerName={fullName}
-        customerEmail={email}
-        onBackToHome={onBack}
-      />
-    );
-  }
-
+  const returnUrl = useMemo(() => {
+    const url = new URL('/?thank-you=true', window.location.origin);
+    url.searchParams.set('plan', plan.id);
+    if (orderId) url.searchParams.set('order_id', orderId);
+    return url.toString();
+  }, [plan.id, orderId]);
 
   return (
-    <div className="min-h-screen bg-white text-[#111827] flex flex-col items-center justify-start py-8 px-4 sm:px-6 font-sans selection:bg-[#205a46] selection:text-white">
-      {/* Top back button if within platform */}
-      {onBack && (
-        <div className="w-full max-w-[560px] mb-3 flex items-center justify-start">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
-          </button>
-        </div>
-      )}
-
-      {/* Main Checkout Container - Exactly matching image.png */}
-      <div className="w-full max-w-[560px] space-y-6">
-        
-        {/* Title: Starter • Tração & Vendas */}
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight">
-            {plan.name}
-          </h1>
-        </div>
-
-        {/* Form Fields */}
-        <form onSubmit={handleProcessPayment} className="space-y-4">
-          
-          {/* 1. Nome completo */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Nome completo
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="Preencha seu nome"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
-            />
-          </div>
-
-          {/* 2. Email */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Email
-            </label>
-            <input
-              type="email"
-              required
-              placeholder="Preencha seu email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
-            />
-          </div>
-
-          {/* 3. Celular e CPF/CNPJ */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+    <main className="min-h-screen bg-[#f5f6f7] px-4 py-5 text-[#16181b] selection:bg-[#16181b] selection:text-white sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-5 flex items-center justify-between border-b border-[#e3e5e7] pb-5">
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label="Voltar"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#dfe2e5] bg-white text-[#34383d] transition hover:bg-[#f0f1f2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17191c]"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Celular
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Preencha seu celular"
-                value={phone}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                CPF/CNPJ
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Preencha seu CPF/CNPJ"
-                value={documentNumber}
-                onChange={(e) => handleDocChange(e.target.value)}
-                className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all shadow-xs"
-              />
+              <div className="text-[13px] font-extrabold tracking-[0.18em] text-[#16181b]">LEADSPAY</div>
+              <div className="mt-0.5 text-[11px] text-[#73777d]">Finalização de compra</div>
             </div>
           </div>
-
-          {/* 4. Oferta Header */}
-          <div className="pt-2 flex items-center justify-between border-t border-transparent">
-            <span className="text-xs font-bold text-gray-900">
-              Oferta
-            </span>
-            <div className="text-right">
-              <span className="text-[11px] text-gray-400 line-through block">
-                R$ {originalStrikePrice.toFixed(2).replace('.', ',')}
-              </span>
-              <span className="text-sm sm:text-base font-bold text-[#205a46] block">
-                R$ {basePrice.toFixed(2).replace('.', ',')}{billingSuffix}
-              </span>
-            </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#e1e3e5] bg-white px-3 py-2 text-[11px] font-medium text-[#555a60]">
+            <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+            Ambiente protegido
           </div>
+        </header>
+        <div className="mb-7 flex items-center gap-2 rounded-xl border border-[#dedfe1] bg-[#eeeff1] px-4 py-3 text-xs text-[#4c5055]" role="status">
+          <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span><strong className="font-semibold">Ambiente de teste Stripe.</strong> Nenhuma cobrança real será efetuada.</span>
+        </div>
 
-          {/* 5. Forma de Pagamento */}
-          <div>
-            <label className="block text-xs font-bold text-gray-900 mb-2">
-              Forma de Pagamento
-            </label>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {/* PIX */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('pix')}
-                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  paymentMethod === 'pix'
-                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
-                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="w-5 h-5 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                    <path d="M12 2L2 12l10 10 10-10L12 2zm0 3.5L18.5 12 12 18.5 5.5 12 12 5.5z"/>
-                  </svg>
-                </div>
-                <span className="text-xs font-bold tracking-tight">PIX</span>
-              </button>
-
-              {/* Boleto Bancário */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('boleto')}
-                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  paymentMethod === 'boleto'
-                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
-                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <FileText className="w-4 h-4" />
-                <span className="text-xs font-bold tracking-tight text-center leading-tight">Boleto</span>
-              </button>
-
-              {/* Cartão de Crédito */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('credit_card')}
-                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  paymentMethod === 'credit_card'
-                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
-                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <CreditCard className="w-4 h-4" />
-                <span className="text-xs font-bold tracking-tight text-center leading-tight">Cartão de Crédito</span>
-              </button>
-
-              {/* Pix Automático */}
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('pix_automatico')}
-                className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer relative ${
-                  paymentMethod === 'pix_automatico'
-                    ? 'bg-[#205a46] border-[#205a46] text-white shadow-sm'
-                    : 'bg-white border-[#e5e7eb] text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="relative">
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                    <path d="M12 2L2 12l10 10 10-10L12 2zm0 3.5L18.5 12 12 18.5 5.5 12 12 5.5z"/>
-                  </svg>
-                  <span className="absolute -top-1.5 -right-2 bg-emerald-500 text-white rounded-full p-0.5 shadow-xs">
-                    <Zap className="w-2.5 h-2.5 fill-current" />
-                  </span>
-                </div>
-                <span className="text-xs font-bold tracking-tight text-center leading-tight">Pix Automático</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Campos de Cartão de Crédito (se selecionado) */}
-          {paymentMethod === 'credit_card' && (
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 animate-in fade-in duration-200">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Número do cartão
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="0000 0000 0000 0000"
-                    value={cardNumber}
-                    onChange={(e) => handleCardNumberChange(e.target.value)}
-                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 font-mono focus:outline-none transition-all"
-                  />
-                  <CreditCard className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Nome impresso no cartão
-                </label>
-                <input
-                  type="text"
-                  placeholder="Como está gravado no cartão"
-                  value={cardHolderName}
-                  onChange={(e) => setCardHolderName(e.target.value.toUpperCase())}
-                  className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] focus:ring-1 focus:ring-[#205a46] rounded-lg px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none transition-all uppercase"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2.5">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Validade
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="MM/AA"
-                    value={cardExpiry}
-                    onChange={(e) => handleExpiryChange(e.target.value)}
-                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] rounded-lg px-2 py-2.5 text-xs text-gray-900 placeholder-gray-400 text-center font-mono focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    CVV
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    required
-                    placeholder="000"
-                    value={cardCvv}
-                    onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] rounded-lg px-2 py-2.5 text-xs text-gray-900 placeholder-gray-400 text-center font-mono focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Parcelas
-                  </label>
-                  <select
-                    value={installments}
-                    onChange={(e) => setInstallments(Number(e.target.value))}
-                    className="w-full bg-white border border-[#d1d5db] focus:border-[#205a46] rounded-lg px-1.5 py-2.5 text-[11px] text-gray-900 focus:outline-none cursor-pointer"
-                  >
-                    <option value={1}>1x de R$ {finalTotal.toFixed(2).replace('.', ',')} (à vista)</option>
-                    <option value={2}>2x de R$ {((finalTotal * 1.04) / 2).toFixed(2).replace('.', ',')}</option>
-                    <option value={3}>3x de R$ {((finalTotal * 1.06) / 3).toFixed(2).replace('.', ',')}</option>
-                    <option value={6}>6x de R$ {((finalTotal * 1.12) / 6).toFixed(2).replace('.', ',')}</option>
-                    <option value={12}>12x de R$ {installment12xValue.toFixed(2).replace('.', ',')}</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 6. Resumo do Pedido Box - Exactly like image.png */}
-          <div className="pt-2">
-            <h2 className="text-xs font-bold text-gray-900 mb-2">
-              Resumo do pedido
-            </h2>
-
-            <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden shadow-xs">
-              
-              {/* Cupom Section (Fechada por padrão ao entrar no site, abre com clique) */}
-              {!isCouponOpen && !appliedCoupon ? (
-                <div className="p-3.5 border-b border-gray-100 bg-gray-50/40">
-                  <button
-                    type="button"
-                    id="btn-abrir-cupom"
-                    onClick={() => setIsCouponOpen(true)}
-                    className="w-full flex items-center justify-between text-xs text-[#205a46] hover:text-[#184636] font-semibold transition-colors cursor-pointer group py-0.5"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Tag className="w-3.5 h-3.5 text-[#205a46] transition-transform group-hover:scale-110" />
-                      <span>Possui um cupom de desconto?</span>
-                    </div>
-                    <span className="text-[11px] font-bold text-gray-500 group-hover:text-[#205a46] flex items-center gap-0.5">
-                      Inserir cupom
-                      <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
-                    </span>
-                  </button>
-                </div>
-              ) : (
-                <div className="p-3.5 border-b border-gray-100 bg-gray-50/20">
-                  {appliedCoupon ? (
-                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-emerald-800 uppercase font-mono">{appliedCoupon.code}</span>
-                            <span className="text-[10px] font-bold bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded">
-                              {appliedCoupon.type === 'percentage' ? `${appliedCoupon.discount}% OFF` : `R$ ${appliedCoupon.discount.toFixed(2)} OFF`}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-emerald-700 block mt-0.5 font-medium">Cupom de desconto ativo no pedido</span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        id="btn-remover-cupom"
-                        onClick={handleRemoveCoupon}
-                        className="text-xs text-rose-600 hover:text-rose-700 font-bold transition-colors cursor-pointer hover:underline pl-2"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-                          <Tag className="w-3 h-3 text-[#205a46]" /> Inserir Cupom de Desconto
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCouponOpen(false);
-                            setCouponError('');
-                          }}
-                          className="text-[11px] text-gray-400 hover:text-gray-600 cursor-pointer"
-                        >
-                          Fechar
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus-within:border-[#205a46] transition-colors">
-                        <div className="flex items-center gap-2 flex-1">
-                          <Tag className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <input
-                            type="text"
-                            id="input-cupom-checkout"
-                            placeholder="CÓDIGO DO CUPOM"
-                            value={couponInput}
-                            onChange={(e) => {
-                              setCouponInput(e.target.value.toUpperCase());
-                              setCouponError('');
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleApplyCoupon();
-                              }
-                            }}
-                            className="w-full text-xs text-gray-800 placeholder-gray-400 focus:outline-none uppercase font-mono font-bold"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          id="btn-aplicar-cupom"
-                          onClick={() => handleApplyCoupon()}
-                          disabled={isApplyingCoupon || !couponInput.trim()}
-                          className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-40 transition-colors cursor-pointer pl-2"
-                        >
-                          {isApplyingCoupon ? 'Aplicando...' : 'Aplicar'}
-                        </button>
-                      </div>
-
-                      {couponError && (
-                        <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1.5 font-medium">
-                          <AlertCircle className="w-3 h-3 shrink-0" /> {couponError}
-                        </p>
-                      )}
-                      {couponSuccess && (
-                        <p className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1.5 font-medium">
-                          <Check className="w-3 h-3 shrink-0" /> {couponSuccess}
-                        </p>
-                      )}
-                    </div>
-                  )}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <section className="rounded-2xl border border-[#e1e3e5] bg-white p-5 shadow-[0_8px_30px_rgba(15,18,20,0.04)] sm:p-8">
+            <div className="mb-7 border-b border-[#eceef0] pb-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#777c82]">Compra segura</p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-[-0.035em] text-[#17191c] sm:text-[30px]">{plan.name}</h1>
+              {(plan.companyName || plan.description) && (
+                <div className="mt-3 flex items-start gap-2 text-sm leading-6 text-[#646970]">
+                  <Store className="mt-1 h-4 w-4 shrink-0 text-[#747980]" aria-hidden="true" />
+                  <span>{plan.companyName || plan.description}</span>
                 </div>
               )}
+            </div>
 
-              {/* Order Items Breakdown */}
-              <div className="p-3.5 space-y-2 text-xs">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="font-medium text-gray-900 block">{plan.name}</span>
-                    <span className="text-[11px] text-gray-400 block">{billingPeriodName}</span>
+            {!clientSecret ? <form onSubmit={handleProcessPayment} className="space-y-6">
+              <div>
+                <h2 className="text-sm font-semibold text-[#202327]">Seus dados</h2>
+                <p className="mt-1 text-xs leading-5 text-[#777c82]">Usaremos essas informações para identificar o pedido e enviar a confirmação.</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label htmlFor="checkout-full-name" className="mb-1.5 block text-xs font-medium text-[#43484e]">Nome completo</label>
+                    <input
+                      id="checkout-full-name"
+                      type="text"
+                      autoComplete="name"
+                      required
+                      maxLength={120}
+                      placeholder="Seu nome e sobrenome"
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-[#dfe2e5] bg-white px-3.5 text-sm text-[#17191c] outline-none transition placeholder:text-[#a0a4a9] hover:border-[#b7bbc0] focus:border-[#202327] focus:ring-2 focus:ring-[#202327]/10"
+                    />
                   </div>
-                  <span className="font-bold text-gray-900">
-                    R$ {basePrice.toFixed(2).replace('.', ',')}{billingSuffix}
-                  </span>
-                </div>
-
-                {includeOrderBump && (
-                  <div className="flex justify-between items-center text-emerald-700 text-[11px]">
-                    <span>+ {plan.orderBumps?.[0]?.name || 'Oferta Adicional'}</span>
-                    <span>R$ {bumpPrice.toFixed(2).replace('.', ',')}</span>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="checkout-email" className="mb-1.5 block text-xs font-medium text-[#43484e]">E-mail</label>
+                    <input
+                      id="checkout-email"
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      required
+                      maxLength={200}
+                      placeholder="voce@exemplo.com"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="min-h-11 w-full rounded-xl border border-[#dfe2e5] bg-white px-3.5 text-sm text-[#17191c] outline-none transition placeholder:text-[#a0a4a9] hover:border-[#b7bbc0] focus:border-[#202327] focus:ring-2 focus:ring-[#202327]/10"
+                    />
                   </div>
-                )}
-
-                {appliedCoupon && (
-                  <div className="flex justify-between items-center text-emerald-700 font-semibold text-[11px]">
-                    <span>Desconto do Cupom ({appliedCoupon.code})</span>
-                    <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                )}
-
-                {/* Taxa de serviço R$ 0,99 */}
-                <div className="flex justify-between items-center text-gray-500 pt-1">
-                  <span>Taxa de serviço</span>
-                  <span className="text-gray-700">R$ {PLATFORM_CHECKOUT_FEE.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
 
-              {/* Total Row with Classic Ticket/Receipt Serrated Divider */}
-              <div className="relative px-3.5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-900">Total</span>
-                <span className="text-sm sm:text-base font-bold text-gray-900">
-                  R$ {finalTotal.toFixed(2).replace('.', ',')}
-                </span>
-              </div>
-
-              {/* Sawtooth edge pattern (from image) */}
-              <div className="w-full h-2.5 bg-repeat-x bg-[length:12px_10px]" style={{
-                backgroundImage: 'radial-gradient(circle at 6px -3px, transparent 6px, #f3f4f6 6.5px)'
-              }} />
-            </div>
-          </div>
-
-          {/* Validação de Valor Mínimo Alerta Amigável na Tela */}
-          {(minAmountAlert || finalTotal < 5.00) && (
-            <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center gap-2 font-medium animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span>
-                {minAmountAlert || "O valor mínimo para cobranças via Asaas é de R$ 5,00"}
-              </span>
-            </div>
-          )}
-
-          {/* QR Code PIX Display (quando gerado via Asaas) */}
-          {(paymentMethod === 'pix' || paymentMethod === 'pix_automatico') && pixData && (
-            <div className="p-4 bg-gray-50 border border-emerald-200 rounded-xl space-y-3 text-center animate-in fade-in">
-              {isPixExpired ? (
-                <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-3 text-center animate-in fade-in">
-                  <div className="w-10 h-10 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 mx-auto">
-                    <XCircle className="w-5 h-5" />
-                  </div>
+              <div className="rounded-xl border border-[#e5e7e9] bg-[#f8f9fa] p-4">
+                <div className="flex gap-3">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#34383d]" aria-hidden="true" />
                   <div>
-                    <h4 className="font-bold text-rose-800 text-sm">QR Code Pix Expirado (5 min)</h4>
-                    <p className="text-xs text-rose-600 mt-1">
-                      O tempo limite de 5 minutos esgotou e o status deste pagamento foi alterado de <strong>Pendente</strong> para <strong>Recusado</strong>.
+                    <h2 className="text-sm font-semibold text-[#292d31]">Pagamento processado pela Stripe</h2>
+                    <p className="mt-1 text-xs leading-5 text-[#666b71]">
+                      Você verá as formas de pagamento atualmente habilitadas e elegíveis para esta compra no checkout seguro da Stripe. A disponibilidade pode variar conforme a conta, o valor e a localização.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsPixExpired(false);
-                      setPixData(null);
-                      generateRealPixPayment();
-                    }}
-                    className="w-full py-2.5 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Gerar Novo QR Code Pix (5 min)
-                  </button>
                 </div>
-              ) : (
-                <>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-bold">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Pague em até {formatCountdown(pixSecondsLeft)}</span>
-                  </div>
-
-                  {pixData.qrCodeBase64 && (
-                    <div className="w-44 h-44 mx-auto bg-white p-2 border border-gray-200 rounded-xl shadow-xs flex items-center justify-center">
-                      <img
-                        src={
-                          pixData.qrCodeBase64.startsWith('data:')
-                            ? pixData.qrCodeBase64
-                            : `data:image/png;base64,${pixData.qrCodeBase64}`
-                        }
-                        alt="QR Code Pix"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                  )}
-
-                  {pixData.copyAndPaste && (
-                    <div className="space-y-1 text-left">
-                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-                        Pix Copia e Cola:
-                      </label>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="text"
-                          readOnly
-                          value={pixData.copyAndPaste}
-                          className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[10px] text-gray-700 font-mono truncate"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleCopyPix}
-                          className="bg-[#205a46] hover:bg-[#194939] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
-                        >
-                          {pixCopied ? 'Copiado!' : 'Copiar'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-[11px]">
-                    <span className="text-gray-500 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-                      Aguardando confirmação...
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => checkPaymentStatus(pixData.id)}
-                      disabled={isCheckingPixStatus}
-                      className="text-emerald-700 hover:text-emerald-800 font-bold transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isCheckingPixStatus ? 'animate-spin' : ''}`} />
-                      Verificar Pagamento
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Erro no PIX se houver */}
-          {pixError && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold block">Atenção no pagamento:</span>
-                <span>{pixError}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Boleto Bancário Display (quando gerado via Asaas) */}
-          {paymentMethod === 'boleto' && boletoData && (
-            <div className="p-4 bg-gray-50 border border-emerald-200 rounded-xl space-y-3 text-center animate-in fade-in">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-bold">
-                <FileText className="w-3.5 h-3.5" />
-                <span>Boleto Gerado com Sucesso!</span>
               </div>
 
-              {boletoData.dueDate && (
-                <p className="text-xs text-gray-600 font-medium">
-                  Vencimento: <strong>{new Date(boletoData.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
-                </p>
+              {formError && (
+                <div className="rounded-xl border border-[#d9dcdf] bg-[#f7f7f8] px-4 py-3 text-sm leading-5 text-[#3e4247]" role="alert">
+                  {formError}
+                </div>
               )}
 
-              {boletoData.identificationField && (
-                <div className="space-y-1 text-left">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-                    Linha Digitável / Código de Barras:
-                  </label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      readOnly
-                      value={boletoData.identificationField}
-                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[10px] text-gray-700 font-mono truncate"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (boletoData.identificationField) {
-                          navigator.clipboard.writeText(boletoData.identificationField);
-                          setBoletoCopied(true);
-                          setTimeout(() => setBoletoCopied(false), 3000);
-                        }
-                      }}
-                      className="bg-[#205a46] hover:bg-[#194939] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      {boletoCopied ? 'Copiado!' : 'Copiar'}
-                    </button>
+              <button
+                type="submit"
+                disabled={isProcessing}
+                className="group inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#17191c] px-5 text-sm font-semibold text-white transition hover:bg-[#303338] active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17191c] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isProcessing ? (
+                  <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white" aria-hidden="true" />Preparando pagamento…</>
+                ) : (
+                  <>Continuar para pagamento <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></>
+                )}
+              </button>
+              <p className="text-center text-[11px] leading-5 text-[#858a90]">
+                Os dados de pagamento são informados diretamente à Stripe pelo formulário seguro. A LeadsPay não recebe os dados do cartão.
+              </p>
+            </form> : stripePromise ? (
+              <div className="space-y-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-semibold text-[#202327]">Forma de pagamento</h2>
+                    <p className="mt-1 text-xs leading-5 text-[#777c82]">Métodos disponibilizados pela Stripe para sua compra.</p>
                   </div>
+                  <button type="button" onClick={() => { setClientSecret(''); setOrderId(''); setFormError(null); }} className="text-xs font-medium text-[#555a60] underline underline-offset-4">Editar dados</button>
                 </div>
-              )}
+                <Elements stripe={stripePromise} options={{ clientSecret, appearance: stripeAppearance }}>
+                  <EmbeddedPaymentForm returnUrl={returnUrl} onError={setFormError} isProcessing={isProcessing} setIsProcessing={setIsProcessing} />
+                </Elements>
+                {formError && <div className="rounded-xl border border-[#d9dcdf] bg-[#f7f7f8] px-4 py-3 text-sm leading-5 text-[#3e4247]" role="alert">{formError}</div>}
+                <p className="text-center text-[11px] leading-5 text-[#858a90]">O status do pagamento será confirmado no servidor via webhook Stripe.</p>
+              </div>
+            ) : null}
+          </section>
 
-              {boletoData.bankSlipUrl && (
-                <div className="pt-2">
-                  <a
-                    href={boletoData.bankSlipUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Visualizar / Imprimir Boleto PDF
-                  </a>
+          <aside className="rounded-2xl border border-[#e1e3e5] bg-white p-5 shadow-[0_8px_30px_rgba(15,18,20,0.04)] sm:p-6 lg:sticky lg:top-6" aria-labelledby="order-summary-title">
+            <h2 id="order-summary-title" className="text-base font-semibold tracking-tight text-[#17191c]">Resumo do pedido</h2>
+            <div className="mt-5 border-y border-[#eceef0] py-4">
+              <div className="flex items-start justify-between gap-4 text-sm">
+                <div>
+                  <p className="font-medium text-[#303439]">{plan.name}</p>
+                  <p className="mt-1 text-xs text-[#81868c]">Pagamento único</p>
                 </div>
-              )}
+                <span className="whitespace-nowrap font-medium text-[#303439]">{formatBRL(basePrice)}</span>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-4 text-xs text-[#71767c]">
+                <span>Taxa de serviço LeadsPay</span>
+                <span className="whitespace-nowrap">{formatBRL(PLATFORM_CHECKOUT_FEE)}</span>
+              </div>
             </div>
-          )}
-
-          {/* Form Error Banner */}
-          {formError && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-medium animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
-              <span>{formError}</span>
+            <div className="flex items-center justify-between gap-4 py-5">
+              <span className="text-sm font-semibold text-[#24282c]">Total</span>
+              <span className="text-xl font-semibold tracking-tight text-[#17191c]">{formatBRL(finalTotal)}</span>
             </div>
-          )}
-
-          {/* 7. Action Button - Green button matching image.png */}
-          <button
-            type="submit"
-            disabled={isProcessing || isGeneratingPix}
-            className="w-full bg-[#205a46] hover:bg-[#194939] active:bg-[#153e30] text-white font-bold py-3.5 rounded-lg text-sm transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isProcessing || isGeneratingPix ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Processando...</span>
-              </>
-            ) : paymentMethod === 'pix' ? (
-              <span>Gerar Pix</span>
-            ) : paymentMethod === 'pix_automatico' ? (
-              <span>Gerar Pix Automático</span>
-            ) : paymentMethod === 'boleto' ? (
-              <span>Gerar Boleto Bancário</span>
-            ) : (
-              <span>Pagar com Cartão de Crédito</span>
+            {Array.isArray(plan.features) && plan.features.length > 0 && (
+              <div className="border-t border-[#eceef0] pt-4">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#858a90]">Incluído nesta oferta</p>
+                <ul className="space-y-2.5">
+                  {plan.features.slice(0, 5).map((feature, index) => (
+                    <li key={`${feature}-${index}`} className="flex gap-2.5 text-xs leading-5 text-[#54595f]">
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#50555b]" aria-hidden="true" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-          </button>
-
-          {/* 8. Trust & Security Footer - Exactly like image.png */}
-          <div className="text-center pt-2 space-y-2 text-xs text-gray-500">
-            <div className="flex items-center justify-center gap-1.5 text-gray-600 font-medium">
-              <Lock className="w-3.5 h-3.5 text-gray-500" />
-              <span>Compra segura</span>
+            <div className="mt-5 flex items-center gap-2 border-t border-[#eceef0] pt-4 text-[11px] text-[#777c82]">
+              <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+              Criptografia e processamento seguro pela Stripe
             </div>
+          </aside>
+        </div>
 
-            <p className="text-[11px] text-gray-400 leading-relaxed px-4">
-              Ao prosseguir, você concorda com os Termos de uso de <strong className="text-gray-600">{plan.name}</strong>, além dos{' '}
-              <a href="#" className="underline hover:text-gray-700">Termos</a> e{' '}
-              <a href="#" className="underline hover:text-gray-700">Políticas</a> da LeadsPay.
-            </p>
-
-            <p className="text-[11px] text-gray-400">
-              Processado por <strong className="text-gray-600">LeadsPay</strong>
-            </p>
-          </div>
-        </form>
-
+        <footer className="mx-auto mt-6 max-w-3xl text-center text-[11px] leading-5 text-[#858a90]">
+          Ao continuar, você confirma que os dados informados estão corretos. O pagamento só será considerado aprovado após confirmação segura pela Stripe.
+        </footer>
       </div>
-    </div>
+    </main>
+  );
+};
+
+interface EmbeddedPaymentFormProps {
+  returnUrl: string;
+  onError: (message: string | null) => void;
+  isProcessing: boolean;
+  setIsProcessing: (processing: boolean) => void;
+}
+
+const EmbeddedPaymentForm: React.FC<EmbeddedPaymentFormProps> = ({ returnUrl, onError, isProcessing, setIsProcessing }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onError(null);
+    if (!stripe || !elements || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        onError(submitError.message || 'Confira os dados da forma de pagamento.');
+        return;
+      }
+      const result = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: returnUrl },
+        redirect: 'if_required',
+      });
+      if (result.error) {
+        onError(result.error.message || 'A Stripe não conseguiu confirmar os dados. Confira e tente novamente.');
+        return;
+      }
+      if (result.paymentIntent?.id) {
+        const destination = new URL(returnUrl);
+        destination.searchParams.set('payment_intent', result.paymentIntent.id);
+        window.location.assign(destination.toString());
+      } else {
+        onError('A Stripe não retornou a referência da tentativa. Atualize a página antes de tentar novamente.');
+      }
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Falha ao confirmar o pagamento.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <PaymentElement options={stripePaymentElementOptions} />
+      <button type="submit" disabled={!stripe || isProcessing} className="group inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#17191c] px-5 text-sm font-semibold text-white transition hover:bg-[#303338] active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17191c] disabled:cursor-not-allowed disabled:opacity-60">
+        {isProcessing ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white" aria-hidden="true" />Confirmando com a Stripe…</> : <>Pagar com segurança <LockKeyhole className="h-4 w-4" aria-hidden="true" /></>}
+      </button>
+    </form>
   );
 };

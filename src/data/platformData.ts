@@ -1,8 +1,7 @@
 import { PlatformProduct, SaleTransaction, PaymentMethodStat, UserSellerProfile, WithdrawalRequest } from '../types/platform';
 
 export const ADMIN_EMAILS: string[] = [
-  'rickmarketing81@gmail.com',
-  'leadspay.oficial@gmail.com'
+  'rickmarketing81@gmail.com'
 ];
 
 export function isSuperAdminEmail(email?: string | null): boolean {

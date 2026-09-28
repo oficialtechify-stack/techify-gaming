@@ -1,484 +1,134 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Link2, 
-  Plus, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  QrCode, 
-  Trash2, 
-  Search, 
-  DollarSign, 
-  AlertCircle, 
-  X,
-  CreditCard,
-  Eye,
-  CheckCircle2,
-  Lock,
-  Layers
-} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Check, Copy, ExternalLink, Link2, Plus, Search } from 'lucide-react';
 import { CompanyPlan, CompanyStartup } from '../../types/platform';
-
-interface PaymentLinkItem {
-  id: string;
-  title: string;
-  description: string;
-  amount: number;
-  slug: string;
-  url: string;
-  status: 'active' | 'inactive';
-  created_at: string;
-  allowedMethods: ('PIX' | 'CREDIT_CARD')[];
-  clicks: number;
-  salesCount: number;
-  companyId?: string;
-}
 
 interface LinksPagamentoViewProps {
   plans?: CompanyPlan[];
   companies?: CompanyStartup[];
   activeCompanyId?: string;
-  onOpenCheckout?: (plan: CompanyPlan) => void;
-  onCreateCustomPlan?: (planPayload: any) => Promise<any>;
+  onCreateCustomPlan?: (planPayload: Omit<CompanyPlan, 'id' | 'createdAt'>) => Promise<boolean>;
 }
 
-const STORAGE_KEY = 'leadspay_custom_payment_links';
+const PLATFORM_FEE = 0.99;
+const money = (value: number) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export const LinksPagamentoView: React.FC<LinksPagamentoViewProps> = ({
-  plans = [],
-  companies = [],
-  activeCompanyId,
-  onOpenCheckout,
-  onCreateCustomPlan
-}) => {
-  const [paymentLinks, setPaymentLinks] = useState<PaymentLinkItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (_) {}
-    return [];
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(paymentLinks));
-    } catch (_) {}
-  }, [paymentLinks]);
-
+export const LinksPagamentoView: React.FC<LinksPagamentoViewProps> = ({ plans = [], companies = [], activeCompanyId, onCreateCustomPlan }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // Form State
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formAmount, setFormAmount] = useState<string>('50.00');
-  const [formPix, setFormPix] = useState<boolean>(true);
-  const [formCard, setFormCard] = useState<boolean>(true);
-  const [formCompanyId, setFormCompanyId] = useState<string>(activeCompanyId || companies[0]?.id || 'store_default');
-  const [formError, setFormError] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [formAmount, setFormAmount] = useState('50.00');
+  const [commissionPercentage, setCommissionPercentage] = useState('0');
+  const [formCompanyId, setFormCompanyId] = useState(activeCompanyId || companies[0]?.id || '');
+  const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleCopy = (url: string, id: string) => {
-    navigator.clipboard.writeText(url);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2500);
+  const links = useMemo(() => plans.map((plan) => {
+    const slug = plan.checkoutSlug || plan.slug || plan.id;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return {
+      id: plan.id,
+      title: plan.name,
+      description: plan.description || '',
+      amount: Number(plan.priceSetup || plan.price || plan.priceMonthly || 0),
+      slug,
+      url: `${origin}/checkout/${encodeURIComponent(slug)}`,
+      active: ['ativo', 'active', 'approved', 'aprovado'].includes(String(plan.status || '').toLowerCase()),
+    };
+  }).filter((link) => {
+    if (!searchTerm.trim()) return true;
+    return `${link.title} ${link.description} ${link.slug}`.toLowerCase().includes(searchTerm.trim().toLowerCase());
+  }), [plans, searchTerm]);
+
+  const handleCopy = async (url: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 2200);
+    } catch {
+      setFormError('Não foi possível copiar automaticamente. Abra o checkout e copie o endereço do navegador.');
+    }
   };
 
-  const handleCreateLink = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetForm = () => {
+    setFormTitle(''); setFormDescription(''); setFormAmount('50.00'); setCommissionPercentage('0');
+    setFormCompanyId(activeCompanyId || companies[0]?.id || ''); setFormError('');
+  };
+
+  const handleCreateLink = async (event: React.FormEvent) => {
+    event.preventDefault();
     setFormError('');
-
-    const numAmount = parseFloat(formAmount.replace(',', '.')) || 0;
-
-    // Validação estrita de R$ 5,00
-    if (numAmount < 5.00) {
-      setFormError('O valor mínimo para cobranças via Asaas é de R$ 5,00.');
-      return;
+    const amount = Number(formAmount.replace(',', '.'));
+    const commission = Number(commissionPercentage.replace(',', '.'));
+    if (!formCompanyId || !companies.some((company) => company.id === formCompanyId)) {
+      setFormError('Selecione uma empresa vinculada à sua conta.'); return;
     }
-
-    if (!formTitle.trim()) {
-      setFormError('Informe o título do link de pagamento.');
-      return;
-    }
-
-    if (!formPix && !formCard) {
-      setFormError('Selecione ao menos um método de pagamento aceito.');
-      return;
-    }
+    if (!formTitle.trim()) { setFormError('Informe o nome da oferta.'); return; }
+    if (!Number.isFinite(amount) || amount < 0.5) { setFormError('O valor da oferta deve ser de pelo menos R$ 0,50.'); return; }
+    if (!Number.isFinite(commission) || commission < 0 || commission > 100) { setFormError('A comissão deve estar entre 0% e 100%.'); return; }
+    if (!onCreateCustomPlan) { setFormError('A criação de oferta não está disponível nesta conta.'); return; }
 
     setIsSubmitting(true);
     try {
-      const slug = `pay_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://pay.leadspay.com';
-      const checkoutUrl = `${origin}/checkout/${slug}`;
-
-      // Se temos o handler de criação de planos na plataforma, podemos registrar como um plano avulso
-      if (onCreateCustomPlan) {
-        const targetCompany = companies.find(c => c.id === formCompanyId);
-        await onCreateCustomPlan({
-          companyId: formCompanyId,
-          companyName: targetCompany?.name || 'Link Avulso LeadsPay',
-          companyLogo: targetCompany?.logo || '',
-          name: formTitle.trim(),
-          description: formDescription.trim() || 'Cobrança via Link de Pagamento LeadsPay',
-          priceSetup: numAmount,
-          priceMonthly: 0,
-          commissionPercentage: 100,
-          commissionValue: numAmount,
-          checkoutSlug: slug,
-          badge: 'Link de Pagamento',
-          status: 'Ativo'
-        });
-      }
-
-      const newLink: PaymentLinkItem = {
-        id: `plk_${Date.now()}`,
-        title: formTitle.trim(),
-        description: formDescription.trim(),
-        amount: numAmount,
-        slug,
-        url: checkoutUrl,
-        status: 'active',
-        created_at: new Date().toISOString(),
-        allowedMethods: [
-          ...(formPix ? ['PIX' as const] : []),
-          ...(formCard ? ['CREDIT_CARD' as const] : [])
-        ],
-        clicks: 0,
-        salesCount: 0,
-        companyId: formCompanyId
-      };
-
-      setPaymentLinks([newLink, ...paymentLinks]);
+      const company = companies.find((item) => item.id === formCompanyId)!;
+      const slug = `lp-${crypto.randomUUID().slice(0, 12)}`;
+      const created = await onCreateCustomPlan({
+        companyId: company.id,
+        companyName: company.name,
+        companyLogo: company.logo || '',
+        category: 'Serviços',
+        name: formTitle.trim().slice(0, 120),
+        description: formDescription.trim().slice(0, 500),
+        priceSetup: amount,
+        priceMonthly: 0,
+        commissionPercentage: commission,
+        commissionValue: Number((amount * commission / 100).toFixed(2)),
+        features: [],
+        bannerImage: '',
+        totalSales: 0,
+        checkoutSlug: slug,
+        badge: 'Link de Pagamento',
+        status: 'Ativo',
+      });
+      if (!created) { setFormError('A oferta não foi salva. Confira a verificação da empresa e tente novamente.'); return; }
       setIsCreateModalOpen(false);
-      setFormTitle('');
-      setFormDescription('');
-      setFormAmount('50.00');
-      setFormError('');
-    } catch (err: any) {
-      setFormError(err.message || 'Erro ao criar link de pagamento.');
+      resetForm();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Não foi possível salvar a oferta.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteLink = (id: string) => {
-    if (!confirm('Deseja realmente excluir este link de pagamento?')) return;
-    setPaymentLinks(paymentLinks.filter(l => l.id !== id));
-  };
-
-  // Combine custom payment links with existing plans
-  const combinedLinks = [
-    ...paymentLinks,
-    ...plans.map(p => {
-      const slug = p.checkoutSlug || p.slug || p.id;
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://pay.leadspay.com';
-      return {
-        id: `plan_${p.id}`,
-        title: p.name,
-        description: p.description || '',
-        amount: Number(p.priceSetup || p.priceMonthly || 0),
-        slug,
-        url: `${origin}/checkout/${slug}`,
-        status: 'active' as const,
-        created_at: (p as any).createdAt || new Date().toISOString(),
-        allowedMethods: ['PIX' as const, 'CREDIT_CARD' as const],
-        clicks: p.affiliatesCount || 0,
-        salesCount: p.totalSales || 0,
-        companyId: p.companyId
-      };
-    })
-  ];
-
-  const filteredLinks = combinedLinks.filter(link => {
-    if (!searchTerm.trim()) return true;
-    const q = searchTerm.toLowerCase();
-    return (
-      link.title.toLowerCase().includes(q) ||
-      link.description.toLowerCase().includes(q) ||
-      link.slug.toLowerCase().includes(q)
-    );
-  });
-
   return (
-    <div className="space-y-6 animate-fadeIn" id="leadspay-links-pagamento-view">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
-            <Link2 className="w-4 h-4" />
-            Vendas Rápidas & Checkout Dinâmico
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-            Links de Pagamento
-          </h1>
-          <p className="text-xs text-white/60 mt-1 max-w-xl">
-            Gere links avulsos para enviar no WhatsApp, redes sociais ou e-mail, permitindo que seus clientes paguem via PIX ou Cartão em segundos.
-          </p>
-        </div>
+    <main className="space-y-6" id="leadspay-links-pagamento-view">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div><div className="mb-1 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#5ba63c]"><Link2 className="h-4 w-4" aria-hidden="true" /> Checkout Stripe</div><h1 className="text-2xl font-semibold tracking-tight text-slate-950">Links de pagamento</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Cada link aponta para uma oferta salva no Firestore. A Stripe decide quais métodos estão habilitados e elegíveis para cada comprador.</p></div>
+        <button type="button" onClick={() => { resetForm(); setIsCreateModalOpen(true); }} disabled={!companies.length} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#3f7f33] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#326829] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3f7f33] disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> Criar link</button>
+      </header>
 
-        <button
-          onClick={() => {
-            setFormError('');
-            setIsCreateModalOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cbe327] text-[#060A15] font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(217,242,42,0.2)] cursor-pointer"
-          id="btn-create-payment-link"
-        >
-          <Plus className="w-4 h-4 stroke-[3]" />
-          + Criar Link de Pagamento
-        </button>
-      </div>
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"><p className="max-w-xl text-xs leading-5 text-slate-600">O checkout de teste acrescenta uma taxa de plataforma de R$ 0,99 ao preço da oferta. O destino do split é calculado no servidor; valores de teste não representam pagamentos reais.</p><label className="relative block w-full sm:max-w-xs"><span className="sr-only">Buscar oferta</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" /><input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar oferta" className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#5ba63c] focus:ring-2 focus:ring-[#5ba63c]/15" /></label></div>
 
-      {/* Search Bar */}
-      <div className="bg-[#080d1a] border border-white/10 p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar link de pagamento por título..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#050811] border border-white/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A]"
-          />
-        </div>
-      </div>
-
-      {/* Grid of Links */}
-      {filteredLinks.length === 0 ? (
-        <div className="p-12 text-center flex flex-col items-center justify-center bg-[#080d1a] border border-white/10 rounded-2xl">
-          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 mb-3">
-            <Link2 className="w-7 h-7 text-[#D9F22A]/60" />
-          </div>
-          <h3 className="text-base font-bold text-white font-['Syne']">
-            Nenhum link de pagamento criado
-          </h3>
-          <p className="text-xs text-white/50 max-w-md mt-1.5">
-            Crie seu primeiro link de cobrança rápida com valor mínimo de R$ 5,00 para compartilhar imediatamente com seus clientes.
-          </p>
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="mt-4 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors cursor-pointer"
-          >
-            + Criar Primeiro Link
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredLinks.map((link) => (
-            <div
-              key={link.id}
-              className="p-5 rounded-2xl bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 transition-all flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Ativo
-                  </span>
-                  <div className="flex items-center gap-1.5 text-[10px] text-white/50">
-                    <QrCode className="w-3 h-3 text-[#D9F22A]" />
-                    <span>PIX + Cartão</span>
-                  </div>
-                </div>
-
-                <h3 className="text-base font-bold text-white font-['Syne'] line-clamp-1">
-                  {link.title}
-                </h3>
-                {link.description && (
-                  <p className="text-xs text-white/50 line-clamp-2 mt-1 mb-3">
-                    {link.description}
-                  </p>
-                )}
-
-                <div className="p-3 rounded-xl bg-[#050811] border border-white/5 my-3">
-                  <span className="text-[10px] text-white/40 block">Valor Cobrado</span>
-                  <div className="text-xl font-black text-emerald-400 font-mono mt-0.5">
-                    R$ {Number(link.amount).toFixed(2)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-white/5">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleCopy(link.url, link.id)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold transition-colors cursor-pointer"
-                  >
-                    {copiedId === link.id ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-[#D9F22A]" />
-                        <span className="text-[#D9F22A]">Link Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-white/60" />
-                        <span>Copiar Link</span>
-                      </>
-                    )}
-                  </button>
-
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-2 rounded-xl bg-[#D9F22A]/10 hover:bg-[#D9F22A] text-[#D9F22A] hover:text-[#060A15] transition-all cursor-pointer"
-                    title="Abrir Link de Pagamento"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-
-                  {link.id.startsWith('plk_') && (
-                    <button
-                      onClick={() => handleDeleteLink(link.id)}
-                      className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
-                      title="Excluir Link"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {links.length === 0 ? <section className="rounded-2xl border border-slate-200 bg-white px-5 py-14 text-center shadow-sm"><Link2 className="mx-auto h-9 w-9 text-slate-300" aria-hidden="true" /><h2 className="mt-3 text-sm font-semibold text-slate-800">Nenhuma oferta disponível para link</h2><p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Crie uma oferta vinculada à sua empresa. Ela só aparecerá aqui depois de ser persistida no Firestore.</p></section> : (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{links.map((link) => <article key={link.id} className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div><div className="mb-3 flex items-center justify-between gap-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${link.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{link.active ? 'Ativo' : 'Pausado'}</span><span className="text-xs text-slate-500">Stripe · métodos dinâmicos</span></div><h2 className="line-clamp-1 text-base font-semibold text-slate-900">{link.title}</h2>{link.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{link.description}</p>}<div className="my-4 rounded-xl border border-slate-100 bg-slate-50 p-3"><span className="text-[10px] font-medium text-slate-500">Preço da oferta</span><div className="mt-0.5 text-xl font-semibold tracking-tight text-slate-950">{money(link.amount)}</div><p className="mt-1 text-[10px] text-slate-500">Total estimado no checkout: {money(link.amount + PLATFORM_FEE)}</p></div><p className="break-all text-[11px] text-slate-500">{link.url}</p></div>
+          <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3"><button type="button" onClick={() => void handleCopy(link.url, link.id)} className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5ba63c]">{copiedId === link.id ? <><Check className="h-3.5 w-3.5 text-emerald-600" /> Copiado</> : <><Copy className="h-3.5 w-3.5" /> Copiar link</>}</button><a href={link.url} target="_blank" rel="noreferrer" aria-label={`Abrir checkout para ${link.title}`} className="inline-flex h-9 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5ba63c]"><ExternalLink className="h-4 w-4" /></a></div>
+        </article>)}</section>
       )}
 
-      {/* Modal: Criar Link de Pagamento */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-[#080d1a] border border-[#D9F22A]/40 rounded-3xl p-6 sm:p-7 shadow-[0_0_50px_rgba(217,242,42,0.15)]">
-            <button
-              onClick={() => setIsCreateModalOpen(false)}
-              className="absolute top-5 right-5 text-white/50 hover:text-white transition-colors cursor-pointer w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center">
-                <Link2 className="w-5 h-5 stroke-[2.5]" />
-              </div>
-              <div>
-                <h2 className="text-lg font-black text-white font-['Syne']">
-                  Novo Link de Pagamento
-                </h2>
-                <p className="text-xs text-white/50">
-                  Crie uma cobrança direta e receba via PIX ou Cartão
-                </p>
-              </div>
-            </div>
-
-            {formError && (
-              <div className="p-3 mb-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateLink} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-white/70 block mb-1.5">
-                  Título do Pagamento / Produto *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Consultoria Estratégica / E-book Exclusivo"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-white/70 block mb-1.5">
-                  Descrição Curta (opcional)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Detalhes ou orientações para o cliente no checkout..."
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-white/70">
-                    Valor da Cobrança (R$) *
-                  </label>
-                  <span className="text-[11px] text-[#D9F22A] font-bold">
-                    Mínimo: R$ 5,00 (Asaas)
-                  </span>
-                </div>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="5.00"
-                  required
-                  placeholder="50.00"
-                  value={formAmount}
-                  onChange={(e) => {
-                    setFormAmount(e.target.value);
-                    if (parseFloat(e.target.value) < 5.00) {
-                      setFormError('O valor mínimo para cobranças via Asaas é de R$ 5,00.');
-                    } else {
-                      setFormError('');
-                    }
-                  }}
-                  className="w-full bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold font-mono focus:outline-none focus:border-[#D9F22A]"
-                />
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#050811] border border-white/5 space-y-2">
-                <span className="text-xs font-bold text-white/70 block">
-                  Métodos de Pagamento Permitidos
-                </span>
-                <div className="flex items-center gap-4 pt-1">
-                  <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formPix}
-                      onChange={(e) => setFormPix(e.target.checked)}
-                      className="accent-[#D9F22A] w-4 h-4 rounded cursor-pointer"
-                    />
-                    <span>PIX Instantâneo</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formCard}
-                      onChange={(e) => setFormCard(e.target.checked)}
-                      className="accent-[#D9F22A] w-4 h-4 rounded cursor-pointer"
-                    />
-                    <span>Cartão de Crédito</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cbe327] text-[#060A15] font-black text-xs uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? 'Gerando Link...' : 'Gerar Link de Pagamento'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+      {isCreateModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmitting) setIsCreateModalOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="create-payment-link-title" className="my-auto w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="mb-5"><div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#5ba63c]"><Link2 className="h-4 w-4" /> Oferta Stripe</div><h2 id="create-payment-link-title" className="mt-2 text-lg font-semibold text-slate-950">Criar link de pagamento</h2><p className="mt-1 text-xs leading-5 text-slate-500">A oferta será salva no Firestore e o checkout buscará preço/empresa no servidor.</p></div>
+        {formError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800" role="alert">{formError}</div>}
+        <form onSubmit={(event) => void handleCreateLink(event)} className="space-y-4">
+          <label className="block text-xs font-semibold text-slate-700">Empresa<select required value={formCompanyId} onChange={(event) => setFormCompanyId(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[#5ba63c] focus:ring-2 focus:ring-[#5ba63c]/15"><option value="" disabled>Selecione a empresa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label>
+          <label className="block text-xs font-semibold text-slate-700">Título da oferta<input required maxLength={120} value={formTitle} onChange={(event) => setFormTitle(event.target.value)} placeholder="Ex.: Consultoria estratégica" className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#5ba63c] focus:ring-2 focus:ring-[#5ba63c]/15" /></label>
+          <label className="block text-xs font-semibold text-slate-700">Descrição<textarea rows={3} maxLength={500} value={formDescription} onChange={(event) => setFormDescription(event.target.value)} placeholder="Informações claras para o comprador" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#5ba63c] focus:ring-2 focus:ring-[#5ba63c]/15" /></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block text-xs font-semibold text-slate-700">Preço do produto (R$)<input type="number" min="0.50" step="0.01" required value={formAmount} onChange={(event) => setFormAmount(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[#5ba63c] focus:ring-2 focus:ring-[#5ba63c]/15" /></label><label className="block text-xs font-semibold text-slate-700">Comissão de afiliado (%)<input type="number" min="0" max="100" step="0.1" value={commissionPercentage} onChange={(event) => setCommissionPercentage(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[#5ba63c] focus:ring-2 focus:ring-[#5ba63c]/15" /><span className="mt-1 block text-[10px] font-normal text-slate-500">A comissão só é aplicada se houver afiliação válida.</span></label></div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">Taxa da plataforma no checkout: {money(PLATFORM_FEE)}. A Stripe seleciona os métodos de pagamento disponíveis para a configuração da conta e do comprador.</div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" disabled={isSubmitting} onClick={() => setIsCreateModalOpen(false)} className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">Cancelar</button><button type="submit" disabled={isSubmitting || !companies.length} className="h-10 rounded-xl bg-[#3f7f33] px-4 text-sm font-semibold text-white transition hover:bg-[#326829] disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? 'Salvando…' : 'Salvar e gerar link'}</button></div>
+        </form>
+      </section></div>}
+    </main>
   );
 };

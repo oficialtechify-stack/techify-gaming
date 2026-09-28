@@ -1,22 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ActiveModal } from './types';
-import { Header } from './components/Header';
-import { HeroSection } from './components/HeroSection';
-import { StatsCounter } from './components/StatsCounter';
-import { HowItWorksSection } from './components/HowItWorksSection';
-import { AboutSection } from './components/AboutSection';
-import { CultureBanner } from './components/CultureBanner';
-import { SponsorshipsSection } from './components/SponsorshipsSection';
-import { ResponsibleGamingSection } from './components/ResponsibleGamingSection';
-import { FooterMarquee } from './components/FooterMarquee';
 import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
-import { 
-  HeroAiBanner, 
-  CodeVibeIntegrationsSection, 
-  FaqSection 
-} from './components/ModernLandingSections';
-import { MarketFeeComparisonSection } from './components/MarketFeeComparisonSection';
 import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
@@ -26,27 +11,13 @@ import { CompanyPlan } from './types/platform';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliateTracking';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
-import { MobileOnboardingView } from './components/mobile/MobileOnboardingView';
+import LeadspayLanding from './components/LeadspayLanding';
+import './styles/leadspay-landing.css';
 
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [viewPlatform, setViewPlatform] = useState<boolean>(false);
   const { isAuthenticated, currentUser } = useAuth();
-  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 768;
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobileScreen(window.innerWidth < 768);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Direct checkout link state
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -54,7 +25,6 @@ function MainApp() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [isThankYouPage, setIsThankYouPage] = useState<boolean>(false);
   const [affiliateRef, setAffiliateRef] = useState<string>('');
-  const [checkoutApiKey, setCheckoutApiKey] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -71,10 +41,6 @@ function MainApp() {
           return;
         }
 
-        const rawKey = params.get('apiKey') || params.get('x-api-key') || params.get('key');
-
-        if (rawKey) setCheckoutApiKey(rawKey);
-        
         // 1. Capturar código do afiliado via Cookie de 15 dias e localStorage
         const capturedRef = handleAffiliateTracking();
         if (capturedRef) {
@@ -106,46 +72,11 @@ function MainApp() {
           }
         }
 
-        // 3. Suporte a Valor Livre / Cobrança Dinâmica (sem precisar cadastrar plano no Firestore)
-        const rawAmountParam = params.get('amount') || params.get('valor') || params.get('price');
-        const rawDescParam = params.get('description') || params.get('descricao') || params.get('nome') || params.get('name') || params.get('produto');
-
-        if (rawAmountParam) {
-          const parsedAmount = parseFloat(rawAmountParam.replace(',', '.'));
-          if (!isNaN(parsedAmount) && parsedAmount > 0) {
-            let cleanDesc = 'Pagamento Seguro';
-            if (rawDescParam) {
-              try {
-                cleanDesc = decodeURIComponent(rawDescParam.replace(/\+/g, ' ')).trim();
-              } catch (_) {
-                cleanDesc = rawDescParam.replace(/\+/g, ' ').trim();
-              }
-            }
-
-            const dynamicPlan: CompanyPlan = {
-              id: targetPlanId || 'checkout-dinamico',
-              name: cleanDesc,
-              description: cleanDesc,
-              priceSetup: parsedAmount,
-              priceMonthly: parsedAmount,
-              commissionPercentage: 0,
-              commissionValue: 0,
-              features: ['Acesso Imediato', 'Pagamento PIX Seguro', 'Emissão D+9'],
-              companyId: 'leadspay',
-              companyName: 'LeadsPay',
-              companyLogo: '',
-              bannerImage: '',
-              category: 'Cobrança Dinâmica',
-              paymentType: 'Único',
-              totalSales: 0,
-              status: 'Ativo'
-            };
-
-            setCheckoutPlan(dynamicPlan);
-            setIsLoadingCheckout(false);
-            setCheckoutError(null);
-            return;
-          }
+        // Never trust price/description parameters from the URL for a charge.
+        const hasDynamicAmount = params.has('amount') || params.has('valor') || params.has('price');
+        if (hasDynamicAmount && !targetPlanId) {
+          setCheckoutError('Cobranças com valor livre não estão habilitadas. Use um link de uma oferta cadastrada pela empresa.');
+          return;
         }
 
         // 4. Se houver link de plano/checkout pré-cadastrado, carrega a oferta do Firestore
@@ -203,7 +134,7 @@ function MainApp() {
       <div className="min-h-screen bg-[#060A15] flex flex-col items-center justify-center p-6 text-white text-center">
         <div className="w-12 h-12 border-4 border-[#208b68] border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-xl font-bold font-['Syne']">Carregando Checkout Seguro...</h2>
-        <p className="text-sm text-white/60 mt-1">Ambiente criptografado Asaas & LeadsPay</p>
+        <p className="text-sm text-white/60 mt-1">Checkout seguro da Stripe</p>
       </div>
     );
   }
@@ -232,7 +163,6 @@ function MainApp() {
         <CustomCheckoutPage
           plan={checkoutPlan}
           affiliateRef={affiliateRef}
-          apiKey={checkoutApiKey}
           onBack={() => {
             setCheckoutPlan(null);
             if (typeof window !== 'undefined' && window.history) {
@@ -293,78 +223,9 @@ function MainApp() {
     );
   }
 
-  // Se for celular / tela mobile (< 768px), substitui a landing page inteira pela experiência de onboarding mobile oficial
-  if (isMobileScreen) {
-    return (
-      <div className="w-full h-full min-h-[100dvh] bg-[#030605] text-white relative overflow-hidden">
-        <MobileOnboardingView
-          onOpenModal={handleOpenModal}
-          onOpenPlatform={handleOpenPlatform}
-        />
-
-        {/* Interactive Modals (Login, Register Affiliate, Register Company, Forgot Password) */}
-        <Modals
-          activeModal={activeModal}
-          onClose={handleCloseModal}
-          onLoginSuccess={handleLoginSuccess}
-        />
-
-        {/* LGPD Cookie Consent Banner */}
-        <CookieConsentBanner />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#060A15] text-white flex flex-col selection:bg-[#D9F22A] selection:text-[#060A15] relative overflow-hidden">
-      {/* Background Decorative Ambient Blur Spots */}
-      <div className="fixed top-0 left-1/4 w-[700px] h-[700px] bg-[#D9F22A]/[0.07] rounded-full blur-[160px] pointer-events-none -z-20" />
-      <div className="fixed bottom-1/3 right-10 w-[600px] h-[600px] bg-[#D9F22A]/[0.05] rounded-full blur-[180px] pointer-events-none -z-20" />
-      <div className="fixed top-2/3 left-10 w-[500px] h-[500px] bg-[#1e3a8a]/[0.08] rounded-full blur-[180px] pointer-events-none -z-20" />
-
-      {/* Main Header / Navigation */}
-      <Header 
-        onOpenModal={handleOpenModal} 
-        onOpenPlatform={handleOpenPlatform} 
-      />
-
-      {/* Main Content Sections */}
-      <main className="flex-grow">
-        <HeroSection 
-          onOpenModal={handleOpenModal} 
-          onOpenPlatform={handleOpenPlatform} 
-        />
-        <StatsCounter />
-
-        {/* Section Image 2: "Construa seu produto. A gente ajuda a vender." */}
-        <HeroAiBanner onOpenPlatform={handleOpenPlatform} />
-
-        {/* Section Image 3: "Integre como quiser! Code, vibe-code, no-code!" */}
-        <CodeVibeIntegrationsSection />
-
-        <AboutSection />
-        <HowItWorksSection onOpenModal={handleOpenModal} />
-        
-        {/* Seção 2: Comparativo de Mercado (Quebra de Objeção - LeadsPay vs Kiwify, Cakto, Hotmart) */}
-        <MarketFeeComparisonSection 
-          onOpenModal={handleOpenModal} 
-          onOpenPlatform={handleOpenPlatform} 
-        />
-
-        <SponsorshipsSection 
-          onOpenPlatform={handleOpenPlatform} 
-          onOpenRegisterCompany={() => handleOpenModal('register_company')} 
-        />
-        <CultureBanner />
-
-        {/* Section Image 7: "Tem dúvidas? Relaxa, nós temos as respostas." (FAQ Accordion) */}
-        <FaqSection />
-
-        <ResponsibleGamingSection onOpenModal={handleOpenModal} />
-      </main>
-
-      {/* Footer with Marquee & Links */}
-      <FooterMarquee onOpenModal={handleOpenModal} />
+    <div className="min-h-screen">
+      <LeadspayLanding onOpenModal={handleOpenModal} onOpenPlatform={handleOpenPlatform} />
 
       {/* Interactive Modals (Login, Register Affiliate, Register Company, Forgot Password) */}
       <Modals

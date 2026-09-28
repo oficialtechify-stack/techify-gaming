@@ -11,14 +11,16 @@ import {
   Firestore 
 } from 'firebase/firestore';
 
+const firebaseEnv = typeof process !== "undefined" ? process.env : ((import.meta as any).env ?? {});
+
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyBZY9m-CFG7-l9H1bptd4eGcd6IL_aEWIM",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "techify-gaming-106fe.firebaseapp.com",
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "techify-gaming-106fe",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "techify-gaming-106fe.firebasestorage.app",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "247058420839",
-  appId: process.env.VITE_FIREBASE_APP_ID || "1:247058420839:web:436355c69a6026be9b70c2",
-  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || "G-3SB1FEBFNZ"
+  apiKey: firebaseEnv.VITE_FIREBASE_API_KEY || "AIzaSyBZY9m-CFG7-l9H1bptd4eGcd6IL_aEWIM",
+  authDomain: firebaseEnv.VITE_FIREBASE_AUTH_DOMAIN || "techify-gaming-106fe.firebaseapp.com",
+  projectId: firebaseEnv.VITE_FIREBASE_PROJECT_ID || "techify-gaming-106fe",
+  storageBucket: firebaseEnv.VITE_FIREBASE_STORAGE_BUCKET || "techify-gaming-106fe.firebasestorage.app",
+  messagingSenderId: firebaseEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "247058420839",
+  appId: firebaseEnv.VITE_FIREBASE_APP_ID || "1:247058420839:web:436355c69a6026be9b70c2",
+  measurementId: firebaseEnv.VITE_FIREBASE_MEASUREMENT_ID || "G-3SB1FEBFNZ"
 };
 
 function getDbInstance(customDb?: Firestore): Firestore {
@@ -34,12 +36,6 @@ export interface PartnerAuthResult {
   companyName?: string;
   companySlug?: string;
   email?: string;
-  asaasSubaccountId?: string;
-  subaccountId?: string;
-  asaasWalletId?: string;
-  walletId?: string;
-  asaasApiKey?: string;
-  subaccountApiKey?: string;
   webhookUrl?: string;
   status?: string;
   isApproved?: boolean;
@@ -58,6 +54,14 @@ export function generatePartnerApiKey(): string {
   return `lp_live_${timestamp}${randomPart1.slice(0, 8)}${randomPart2.slice(0, 8)}`;
 }
 
+function safePartnerData(data: Record<string, any>): Record<string, any> {
+  const safe = { ...data };
+  for (const key of ['apiKey', 'asaasApiKey', 'subaccountApiKey', 'asaasSubaccountId', 'asaasWalletId', 'subaccountId', 'subaccount_id', 'walletId']) {
+    delete safe[key];
+  }
+  return safe;
+}
+
 /**
  * Helper interno para resolver dados do parceiro (usuário + empresa vinculada)
  */
@@ -66,9 +70,6 @@ async function resolvePartnerDetails(
   data: Record<string, any>,
   db: Firestore
 ): Promise<PartnerAuthResult> {
-  let asaasSubaccountId = data.asaasSubaccountId || data.subaccountId || data.subaccount_id || null;
-  let asaasWalletId = data.asaasWalletId || data.walletId || null;
-  let asaasApiKey = data.asaasApiKey || data.subaccountApiKey || null;
   let webhookUrl = data.webhookUrl || data.postbackUrl || null;
   let companyId = data.companyId || null;
   let companyName = data.companyName || data.name || 'Parceiro LeadsPay';
@@ -82,15 +83,6 @@ async function resolvePartnerDetails(
       const compDoc = await getDoc(doc(db, 'companies', String(companyId)));
       if (compDoc.exists()) {
         const cData = compDoc.data();
-        if (!asaasSubaccountId) {
-          asaasSubaccountId = cData.asaasSubaccountId || cData.subaccountId || null;
-        }
-        if (!asaasWalletId) {
-          asaasWalletId = cData.asaasWalletId || cData.walletId || null;
-        }
-        if (!asaasApiKey) {
-          asaasApiKey = cData.asaasApiKey || cData.subaccountApiKey || null;
-        }
         if (!webhookUrl) {
           webhookUrl = cData.webhookUrl || cData.postbackUrl || null;
         }
@@ -112,15 +104,6 @@ async function resolvePartnerDetails(
         const compDoc = compSnap.docs[0];
         const cData = compDoc.data();
         companyId = compDoc.id;
-        if (!asaasSubaccountId) {
-          asaasSubaccountId = cData.asaasSubaccountId || cData.subaccountId || null;
-        }
-        if (!asaasWalletId) {
-          asaasWalletId = cData.asaasWalletId || cData.walletId || null;
-        }
-        if (!asaasApiKey) {
-          asaasApiKey = cData.asaasApiKey || cData.subaccountApiKey || null;
-        }
         if (!webhookUrl) {
           webhookUrl = cData.webhookUrl || cData.postbackUrl || null;
         }
@@ -142,21 +125,15 @@ async function resolvePartnerDetails(
     companyName,
     companySlug,
     email: data.email || '',
-    asaasSubaccountId: asaasSubaccountId || undefined,
-    subaccountId: asaasSubaccountId || undefined,
-    asaasWalletId: asaasWalletId || undefined,
-    walletId: asaasWalletId || undefined,
-    asaasApiKey: asaasApiKey || undefined,
-    subaccountApiKey: asaasApiKey || undefined,
     webhookUrl: webhookUrl || undefined,
     status,
     isApproved,
-    raw: data
+    raw: safePartnerData(data)
   };
 }
 
 /**
- * Valida se a chave de API do parceiro existe e retorna seus dados de conta e subconta Asaas.
+ * Valida uma chave de API LeadsPay e retorna somente dados necessários à integração.
  * Suporta busca nas coleções users, user_profiles e companies.
  */
 export async function validateApiKey(
@@ -209,16 +186,10 @@ export async function validateApiKey(
         companyName: cData.name || 'Empresa LeadsPay',
         companySlug: cData.slug || '',
         email: cData.email || '',
-        asaasSubaccountId: cData.asaasSubaccountId || cData.subaccountId || undefined,
-        subaccountId: cData.asaasSubaccountId || cData.subaccountId || undefined,
-        asaasWalletId: cData.asaasWalletId || cData.walletId || undefined,
-        walletId: cData.asaasWalletId || cData.walletId || undefined,
-        asaasApiKey: cData.asaasApiKey || cData.subaccountApiKey || undefined,
-        subaccountApiKey: cData.asaasApiKey || cData.subaccountApiKey || undefined,
         webhookUrl: cData.webhookUrl || cData.postbackUrl || undefined,
         status: cData.status || 'approved',
         isApproved: cData.verified === true || cData.status === 'approved',
-        raw: cData
+        raw: safePartnerData(cData)
       };
     }
 

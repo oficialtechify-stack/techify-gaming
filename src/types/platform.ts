@@ -25,10 +25,7 @@ export interface CompanyStartup {
   address?: string;
   hasNoCnpj?: boolean;
   docType?: 'CNPJ' | 'CPF' | 'MEI' | 'SEM_CNPJ';
-  asaasSubaccountId?: string;
-  asaasWalletId?: string;
-  subaccountId?: string;
-  walletId?: string;
+  companyDocType?: 'CNPJ' | 'CPF' | 'MEI' | 'SEM_CNPJ';
   apiKey?: string;
   webhookUrl?: string;
   documentType?: 'CNPJ' | 'MEI' | 'CPF';
@@ -45,7 +42,9 @@ export interface CompanyStartup {
   verified: boolean;
   environment?: 'development' | 'production'; // Padrão: 'development' (Dev Mode / Sandbox)
   kyc_status?: 'pending' | 'submitted' | 'verified'; // Status de homologação documental KYC
-  status?: 'pending' | 'approved' | 'rejected' | 'banned';
+  status?: 'draft' | 'pending' | 'approved' | 'rejected' | 'banned';
+  archived?: boolean;
+  archivedAt?: string;
   banned?: boolean;
   banReason?: string | null;
   bannedAt?: string | null;
@@ -53,6 +52,7 @@ export interface CompanyStartup {
   submittedByName?: string;
   submittedByEmail?: string;
   submittedAt?: string;
+  verificationSubmittedAt?: string;
   reviewedAt?: string;
   rejectionReason?: string;
   ownerId?: string;
@@ -144,8 +144,6 @@ export interface CompanyPlan {
   companyLogo: string;
   category: string;
   ownerId?: string;
-  asaasSubaccountId?: string | null;
-  asaasWalletId?: string | null;
   name: string;
   tagline?: string;
   description: string;
@@ -259,6 +257,7 @@ export interface SaleTransaction {
   buyerPhone?: string;
   buyerDocument?: string;
   buyerCpf?: string;
+  source?: 'stripe' | 'legacy' | string;
   dueDate?: string;
   paymentUrl?: string;
   ticket_url?: string;
@@ -310,8 +309,9 @@ export interface WithdrawalRequest {
   requestedAt: string;
   completedAt?: string;
   createdAt?: string;
-  endToEndId?: string; // ID E2E do PIX Asaas / Bacen
-  asaasTransferId?: string; // ID da transferência Asaas
+  endToEndId?: string;
+  stripeTransferId?: string;
+  stripePayoutId?: string;
   failureReason?: string;
   is_test?: boolean;
   environment?: 'development' | 'production';
@@ -336,8 +336,8 @@ export interface UserSellerProfile {
   email: string;
   role: string;
   avatar: string;
-  pixKey: string;
-  pixKeyType: string;
+  pixKey?: string;
+  pixKeyType?: string;
   availableBalance: number;
   pendingBalance: number;
   totalEarned: number;
@@ -376,8 +376,6 @@ export interface UserSellerProfile {
   companyCity?: string;
   companyCountry?: string;
   companyDocType?: 'CNPJ' | 'CPF' | 'MEI' | 'SEM_CNPJ';
-  asaasSubaccountId?: string;
-  asaasWalletId?: string;
   apiKey?: string;
   webhookUrl?: string;
   documentType?: 'CNPJ' | 'MEI' | 'CPF';
@@ -392,12 +390,20 @@ export interface UserSellerProfile {
   banReason?: string | null;
   bannedAt?: string | null;
   status?: string;
+  archived?: boolean;
+  archivedAt?: string;
+  statusBeforeBan?: string | null;
+  verifiedBeforeBan?: boolean | null;
   verificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected' | 'banned';
   environment?: 'development' | 'production';
   kyc_status?: 'pending' | 'submitted' | 'verified';
   verificationSubmittedAt?: string;
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
+  communicationPreferences?: {
+    inApp?: { enabled: boolean; updatedAt?: string; consentVersion?: string; source?: string };
+  };
+  inAppNotificationsEnabled?: boolean;
   updatedAt?: string;
   // Plano de Assinatura LeadsPay
   plan?: string;
@@ -448,6 +454,8 @@ export interface VerificationRequest {
   rejectionReason?: string;
   submittedAt: string;
   reviewedAt?: string;
+  archived?: boolean;
+  archivedAt?: string;
 }
 
 export interface AffiliateLinkItem {

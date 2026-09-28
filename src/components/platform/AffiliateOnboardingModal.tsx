@@ -127,22 +127,22 @@ export const AffiliateOnboardingModal: React.FC<AffiliateOnboardingModalProps> =
                 <p className="text-xs text-white/80 leading-relaxed">
                   Sabemos o quanto o mercado digital pode ser desafiador quando se está sozinho. Por isso, 
                   estruturamos a LeadsPay para oferecer <span className="text-white font-semibold">segurança matemática</span>, 
-                  <span className="text-white font-semibold"> saques rápidos sem enrolação</span> e uma rede humana que te apoia em cada etapa.
+                  <span className="text-white font-semibold"> repasses acompanhados no painel</span> e uma rede humana que te apoia em cada etapa.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                 <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                   <div className="text-lg font-black text-[#D9F22A] font-['Syne']">D+9</div>
-                  <div className="text-[11px] text-white/70 font-medium">Saque PIX Líquido</div>
+                  <div className="text-[11px] text-white/70 font-medium">Prazo de repasse*</div>
                 </div>
                 <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                   <div className="text-lg font-black text-[#D9F22A] font-['Syne']">100%</div>
                   <div className="text-[11px] text-white/70 font-medium">Split Automático</div>
                 </div>
                 <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                  <div className="text-lg font-black text-[#D9F22A] font-['Syne']">R$ 0,00</div>
-                  <div className="text-[11px] text-white/70 font-medium">Zero Mensalidade</div>
+                  <div className="text-lg font-black text-[#D9F22A] font-['Syne']">Stripe</div>
+                  <div className="text-[11px] text-white/70 font-medium">Conta conectada</div>
                 </div>
               </div>
             </div>
@@ -171,10 +171,10 @@ export const AffiliateOnboardingModal: React.FC<AffiliateOnboardingModalProps> =
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-white uppercase tracking-wider font-['Syne']">
-                      Split Instantâneo e Transparente
+                      Split Automático e Transparente
                     </h3>
                     <p className="text-xs text-white/70 leading-relaxed mt-0.5">
-                      No momento exato em que o cliente paga via PIX ou Cartão, a LeadsPay divide o valor e credita sua comissão automaticamente. Sem depender de repasse manual do produtor.
+                      Após a confirmação do pagamento pelo webhook, o valor é dividido conforme a oferta e a afiliação. A transferência é programada para D+9; a Stripe gerencia o payout bancário da conta conectada.
                     </p>
                   </div>
                 </div>
@@ -188,7 +188,7 @@ export const AffiliateOnboardingModal: React.FC<AffiliateOnboardingModalProps> =
                       Marketplace de Startups & Infoprodutos
                     </h3>
                     <p className="text-xs text-white/70 leading-relaxed mt-0.5">
-                      Produtos e assinaturas validados com páginas de alta conversão, order bumps e funis prontos para você se afiliar em 1 clique.
+                      Ofertas aprovadas com checkout seguro. No piloto atual, o checkout processa pagamentos únicos; assinaturas recorrentes ainda não estão disponíveis.
                     </p>
                   </div>
                 </div>
@@ -199,10 +199,10 @@ export const AffiliateOnboardingModal: React.FC<AffiliateOnboardingModalProps> =
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-white uppercase tracking-wider font-['Syne']">
-                      Saques Rápidos em D+9 via PIX
+                      Repasses pela Stripe Connect
                     </h3>
                     <p className="text-xs text-white/70 leading-relaxed mt-0.5">
-                      Transfira seus lucros com agilidade diretamente para a sua chave PIX com histórico auditável e acompanhamento em tempo real.
+                      Conecte sua conta Stripe Express. Os repasses das vendas elegíveis seguem o prazo configurado (D+9); pagamentos ao banco seguem as regras e verificações da Stripe.
                     </p>
                   </div>
                 </div>
