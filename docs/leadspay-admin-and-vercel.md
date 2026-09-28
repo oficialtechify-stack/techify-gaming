@@ -6,8 +6,8 @@
 - Em 28/09/2026, confirmei que os nomes `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_PROJECT_ID`, `STRIPE_TEST_SECRET_KEY` e `STRIPE_WEBHOOK_SECRET` já existem no target **Preview** desse projeto; a Vercel não revelou os valores (nem tentei descriptografá-los). Você informou que já rotacionou a chave privada Firebase e o secret do webhook.
 - Ainda não aparecem no target Preview `VITE_STRIPE_PUBLISHABLE_KEY` nem `CRON_SECRET`/`STRIPE_RELEASE_CRON_SECRET`. O primeiro é necessário para montar o formulário Stripe; o segundo apenas para invocar manualmente o cron protegido de releases.
 - Os segredos acima estão no target Preview sem filtro explícito por branch, portanto podem ser usados pela Preview da branch `feature/leadspay-stripe-connect`. `LEADSPAY_ADMIN_UIDS` que aparece na lista está limitado a outra branch (`feature/leadspay-landing`) e não substitui a verificação do Admin no backend.
-- Deployment original mais recente verificado: `READY`, commit `ab40943` (`fix: align affiliate approval and Stripe Connect flows`), URL estável de branch `techify-gaming-git-feature-leadspay-dca63e-rickzinxxxs-projects.vercel.app`.
-- **`preview.techify.sbs` não resolvia via DNS** quando testei. Até corrigir o DNS e apontar o domínio para o projeto certo, use a URL Preview estável da branch acima. Não altere Production.
+- Preview mais recente verificado no projeto original: **`READY`**, commit `13e36ce` (`fix: harden payments and reversible company archive`), URL do branch `techify-gaming-git-feature-leadspay-dca63e-rickzinxxxs-projects.vercel.app`. A página ainda está protegida pelo SSO da Vercel.
+- **`preview.techify.sbs` permanece vinculado ao projeto separado `leadspay-stripe-connect-preview`**, e a tentativa de anexá-lo ao projeto `techify-gaming` foi recusada porque o domínio já está em uso. A consulta DNS não retornou endereço. Para resolver, remova esse domínio do projeto duplicado, adicione-o a `techify-gaming` associado à branch `feature/leadspay-stripe-connect` e configure o CNAME exatamente para o destino que a Vercel mostrar. Até isso estar concluído, use a URL estável Preview do branch acima. Não altere Production.
 - Há um projeto Vercel separado chamado `leadspay-stripe-connect-preview`; não use esse projeto para esta rodada. Também existe `leadspaybank`, mas ele não tem as variáveis de Stripe/Firebase necessárias.
 - A aplicação Firebase que o backend aceita é **`techify-gaming-106fe`**.
 - O backend Stripe desta branch é deliberadamente **somente teste**: a chave precisa começar por `sk_test_`. Não use chaves live.
@@ -101,7 +101,7 @@ O handler está em **`POST /api/stripe/webhook`**. Primeiro pegue a URL completa
 
 Você informou que já rotacionou a chave privada do Firebase e o signing secret do webhook. Obrigado: **não reutilize os valores anteriores**. Os nomes dessas variáveis estão configurados em Preview no projeto `techify-gaming`, sem que seus valores tenham sido exibidos. Se a chave Firebase antiga também era usada em Production ou outro serviço, atualize cada consumidor legítimo antes de revogá-la; esta homologação não altera Production.
 
-As verificações restantes são cadastrar `VITE_STRIPE_PUBLISHABLE_KEY` com uma chave pública de teste `pk_test_…`, gerar `CRON_SECRET` se for necessário testar manualmente o endpoint D+9, e aguardar o redeploy desta branch. O DNS de `preview.techify.sbs` ainda precisa ser corrigido antes de voltar a usar esse hostname. Não envie valores de chaves aqui.
+As verificações restantes são cadastrar `VITE_STRIPE_PUBLISHABLE_KEY` com uma chave pública de teste `pk_test_…`; gerar `CRON_SECRET` apenas se for necessário testar manualmente o endpoint D+9; transferir o domínio de Preview do projeto duplicado para `techify-gaming`; e corrigir o registro DNS conforme o destino exibido pela Vercel. O código está no Preview `READY`; nenhuma regra foi publicada no Firestore compartilhado. Não envie valores de chaves aqui.
 
 ## Referências oficiais
 
