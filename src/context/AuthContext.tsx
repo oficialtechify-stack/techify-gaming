@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { COLLECTIONS, sanitizeForFirestore } from '../services/firestoreService';
 import { 
@@ -16,6 +16,7 @@ import {
 } from '../services/authService';
 import { UserSellerProfile, UserRoleMode } from '../types/platform';
 import { INITIAL_USER_PROFILE, isSuperAdminEmail } from '../data/platformData';
+import { applyVerificationRequest, resolveProfileRole } from '../../lib/profileEligibility';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -56,27 +57,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
         unsubProfile = onSnapshot(profileRef, async (snap) => {
           if (snap.exists()) {
-            const data = snap.data() as Partial<UserSellerProfile>;
+            let data = snap.data() as Partial<UserSellerProfile>;
             const userEmail = (user.email || data.email || '').trim().toLowerCase();
             const isAdminAccount = isSuperAdminEmail(userEmail);
+            try {
+              const requestSnap = await getDoc(doc(db, COLLECTIONS.VERIFICATIONS, user.uid));
+              if (requestSnap.exists()) {
+                data = applyVerificationRequest(data as Record<string, unknown>, requestSnap.data() as Record<string, unknown>) as Partial<UserSellerProfile>;
+              }
+            } catch (error) {
+              console.warn('[AuthContext] Não foi possível carregar o status da solicitação do próprio perfil.', error);
+            }
 
-            // Identificar se a conta é estritamente Empresa ou Afiliado
-            const isCompanyAccount = !isAdminAccount && (
-              data.accountType === 'empresa' ||
-              data.hasCompanyProfile === true ||
-              Boolean(data.companyId) ||
-              Boolean(data.companyName) ||
-              data.activeRoleMode === 'empresa' ||
-              (typeof data.role === 'string' && (
-                data.role.toLowerCase().includes('startup') || 
-                data.role.toLowerCase().includes('empresa') || 
-                data.role.toLowerCase().includes('produtor') ||
-                data.role.toLowerCase().includes('fundador')
-              )) ||
-              (typeof data.partnerLevel === 'string' && data.partnerLevel.toLowerCase().includes('empresa'))
-            );
-
-            const resolvedRoleMode: UserRoleMode = isAdminAccount ? 'admin' : (isCompanyAccount ? 'empresa' : 'afiliado');
+            // Explicit accountType/activeRoleMode wins over stale company fields.
+            // Admin access remains enforced independently by the allowlisted email.
+            const preferredRole = data.activeRoleMode === 'empresa' || data.activeRoleMode === 'afiliado' ? data.activeRoleMode : undefined;
+            const resolvedProfileRole = resolveProfileRole(data as Record<string, unknown>, preferredRole);
+            const resolvedRoleMode: UserRoleMode = isAdminAccount && resolvedProfileRole === 'admin' ? 'admin' : resolvedProfileRole;
+            const resolvedAccountType: UserSellerProfile['accountType'] = isAdminAccount
+              ? 'admin'
+              : data.hasAffiliateProfile === true && data.hasCompanyProfile === true
+                ? 'ambos'
+                : resolvedProfileRole;
+            const isCompanyAccount = resolvedProfileRole === 'empresa';
 
             const safeProfile: UserSellerProfile = {
               ...INITIAL_USER_PROFILE,
@@ -92,9 +95,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               targetGoal: typeof data.targetGoal === 'number' && !isNaN(data.targetGoal) ? data.targetGoal : (isCompanyAccount ? 500000 : 100000),
               currentSalesProgress: typeof data.currentSalesProgress === 'number' && !isNaN(data.currentSalesProgress) ? data.currentSalesProgress : 0,
               partnerLevel: data.partnerLevel || (isAdminAccount ? 'Super Administrador' : (isCompanyAccount ? 'Empresa Parceira' : 'Afiliado Starter')),
-              accountType: resolvedRoleMode,
-              hasAffiliateProfile: !isAdminAccount && !isCompanyAccount,
-              hasCompanyProfile: !isAdminAccount && isCompanyAccount,
+              accountType: resolvedAccountType,
+              hasAffiliateProfile: data.hasAffiliateProfile === true || (!isAdminAccount && resolvedProfileRole === 'afiliado'),
+              hasCompanyProfile: data.hasCompanyProfile === true || (!isAdminAccount && resolvedProfileRole === 'empresa'),
               activeRoleMode: resolvedRoleMode,
               role: data.role || (isAdminAccount ? 'Administrador do Sistema' : (isCompanyAccount ? 'Fundador / Startup' : 'Afiliado de Alta Performance')),
               plan: data.plan,
@@ -199,7 +202,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await loginUser(email, password, preferredRole);
       setCurrentUser(res.user);
       setUserProfile(res.profile);
-      const effectiveRole = preferredRole || res.profile.activeRoleMode || res.profile.accountType || 'afiliado';
+      const effectiveRole: UserRoleMode = res.profile.activeRoleMode === 'admin' || res.profile.activeRoleMode === 'empresa' || res.profile.activeRoleMode === 'afiliado'
+        ? res.profile.activeRoleMode
+        : res.profile.accountType === 'admin' ? 'admin' : 'afiliado';
       setUserRole(effectiveRole);
       return res;
     } finally {

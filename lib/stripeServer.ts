@@ -25,7 +25,9 @@ export function getStripeWebhookSecret(): string {
 }
 
 export function getLeadspayBaseUrl(): string {
-  const raw = process.env.LEADSPAY_BASE_URL?.trim() || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
+  const deploymentUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+  const isPreview = process.env.VERCEL_ENV === 'preview';
+  const raw = (isPreview && deploymentUrl) || process.env.LEADSPAY_BASE_URL?.trim() || deploymentUrl;
   if (!raw) throw new Error('LEADSPAY_BASE_URL não está configurada.');
   const url = new URL(raw);
   if (url.protocol !== 'https:' && !(url.hostname === 'localhost' && process.env.NODE_ENV !== 'production')) {

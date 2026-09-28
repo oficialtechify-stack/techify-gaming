@@ -1,6 +1,7 @@
 import { verifyFirebaseIdentity, getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient } from '../../lib/stripeServer.js';
 import { calculateSplit, toCents } from '../../lib/stripeSplit.js';
+import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
@@ -57,7 +58,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const companyProfileSnap = await db.collection('user_profiles').doc(companyOwnerId).get();
-    const companyProfile = companyProfileSnap.data();
+    const companyRequestSnap = await db.collection('verification_requests').doc(companyOwnerId).get();
+    const companyProfileRaw = companyProfileSnap.data();
+    const companyProfile = companyProfileRaw
+      ? applyVerificationRequest(companyProfileRaw, companyRequestSnap.exists ? companyRequestSnap.data()! : null) as Record<string, any>
+      : undefined;
+    if (!companyProfile || !profileHasRole(companyProfile, 'empresa') || !profileRoleIsApproved(companyProfile, 'empresa')) {
+      return fail(res, 409, 'O perfil da empresa responsável precisa estar aprovado para vender pela Stripe.');
+    }
     const companyAccountId = String(companyProfile?.stripeAccounts?.empresa || company.stripeAccountId || '');
     if (!companyAccountId) return fail(res, 409, 'A empresa ainda não conectou sua conta Stripe.');
 
@@ -74,7 +82,15 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           affiliateId = String(affiliation.affiliateId || affiliation.userId || affiliation.user_id || '');
           affiliatePercent = Number(affiliation.commissionPercentage ?? plan.commissionPercentage ?? 0);
           const affiliateProfileSnap = affiliateId ? await db.collection('user_profiles').doc(affiliateId).get() : null;
-          affiliateAccountId = String(affiliateProfileSnap?.data()?.stripeAccounts?.afiliado || '');
+          const affiliateRequestSnap = affiliateId ? await db.collection('verification_requests').doc(affiliateId).get() : null;
+          const affiliateProfileRaw = affiliateProfileSnap?.data();
+          const affiliateProfile = affiliateProfileRaw
+            ? applyVerificationRequest(affiliateProfileRaw, affiliateRequestSnap?.exists ? affiliateRequestSnap.data()! : null) as Record<string, any>
+            : undefined;
+          if (affiliatePercent > 0 && (!affiliateProfile || !profileHasRole(affiliateProfile, 'afiliado') || !profileRoleIsApproved(affiliateProfile, 'afiliado'))) {
+            return fail(res, 409, 'O perfil do afiliado vinculado precisa estar aprovado antes de receber comissões.');
+          }
+          affiliateAccountId = String(affiliateProfile?.stripeAccounts?.afiliado || '');
           if (affiliatePercent > 0 && !affiliateAccountId) return fail(res, 409, 'O afiliado vinculado ainda não conectou sua conta Stripe.');
         }
       }

@@ -14,6 +14,7 @@ import {
   archiveEntityInFirebase,
   restoreArchivedEntityInFirebase
 } from '../../services/firestoreService';
+import { profileHasRole, profileRoleStatus } from '../../../lib/profileEligibility';
 import { 
   Database, 
   RefreshCw, 
@@ -65,6 +66,15 @@ import { AdminModalImagesManager } from './AdminModalImagesManager';
 
 type MainAdminTab = 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'modal_backgrounds' | 'database_explorer';
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'banned' | 'archived' | 'all';
+
+const combineReviewStatus = (...values: unknown[]): Exclude<StatusFilter, 'all' | 'archived'> => {
+  const statuses = values.map(value => String(value || '').toLowerCase());
+  if (statuses.includes('banned')) return 'banned';
+  if (statuses.includes('rejected') || statuses.includes('revoked')) return 'rejected';
+  if (statuses.includes('pending') || statuses.includes('submitted') || statuses.includes('under_review')) return 'pending';
+  if (statuses.includes('approved') || statuses.includes('active') || statuses.includes('verified')) return 'approved';
+  return 'pending';
+};
 
 interface SecurityTarget {
   id: string;
@@ -293,6 +303,7 @@ export const DatabaseManagerView: React.FC = () => {
       // Atualização imediata em todos os estados locais preservando o perfil real
       setVerifications(prev => prev.map(v => (v.userId === userId || v.id === userId) ? { 
         ...v, 
+        roleType: 'afiliado',
         status: 'approved', 
         verified: true, 
         kyc_status: 'verified', 
@@ -302,6 +313,8 @@ export const DatabaseManagerView: React.FC = () => {
       
       setRegisteredProfiles(prev => prev.map(p => (p.userId === userId || p.id === userId) ? { 
         ...p, 
+        affiliateVerificationStatus: 'approved',
+        verificationRoleType: 'afiliado',
         verified: true, 
         verificationStatus: 'approved', 
         kyc_status: 'verified', 
@@ -350,8 +363,8 @@ export const DatabaseManagerView: React.FC = () => {
     try {
       if (type === 'user') {
         await rejectVerificationInFirebase(id, reason);
-        setVerifications(prev => prev.map(v => (v.userId === id || v.id === id) ? { ...v, status: 'rejected', rejectionReason: reason, verified: false } : v));
-        setRegisteredProfiles(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, verified: false, verificationStatus: 'rejected', rejectionReason: reason } : p));
+        setVerifications(prev => prev.map(v => (v.userId === id || v.id === id) ? { ...v, roleType: 'afiliado', status: 'rejected', rejectionReason: reason, verified: false, kyc_status: 'rejected' } : v));
+        setRegisteredProfiles(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, affiliateVerificationStatus: 'rejected', verificationRoleType: 'afiliado', verified: false, verificationStatus: 'rejected', kyc_status: 'rejected', rejectionReason: reason, verificationRejectionReason: reason } : p));
         setStatusMessage(`Validação do afiliado "${name}" recusada com motivo registrado.`);
       } else {
         await rejectCompanyInFirebase(id, reason);
@@ -642,25 +655,15 @@ export const DatabaseManagerView: React.FC = () => {
         return;
       }
 
-      const isVerified = p.verified === true || p.verificationStatus === 'approved' || p.kyc_status === 'verified';
+      const roleStatus = profileRoleStatus(p as unknown as Record<string, unknown>, 'afiliado');
+      const isVerified = roleStatus === 'approved';
       const isBanned = p.banned === true;
-      let status: any = 'pending';
-      if (isBanned) status = 'banned';
-      else if (p.verificationStatus === 'rejected') status = 'rejected';
-      else if (isVerified) status = 'approved';
-      else status = 'pending';
+      const status: StatusFilter = isBanned ? 'banned' : roleStatus === 'rejected' ? 'rejected' : isVerified ? 'approved' : 'pending';
 
       const existing = map.get(key);
       if (existing) {
         // FUNDE SEMPRE! NUNCA DEIXE NOME, FOTO OU DADOS CADASTRAIS VAZIOS
-        const profileStatus = p.banned === true
-          ? 'banned'
-          : ['approved', 'pending', 'rejected', 'banned'].includes(p.verificationStatus)
-            ? p.verificationStatus
-            : isVerified
-              ? 'approved'
-              : null;
-        const resolvedStatus = profileStatus || existing.status || status;
+        const resolvedStatus = combineReviewStatus(existing.status, roleStatus, isBanned ? 'banned' : '');
 
         map.set(key, {
           ...existing,
@@ -685,8 +688,8 @@ export const DatabaseManagerView: React.FC = () => {
           submittedAt: existing.submittedAt || p.submittedAt || p.createdAt || p.updatedAt || new Date().toISOString()
         } as VerificationRequest);
       } else {
-        if (!isVerified && p.verificationStatus !== 'pending' && p.verificationStatus !== 'rejected' && p.verificationStatus !== 'banned') return;
-        if (p.verificationStatus === 'pending' && !p.verificationSubmittedAt && !p.submittedAt) return;
+        if (!['approved', 'pending', 'rejected', 'banned'].includes(status)) return;
+        if (status === 'pending' && !p.verificationSubmittedAt && !p.submittedAt) return;
         map.set(key, {
           id: key,
           userId: key,
@@ -815,27 +818,15 @@ export const DatabaseManagerView: React.FC = () => {
       const profileOwnerId = String(p.userId || p.id || '').trim();
       if (!profileOwnerId || (validAuthUids !== null && !validAuthUids.has(profileOwnerId))) return;
 
-      const isCompanyProfile = p.accountType === 'empresa' ||
-                               p.hasCompanyProfile === true ||
-                               Boolean(p.companyId?.trim()) ||
-                               Boolean(p.companyName?.trim()) ||
-                               p.activeRoleMode === 'empresa' ||
-                               p.verificationRoleType === 'empresa' ||
-                               (typeof p.role === 'string' && (
-                                 p.role.toLowerCase().includes('startup') || 
-                                 p.role.toLowerCase().includes('empresa') || 
-                                 p.role.toLowerCase().includes('produtor') ||
-                                 p.role.toLowerCase().includes('fundador')
-                               )) ||
-                               (typeof p.partnerLevel === 'string' && p.partnerLevel.toLowerCase().includes('empresa'));
-
-      if (!isCompanyProfile || p.verificationStatus === 'unsubmitted' || p.verificationStatus === 'draft') return;
+      const isCompanyProfile = profileHasRole(p as Record<string, unknown>, 'empresa');
+      const companyRoleStatus = profileRoleStatus(p as Record<string, unknown>, 'empresa');
+      if (!isCompanyProfile || companyRoleStatus === 'unsubmitted' || companyRoleStatus === 'draft') return;
 
         const ownerId = String(p.userId || p.id || '').trim();
       const compId = ownerId || p.companyId;
       if (compId && p.companyId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
         const existing = map.get(compId);
-        const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
+        const isApprv = companyRoleStatus === 'approved';
         const companyDisplayName = p.companyName?.trim() || p.name?.trim() || 'Empresa Cadastrada';
 
         if (existing) {
@@ -851,12 +842,12 @@ export const DatabaseManagerView: React.FC = () => {
             email: existing.email || p.companyEmail || p.email || '',
             whatsapp: existing.whatsapp || p.companyWhatsapp || p.whatsapp || p.phone || '',
             ownerId: existing.ownerId || p.userId || p.id,
-            status: existing.status || (isApprv ? 'approved' : (p.verificationStatus || 'pending')),
+            status: combineReviewStatus(existing.status, companyRoleStatus),
             verified: Boolean(existing.verified || isApprv)
           });
         } else {
-          if (!isApprv && p.verificationStatus !== 'pending' && p.verificationStatus !== 'rejected' && p.verificationStatus !== 'banned') return;
-          if (p.verificationStatus === 'pending' && !p.verificationSubmittedAt && !p.submittedAt) return;
+          if (!['approved', 'pending', 'rejected', 'banned'].includes(companyRoleStatus)) return;
+          if (companyRoleStatus === 'pending' && !p.verificationSubmittedAt && !p.submittedAt) return;
           map.set(compId, {
             id: p.companyId || compId,
             name: companyDisplayName,
@@ -873,7 +864,7 @@ export const DatabaseManagerView: React.FC = () => {
             whatsapp: p.companyWhatsapp || p.whatsapp || p.phone || '',
             ownerId: p.userId || p.id,
             submittedBy: p.userId || p.id,
-            status: isApprv ? 'approved' : (p.verificationStatus || 'pending'),
+            status: companyRoleStatus,
             verified: isApprv,
             totalPlansCount: 0,
             totalAffiliatesCount: 0,
@@ -891,16 +882,18 @@ export const DatabaseManagerView: React.FC = () => {
   const getStatusOfVerification = (v: VerificationRequest): StatusFilter => {
     if (v.archived) return 'archived';
     if (v.banned) return 'banned';
-    if (v.status === 'approved' || (v as any).status === 'active' || (v as any).verified || (v as any).kyc_status === 'verified') return 'approved';
     if (v.status === 'rejected') return 'rejected';
+    if (v.status === 'pending' || (v as any).status === 'submitted' || (v as any).status === 'under_review') return 'pending';
+    if (v.status === 'approved' || (v as any).status === 'active' || (v as any).verified || (v as any).kyc_status === 'verified') return 'approved';
     return 'pending';
   };
 
   const getStatusOfCompany = (c: CompanyStartup): StatusFilter => {
     if (c.archived) return 'archived';
     if (c.banned) return 'banned';
-    if (c.status === 'approved' || (c.status as string) === 'active' || c.verified || (c as any).kyc_status === 'verified') return 'approved';
     if (c.status === 'rejected') return 'rejected';
+    if (c.status === 'pending' || (c.status as string) === 'submitted' || (c.status as string) === 'under_review') return 'pending';
+    if (c.status === 'approved' || (c.status as string) === 'active' || c.verified || (c as any).kyc_status === 'verified') return 'approved';
     return 'pending';
   };
 

@@ -1,4 +1,5 @@
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
+import { profileHasRole, profileRoleStatus } from '../../lib/profileEligibility.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown };
@@ -54,13 +55,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil LeadsPay não encontrado. Atualize a página e tente novamente.' });
     const current = profileSnap.data()!;
     const accountType = String(current.accountType || '').toLowerCase();
-    const ownsRole = role === 'empresa'
-      ? accountType === 'empresa' || accountType === 'ambos' || current.hasCompanyProfile === true
-      : accountType === 'afiliado' || accountType === 'ambos' || current.hasAffiliateProfile === true;
-    if (!ownsRole || accountType === 'admin') return res.status(403).json({ error: 'O tipo do perfil não corresponde à conta autenticada.' });
+    if (!profileHasRole(current, role)) return res.status(403).json({ error: 'O tipo do perfil não corresponde à conta autenticada.' });
     if (current.banned === true || current.status === 'banned') return res.status(403).json({ error: 'Esta conta não pode enviar cadastros.' });
-    if (current.verified === true || current.verificationStatus === 'approved') return res.status(409).json({ error: 'Este perfil já foi aprovado.' });
-    if (current.verificationStatus === 'pending') return res.status(409).json({ error: 'Seu perfil já está em análise.' });
+    const currentRoleStatus = profileRoleStatus(current, role);
+    if (currentRoleStatus === 'approved' || currentRoleStatus === 'verified') return res.status(409).json({ error: 'Este perfil já foi aprovado.' });
+    if (currentRoleStatus === 'pending' || currentRoleStatus === 'submitted') return res.status(409).json({ error: 'Seu perfil já está em análise.' });
 
     const email = role === 'afiliado' ? String(identity.email || '').trim().toLowerCase() : String(body.email || identity.email || '').trim().toLowerCase();
     const phone = String(body.phone || body.whatsapp || body.companyPhone || '').trim();
@@ -103,9 +102,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     for (const field of PROFILE_FIELDS) if (field in body) profileFields[field] = body[field];
     profileFields.email = email;
     profileFields.verificationRoleType = role;
-    profileFields.verificationStatus = 'pending';
-    profileFields.kyc_status = 'submitted';
-    profileFields.verified = false;
+    profileFields.activeRoleMode = role;
+    profileFields[role === 'empresa' ? 'empresaVerificationStatus' : 'affiliateVerificationStatus'] = 'pending';
+    const isCurrentRole = current.activeRoleMode === role || current.verificationRoleType === role || accountType === role || (accountType === 'admin' && role === 'afiliado');
+    if (isCurrentRole) {
+      profileFields.verificationStatus = 'pending';
+      profileFields.kyc_status = 'submitted';
+      profileFields.verified = false;
+    }
     profileFields.verificationSubmittedAt = now;
     profileFields.verificationRejectionReason = null;
     profileFields.updatedAt = now;

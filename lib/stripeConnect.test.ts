@@ -58,10 +58,32 @@ test('não inicializa Stripe sem segredo nem aceita chave live', () => {
 test('webhook e endereço base são obrigatoriamente configurados', () => {
   const oldSecret = process.env.STRIPE_WEBHOOK_SECRET;
   const oldBase = process.env.LEADSPAY_BASE_URL;
+  const oldVercelUrl = process.env.VERCEL_URL;
+  const oldVercelEnv = process.env.VERCEL_ENV;
   delete process.env.STRIPE_WEBHOOK_SECRET;
   delete process.env.LEADSPAY_BASE_URL;
+  delete process.env.VERCEL_URL;
+  delete process.env.VERCEL_ENV;
   assert.throws(() => getStripeWebhookSecret(), /não configurado/);
   assert.throws(() => getLeadspayBaseUrl(), /não está configurada/);
   if (oldSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = oldSecret;
   if (oldBase !== undefined) process.env.LEADSPAY_BASE_URL = oldBase;
+  if (oldVercelUrl !== undefined) process.env.VERCEL_URL = oldVercelUrl;
+  if (oldVercelEnv !== undefined) process.env.VERCEL_ENV = oldVercelEnv;
+});
+
+test('Preview usa URL da implantação atual em vez de URL base antiga', () => {
+  const oldBase = process.env.LEADSPAY_BASE_URL;
+  const oldVercelUrl = process.env.VERCEL_URL;
+  const oldVercelEnv = process.env.VERCEL_ENV;
+  process.env.LEADSPAY_BASE_URL = 'https://deploy-antigo.example';
+  process.env.VERCEL_URL = 'leadspay-preview-atual.vercel.app';
+  process.env.VERCEL_ENV = 'preview';
+  assert.equal(getLeadspayBaseUrl(), 'https://leadspay-preview-atual.vercel.app');
+  if (oldBase !== undefined) process.env.LEADSPAY_BASE_URL = oldBase;
+  else delete process.env.LEADSPAY_BASE_URL;
+  if (oldVercelUrl !== undefined) process.env.VERCEL_URL = oldVercelUrl;
+  else delete process.env.VERCEL_URL;
+  if (oldVercelEnv !== undefined) process.env.VERCEL_ENV = oldVercelEnv;
+  else delete process.env.VERCEL_ENV;
 });

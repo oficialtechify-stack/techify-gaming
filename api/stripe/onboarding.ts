@@ -1,5 +1,6 @@
 import { verifyFirebaseIdentity, getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getLeadspayBaseUrl, getStripeTestClient } from '../../lib/stripeServer.js';
+import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
@@ -47,16 +48,16 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const profileRef = db.collection('user_profiles').doc(identity.uid);
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return fail(res, 404, 'Perfil LeadsPay não encontrado.');
-    const profile = profileSnap.data()!;
+    const requestSnap = await db.collection('verification_requests').doc(identity.uid).get();
+    const profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
     if (profile.banned || profile.status === 'banned') return fail(res, 403, 'Esta conta não pode conectar recebimentos.');
-    if (role === 'afiliado' && profile.accountType !== 'afiliado' && profile.hasAffiliateProfile !== true && !profile.affiliateId) {
-      return fail(res, 403, 'O perfil autenticado não possui conta de Afiliado aprovada.');
+    if (!profileHasRole(profile, role)) {
+      const roleName = role === 'afiliado' ? 'Afiliado' : 'Empresa';
+      return fail(res, 403, `O perfil autenticado não possui um cadastro de ${roleName}.`);
     }
-    if (role === 'empresa' && profile.accountType !== 'empresa' && profile.hasCompanyProfile !== true && !profile.companyId) {
-      return fail(res, 403, 'O perfil autenticado não possui conta de Empresa.');
-    }
-    if (profile.verified !== true && profile.verificationStatus !== 'approved') {
-      return fail(res, 403, 'Conclua a verificação da conta LeadsPay antes de conectar recebimentos.');
+    if (!profileRoleIsApproved(profile, role)) {
+      const roleName = role === 'afiliado' ? 'Afiliado' : 'Empresa';
+      return fail(res, 403, `A aprovação do perfil de ${roleName} é necessária antes de configurar recebimentos.`);
     }
 
     let companyRef: any;

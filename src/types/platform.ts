@@ -351,7 +351,7 @@ export interface UserSellerProfile {
   partnerLevel: 'Afiliado Starter' | 'Parceiro Silver' | 'Parceiro Gold' | 'Master Elite Black' | 'Elite Partner' | string;
   targetGoal: number;
   currentSalesProgress: number;
-  accountType?: 'afiliado' | 'empresa' | 'admin';
+  accountType?: 'afiliado' | 'empresa' | 'ambos' | 'admin';
   hasAffiliateProfile?: boolean;
   hasCompanyProfile?: boolean;
   activeRoleMode?: UserRoleMode;
@@ -380,6 +380,8 @@ export interface UserSellerProfile {
   webhookUrl?: string;
   documentType?: 'CNPJ' | 'MEI' | 'CPF';
   verificationRoleType?: 'afiliado' | 'empresa';
+  affiliateVerificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected' | 'banned';
+  empresaVerificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected' | 'banned';
   cep?: string;
   country?: string;
   state?: string;

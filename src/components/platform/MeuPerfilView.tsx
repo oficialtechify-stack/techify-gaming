@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
+import { profileRoleStatus } from '../../../lib/profileEligibility';
 
 interface MeuPerfilViewProps {
   userProfile: UserSellerProfile;
@@ -114,9 +115,10 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [isEditingRejected, setIsEditingRejected] = useState<boolean>(false);
 
   // Determine verification status
-  const verificationStatus = userProfile.verificationStatus || (userProfile.verified ? 'approved' : 'unsubmitted');
+  const verificationRole = roleMode === 'empresa' ? 'empresa' : 'afiliado';
+  const verificationStatus = profileRoleStatus(userProfile as unknown as Record<string, unknown>, verificationRole);
   const isPending = verificationStatus === 'pending';
-  const isApproved = verificationStatus === 'approved' || userProfile.verified;
+  const isApproved = verificationStatus === 'approved';
   const isRejected = verificationStatus === 'rejected';
 
   // Fields are locked when submitted/pending or approved (unless user explicitly clicks to fix a rejected submission)

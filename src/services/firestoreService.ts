@@ -46,7 +46,8 @@ export type {
 import { 
   INITIAL_USER_PROFILE, 
   INITIAL_TRANSACTIONS, 
-  INITIAL_WITHDRAWALS 
+  INITIAL_WITHDRAWALS,
+  isSuperAdminEmail
 } from '../data/platformData';
 
 // Firestore Collection Names
@@ -221,12 +222,19 @@ export async function approveVerificationInFirebase(userId: string) {
     } catch (e) {}
   }
 
-  // Aprova somente o perfil submetido; não altera tipo de conta ou permissões.
-  const approvedRoleType = pData.accountType === 'empresa' || pData.roleType === 'empresa' ? 'empresa' : 'afiliado';
-  await setDoc(profileRef, {
-    verified: true,
-    verificationStatus: 'approved',
-    kyc_status: 'verified',
+  // Aprova somente o papel da solicitação canônica; não altera permissões.
+  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
+  const existingRequest = await getDoc(requestRef);
+  const requestData = existingRequest.exists() ? existingRequest.data() : {};
+  const requestedRole = requestData?.roleType || requestData?.verificationRoleType || pData.verificationRoleType || pData.activeRoleMode || pData.accountType;
+  const approvedRoleType = requestedRole === 'empresa' ? 'empresa' : 'afiliado';
+  const roleStatusField = approvedRoleType === 'empresa' ? 'empresaVerificationStatus' : 'affiliateVerificationStatus';
+  const isCurrentRole = pData.verificationRoleType === approvedRoleType || pData.activeRoleMode === approvedRoleType || pData.accountType === approvedRoleType || pData.accountType === 'admin';
+  const moderationBatch = writeBatch(db);
+  moderationBatch.set(profileRef, {
+    [roleStatusField]: 'approved',
+    verificationRoleType: approvedRoleType,
+    ...(isCurrentRole ? { verified: true, verificationStatus: 'approved', kyc_status: 'verified' } : {}),
     verificationReviewedAt: now,
     verificationRejectionReason: null,
     rejectionReason: null,
@@ -244,9 +252,7 @@ export async function approveVerificationInFirebase(userId: string) {
   } catch (e) {}
 
   // 3. Atualiza o registro em verification_requests pelo ID PRESERVANDO dados reais
-  try {
-    const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
-    await setDoc(requestRef, {
+  moderationBatch.set(requestRef, {
       id: userId,
       userId: userId,
       name: pData.name || pData.fullName || '',
@@ -268,13 +274,14 @@ export async function approveVerificationInFirebase(userId: string) {
       rejectionReason: null,
       updatedAt: now
     }, { merge: true });
-  } catch (e) {}
+  await moderationBatch.commit();
 
   // Consolidate same-UID/same-role legacy duplicates under the canonical UID key.
   try {
     const vQ = query(collection(db, COLLECTIONS.VERIFICATIONS), where('userId', '==', userId));
     const vSnap = await getDocs(vQ);
     for (const vDoc of vSnap.docs) {
+      if (vDoc.data().roleType && vDoc.data().roleType !== approvedRoleType) continue;
       if (vDoc.id !== userId && vDoc.data().roleType === approvedRoleType) {
         await deleteDoc(vDoc.ref);
         continue;
@@ -299,6 +306,10 @@ export async function approveVerificationInFirebase(userId: string) {
 export async function rejectVerificationInFirebase(userId: string, reason: string = 'Dados cadastrais necessitam de correção') {
   const now = new Date().toISOString();
 
+  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
+  const requestSnap = await getDoc(requestRef);
+  const requestData = requestSnap.exists() ? requestSnap.data() : {};
+
   let pData: any = {};
   try {
     const profSnap = await getDoc(doc(db, COLLECTIONS.PROFILES, userId));
@@ -316,30 +327,26 @@ export async function rejectVerificationInFirebase(userId: string, reason: strin
     } catch (e) {}
   }
 
-  // 1. Update user profile
+  const requestedRole = requestData?.roleType || requestData?.verificationRoleType || pData.verificationRoleType || pData.activeRoleMode || pData.accountType;
+  const rejectedRoleType = requestedRole === 'empresa' ? 'empresa' : 'afiliado';
+  const roleStatusField = rejectedRoleType === 'empresa' ? 'empresaVerificationStatus' : 'affiliateVerificationStatus';
+  const isCurrentRole = pData.verificationRoleType === rejectedRoleType || pData.activeRoleMode === rejectedRoleType || pData.accountType === rejectedRoleType || pData.accountType === 'admin';
+
+  // 1. Atualiza somente o papel submetido, sem revogar outra aprovação.
   const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
-  await setDoc(profileRef, {
-    verified: false,
-    verificationStatus: 'rejected',
-    kyc_status: 'rejected',
+  const moderationBatch = writeBatch(db);
+  moderationBatch.set(profileRef, {
+    [roleStatusField]: 'rejected',
+    verificationRoleType: rejectedRoleType,
+    ...(isCurrentRole ? { verified: false, verificationStatus: 'rejected', kyc_status: 'rejected' } : {}),
     verificationRejectionReason: reason,
     rejectionReason: reason,
     verificationReviewedAt: now,
     updatedAt: now
   }, { merge: true });
 
-  try {
-    await setDoc(doc(db, 'users', userId), {
-      verified: false,
-      verificationStatus: 'rejected',
-      kyc_status: 'rejected',
-      updatedAt: now
-    }, { merge: true });
-  } catch (e) {}
-
-  // 2. Update verification request record mantendo integridade dos dados
-  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, userId);
-  await setDoc(requestRef, {
+  // 2. Atualiza o pedido canônico mantendo integridade dos dados.
+  moderationBatch.set(requestRef, {
     id: userId,
     userId: userId,
     name: pData.name || pData.fullName || '',
@@ -347,12 +354,25 @@ export async function rejectVerificationInFirebase(userId: string, reason: strin
     phone: pData.phone || pData.whatsapp || '',
     cpf: pData.cpf || '',
     avatar: pData.avatar || '',
+    roleType: rejectedRoleType,
     status: 'rejected',
     verified: false,
     rejectionReason: reason,
     reviewedAt: now,
     updatedAt: now
   }, { merge: true });
+  await moderationBatch.commit();
+
+  // Sincroniza apenas cópias do mesmo UID e do mesmo tipo de cadastro.
+  const duplicates = await getDocs(query(collection(db, COLLECTIONS.VERIFICATIONS), where('userId', '==', userId)));
+  const batch = writeBatch(db);
+  let count = 0;
+  for (const duplicate of duplicates.docs) {
+    if (duplicate.id === userId || (duplicate.data().roleType && duplicate.data().roleType !== rejectedRoleType)) continue;
+    batch.set(duplicate.ref, { roleType: rejectedRoleType, status: 'rejected', verified: false, kyc_status: 'rejected', rejectionReason: reason, reviewedAt: now, updatedAt: now }, { merge: true });
+    count++;
+  }
+  if (count > 0) await batch.commit();
 
   return { success: true };
 }
@@ -759,14 +779,17 @@ export async function approveCompanyInFirebase(companyId: string) {
     // 3. Atualiza perfil do proprietário (ownerId ou submittedBy) SEM DESTRUIR perfil de afiliado
     const ownerId = ownerIdForApproval;
     if (ownerId) {
-      try {
         const profRef = doc(db, COLLECTIONS.PROFILES, String(ownerId));
 
+        const hasAffiliate = ownerProfile?.hasAffiliateProfile === true || ownerProfile?.accountType === 'afiliado' || ownerProfile?.accountType === 'ambos' || ownerProfile?.affiliateVerificationStatus === 'approved';
+        const isAdminProfile = ownerProfile?.accountType === 'admin' || isSuperAdminEmail(String(ownerProfile?.email || ''));
         const updateProf: Record<string, any> = {
-          verified: true,
-          verificationStatus: 'approved',
-          kyc_status: 'verified',
+          ...(isAdminProfile ? {} : { accountType: hasAffiliate ? 'ambos' : 'empresa' }),
+          empresaVerificationStatus: 'approved',
+          ...(ownerProfile?.activeRoleMode === 'empresa' || ownerProfile?.verificationRoleType === 'empresa' || ownerProfile?.accountType === 'empresa' ? { verified: true, verificationStatus: 'approved', kyc_status: 'verified' } : {}),
+          hasAffiliateProfile: hasAffiliate,
           hasCompanyProfile: true,
+          companyVerificationStatus: 'approved',
           companyId,
           companyName: compData?.name || compData?.companyName,
           updatedAt: now
@@ -774,15 +797,6 @@ export async function approveCompanyInFirebase(companyId: string) {
 
         await setDoc(profRef, updateProf, { merge: true });
 
-        // Atualiza verificação vinculada
-        await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, String(ownerId)), {
-          status: 'approved',
-          reviewedAt: now,
-          rejectionReason: null
-        }, { merge: true });
-      } catch (pErr) {
-        console.warn('Aviso ao sincronizar perfil do dono da empresa:', pErr);
-      }
     }
 
     // 4. Atualiza registro na coleção de verificações
@@ -828,30 +842,28 @@ export async function rejectCompanyInFirebase(companyId: string, reason: string 
   }), { merge: true });
 
   if (ownerId) {
-    try {
-      await setDoc(doc(db, COLLECTIONS.PROFILES, ownerId), {
-        verified: false,
-        verificationStatus: 'rejected',
-        kyc_status: 'rejected',
-        rejectionReason: reason,
-        updatedAt: now
-      }, { merge: true });
-
-      await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, ownerId), {
-        status: 'rejected',
-        rejectionReason: reason,
-        reviewedAt: now
-      }, { merge: true });
-    } catch (e) {}
+    const ownerProfileRef = doc(db, COLLECTIONS.PROFILES, ownerId);
+    const ownerProfileSnap = await getDoc(ownerProfileRef);
+    const ownerProfile = ownerProfileSnap.exists() ? ownerProfileSnap.data() : {};
+    const isCurrentCompany = ownerProfile.activeRoleMode === 'empresa' || ownerProfile.verificationRoleType === 'empresa' || ownerProfile.accountType === 'empresa';
+    await setDoc(ownerProfileRef, {
+      empresaVerificationStatus: 'rejected',
+      companyVerificationStatus: 'rejected',
+      verificationRoleType: 'empresa',
+      ...(isCurrentCompany ? { verified: false, verificationStatus: 'rejected', kyc_status: 'rejected' } : {}),
+      rejectionReason: reason,
+      updatedAt: now
+    }, { merge: true });
   }
 
-  try {
-    await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId), {
-      status: 'rejected',
-      rejectionReason: reason,
-      reviewedAt: now
-    }, { merge: true });
-  } catch (e) {}
+  await setDoc(doc(db, COLLECTIONS.VERIFICATIONS, companyId), {
+    roleType: 'empresa',
+    status: 'rejected',
+    verified: false,
+    kyc_status: 'rejected',
+    rejectionReason: reason,
+    reviewedAt: now
+  }, { merge: true });
 
   return { success: true };
 }

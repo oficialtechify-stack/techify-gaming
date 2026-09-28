@@ -18,7 +18,7 @@ async function readApiJson(response: Response): Promise<Record<string, any>> {
 
 export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) => {
   const role: StripeRole = roleMode === 'empresa' ? 'empresa' : 'afiliado';
-  const [status, setStatus] = useState<'loading' | 'not_connected' | 'onboarding_incomplete' | 'connected' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'not_connected' | 'onboarding_incomplete' | 'connected' | 'approval_required' | 'error'>('loading');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -32,7 +32,14 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
     try {
       const response = await fetch(`/api/stripe/connect-status?role=${role}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
       const result = await readApiJson(response);
-      if (!response.ok) throw new Error(result.error || 'Não foi possível consultar a conta de recebimento.');
+      if (!response.ok) {
+        if (response.status === 403 && /aprova|aprovad/i.test(String(result.error || ''))) {
+          setStatus('approval_required');
+          setMessage(result.error || 'A aprovação deste perfil é necessária antes de conectar recebimentos.');
+          return;
+        }
+        throw new Error(result.error || 'Não foi possível consultar a conta de recebimento.');
+      }
       setStatus(result.status);
       setMessage('');
     } catch (error) {
@@ -41,7 +48,18 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
     }
   }, [role]);
 
-  useEffect(() => { void fetchStatus(); }, [fetchStatus]);
+  useEffect(() => {
+    void fetchStatus();
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void fetchStatus(); };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void fetchStatus(); }, 60_000);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.clearInterval(timer);
+    };
+  }, [fetchStatus]);
 
   const startOnboarding = async () => {
     setBusy(true);
@@ -96,7 +114,7 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
         </div>
         <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${status === 'connected' ? 'bg-slate-100 text-slate-800' : 'bg-slate-50 text-slate-600'}`} aria-live="polite">
           {status === 'connected' ? <CheckCircle2 className="h-3.5 w-3.5" /> : status === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock3 className="h-3.5 w-3.5" />}
-          {status === 'connected' ? 'Conectada' : status === 'loading' ? 'Verificando' : status === 'onboarding_incomplete' ? 'Cadastro pendente' : 'Não conectada'}
+          {status === 'connected' ? 'Conectada' : status === 'loading' ? 'Verificando' : status === 'approval_required' ? 'Aprovação necessária' : status === 'onboarding_incomplete' ? 'Cadastro pendente' : 'Não conectada'}
         </span>
       </div>
       <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
@@ -108,12 +126,12 @@ export const StripeConnectPanel: React.FC<Props> = ({ roleMode, userProfile }) =
           <button type="button" onClick={() => void openExpress()} disabled={busy} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Abrir painel de recebimentos <ArrowUpRight className="h-4 w-4" />
           </button>
-        ) : (
+        ) : status === 'approval_required' ? null : (
           <button type="button" onClick={() => void startOnboarding()} disabled={busy || status === 'loading'} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{status === 'onboarding_incomplete' ? 'Continuar cadastro' : 'Conectar recebimentos'}<ArrowUpRight className="h-4 w-4" />
           </button>
         )}
-        {status === 'error' && <button type="button" onClick={() => void fetchStatus()} className="min-h-10 rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50">Tentar novamente</button>}
+        {(status === 'error' || status === 'approval_required') && <button type="button" onClick={() => void fetchStatus()} className="min-h-10 rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50">Atualizar status</button>}
       </div>
       <p className="mt-3 text-xs text-slate-500">Perfil: {userProfile.name || roleName} · área {roleName}</p>
     </section>
