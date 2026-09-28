@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { timingSafeEqual } from 'node:crypto';
-import { getServerAdminFirestore } from '../../lib/firebaseAdminServer';
-import { getStripeTestClient } from '../../lib/stripeServer';
+import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
+import { getStripeTestClient } from '../../lib/stripeServer.js';
 
 type RequestLike = { method?: string; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown };

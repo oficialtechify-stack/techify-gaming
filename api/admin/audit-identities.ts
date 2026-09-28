@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase-admin/auth';
-import { getServerAdminApp, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer';
+import { getServerAdminApp, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 
 const ADMIN_EMAILS = new Set([
   'rickmarketing81@gmail.com',

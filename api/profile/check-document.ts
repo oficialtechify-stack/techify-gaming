@@ -1,4 +1,4 @@
-import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer';
+import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown };

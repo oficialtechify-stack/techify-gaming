@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
-import { getServerAdminFirestore } from '../../lib/firebaseAdminServer';
-import { getStripeTestClient, getStripeWebhookSecret } from '../../lib/stripeServer';
+import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
+import { getStripeTestClient, getStripeWebhookSecret } from '../../lib/stripeServer.js';
 
 type RequestLike = AsyncIterable<Buffer | string> & { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };

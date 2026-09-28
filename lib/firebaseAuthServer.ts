@@ -1,5 +1,5 @@
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
-import { getServerAdminApp } from './firebaseAdminServer';
+import { getServerAdminApp } from './firebaseAdminServer.js';
 
 /** Tokens come exclusively from the Authorization header, never from request bodies/URLs. */
 export function extractBearerToken(header: string | undefined): string | null {
