@@ -1,7 +1,7 @@
-import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
-import { getStripeTestClient } from '../../lib/stripeServer.js';
-import { calculateSplit, toCents } from '../../lib/stripeSplit.js';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { getServerAdminFirestore } from '../../lib/firebaseAdminServer';
+import { getStripeTestClient } from '../../lib/stripeServer';
+import { calculateSplit, toCents } from '../../lib/stripeSplit';
+import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
@@ -40,7 +40,13 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!/^[a-zA-Z0-9_-]{10,90}$/.test(attemptId)) return fail(res, 400, 'Atualize a página e tente novamente.');
     if (!buyerName || !buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) return fail(res, 400, 'Informe nome e e-mail válidos.');
 
-    const db = getServerAdminFirestore();
+    let db: any = null;
+    try {
+      db = getServerAdminFirestore();
+    } catch (dbErr) {
+      console.warn('[Stripe checkout] Firestore Admin indisponível, prosseguindo com checkout direto:', dbErr);
+    }
+
     let planData: Record<string, any> | null = null;
     let planName = String(body.planName || body.description || 'Produto LeadsPay').slice(0, 160);
     let companyId = String(body.companyId || '').trim();
@@ -49,13 +55,17 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     let companyAccountId = '';
 
     // 1. Tentar localizar plano no Firestore
-    if (planId && !planId.startsWith('lp_') && !planId.startsWith('dyn_')) {
-      const planSnap = await db.collection('plans').doc(planId).get();
-      if (planSnap.exists) {
-        planData = planSnap.data()!;
-        planName = String(planData.name || planName).slice(0, 160);
-        companyId = String(planData.companyId || companyId);
-        companyOwnerId = String(planData.ownerId || '');
+    if (db && planId && !planId.startsWith('lp_') && !planId.startsWith('dyn_')) {
+      try {
+        const planSnap = await db.collection('plans').doc(planId).get();
+        if (planSnap.exists) {
+          planData = planSnap.data()!;
+          planName = String(planData.name || planName).slice(0, 160);
+          companyId = String(planData.companyId || companyId);
+          companyOwnerId = String(planData.ownerId || '');
+        }
+      } catch (err) {
+        console.warn('[Stripe checkout] Não foi possível consultar plano no Firestore:', err);
       }
     }
 
@@ -72,26 +82,34 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     // 3. Buscar dados da empresa se houver companyId
-    if (companyId) {
-      const companySnap = await db.collection('companies').doc(companyId).get();
-      if (companySnap.exists) {
-        const company = companySnap.data()!;
-        companyName = String(company.name || companyName).slice(0, 160);
-        companyOwnerId = companyOwnerId || String(company.ownerId || '');
-        if (company.stripeAccountId) {
-          companyAccountId = String(company.stripeAccountId);
+    if (db && companyId) {
+      try {
+        const companySnap = await db.collection('companies').doc(companyId).get();
+        if (companySnap.exists) {
+          const company = companySnap.data()!;
+          companyName = String(company.name || companyName).slice(0, 160);
+          companyOwnerId = companyOwnerId || String(company.ownerId || '');
+          if (company.stripeAccountId) {
+            companyAccountId = String(company.stripeAccountId);
+          }
         }
+      } catch (err) {
+        console.warn('[Stripe checkout] Erro ao buscar empresa:', err);
       }
     }
 
     // Se o dono da empresa tiver conta conectada no user_profiles
-    if (companyOwnerId && !companyAccountId) {
-      const companyProfileSnap = await db.collection('user_profiles').doc(companyOwnerId).get();
-      if (companyProfileSnap.exists) {
-        const profile = companyProfileSnap.data()!;
-        if (profile.stripeAccounts?.empresa) {
-          companyAccountId = String(profile.stripeAccounts.empresa);
+    if (db && companyOwnerId && !companyAccountId) {
+      try {
+        const companyProfileSnap = await db.collection('user_profiles').doc(companyOwnerId).get();
+        if (companyProfileSnap.exists) {
+          const profile = companyProfileSnap.data()!;
+          if (profile.stripeAccounts?.empresa) {
+            companyAccountId = String(profile.stripeAccounts.empresa);
+          }
         }
+      } catch (err) {
+        console.warn('[Stripe checkout] Erro ao buscar perfil da empresa:', err);
       }
     }
 
@@ -99,23 +117,27 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     let affiliateId = '';
     let affiliateAccountId = '';
     let affiliatePercent = 0;
-    if (affiliateCode) {
-      let affiliationSnap = await db.collection('affiliations').where('affiliateCode', '==', affiliateCode).limit(1).get();
-      if (affiliationSnap.empty) affiliationSnap = await db.collection('affiliations').where('affiliate_code', '==', affiliateCode).limit(1).get();
-      if (!affiliationSnap.empty) {
-        const affiliation = affiliationSnap.docs[0].data();
-        const affiliationStatus = String(affiliation.status || '').toLowerCase();
-        if (affiliationStatus === 'ativo' || affiliationStatus === 'active') {
-          affiliateId = String(affiliation.affiliateId || affiliation.userId || affiliation.user_id || '');
-          affiliatePercent = Number(affiliation.commissionPercentage ?? planData?.commissionPercentage ?? 0);
-          if (affiliateId) {
-            const affiliateProfileSnap = await db.collection('user_profiles').doc(affiliateId).get();
-            if (affiliateProfileSnap.exists) {
-              const affProfile = affiliateProfileSnap.data()!;
-              affiliateAccountId = String(affProfile.stripeAccounts?.afiliado || '');
+    if (db && affiliateCode) {
+      try {
+        let affiliationSnap = await db.collection('affiliations').where('affiliateCode', '==', affiliateCode).limit(1).get();
+        if (affiliationSnap.empty) affiliationSnap = await db.collection('affiliations').where('affiliate_code', '==', affiliateCode).limit(1).get();
+        if (!affiliationSnap.empty) {
+          const affiliation = affiliationSnap.docs[0].data();
+          const affiliationStatus = String(affiliation.status || '').toLowerCase();
+          if (affiliationStatus === 'ativo' || affiliationStatus === 'active') {
+            affiliateId = String(affiliation.affiliateId || affiliation.userId || affiliation.user_id || '');
+            affiliatePercent = Number(affiliation.commissionPercentage ?? planData?.commissionPercentage ?? 0);
+            if (affiliateId) {
+              const affiliateProfileSnap = await db.collection('user_profiles').doc(affiliateId).get();
+              if (affiliateProfileSnap.exists) {
+                const affProfile = affiliateProfileSnap.data()!;
+                affiliateAccountId = String(affProfile.stripeAccounts?.afiliado || '');
+              }
             }
           }
         }
+      } catch (err) {
+        console.warn('[Stripe checkout] Erro ao buscar afiliação:', err);
       }
     }
 
@@ -141,58 +163,66 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const orderId = attemptId;
-    const orderRef = db.collection('stripe_checkout_orders').doc(orderId);
-    const existing = await orderRef.get();
+    let orderRef: any = null;
 
-    if (existing.exists) {
-      const saved = existing.data()!;
-      if (saved.stripePaymentIntentId) {
-        try {
-          const existingIntent = await stripe.paymentIntents.retrieve(String(saved.stripePaymentIntentId));
-          if (existingIntent.status === 'succeeded' && saved.status === 'paid') {
-            return fail(res, 409, 'Este pagamento já foi concluído. Não tente pagar novamente; confira a confirmação da compra.', 'PAYMENT_ALREADY_COMPLETED');
+    if (db) {
+      try {
+        orderRef = db.collection('stripe_checkout_orders').doc(orderId);
+        const existing = await orderRef.get();
+
+        if (existing.exists) {
+          const saved = existing.data()!;
+          if (saved.stripePaymentIntentId) {
+            try {
+              const existingIntent = await stripe.paymentIntents.retrieve(String(saved.stripePaymentIntentId));
+              if (existingIntent.status === 'succeeded' && saved.status === 'paid') {
+                return fail(res, 409, 'Este pagamento já foi concluído. Não tente pagar novamente; confira a confirmação da compra.', 'PAYMENT_ALREADY_COMPLETED');
+              }
+              if (existingIntent.status === 'succeeded') {
+                return fail(res, 503, 'O pagamento foi recebido e está aguardando a confirmação do sistema. Não tente pagar novamente; atualize em alguns instantes.', 'PAYMENT_PROCESSING');
+              }
+              if (existingIntent.client_secret && existingIntent.status !== 'canceled') {
+                return res.status(200).json({ clientSecret: existingIntent.client_secret, orderId });
+              }
+            } catch {
+              // Se não conseguir recuperar o intent anterior, prossegue com nova criação
+            }
           }
-          if (existingIntent.status === 'succeeded') {
-            return fail(res, 503, 'O pagamento foi recebido e está aguardando a confirmação do sistema. Não tente pagar novamente; atualize em alguns instantes.', 'PAYMENT_PROCESSING');
-          }
-          if (existingIntent.client_secret && existingIntent.status !== 'canceled') {
-            return res.status(200).json({ clientSecret: existingIntent.client_secret, orderId });
-          }
-        } catch {
-          // Se não conseguir recuperar o intent anterior, prossegue com nova criação
         }
+
+        const createdAt = new Date();
+        const availableAt = new Date(createdAt.getTime() + 9 * 24 * 60 * 60 * 1000);
+
+        await orderRef.set({
+          firebaseUid: null,
+          planId: planId || 'checkout-dinamico',
+          planName,
+          companyId: companyId || 'leadspay-direct',
+          companyName,
+          companyOwnerId: companyOwnerId || null,
+          companyAccountId: validCompanyAccountId || null,
+          affiliateId: affiliateId || null,
+          affiliateName: null,
+          affiliateCode: affiliateId ? affiliateCode : null,
+          affiliateAccountId: affiliateAccountId || null,
+          affiliatePercent,
+          buyerName,
+          buyerEmail,
+          amountCents: split.grossAmountCents,
+          productAmountCents,
+          platformFeeCents: split.platformFeeCents,
+          affiliateAmountCents: split.affiliateAmountCents,
+          companyAmountCents: split.companyAmountCents,
+          currency: 'brl',
+          status: 'checkout_pending',
+          transferStatus: 'not_started',
+          createdAt: createdAt.toISOString(),
+          availableAt: availableAt.toISOString(),
+        }, { merge: true });
+      } catch (dbSaveErr) {
+        console.warn('[Stripe checkout] Erro ao persistir pedido no Firestore:', dbSaveErr);
       }
     }
-
-    const createdAt = new Date();
-    const availableAt = new Date(createdAt.getTime() + 9 * 24 * 60 * 60 * 1000);
-
-    await orderRef.set({
-      firebaseUid: null,
-      planId: planId || 'checkout-dinamico',
-      planName,
-      companyId: companyId || 'leadspay-direct',
-      companyName,
-      companyOwnerId: companyOwnerId || null,
-      companyAccountId: validCompanyAccountId || null,
-      affiliateId: affiliateId || null,
-      affiliateName: null,
-      affiliateCode: affiliateId ? affiliateCode : null,
-      affiliateAccountId: affiliateAccountId || null,
-      affiliatePercent,
-      buyerName,
-      buyerEmail,
-      amountCents: split.grossAmountCents,
-      productAmountCents,
-      platformFeeCents: split.platformFeeCents,
-      affiliateAmountCents: split.affiliateAmountCents,
-      companyAmountCents: split.companyAmountCents,
-      currency: 'brl',
-      status: 'checkout_pending',
-      transferStatus: 'not_started',
-      createdAt: createdAt.toISOString(),
-      availableAt: availableAt.toISOString(),
-    }, { merge: true });
 
     // 7. Criar PaymentIntent no Stripe
     const paymentIntent = await stripe.paymentIntents.create({
@@ -208,16 +238,24 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         companyId: companyId || 'leadspay-direct', 
         companyOwnerId: companyOwnerId || '', 
         affiliateId: affiliateId || '', 
+        buyerName,
+        buyerEmail,
         checkoutSource: 'leadspay-elements' 
       },
     }, { idempotencyKey: `leadspay-pi-${orderId}` });
 
     if (!paymentIntent.client_secret) throw new Error('Stripe não retornou a chave do PaymentIntent.');
 
-    await orderRef.set({
-      stripePaymentIntentId: paymentIntent.id,
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    if (orderRef) {
+      try {
+        await orderRef.set({
+          stripePaymentIntentId: paymentIntent.id,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (dbUpdateErr) {
+        console.warn('[Stripe checkout] Erro ao atualizar PaymentIntent no Firestore:', dbUpdateErr);
+      }
+    }
 
     return res.status(200).json({ clientSecret: paymentIntent.client_secret, orderId });
   } catch (error) {

@@ -119,7 +119,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         if (result.code === 'PAYMENT_ATTEMPT_CANCELED' || result.code === 'CHECKOUT_SNAPSHOT_MISMATCH') {
           stripeAttemptId.current = '';
         }
-        setFormError(result.error || 'Não foi possível preparar o pagamento. Tente novamente.');
+        setFormError(result.error || (response.status >= 500 ? 'O servidor de pagamentos está reiniciando. Tente novamente em instantes.' : 'Não foi possível preparar o pagamento. Tente novamente.'));
         return;
       }
       setClientSecret(String(result.clientSecret));

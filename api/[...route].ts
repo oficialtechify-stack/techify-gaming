@@ -1,16 +1,16 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import stripeCheckoutHandler from '../server-api/stripe/checkout.js';
-import stripeOnboardingHandler from '../server-api/stripe/onboarding.js';
-import stripeConnectStatusHandler from '../server-api/stripe/connect-status.js';
-import stripeExpressDashboardHandler from '../server-api/stripe/express-dashboard.js';
-import stripeStatusHandler from '../server-api/stripe/status.js';
-import stripeWebhookHandler from '../server-api/stripe/webhook.js';
-import stripeReleasesCronHandler from '../server-api/crons/stripe-releases.js';
-import checkDocumentHandler from '../server-api/profile/check-document.js';
-import submitVerificationHandler from '../server-api/profile/submit-verification.js';
-import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
-import affiliateJoinHandler from '../server-api/affiliates/join.js';
-import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
+import stripeCheckoutHandler from '../server-api/stripe/checkout';
+import stripeOnboardingHandler from '../server-api/stripe/onboarding';
+import stripeConnectStatusHandler from '../server-api/stripe/connect-status';
+import stripeExpressDashboardHandler from '../server-api/stripe/express-dashboard';
+import stripeStatusHandler from '../server-api/stripe/status';
+import stripeWebhookHandler from '../server-api/stripe/webhook';
+import stripeReleasesCronHandler from '../server-api/crons/stripe-releases';
+import checkDocumentHandler from '../server-api/profile/check-document';
+import submitVerificationHandler from '../server-api/profile/submit-verification';
+import legacyLookupHandler from '../server-api/profile/legacy-lookup';
+import affiliateJoinHandler from '../server-api/affiliates/join';
+import auditIdentitiesHandler from '../server-api/admin/audit-identities';
 
 export const config = {
   api: {
@@ -33,10 +33,20 @@ type VercelResponse = ServerResponse & {
 };
 
 async function readRawBody(req: IncomingMessage): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  if ((req as any).rawBody && Buffer.isBuffer((req as any).rawBody)) return (req as any).rawBody;
+  if (Buffer.isBuffer((req as any).body)) return (req as any).body;
+  if (typeof (req as any).body === 'string') return Buffer.from((req as any).body);
+  if ((req as any).body && typeof (req as any).body === 'object') {
+    try {
+      return Buffer.from(JSON.stringify((req as any).body));
+    } catch {}
   }
+  const chunks: Buffer[] = [];
+  try {
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+  } catch {}
   return Buffer.concat(chunks);
 }
 
@@ -63,8 +73,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } else if (typeof routeParam === 'string') {
     subpath = routeParam;
   } else if (req.url) {
-    const urlObj = new URL(req.url, 'http://localhost');
-    subpath = urlObj.pathname.replace(/^\/api\/?/, '');
+    try {
+      const urlObj = new URL(req.url, 'http://localhost');
+      subpath = urlObj.pathname.replace(/^\/api\/?/, '');
+    } catch {
+      subpath = req.url.replace(/^\/api\/?/, '').split('?')[0];
+    }
   }
 
   const cleanPath = subpath.replace(/^\/+|\/+$/g, '').toLowerCase();
@@ -89,12 +103,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Read raw body
+  // Read raw body safely
   const rawBody = await readRawBody(req);
   req.rawBody = rawBody;
 
-  // Parse JSON for non-webhook requests
-  if (rawBody.length > 0 && cleanPath !== 'stripe/webhook' && cleanPath !== 'webhooks/stripe' && cleanPath !== 'webhook/stripe') {
+  // Parse JSON for non-webhook requests if req.body is not already parsed
+  if ((!req.body || typeof req.body !== 'object') && rawBody.length > 0 && cleanPath !== 'stripe/webhook' && cleanPath !== 'webhooks/stripe' && cleanPath !== 'webhook/stripe') {
     try {
       req.body = JSON.parse(rawBody.toString('utf-8'));
     } catch {
