@@ -50,18 +50,18 @@ import { sendFulfillmentEmail, sendBillingEmail, sendRemarketingEmail } from './
 import { setupMcpRoutes } from './server/mcpRoutes';
 
 // Stripe & Profile Server Handlers
-import stripeOnboardingHandler from './api/stripe/onboarding';
-import stripeCheckoutHandler from './api/stripe/checkout';
-import stripeConnectStatusHandler from './api/stripe/connect-status';
-import stripeExpressDashboardHandler from './api/stripe/express-dashboard';
-import stripeStatusHandler from './api/stripe/status';
-import stripeWebhookHandler from './api/stripe/webhook';
-import stripeReleasesCronHandler from './api/crons/stripe-releases';
-import checkDocumentHandler from './api/profile/check-document';
-import submitVerificationHandler from './api/profile/submit-verification';
-import legacyLookupHandler from './api/profile/legacy-lookup';
-import affiliateJoinHandler from './api/affiliates/join';
-import auditIdentitiesHandler from './api/admin/audit-identities';
+import stripeOnboardingHandler from './server-api/stripe/onboarding';
+import stripeCheckoutHandler from './server-api/stripe/checkout';
+import stripeConnectStatusHandler from './server-api/stripe/connect-status';
+import stripeExpressDashboardHandler from './server-api/stripe/express-dashboard';
+import stripeStatusHandler from './server-api/stripe/status';
+import stripeWebhookHandler from './server-api/stripe/webhook';
+import stripeReleasesCronHandler from './server-api/crons/stripe-releases';
+import checkDocumentHandler from './server-api/profile/check-document';
+import submitVerificationHandler from './server-api/profile/submit-verification';
+import legacyLookupHandler from './server-api/profile/legacy-lookup';
+import affiliateJoinHandler from './server-api/affiliates/join';
+import auditIdentitiesHandler from './server-api/admin/audit-identities';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
