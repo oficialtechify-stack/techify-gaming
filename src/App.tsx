@@ -72,10 +72,47 @@ function MainApp() {
           }
         }
 
-        // Never trust price/description parameters from the URL for a charge.
-        const hasDynamicAmount = params.has('amount') || params.has('valor') || params.has('price');
-        if (hasDynamicAmount && !targetPlanId) {
-          setCheckoutError('Cobranças com valor livre não estão habilitadas. Use um link de uma oferta cadastrada pela empresa.');
+        // 3. Suporte a cobranças com parâmetros diretos de valor e descrição (ex: ?amount=197.00&description=Mentoria+VIP&apiKey=...)
+        const rawAmount = params.get('amount') || params.get('valor') || params.get('price');
+        const customAmount = rawAmount ? parseFloat(rawAmount.replace(',', '.')) : 0;
+        const customDesc = params.get('description') || params.get('descricao') || params.get('name') || params.get('nome') || params.get('product') || 'Cobrança LeadsPay';
+        const apiKeyParam = params.get('apiKey') || params.get('api_key') || '';
+        const companyIdParam = params.get('companyId') || params.get('company_id') || '';
+
+        // Helper para gerar plano dinâmico válido
+        const makeDynamicPlan = (id: string, amount: number, desc: string, compId?: string, key?: string): CompanyPlan => ({
+          id,
+          name: desc,
+          tagline: desc,
+          description: desc,
+          price: amount,
+          priceSetup: amount,
+          priceMonthly: amount,
+          commissionPercentage: 0,
+          commissionValue: 0,
+          category: 'Pagamento Digital',
+          companyId: compId || 'leadspay-direct',
+          companyName: 'LeadsPay Pagamentos',
+          companyLogo: '',
+          status: 'Ativo',
+          active: true,
+          billingType: 'avulso',
+          paymentType: 'Único',
+          features: [desc, 'Acesso Imediato', 'Pagamento Seguro via Stripe'],
+          bannerImage: '',
+          allowAffiliates: false,
+          totalSales: 0,
+          totalSalesCount: 0,
+          totalRevenue: 0,
+          apiKey: key || undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+
+        if (customAmount > 0 && !targetPlanId) {
+          setIsLoadingCheckout(false);
+          setCheckoutError(null);
+          setCheckoutPlan(makeDynamicPlan(`dyn_${Date.now()}`, customAmount, customDesc, companyIdParam, apiKeyParam));
           return;
         }
 
@@ -87,17 +124,23 @@ function MainApp() {
             setIsLoadingCheckout(false);
             if (plan) {
               setCheckoutPlan(plan);
+            } else if (customAmount > 0) {
+              setCheckoutPlan(makeDynamicPlan(targetPlanId, customAmount, customDesc, companyIdParam, apiKeyParam));
             } else {
               setCheckoutError(`Não encontramos a oferta para "${targetPlanId}". O link pode estar incorreto ou expirado.`);
             }
           }).catch((err) => {
             console.error('Erro ao buscar plano para checkout:', err);
             setIsLoadingCheckout(false);
-            setCheckoutError('Erro ao carregar o checkout seguro. Tente novamente.');
+            if (customAmount > 0) {
+              setCheckoutPlan(makeDynamicPlan(targetPlanId, customAmount, customDesc, companyIdParam, apiKeyParam));
+            } else {
+              setCheckoutError('Erro ao carregar o checkout seguro. Tente novamente.');
+            }
           });
         } else if (isCheckoutPath) {
           setIsLoadingCheckout(false);
-          setCheckoutError('Por favor, informe um plano cadastrado ou os parâmetros de valor e descrição (ex: ?amount=197.00&description=NomeDoProduto).');
+          setCheckoutError('Por favor, informe uma oferta cadastrada ou parâmetros de valor (ex: ?amount=197.00&description=Mentoria+VIP).');
         }
 
         // 5. Suporte a abertura direta de modais de autenticação via URL (ex: ?auth=login, ?auth=afiliado, #login)

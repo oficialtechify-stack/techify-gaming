@@ -250,9 +250,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
-      return window.localStorage.getItem('leadspay-landing-theme') === 'dark';
+      const stored = window.localStorage.getItem('leadspay-landing-theme');
+      if (stored) return stored === 'dark';
+      return true; // Default to dark mode with full vibrant LeadsPay brand colors
     } catch {
-      return false;
+      return true;
     }
   });
 

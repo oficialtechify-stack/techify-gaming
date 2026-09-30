@@ -1,4 +1,4 @@
-import { verifyFirebaseIdentity, getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
+import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient } from '../../lib/stripeServer.js';
 import { calculateSplit, toCents } from '../../lib/stripeSplit.js';
 import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
@@ -34,41 +34,68 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const buyerName = String(body.buyerName || '').trim().slice(0, 120);
     const buyerEmail = String(body.buyerEmail || '').trim().toLowerCase().slice(0, 200);
     const affiliateCode = String(body.affiliateCode || '').trim().slice(0, 64);
-    if (!planId || planId.length > 180) return fail(res, 400, 'Oferta inválida.');
-    if (!/^[a-zA-Z0-9_-]{20,80}$/.test(attemptId)) return fail(res, 400, 'Atualize a página e tente novamente.');
+    const customAmount = Number(body.amount || 0);
+
+    if (!planId && customAmount <= 0) return fail(res, 400, 'Oferta ou valor inválido.');
+    if (!/^[a-zA-Z0-9_-]{10,90}$/.test(attemptId)) return fail(res, 400, 'Atualize a página e tente novamente.');
     if (!buyerName || !buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) return fail(res, 400, 'Informe nome e e-mail válidos.');
-    if (body.couponCode || body.orderBump) return fail(res, 422, 'Cupons e adicionais ainda não estão habilitados neste checkout Stripe piloto. Nenhum valor foi cobrado.');
 
     const db = getServerAdminFirestore();
-    const planSnap = await db.collection('plans').doc(planId).get();
-    if (!planSnap.exists) return fail(res, 404, 'Oferta não encontrada.');
-    const plan = planSnap.data()!;
-    if (plan.status !== 'Ativo' || plan.active === false) return fail(res, 409, 'Esta oferta não está disponível para compra.');
-    if (plan.paymentType === 'Recorrente' || plan.paymentType === 'Assinatura' || plan.billingType === 'recorrente') {
-      return fail(res, 422, 'Este checkout Stripe piloto aceita somente compras avulsas. Assinaturas serão habilitadas depois de configurar Stripe Billing e seus webhooks.');
+    let planData: Record<string, any> | null = null;
+    let planName = String(body.planName || body.description || 'Produto LeadsPay').slice(0, 160);
+    let companyId = String(body.companyId || '').trim();
+    let companyOwnerId = '';
+    let companyName = 'LeadsPay';
+    let companyAccountId = '';
+
+    // 1. Tentar localizar plano no Firestore
+    if (planId && !planId.startsWith('lp_') && !planId.startsWith('dyn_')) {
+      const planSnap = await db.collection('plans').doc(planId).get();
+      if (planSnap.exists) {
+        planData = planSnap.data()!;
+        planName = String(planData.name || planName).slice(0, 160);
+        companyId = String(planData.companyId || companyId);
+        companyOwnerId = String(planData.ownerId || '');
+      }
     }
 
-    const companyId = String(plan.companyId || '');
-    const companySnap = companyId ? await db.collection('companies').doc(companyId).get() : null;
-    if (!companySnap?.exists) return fail(res, 422, 'A empresa responsável por esta oferta não foi encontrada.');
-    const company = companySnap.data()!;
-    const companyOwnerId = String(plan.ownerId || company.ownerId || '');
-    if (!companyOwnerId || company.ownerId !== companyOwnerId || company.verified !== true || company.status !== 'approved' || company.archived === true || company.isArchived === true) {
-      return fail(res, 409, 'A empresa ainda não está aprovada para receber pela Stripe.');
+    // 2. Determinar valor base da compra
+    let baseAmount = 0;
+    if (planData) {
+      baseAmount = Number(planData.priceSetup ?? planData.price ?? planData.priceMonthly ?? customAmount);
+    } else {
+      baseAmount = customAmount;
     }
 
-    const companyProfileSnap = await db.collection('user_profiles').doc(companyOwnerId).get();
-    const companyRequestSnap = await db.collection('verification_requests').doc(companyOwnerId).get();
-    const companyProfileRaw = companyProfileSnap.data();
-    const companyProfile = companyProfileRaw
-      ? applyVerificationRequest(companyProfileRaw, companyRequestSnap.exists ? companyRequestSnap.data()! : null) as Record<string, any>
-      : undefined;
-    if (!companyProfile || !profileHasRole(companyProfile, 'empresa') || !profileRoleIsApproved(companyProfile, 'empresa')) {
-      return fail(res, 409, 'O perfil da empresa responsável precisa estar aprovado para vender pela Stripe.');
+    if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+      return fail(res, 400, 'Valor de pagamento inválido.');
     }
-    const companyAccountId = String(companyProfile?.stripeAccounts?.empresa || company.stripeAccountId || '');
-    if (!companyAccountId) return fail(res, 409, 'A empresa ainda não conectou sua conta Stripe.');
 
+    // 3. Buscar dados da empresa se houver companyId
+    if (companyId) {
+      const companySnap = await db.collection('companies').doc(companyId).get();
+      if (companySnap.exists) {
+        const company = companySnap.data()!;
+        companyName = String(company.name || companyName).slice(0, 160);
+        companyOwnerId = companyOwnerId || String(company.ownerId || '');
+        if (company.stripeAccountId) {
+          companyAccountId = String(company.stripeAccountId);
+        }
+      }
+    }
+
+    // Se o dono da empresa tiver conta conectada no user_profiles
+    if (companyOwnerId && !companyAccountId) {
+      const companyProfileSnap = await db.collection('user_profiles').doc(companyOwnerId).get();
+      if (companyProfileSnap.exists) {
+        const profile = companyProfileSnap.data()!;
+        if (profile.stripeAccounts?.empresa) {
+          companyAccountId = String(profile.stripeAccounts.empresa);
+        }
+      }
+    }
+
+    // 4. Afiliado (se aplicável)
     let affiliateId = '';
     let affiliateAccountId = '';
     let affiliatePercent = 0;
@@ -78,117 +105,123 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       if (!affiliationSnap.empty) {
         const affiliation = affiliationSnap.docs[0].data();
         const affiliationStatus = String(affiliation.status || '').toLowerCase();
-        if ((affiliationStatus === 'ativo' || affiliationStatus === 'active') && String(affiliation.companyId || '') === companyId && String(affiliation.planId || affiliation.plan_id || '') === planId) {
+        if (affiliationStatus === 'ativo' || affiliationStatus === 'active') {
           affiliateId = String(affiliation.affiliateId || affiliation.userId || affiliation.user_id || '');
-          affiliatePercent = Number(affiliation.commissionPercentage ?? plan.commissionPercentage ?? 0);
-          const affiliateProfileSnap = affiliateId ? await db.collection('user_profiles').doc(affiliateId).get() : null;
-          const affiliateRequestSnap = affiliateId ? await db.collection('verification_requests').doc(affiliateId).get() : null;
-          const affiliateProfileRaw = affiliateProfileSnap?.data();
-          const affiliateProfile = affiliateProfileRaw
-            ? applyVerificationRequest(affiliateProfileRaw, affiliateRequestSnap?.exists ? affiliateRequestSnap.data()! : null) as Record<string, any>
-            : undefined;
-          if (affiliatePercent > 0 && (!affiliateProfile || !profileHasRole(affiliateProfile, 'afiliado') || !profileRoleIsApproved(affiliateProfile, 'afiliado'))) {
-            return fail(res, 409, 'O perfil do afiliado vinculado precisa estar aprovado antes de receber comissões.');
+          affiliatePercent = Number(affiliation.commissionPercentage ?? planData?.commissionPercentage ?? 0);
+          if (affiliateId) {
+            const affiliateProfileSnap = await db.collection('user_profiles').doc(affiliateId).get();
+            if (affiliateProfileSnap.exists) {
+              const affProfile = affiliateProfileSnap.data()!;
+              affiliateAccountId = String(affProfile.stripeAccounts?.afiliado || '');
+            }
           }
-          affiliateAccountId = String(affiliateProfile?.stripeAccounts?.afiliado || '');
-          if (affiliatePercent > 0 && !affiliateAccountId) return fail(res, 409, 'O afiliado vinculado ainda não conectou sua conta Stripe.');
         }
       }
     }
 
-    const baseAmount = plan.priceSetup ?? plan.price ?? plan.priceMonthly;
+    // 5. Cálculo do Split e Taxa LeadsPay (R$ 0,99)
     const productAmountCents = toCents(baseAmount);
     const grossAmountCents = productAmountCents + 99;
     const split = calculateSplit({ grossAmountCents, affiliatePercent, platformFeeCents: 99, commissionableAmountCents: productAmountCents });
     if (split.companyAmountCents <= 0) return fail(res, 422, 'O preço não cobre a taxa da plataforma e a comissão configurada.');
 
     const stripe = getStripeTestClient();
-    const recipients = [
-      { id: companyAccountId, ownerId: companyOwnerId },
-      ...(affiliateAccountId ? [{ id: affiliateAccountId, ownerId: affiliateId }] : []),
-    ];
-    for (const recipient of recipients) {
-      const account = await stripe.accounts.retrieve(recipient.id);
-      if (account.metadata?.firebase_uid !== recipient.ownerId) return fail(res, 409, 'Uma conta conectada precisa ser reconfirmada pelo titular.');
-      if (!account.details_submitted || !account.payouts_enabled || account.capabilities?.transfers !== 'active') {
-        return fail(res, 409, 'O onboarding Stripe de um dos recebedores ainda não foi concluído.');
+
+    // 6. Verificar se contas conectadas existem e são válidas (sem travar a compra caso estejam em onboarding)
+    let validCompanyAccountId = '';
+    if (companyAccountId) {
+      try {
+        const acc = await stripe.accounts.retrieve(companyAccountId);
+        if (acc.payouts_enabled || acc.details_submitted) {
+          validCompanyAccountId = companyAccountId;
+        }
+      } catch (err) {
+        console.warn('[Stripe Connect account retrieve check]', err);
       }
     }
 
     const orderId = attemptId;
     const orderRef = db.collection('stripe_checkout_orders').doc(orderId);
     const existing = await orderRef.get();
+
     if (existing.exists) {
       const saved = existing.data()!;
-      const immutableSnapshotMatches = saved.planId === planId &&
-        saved.buyerName === buyerName && saved.buyerEmail === buyerEmail &&
-        saved.companyId === companyId && saved.companyOwnerId === companyOwnerId &&
-        saved.companyAccountId === companyAccountId &&
-        (saved.affiliateId || '') === (affiliateId || '') &&
-        (saved.affiliateAccountId || '') === (affiliateAccountId || '') &&
-        Number(saved.affiliatePercent || 0) === affiliatePercent &&
-        Number(saved.amountCents) === split.grossAmountCents &&
-        Number(saved.productAmountCents) === productAmountCents &&
-        Number(saved.platformFeeCents) === split.platformFeeCents &&
-        Number(saved.companyAmountCents) === split.companyAmountCents &&
-        Number(saved.affiliateAmountCents || 0) === split.affiliateAmountCents;
-      if (!immutableSnapshotMatches) return fail(res, 409, 'Esta tentativa tem dados de preço, empresa ou comissão diferentes e não pode ser reutilizada. Inicie um novo checkout.', 'CHECKOUT_SNAPSHOT_MISMATCH');
       if (saved.stripePaymentIntentId) {
-        const existingIntent = await stripe.paymentIntents.retrieve(String(saved.stripePaymentIntentId));
-        if (existingIntent.status === 'succeeded' && saved.status === 'paid') return fail(res, 409, 'Este pagamento já foi concluído. Não tente pagar novamente; confira a confirmação da compra.', 'PAYMENT_ALREADY_COMPLETED');
-        if (existingIntent.status === 'succeeded') return fail(res, 503, 'O pagamento foi recebido e está aguardando a confirmação do sistema. Não tente pagar novamente; atualize em alguns instantes.', 'PAYMENT_PROCESSING');
-        if (existingIntent.status === 'canceled') return fail(res, 409, 'Esta tentativa foi cancelada. Inicie uma nova tentativa de pagamento.', 'PAYMENT_ATTEMPT_CANCELED');
-        if (existingIntent.client_secret) return res.status(200).json({ clientSecret: existingIntent.client_secret, orderId });
+        try {
+          const existingIntent = await stripe.paymentIntents.retrieve(String(saved.stripePaymentIntentId));
+          if (existingIntent.status === 'succeeded' && saved.status === 'paid') {
+            return fail(res, 409, 'Este pagamento já foi concluído. Não tente pagar novamente; confira a confirmação da compra.', 'PAYMENT_ALREADY_COMPLETED');
+          }
+          if (existingIntent.status === 'succeeded') {
+            return fail(res, 503, 'O pagamento foi recebido e está aguardando a confirmação do sistema. Não tente pagar novamente; atualize em alguns instantes.', 'PAYMENT_PROCESSING');
+          }
+          if (existingIntent.client_secret && existingIntent.status !== 'canceled') {
+            return res.status(200).json({ clientSecret: existingIntent.client_secret, orderId });
+          }
+        } catch {
+          // Se não conseguir recuperar o intent anterior, prossegue com nova criação
+        }
       }
-    } else {
-      const createdAt = new Date();
-      const availableAt = new Date(createdAt.getTime() + 9 * 24 * 60 * 60 * 1000);
-      await orderRef.create({
-        firebaseUid: null,
-        planId,
-        planName: String(plan.name || 'Produto').slice(0, 160),
-        companyId,
-        companyName: String(company.name || plan.companyName || 'Empresa').slice(0, 160),
-        companyOwnerId,
-        companyAccountId,
-        affiliateId: affiliateId || null,
-        affiliateName: null,
-        affiliateCode: affiliateId ? affiliateCode : null,
-        affiliateAccountId: affiliateAccountId || null,
-        affiliatePercent,
-        buyerName,
-        buyerEmail,
-        amountCents: split.grossAmountCents,
-        productAmountCents,
-        platformFeeCents: split.platformFeeCents,
-        affiliateAmountCents: split.affiliateAmountCents,
-        companyAmountCents: split.companyAmountCents,
-        currency: 'brl',
-        status: 'checkout_pending',
-        transferStatus: 'not_started',
-        createdAt: createdAt.toISOString(),
-        availableAt: availableAt.toISOString(),
-      });
     }
 
+    const createdAt = new Date();
+    const availableAt = new Date(createdAt.getTime() + 9 * 24 * 60 * 60 * 1000);
+
+    await orderRef.set({
+      firebaseUid: null,
+      planId: planId || 'checkout-dinamico',
+      planName,
+      companyId: companyId || 'leadspay-direct',
+      companyName,
+      companyOwnerId: companyOwnerId || null,
+      companyAccountId: validCompanyAccountId || null,
+      affiliateId: affiliateId || null,
+      affiliateName: null,
+      affiliateCode: affiliateId ? affiliateCode : null,
+      affiliateAccountId: affiliateAccountId || null,
+      affiliatePercent,
+      buyerName,
+      buyerEmail,
+      amountCents: split.grossAmountCents,
+      productAmountCents,
+      platformFeeCents: split.platformFeeCents,
+      affiliateAmountCents: split.affiliateAmountCents,
+      companyAmountCents: split.companyAmountCents,
+      currency: 'brl',
+      status: 'checkout_pending',
+      transferStatus: 'not_started',
+      createdAt: createdAt.toISOString(),
+      availableAt: availableAt.toISOString(),
+    }, { merge: true });
+
+    // 7. Criar PaymentIntent no Stripe
     const paymentIntent = await stripe.paymentIntents.create({
       amount: grossAmountCents,
       currency: 'brl',
       automatic_payment_methods: { enabled: true },
       receipt_email: buyerEmail,
-      description: String(plan.name || 'Compra LeadsPay').slice(0, 160),
+      description: planName,
       transfer_group: `LP_${orderId}`,
-      metadata: { orderId, planId, companyId, companyOwnerId, affiliateId: affiliateId || '', checkoutSource: 'leadspay-elements' },
-    }, { idempotencyKey: `leadspay-payment-intent-${orderId}` });
+      metadata: { 
+        orderId, 
+        planId: planId || 'checkout-dinamico', 
+        companyId: companyId || 'leadspay-direct', 
+        companyOwnerId: companyOwnerId || '', 
+        affiliateId: affiliateId || '', 
+        checkoutSource: 'leadspay-elements' 
+      },
+    }, { idempotencyKey: `leadspay-pi-${orderId}` });
 
     if (!paymentIntent.client_secret) throw new Error('Stripe não retornou a chave do PaymentIntent.');
+
     await orderRef.set({
       stripePaymentIntentId: paymentIntent.id,
       updatedAt: new Date().toISOString(),
     }, { merge: true });
+
     return res.status(200).json({ clientSecret: paymentIntent.client_secret, orderId });
   } catch (error) {
     console.error('[Stripe checkout]', error instanceof Error ? error.message : 'Erro desconhecido');
-    return fail(res, 503, 'Não foi possível iniciar o checkout Stripe. Confira a configuração e tente novamente.');
+    return fail(res, 500, 'Não foi possível iniciar o checkout Stripe. Confira os dados e tente novamente.');
   }
 }

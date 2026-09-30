@@ -198,6 +198,12 @@ export interface CompanyPlan {
   };
   checkoutUrl?: string;
   status: 'Ativo' | 'Pausado';
+  active?: boolean;
+  apiKey?: string;
+  totalSalesCount?: number;
+  totalRevenue?: number;
+  allowAffiliates?: boolean;
+  updatedAt?: string;
   createdAt?: string;
 }
 
