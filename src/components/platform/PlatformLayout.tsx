@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   PlatformTab, 
   CompanyStartup,
@@ -120,7 +120,7 @@ import {
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
-import { requestNotificationPermission } from '../../lib/push';
+import '../../styles/platform-dashboard.css';
 
 interface PlatformLayoutProps {
   onBackToHome: () => void;
@@ -182,6 +182,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [affiliations, setAffiliations] = useState<UserAffiliation[]>([]);
   const [allAffiliations, setAllAffiliations] = useState<UserAffiliation[]>([]);
   const [transactions, setTransactions] = useState<SaleTransaction[]>([]);
+  const [salesDataLoaded, setSalesDataLoaded] = useState(false);
   const [paymentStats, setPaymentStats] = useState<PaymentMethodStat[]>(INITIAL_PAYMENT_STATS);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [dbConnected, setDbConnected] = useState<boolean>(false);
@@ -240,10 +241,29 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Live Toast Notification
   const [liveToast, setLiveToast] = useState<{ message: string; sub: string; amount: string } | null>(null);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [inAppNotifications, setInAppNotifications] = useState<Array<{ id: string; title: string; body: string; createdAt: string; unread: boolean }>>([]);
+  const processedSalesStatuses = useRef<Record<string, string>>({});
+  const hasLoadedSalesForNotifications = useRef(false);
 
   // Topbar Dropdown & Theme state
   const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('leadspay-landing-theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const syncTheme = (event: Event) => {
+      const theme = (event as CustomEvent<'light' | 'dark'>).detail;
+      if (theme === 'light' || theme === 'dark') setIsDarkMode(theme === 'dark');
+    };
+    window.addEventListener('leadspay-theme-change', syncTheme);
+    return () => window.removeEventListener('leadspay-theme-change', syncTheme);
+  }, []);
 
   // Modal de Boas-vindas & Onboarding de Primeiro Login do Afiliado
   const [isAffiliateOnboardingOpen, setIsAffiliateOnboardingOpen] = useState<boolean>(false);
@@ -305,21 +325,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setRoleMode(userRole);
     }
   }, [userRole, isMobileScreen]);
-
-  // Solicita permissão e registra subscrição Web Push no arranque do dashboard (Afiliado ou Empresa)
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-    const effectiveRole: 'affiliate' | 'company' = roleMode === 'empresa' ? 'company' : 'affiliate';
-    
-    // Pequeno atraso para carregar a interface antes do prompt nativo
-    const timeoutId = setTimeout(() => {
-      requestNotificationPermission(currentUser.uid, effectiveRole).catch((err) => {
-        console.warn('Aviso na solicitação de notificações push:', err);
-      });
-    }, 1500);
-
-    return () => clearTimeout(timeoutId);
-  }, [currentUser?.uid, roleMode]);
 
   useEffect(() => {
     if ((activeTab === 'database' || activeTab === 'modal_backgrounds') && !isSuperAdmin) {
@@ -445,6 +450,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // 1. Company-isolated or Global subscriptions (companies, plans, affiliations, and sales)
   useEffect(() => {
+    setTransactions([]);
+    setSalesDataLoaded(false);
     seedFirestoreIfEmpty().then(() => {
       setDbConnected(true);
     });
@@ -463,6 +470,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     const unsubSales = subscribeSales((salesList) => {
       setTransactions(salesList);
+      setSalesDataLoaded(true);
     }, effectiveCompanyId);
 
     return () => {
@@ -471,7 +479,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       unsubAllAffiliations();
       unsubSales();
     };
-  }, [effectiveCompanyId]);
+  }, [effectiveCompanyId, effectiveUserId]);
 
   // 2. User-specific subscriptions (user affiliations, user withdrawals strictly isolated to this account)
   useEffect(() => {
@@ -587,6 +595,80 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     return [];
   }, [transactions, effectiveUserId, roleMode, isSuperAdmin, userAffiliationCodes, myCompanyIds, myCompanyPlanIds]);
+
+  useEffect(() => {
+    const storageKey = `leadspay-in-app-notifications:${effectiveUserId}`;
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      setInAppNotifications(stored ? JSON.parse(stored) : []);
+    } catch {
+      setInAppNotifications([]);
+    }
+    processedSalesStatuses.current = {};
+    hasLoadedSalesForNotifications.current = false;
+  }, [effectiveUserId]);
+
+  useEffect(() => {
+    if (!effectiveUserId || !salesDataLoaded) return;
+    const isInitialSnapshot = !hasLoadedSalesForNotifications.current;
+    const approvedStatuses = new Set(['Aprovado', 'Liberado', 'RECEIVED', 'CONFIRMED']);
+    const now = Date.now();
+    const added: Array<{ id: string; title: string; body: string; createdAt: string; unread: boolean }> = [];
+    const nextStatuses = { ...processedSalesStatuses.current };
+
+    for (const sale of userVisibleTransactions) {
+      const id = String(sale.id || '');
+      if (!id) continue;
+      const currentStatus = String(sale.status || '');
+      const previousStatus = processedSalesStatuses.current[id];
+      const isApproved = approvedStatuses.has(currentStatus);
+      const justApproved = Boolean(previousStatus && !approvedStatuses.has(previousStatus) && isApproved);
+      const saleTime = Date.parse(sale.createdAt || sale.paidAt || sale.date || '');
+      const newlyVisibleAndRecent = !previousStatus && Number.isFinite(saleTime) && now - saleTime < 2 * 60 * 1000;
+
+      if (!isInitialSnapshot && userProfile.communicationPreferences?.inApp?.enabled === true && isApproved && (justApproved || newlyVisibleAndRecent)) {
+        const isAffiliate = roleMode === 'afiliado';
+        const value = isAffiliate ? Number(sale.commissionEarned || 0) : Number(sale.amount || 0);
+        const formattedValue = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        added.push({
+          id: `${id}:${currentStatus}:${roleMode}`,
+          title: isAffiliate ? 'Comissão atualizada' : 'Venda aprovada',
+          body: isAffiliate ? `Uma nova comissão de ${formattedValue} foi registrada na sua conta.` : `Uma venda de ${formattedValue} foi aprovada para ${sale.platformName || 'seu produto'}.`,
+          createdAt: new Date().toISOString(),
+          unread: true,
+        });
+      }
+      nextStatuses[id] = currentStatus;
+    }
+
+    processedSalesStatuses.current = nextStatuses;
+    hasLoadedSalesForNotifications.current = true;
+    if (!added.length) return;
+
+    setInAppNotifications(previous => {
+      const knownIds = new Set(previous.map(item => item.id));
+      const merged = [...added.filter(item => !knownIds.has(item.id)), ...previous].slice(0, 30);
+      try {
+        window.localStorage.setItem(`leadspay-in-app-notifications:${effectiveUserId}`, JSON.stringify(merged));
+      } catch {
+        // Avisos continuam visíveis durante esta sessão caso o navegador bloqueie armazenamento local.
+      }
+      return merged;
+    });
+  }, [transactions, userVisibleTransactions, effectiveUserId, salesDataLoaded, userProfile.communicationPreferences?.inApp?.enabled, roleMode]);
+
+  const unreadNotificationCount = inAppNotifications.filter(item => item.unread).length;
+  const markNotificationsAsRead = () => {
+    setInAppNotifications(previous => {
+      const updated = previous.map(item => ({ ...item, unread: false }));
+      try {
+        window.localStorage.setItem(`leadspay-in-app-notifications:${effectiveUserId}`, JSON.stringify(updated));
+      } catch {
+        // A lista permanece marcada como lida enquanto esta sessão estiver ativa.
+      }
+      return updated;
+    });
+  };
 
   // Dynamic payment stats derived strictly from real transactions
   const userPaymentStats = useMemo(() => {
@@ -984,7 +1066,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const affiliateNavItems = [
-    { id: 'dashboard' as PlatformTab, label: 'Dashboard & Carteira', icon: LayoutDashboard },
+    { id: 'dashboard' as PlatformTab, label: 'Visão geral e carteira', icon: LayoutDashboard },
     { id: 'comunidade' as PlatformTab, label: 'Comunidade VIP (Família)', icon: HeartHandshake, badge: 'WhatsApp' },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
@@ -1012,7 +1094,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
 
   return (
-    <div className="min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]">
+    <div className="leadspay-platform min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]" data-theme={isDarkMode ? 'dark' : 'light'}>
       {/* Background Ambience */}
       <div className="fixed top-0 right-1/4 w-[600px] h-[600px] bg-[#D9F22A]/[0.03] rounded-full blur-[180px] pointer-events-none -z-10" />
 
@@ -1369,9 +1451,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 ml-auto flex-shrink-0">
             {/* Dark / Light Mode Switcher */}
             <button 
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="hidden xs:flex items-center w-11 h-6 bg-[#1f293d] rounded-full p-0.5 border border-white/10 transition-colors cursor-pointer relative flex-shrink-0"
+              onClick={() => {
+                const nextTheme = isDarkMode ? 'light' : 'dark';
+                setIsDarkMode(nextTheme === 'dark');
+                try { window.localStorage.setItem('leadspay-landing-theme', nextTheme); } catch { /* Tema ativo nesta sessão. */ }
+                window.dispatchEvent(new CustomEvent('leadspay-theme-change', { detail: nextTheme }));
+              }}
+              className="flex items-center w-11 h-6 bg-[#1f293d] rounded-full p-0.5 border border-white/10 transition-colors cursor-pointer relative flex-shrink-0"
               title="Alternar Tema"
+              aria-label={`Ativar tema ${isDarkMode ? 'claro' : 'escuro'}`}
+              aria-pressed={isDarkMode}
             >
               <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
                 isDarkMode 
@@ -1382,48 +1471,50 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               </div>
             </button>
 
-            {/* Notification Bell with animated badge & click to trigger / test Web Push */}
+            {/* Central de notificações internas — opcional e sem serviços externos. */}
             <div className="relative flex-shrink-0">
               <button 
-                onClick={async () => {
-                  if (currentUser?.uid) {
-                    const effectiveRole: 'affiliate' | 'company' = roleMode === 'empresa' ? 'company' : 'affiliate';
-                    const granted = await requestNotificationPermission(currentUser.uid, effectiveRole);
-                    if (granted) {
-                      // Dispara um teste push direto pelo backend
-                      fetch('/api/notifications/test', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          userId: currentUser.uid,
-                          title: '🔔 Notificações LeadsPay Ativas!',
-                          body: `Você receberá avisos em tempo real de novas vendas e comissões para ${effectiveRole === 'affiliate' ? 'Afiliado' : 'Empresa'}.`
-                        })
-                      }).catch(() => null);
-
-                      setLiveToast({ 
-                        message: 'Notificações Ativadas', 
-                        sub: 'Notificação de teste enviada com sucesso ao seu navegador!', 
-                        amount: 'Push' 
-                      });
-                    } else {
-                      setLiveToast({ 
-                        message: 'Permissão de Notificação', 
-                        sub: 'Ative as notificações nas permissões do navegador.', 
-                        amount: 'Aviso' 
-                      });
-                    }
-                  } else {
-                    setLiveToast({ message: 'Notificações Ativas', sub: 'Nenhuma pendência recente no sistema.', amount: 'D+9' });
-                  }
-                  setTimeout(() => setLiveToast(null), 4000);
+                onClick={() => {
+                  const nextOpen = !isNotificationCenterOpen;
+                  setIsNotificationCenterOpen(nextOpen);
+                  setIsUserMenuOpen(false);
+                  if (nextOpen) markNotificationsAsRead();
                 }}
                 className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/70 hover:text-white cursor-pointer transition-colors"
-                title="Ativar e Testar Notificações Web Push"
+                title="Abrir central de notificações"
+                aria-label="Abrir central de notificações"
+                aria-expanded={isNotificationCenterOpen}
+                aria-haspopup="dialog"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D9F22A] animate-pulse" />
+                {unreadNotificationCount > 0 && <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-[#D9F22A] text-[#060A15] text-[9px] font-black flex items-center justify-center" aria-label={`${unreadNotificationCount} avisos não lidos`}>{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</span>}
               </button>
+              {isNotificationCenterOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Central de notificações"
+                  onKeyDown={event => { if (event.key === 'Escape') setIsNotificationCenterOpen(false); }}
+                  className="absolute right-0 top-11 z-50 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b1220] shadow-2xl"
+                >
+                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                    <div><h2 className="text-sm font-bold text-white">Avisos da sua conta</h2><p className="mt-0.5 text-[10px] text-white/45">Somente dentro da plataforma</p></div>
+                    <button type="button" onClick={() => setIsNotificationCenterOpen(false)} className="rounded-lg px-2 py-1 text-white/50 hover:bg-white/10 hover:text-white" aria-label="Fechar central de notificações">✕</button>
+                  </div>
+                  {inAppNotifications.length > 0 ? (
+                    <ul className="max-h-[min(60vh,420px)] overflow-y-auto divide-y divide-white/5">
+                      {inAppNotifications.map(item => (
+                        <li key={item.id} className="px-4 py-3.5">
+                          <p className="text-xs font-bold text-white">{item.title}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-white/65">{item.body}</p>
+                          <time className="mt-2 block text-[10px] text-white/35" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString('pt-BR')}</time>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="px-4 py-8 text-center"><Bell className="mx-auto h-6 w-6 text-white/30" aria-hidden="true" /><p className="mt-2 text-xs font-semibold text-white/70">Nenhum aviso por enquanto</p><p className="mt-1 text-[11px] text-white/40">Ative os avisos internos em Meu Perfil para acompanhar vendas e comissões.</p><button type="button" onClick={() => { setIsNotificationCenterOpen(false); setActiveTab('meu_perfil'); }} className="mt-4 rounded-lg bg-emerald-400/15 px-3 py-2 text-[11px] font-bold text-emerald-200 hover:bg-emerald-400/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">Configurar avisos</button></div>
+                  )}
+                </div>
+              )}
             </div>
 
 
@@ -1604,6 +1695,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   userEmail={userEmail || currentUser?.email || undefined}
                   onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
                   onBackToHome={onBackToHome}
+                  notificationItems={inAppNotifications}
+                  onOpenNotifications={markNotificationsAsRead}
                 />
               )}
 

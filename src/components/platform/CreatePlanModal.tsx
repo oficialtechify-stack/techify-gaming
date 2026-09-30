@@ -425,37 +425,22 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setBillingType('recorrente')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  billingType === 'recorrente'
-                    ? 'border-[#D9F22A] bg-[#D9F22A]/10 text-white'
-                    : 'border-white/10 bg-[#080d1a] text-white/60 hover:text-white'
-                }`}
+                disabled
+                title="Stripe Billing ainda não está disponível neste piloto."
+                className="p-3 rounded-xl border border-slate-200 bg-slate-100 text-left text-slate-400 opacity-70 cursor-not-allowed"
               >
                 <div className="font-bold text-xs flex items-center justify-between">
                   Assinatura Recorrente
-                  {billingType === 'recorrente' && <Check className="w-3.5 h-3.5 text-[#D9F22A]" />}
                 </div>
-                <span className="text-[11px] text-white/40 block mt-0.5">Renovação automática via Asaas</span>
+                <span className="text-[11px] block mt-0.5">Indisponível até a integração com Stripe Billing.</span>
               </button>
             </div>
 
             {billingType === 'recorrente' && (
-              <div className="pt-2 animate-fadeIn">
-                <label className="block text-[11px] font-bold text-white/80 mb-1.5">
-                  Frequência / Ciclo da Assinatura (API Asaas) *
-                </label>
-                <select
-                  value={billingCycle}
-                  onChange={(e) => setBillingCycle(e.target.value as any)}
-                  className="w-full bg-[#080d1a] border border-[#D9F22A]/40 text-white text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-[#D9F22A]"
-                >
-                  <option value="WEEKLY">Assinatura Semanal (WEEKLY)</option>
-                  <option value="MONTHLY">Assinatura Mensal (MONTHLY)</option>
-                  <option value="QUARTERLY">Assinatura Trimestral (QUARTERLY)</option>
-                  <option value="SEMIANNUALLY">Assinatura Semestral (SEMIANNUALLY)</option>
-                  <option value="YEARLY">Assinatura Anual (YEARLY)</option>
-                </select>
+              <div className="pt-2" role="status">
+                <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                  Este é um plano recorrente legado. Stripe Billing ainda não foi habilitado; o checkout não cobra renovação. Não é possível salvar ou publicar alterações recorrentes nesta versão.
+                </p>
               </div>
             )}
           </div>
@@ -910,18 +895,18 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
           {/* SUBMIT BUTTON */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || billingType === 'recorrente'}
             className="mt-2 w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isEditMode ? (
               <>
                 <Check className="w-4 h-4 stroke-[3]" />
-                {isSubmitting ? 'Salvando Alterações...' : 'Salvar Alterações do Plano'}
+                {billingType === 'recorrente' ? 'Stripe Billing indisponível' : isSubmitting ? 'Salvando Alterações...' : 'Salvar Alterações do Plano'}
               </>
             ) : (
               <>
                 <Layers className="w-4 h-4" />
-                {isSubmitting ? 'Salvando Plano...' : 'Salvar Plano & Liberar para Afiliados'}
+                {billingType === 'recorrente' ? 'Stripe Billing indisponível' : isSubmitting ? 'Salvando Plano...' : 'Salvar Plano & Liberar para Afiliados'}
               </>
             )}
           </button>

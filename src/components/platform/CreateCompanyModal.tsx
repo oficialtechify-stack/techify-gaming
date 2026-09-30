@@ -37,6 +37,8 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
   const [cnpj, setCnpj] = useState('');
   const [cpf, setCpf] = useState('');
   const [postalCode, setPostalCode] = useState('');
+  const [state, setState] = useState('');
+  const [city, setCity] = useState('');
   const [addressNumber, setAddressNumber] = useState('');
   const [address, setAddress] = useState('');
   const [tagline, setTagline] = useState('');
@@ -71,7 +73,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
     // Validação estrita de Documento Fiscal (CNPJ ou CPF) - Obrigatório!
     if (docType === 'CNPJ') {
       if (!cleanCnpj) {
-        setErrorMsg('O CNPJ da empresa é estritamente obrigatório para emissão de notas e recebimento no Asaas.');
+        setErrorMsg('Informe um CNPJ válido para o tipo de cadastro selecionado.');
         return;
       }
       if (cleanCnpj.length !== 14 || !isValidCNPJ(cleanCnpj) || /^0+$/.test(cleanCnpj)) {
@@ -80,7 +82,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       }
     } else {
       if (!cleanCpf) {
-        setErrorMsg('O CPF ou MEI é estritamente obrigatório para emissão de notas e recebimento no Asaas.');
+        setErrorMsg('Informe um CPF válido para o cadastro individual selecionado.');
         return;
       }
       if (cleanCpf.length !== 11 || !isValidCPF(cleanCpf) || /^0+$/.test(cleanCpf)) {
@@ -108,12 +110,16 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
 
     const cleanPostal = postalCode.replace(/\D/g, '');
     if (!cleanPostal || cleanPostal.length !== 8) {
-      setErrorMsg('O CEP fiscal é obrigatório com 8 dígitos para criação da subconta no Asaas.');
+      setErrorMsg('Informe um CEP válido com 8 dígitos para o cadastro.');
       return;
     }
 
     if (!addressNumber.trim()) {
       setErrorMsg('Informe o número do endereço fiscal da empresa.');
+      return;
+    }
+    if (!state.trim() || !city.trim()) {
+      setErrorMsg('Informe a cidade e o estado do endereço fiscal.');
       return;
     }
 
@@ -135,6 +141,8 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
       phone: cleanPhone,
       mobilePhone: cleanPhone,
       postalCode: cleanPostal,
+      state: state.trim() as any,
+      city: city.trim(),
       addressNumber: addressNumber.trim(),
       address: address.trim() || 'Sede Comercial',
       docType: docType,
@@ -331,7 +339,7 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             )}
             <p className="text-[10px] text-white/40 mt-1.5 flex items-center gap-1">
               <ShieldAlert className="w-3 h-3 text-[#D9F22A]" />
-              O documento fiscal é exigido para criação automática da subconta homologada no Asaas.
+              O documento informado será usado no cadastro. A Stripe fará sua própria validação durante o onboarding da conta conectada.
             </p>
           </div>
 
@@ -367,16 +375,17 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
             </div>
           </div>
 
-          {/* Endereço Fiscal Asaas (CEP e Número Obrigatórios) */}
+          {/* Endereço cadastral */}
           <div className="bg-[#050811]/80 border border-white/10 rounded-2xl p-3.5">
             <div className="flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider text-white/80">
               <MapPin className="w-3.5 h-3.5 text-[#D9F22A]" />
-              <span>Endereço Fiscal (Subconta Asaas) *</span>
+              <span>Endereço cadastral *</span>
             </div>
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2.5">
               <div className="col-span-1">
-                <label className="block text-[10px] text-white/50 mb-1">CEP Fiscal *</label>
+                <label htmlFor="company-postal-code" className="block text-[10px] text-white/50 mb-1">CEP Fiscal *</label>
                 <input
+                  id="company-postal-code"
                   type="text"
                   required
                   maxLength={9}
@@ -388,8 +397,9 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
               </div>
 
               <div className="col-span-1">
-                <label className="block text-[10px] text-white/50 mb-1">Número *</label>
+                <label htmlFor="company-address-number" className="block text-[10px] text-white/50 mb-1">Número *</label>
                 <input
+                  id="company-address-number"
                   type="text"
                   required
                   placeholder="Ex: 100"
@@ -399,13 +409,42 @@ export const CreateCompanyModal: React.FC<CreateCompanyModalProps> = ({
                 />
               </div>
 
-              <div className="col-span-1">
-                <label className="block text-[10px] text-white/50 mb-1">Logradouro / Bairro</label>
+              <div className="col-span-2">
+                <label htmlFor="company-address-line" className="block text-[10px] text-white/50 mb-1">Logradouro / Bairro</label>
                 <input
+                  id="company-address-line"
                   type="text"
                   placeholder="Av. Paulista"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+              <div className="col-span-1">
+                <label htmlFor="company-city" className="block text-[10px] text-white/50 mb-1">Cidade *</label>
+                <input
+                  id="company-city"
+                  type="text"
+                  required
+                  maxLength={100}
+                  autoComplete="address-level2"
+                  placeholder="Cidade"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
+                />
+              </div>
+              <div className="col-span-1">
+                <label htmlFor="company-state" className="block text-[10px] text-white/50 mb-1">Estado (UF) *</label>
+                <input
+                  id="company-state"
+                  type="text"
+                  required
+                  maxLength={2}
+                  autoComplete="address-level1"
+                  placeholder="SP"
+                  value={state}
+                  onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
                   className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
                 />
               </div>

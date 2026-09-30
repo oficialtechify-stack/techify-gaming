@@ -956,11 +956,14 @@ export async function approveCompanyInFirebase(companyId: string) {
       body: JSON.stringify({ companyId })
     });
 
-    if (res.ok) {
-      backendResult = await res.json();
+    const resJson = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(resJson?.error || 'Erro retornado pela API do Asaas ao homologar empresa.');
     }
+    backendResult = resJson;
   } catch (apiErr: any) {
-    console.warn('Aviso na chamada da rota de aprovação do backend, aplicando contingência direta:', apiErr);
+    console.error('Erro na chamada da rota de aprovação do Asaas:', apiErr);
+    throw apiErr;
   }
 
   // 2. Garante atualização no documento da empresa no Firestore

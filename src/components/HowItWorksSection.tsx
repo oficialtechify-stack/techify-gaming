@@ -58,9 +58,9 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({ onOpenModa
     },
     {
       step: '04',
-      title: 'Receba Comissões no PIX D+9',
-      desc: 'A cada pagamento de cliente, sua comissão de até 50% é liberada na sua carteira digital para saque seguro no prazo D+9.',
-      badge: 'Repasse PIX D+9',
+      title: 'Receba comissões via Stripe Connect',
+      desc: 'Após nove dias completos da confirmação do pagamento, a parcela elegível é transferida para sua conta Stripe Connect. O depósito bancário segue os requisitos e o calendário de payout da Stripe.',
+      badge: 'Repasse elegível em D+9',
     },
   ];
 

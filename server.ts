@@ -47,23 +47,59 @@ import {
 } from './lib/asaas';
 import { validateApiKey } from './lib/auth-partner';
 import { sendFulfillmentEmail, sendBillingEmail, sendRemarketingEmail } from './lib/email';
-import { 
-  getVapidPublicKey,
-  sendPushNotification,
-  notifyAffiliateCommission, 
-  notifyCompanySale, 
-  notifySystemUpdate 
-} from './src/lib/notifications';
 import { setupMcpRoutes } from './server/mcpRoutes';
 
-const app = express();
-const PORT = 3000;
+// Stripe & Profile Server Handlers
+import stripeOnboardingHandler from './api/stripe/onboarding';
+import stripeCheckoutHandler from './api/stripe/checkout';
+import stripeConnectStatusHandler from './api/stripe/connect-status';
+import stripeExpressDashboardHandler from './api/stripe/express-dashboard';
+import stripeStatusHandler from './api/stripe/status';
+import stripeWebhookHandler from './api/stripe/webhook';
+import stripeReleasesCronHandler from './api/crons/stripe-releases';
+import checkDocumentHandler from './api/profile/check-document';
+import submitVerificationHandler from './api/profile/submit-verification';
+import legacyLookupHandler from './api/profile/legacy-lookup';
+import affiliateJoinHandler from './api/affiliates/join';
+import auditIdentitiesHandler from './api/admin/audit-identities';
 
-app.use(express.json());
+const app = express();
+const PORT = Number(process.env.PORT || 3000);
+
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+
+// 💳 STRIPE CONNECT & PROFILE API ROUTES (Executam antes do interceptador legado)
+app.all('/api/stripe/checkout', (req, res) => stripeCheckoutHandler(req as any, res as any));
+app.all('/api/stripe/onboarding', (req, res) => stripeOnboardingHandler(req as any, res as any));
+app.all('/api/stripe/connect-status', (req, res) => stripeConnectStatusHandler(req as any, res as any));
+app.all('/api/stripe/express-dashboard', (req, res) => stripeExpressDashboardHandler(req as any, res as any));
+app.all('/api/stripe/status', (req, res) => stripeStatusHandler(req as any, res as any));
+app.all(['/api/stripe/webhook', '/api/webhooks/stripe', '/api/webhook/stripe'], (req, res) => stripeWebhookHandler(req as any, res as any));
+app.all('/api/crons/stripe-releases', (req, res) => stripeReleasesCronHandler(req as any, res as any));
+app.all('/api/cron/stripe-releases', (req, res) => stripeReleasesCronHandler(req as any, res as any));
+app.all('/api/profile/check-document', (req, res) => checkDocumentHandler(req as any, res as any));
+app.all('/api/profile/submit-verification', (req, res) => submitVerificationHandler(req as any, res as any));
+app.all('/api/profile/legacy-lookup', (req, res) => legacyLookupHandler(req as any, res as any));
+app.all('/api/affiliates/join', (req, res) => affiliateJoinHandler(req as any, res as any));
+app.all('/api/admin/audit-identities', (req, res) => auditIdentitiesHandler(req as any, res as any));
+
+app.use((req, res, next) => {
+  const retiredAsaasRoute = /^\/(?:api\/(?:payments(?:\/|$)|checkout(?:\/|$)|pix(?:\/|$)|subaccounts(?:\/|$)|asaas(?:\/|$)|withdrawals?(?:\/|$)|subscriptions?(?:\/|$)|plans\/checkout(?:\/|$)|cron\/release-balances(?:\/|$)|v3\/(?:accounts|payments|subaccounts)(?:\/|$)|webhooks\/asaas(?:\/|$)|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity)(?:\/|$))|webhooks\/asaas(?:\/|$)|webhook\/asaas(?:\/|$))/i.test(req.path);
+  if (!retiredAsaasRoute) return next();
+  return res.status(410).json({
+    error: true,
+    code: 'PAYMENT_PROVIDER_MIGRATED',
+    message: 'Rota de pagamento legada aposentada. Use os endpoints Stripe da LeadsPay.',
+  });
+});
 
 // Asaas API v3 Configuration
 const { apiUrl: ASAAS_ACTIVE_URL, apiKey: ASAAS_ACTIVE_KEY } = getAsaasConfig();
-console.log(`⚡ LeadsPay Gateway: Operando exclusivamente com Asaas v3 (${ASAAS_ACTIVE_URL})`);
+console.log('⚡ LeadsPay: rotas financeiras legadas aposentadas; Stripe Connect é servido pelas funções seguras em /api/stripe.');
 
 // Firebase Configuration for Backend
 const firebaseConfig = {
@@ -256,14 +292,8 @@ async function processBalanceReleases(): Promise<{ releasedCount: number; detail
   }
 }
 
-// Inicia verificação 5s após startup e agenda execução diária (24 horas)
-setTimeout(() => {
-  processBalanceReleases();
-}, 5000);
-
-setInterval(() => {
-  processBalanceReleases();
-}, 24 * 60 * 60 * 1000);
+// O cron legado de saldo local está desativado. A liberação D+9 oficial é
+// executada exclusivamente por /api/crons/stripe-releases no modelo Connect.
 
 // Endpoint Serverless / Cron para acionar ou consultar a liberação de saldos D+9
 app.all('/api/cron/release-balances', async (req, res) => {
@@ -306,8 +336,8 @@ app.get('/api/finances/summary', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    gateway: 'Asaas API v3 Active',
-    cron: 'Rotina de 9 dias ativa',
+    gateway: 'Stripe Connect',
+    cron: 'Liberação Stripe Connect D+9 ativa',
     time: new Date().toISOString() 
   });
 });
@@ -663,69 +693,6 @@ async function creditSaleCommissionAndBalances(paymentId: string, paymentData?: 
       console.warn('⚠️ [AgencyOS Webhook Dispatch Warning] Erro ao disparar webhook para AgencyOS:', agencyOsErr);
     }
 
-    // ── DISPARO DE NOTIFICAÇÕES WEB PUSH (AFILIADO & EMPRESA) ──
-    try {
-      // 1. Notificação Push de Comissão para o Afiliado
-      if (affiliateId && affiliateCommission > 0) {
-        let affiliatePushSub: any = null;
-        try {
-          const affDoc = await getDoc(doc(db, 'users', String(affiliateId)));
-          if (affDoc.exists() && affDoc.data()?.pushSubscription) {
-            affiliatePushSub = affDoc.data()?.pushSubscription;
-          }
-          if (!affiliatePushSub) {
-            const affProfDoc = await getDoc(doc(db, 'user_profiles', String(affiliateId)));
-            if (affProfDoc.exists() && affProfDoc.data()?.pushSubscription) {
-              affiliatePushSub = affProfDoc.data()?.pushSubscription;
-            }
-          }
-        } catch (pushErr) {
-          console.warn('Aviso ao obter subscrição push do afiliado:', pushErr);
-        }
-
-        if (affiliatePushSub) {
-          console.log(`📲 [WebPush] Enviando notificação de comissão de R$ ${affiliateCommission} para o afiliado ${affiliateId}`);
-          await notifyAffiliateCommission(affiliatePushSub, affiliateCommission).catch((e) => {
-            console.warn('Aviso no envio de push para afiliado:', e);
-          });
-        }
-      }
-
-      // 2. Notificação Push de Nova Venda para a Empresa
-      const companyTargetId = companyId || sellerId;
-      if (companyTargetId) {
-        let companyPushSub: any = null;
-        try {
-          const compDoc = await getDoc(doc(db, 'companies', String(companyTargetId)));
-          if (compDoc.exists() && compDoc.data()?.pushSubscription) {
-            companyPushSub = compDoc.data()?.pushSubscription;
-          }
-          if (!companyPushSub && sellerId) {
-            const userDoc = await getDoc(doc(db, 'users', String(sellerId)));
-            if (userDoc.exists() && userDoc.data()?.pushSubscription) {
-              companyPushSub = userDoc.data()?.pushSubscription;
-            }
-            if (!companyPushSub) {
-              const profDoc = await getDoc(doc(db, 'user_profiles', String(sellerId)));
-              if (profDoc.exists() && profDoc.data()?.pushSubscription) {
-                companyPushSub = profDoc.data()?.pushSubscription;
-              }
-            }
-          }
-        } catch (compPushErr) {
-          console.warn('Aviso ao obter subscrição push da empresa:', compPushErr);
-        }
-
-        if (companyPushSub) {
-          console.log(`📲 [WebPush] Enviando notificação de nova venda de R$ ${totalAmount} para a empresa ${companyTargetId}`);
-          await notifyCompanySale(companyPushSub, totalAmount, String(planName || 'Produto LeadsPay')).catch((e) => {
-            console.warn('Aviso no envio de push para empresa:', e);
-          });
-        }
-      }
-    } catch (pushDispatchErr) {
-      console.warn('Aviso no envio de notificações WebPush da venda:', pushDispatchErr);
-    }
 
 
   } catch (err) {
@@ -1519,18 +1486,7 @@ app.post(['/api/payments', '/api/payments/pix', '/api/pix', '/api/checkout'], as
       }
       partnerInfo = partner;
 
-      // Injete automaticamente os dados de subconta resolvidos da empresa vinculada àquela API Key
-      if (partner.asaasSubaccountId || partner.subaccountId) {
-        sellerSubaccountId = partner.asaasSubaccountId || partner.subaccountId;
-        body.subaccountId = sellerSubaccountId;
-      }
-      if (partner.asaasWalletId || partner.walletId) {
-        sellerWalletId = partner.asaasWalletId || partner.walletId;
-      }
-      if (partner.asaasApiKey || partner.subaccountApiKey) {
-        sellerApiKey = partner.asaasApiKey || partner.subaccountApiKey;
-      }
-      console.log(`🔑 [API Partner] Autenticado com sucesso para ${partner.companyName || partner.userId} (Subconta: ${sellerSubaccountId || 'Master'}, Wallet: ${sellerWalletId || 'Master'})`);
+      console.log(`🔑 [API Partner] Autenticado para ${partner.companyName || partner.userId}. A rota financeira legada está aposentada.`);
     }
 
     // Se amount não foi informado diretamente, mas planId foi passado, busca preço do plano
@@ -4701,188 +4657,8 @@ app.post('/api/agencyos/logs/clear', async (req, res) => {
 });
 
 // =========================================================================
-// 🔔 MÓDULO WEB PUSH: Subscrição, VAPID, Envio Direto e Cron Motivacional
+// 🔔 NOTIFICAÇÕES MULTICANAIS: endpoints autenticados e opt-in explícito
 // =========================================================================
-
-// 1. GET /api/notifications/vapid-public-key
-app.get('/api/notifications/vapid-public-key', (req, res) => {
-  return res.json({ publicKey: getVapidPublicKey() });
-});
-
-// 2. POST /api/notifications/subscribe (Pedir Permissão e Guardar o Token Push)
-app.post('/api/notifications/subscribe', async (req, res) => {
-  try {
-    const { userId, role, subscription } = req.body;
-    if (!userId || !subscription) {
-      return res.status(400).json({ error: 'userId e subscription são obrigatórios' });
-    }
-
-    const nowIso = new Date().toISOString();
-    const updateData = {
-      pushSubscription: subscription,
-      hasPush: true,
-      pushRole: role || 'affiliate',
-      pushUpdatedAt: nowIso
-    };
-
-    // Guarda na coleção 'users' e 'user_profiles'
-    try {
-      await setDoc(doc(db, 'users', String(userId)), updateData, { merge: true });
-    } catch (_) {}
-
-    try {
-      await setDoc(doc(db, 'user_profiles', String(userId)), updateData, { merge: true });
-    } catch (_) {}
-
-    // Se for papel de empresa, guarda também na coleção companies se houver correspondência
-    if (role === 'company') {
-      try {
-        await setDoc(doc(db, 'companies', String(userId)), {
-          pushSubscription: subscription,
-          hasPush: true,
-          updatedAt: nowIso
-        }, { merge: true });
-      } catch (_) {}
-    }
-
-    // Guarda também no registro indexado de subscrições ativas
-    try {
-      await setDoc(doc(db, 'push_subscriptions', String(userId)), {
-        userId: String(userId),
-        role: role || 'affiliate',
-        subscription,
-        updatedAt: nowIso
-      }, { merge: true });
-    } catch (_) {}
-
-    console.log(`✅ [WebPush] Subscrição Push salva para o usuário ${userId} (${role})`);
-    return res.json({ success: true, message: 'Subscrição push registrada com sucesso!' });
-  } catch (err: any) {
-    console.error('Erro ao registrar subscrição push:', err);
-    return res.status(500).json({ error: err.message || 'Erro ao salvar subscrição' });
-  }
-});
-
-// 3. POST /api/notifications/test (Disparo de teste para o próprio usuário)
-app.post('/api/notifications/test', async (req, res) => {
-  try {
-    const { userId, title, body, url } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'userId obrigatório' });
-    }
-
-    let subscription: any = null;
-    const uDoc = await getDoc(doc(db, 'users', String(userId)));
-    if (uDoc.exists() && uDoc.data()?.pushSubscription) {
-      subscription = uDoc.data()?.pushSubscription;
-    }
-    if (!subscription) {
-      const pDoc = await getDoc(doc(db, 'user_profiles', String(userId)));
-      if (pDoc.exists() && pDoc.data()?.pushSubscription) {
-        subscription = pDoc.data()?.pushSubscription;
-      }
-    }
-
-    if (!subscription) {
-      return res.status(404).json({ error: 'Nenhuma subscrição push ativa encontrada para este usuário.' });
-    }
-
-    await sendPushNotification(subscription, {
-      title: title || '⚡ Notificação de Teste LeadsPay',
-      body: body || 'Suas notificações Web Push estão funcionando perfeitamente!',
-      url: url || '/dashboard'
-    });
-
-    return res.json({ success: true, message: 'Notificação de teste enviada com sucesso!' });
-  } catch (err: any) {
-    console.error('Erro ao enviar teste push:', err);
-    return res.status(500).json({ error: err.message || 'Erro ao enviar notificação' });
-  }
-});
-
-// 4. GET & POST /api/crons/motivational (Cron Job para Frases Motivacionais Diário às 08:00)
-const MOTIVATIONAL_QUOTES = [
-  "O sucesso é a soma de pequenos esforços repetidos dia após dia. Boas vendas!",
-  "Cada lead é uma nova oportunidade. Mantenha o foco e feche negócios hoje!",
-  "Quem foca no processo colhe os resultados. Bora pra cima!",
-  "A disciplina é a ponte entre suas metas e suas realizações. Excelente dia de comissões!",
-  "Mais um dia, mais oportunidades de faturar alto com a LeadsPay. Foco na conversão!"
-];
-
-app.all(['/api/crons/motivational', '/api/cron/motivational'], async (req, res) => {
-  try {
-    // Validação da chave secreta do Cron (Bearer token ou query param secret)
-    const cronSecret = process.env.CRON_SECRET || 'leadspay_cron_secret_2026';
-    const authHeader = req.headers.authorization;
-    const querySecret = req.query.secret;
-
-    const isAuthorized = 
-      (authHeader && authHeader === `Bearer ${cronSecret}`) ||
-      (querySecret && querySecret === cronSecret) ||
-      process.env.NODE_ENV !== 'production';
-
-    if (!isAuthorized) {
-      return res.status(401).json({ error: 'Não autorizado' });
-    }
-
-    const quote = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
-
-    // Buscar todas as subscrições dos afiliados (em push_subscriptions ou users com hasPush: true)
-    const subscriptionsToNotify: Array<{ sub: any; userId: string }> = [];
-
-    try {
-      const qSubs = query(collection(db, 'push_subscriptions'), where('role', '==', 'affiliate'));
-      const snapSubs = await getDocs(qSubs);
-      snapSubs.forEach(d => {
-        const data = d.data();
-        if (data.subscription) {
-          subscriptionsToNotify.push({ sub: data.subscription, userId: data.userId || d.id });
-        }
-      });
-    } catch (_) {}
-
-    // Fallback: busca em users com hasPush: true
-    if (subscriptionsToNotify.length === 0) {
-      try {
-        const qUsers = query(collection(db, 'users'), where('hasPush', '==', true));
-        const snapUsers = await getDocs(qUsers);
-        snapUsers.forEach(d => {
-          const data = d.data();
-          if (data.pushSubscription) {
-            subscriptionsToNotify.push({ sub: data.pushSubscription, userId: d.id });
-          }
-        });
-      } catch (_) {}
-    }
-
-    console.log(`☀️ [Cron Motivacional] Enviando frase diária para ${subscriptionsToNotify.length} afiliados: "${quote}"`);
-
-    let sentCount = 0;
-    for (const item of subscriptionsToNotify) {
-      try {
-        await sendPushNotification(item.sub, {
-          title: '☀️ Bom dia, Afiliado!',
-          body: quote,
-          url: '/dashboard'
-        });
-        sentCount++;
-      } catch (errSend) {
-        console.warn(`Aviso ao enviar push motivacional para ${item.userId}:`, errSend);
-      }
-    }
-
-    return res.json({ 
-      success: true, 
-      sentCount, 
-      totalRecipients: subscriptionsToNotify.length,
-      quote 
-    });
-  } catch (err: any) {
-    console.error('Erro na execução do Cron motivacional:', err);
-    return res.status(500).json({ error: err.message || 'Erro no processamento do cron' });
-  }
-});
-
 // Start Server with Vite Middleware
 
 async function startServer() {
@@ -4931,4 +4707,3 @@ process.on('uncaughtException', (err) => {
 startServer().catch((err) => {
   console.error('❌ startServer promise rejection:', err);
 });
-

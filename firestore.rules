@@ -11,23 +11,18 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin') ||
-        (exists(/databases/$(database)/documents/user_profiles/$(request.auth.uid)) && get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.accountType == 'admin') ||
-        (exists(/databases/$(database)/documents/user_profiles/$(request.auth.uid)) && get(/databases/$(database)/documents/user_profiles/$(request.auth.uid)).data.role == 'Administrador do Sistema') ||
-        request.auth.token.email in ['leadspay.oficial@gmail.com', 'rickmarketing81@gmail.com', 'agencyosoficial@gmail.com', 'aigerakabane81983521523@gmail.com', 'admin@leadspay.com']
-      );
+      return isAuthenticated() && request.auth.token.email == 'rickmarketing81@gmail.com' && request.auth.token.email_verified == true;
     }
 
-    // Isolamento estrito multi-tenant: proibir leitura/escrita caso o request.auth.uid não pertença à empresa solicitante
-    match /companies/{companyId}/{document=**} {
-      allow read, write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
+    function isCompanyOwner(companyId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/companies/$(companyId)) &&
+        get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid;
     }
 
     // Documento raiz da empresa
     match /companies/{companyId} {
-      allow read: if (request.auth != null && (
+      allow read: if (isAuthenticated() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == companyId) ||
         resource.data.ownerId == request.auth.uid ||
         resource.data.userId == request.auth.uid ||
@@ -35,58 +30,105 @@ service cloud.firestore {
       )) || (resource.data.status == 'approved' || resource.data.verified == true);
 
       allow create: if isAuthenticated() && (
-        request.resource.data.ownerId == request.auth.uid ||
-        request.resource.data.userId == request.auth.uid ||
-        request.resource.data.submittedBy == request.auth.uid ||
-        isAdmin()
+        isAdmin() || (
+          (request.resource.data.ownerId == request.auth.uid ||
+           request.resource.data.userId == request.auth.uid ||
+           request.resource.data.submittedBy == request.auth.uid) &&
+          request.resource.data.status == 'draft' &&
+          (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+          (!('banned' in request.resource.data) || request.resource.data.banned == false) &&
+          !('stripeAccountId' in request.resource.data) &&
+          !('stripeOnboardingStatus' in request.resource.data) &&
+          (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status in ['pending', 'draft', 'unsubmitted'])
+        )
       );
 
-      allow update, delete: if isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == companyId) ||
-        resource.data.ownerId == request.auth.uid ||
-        resource.data.userId == request.auth.uid ||
-        isAdmin()
+      allow update: if isAuthenticated() && (
+        isAdmin() || ((resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid) &&
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived', 'archivedAt']) && request.resource.data.archived == true ||
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus', 'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt', 'ownerId', 'userId', 'submittedBy', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan']))
+          )
       );
+      allow delete: if isAdmin();
     }
 
-    // Perfis de Usuário
+    // Perfis de Usuário: clientes podem editar dados cadastrais, nunca aprovação, papel, tenant ou Stripe.
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        (!('role' in request.resource.data) || request.resource.data.role != 'admin') &&
+        (!('accountType' in request.resource.data) || request.resource.data.accountType != 'admin') &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+        (!('banned' in request.resource.data) || request.resource.data.banned == false) &&
+        (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('affiliateVerificationStatus' in request.resource.data) || request.resource.data.affiliateVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('empresaVerificationStatus' in request.resource.data) || request.resource.data.empresaVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('companyVerificationStatus' in request.resource.data) || request.resource.data.companyVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('status' in request.resource.data) || request.resource.data.status in ['draft', 'unsubmitted', 'pending']) &&
+        (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status in ['draft', 'pending', 'unsubmitted'])
+      ));
+      allow update: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'roleType', 'status', 'verificationReviewedAt', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'banned', 'banReason', 'companyId', 'isAdmin', 'activeRoleMode', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan'])
+      ));
+      allow delete: if isAdmin();
     }
 
     match /user_profiles/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        request.resource.data.accountType in ['afiliado', 'empresa', 'ambos'] &&
+        request.resource.data.role != 'Administrador do Sistema' &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+        (!('banned' in request.resource.data) || request.resource.data.banned == false) &&
+        (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('affiliateVerificationStatus' in request.resource.data) || request.resource.data.affiliateVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('empresaVerificationStatus' in request.resource.data) || request.resource.data.empresaVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('companyVerificationStatus' in request.resource.data) || request.resource.data.companyVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('status' in request.resource.data) || request.resource.data.status in ['draft', 'unsubmitted', 'pending'])
+      ));
+      allow update: if isAuthenticated() && (isAdmin() || (
+        request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'role', 'roleType', 'partnerLevel', 'hasAffiliateProfile', 'hasCompanyProfile', 'activeRoleMode', 'banned', 'banReason', 'verificationReviewedAt', 'isAdmin', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'status', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan']) &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
+        (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['draft', 'unsubmitted', 'pending']) &&
+        (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status == 'pending')
+      ));
+      allow delete: if isAdmin();
     }
 
-    // Planos e Produtos com vínculo multi-tenant
+    // Planos: o proprietário e a empresa não podem mover um plano para outro tenant.
     match /plans/{planId} {
       allow read: if true;
       allow create: if isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == request.resource.data.companyId) ||
-        request.resource.data.ownerId == request.auth.uid ||
-        isAdmin()
+        isAdmin() || (
+          request.resource.data.ownerId == request.auth.uid &&
+          ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == request.resource.data.companyId) || isCompanyOwner(request.resource.data.companyId))
+        )
       );
-      allow update, delete: if isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
-        resource.data.ownerId == request.auth.uid ||
-        isAdmin()
+      allow update: if isAuthenticated() && (
+        isAdmin() || (
+          (resource.data.ownerId == request.auth.uid || isCompanyOwner(resource.data.companyId)) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerId', 'companyId'])
+        )
       );
+      allow delete: if isAuthenticated() && (isAdmin() || resource.data.ownerId == request.auth.uid || isCompanyOwner(resource.data.companyId));
     }
 
-    // Vendas isoladas por empresa/afiliado (isoladas estritamente na aplicação por empresa e afiliado)
+    // Stripe sales are server-created only and readable only by the connected owner/affiliate or admin.
     match /sales/{saleId} {
-      allow read: if isAuthenticated();
-      allow create: if true;
-      allow update, delete: if isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
+      allow read: if isAuthenticated() && (
         resource.data.companyOwnerId == request.auth.uid ||
+        resource.data.affiliateId == request.auth.uid ||
         isAdmin()
       );
+      allow create, update, delete: if false;
     }
 
-    // Clientes isolados por empresa
+    // Clientes isolados por empresa; vínculo do tenant não pode ser alterado pelo cliente.
     match /clients/{clientId} {
       allow read: if isAuthenticated() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
@@ -96,17 +138,24 @@ service cloud.firestore {
         )) ||
         isAdmin()
       );
-      allow write: if isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+      allow create: if isAuthenticated() && (
+        isAdmin() || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
           getUserData().companyId == request.resource.data.companyId ||
           getUserData().companyId == request.resource.data.store_id ||
           getUserData().companyId == request.resource.data.empresa_id
-        )) ||
-        isAdmin()
+        ))
       );
+      allow update: if isAuthenticated() && (
+        isAdmin() || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (getUserData().companyId == resource.data.companyId || getUserData().companyId == resource.data.store_id || getUserData().companyId == resource.data.empresa_id) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['companyId', 'store_id', 'empresa_id', 'ownerId', 'userId'])
+        )
+      );
+      allow delete: if isAdmin();
     }
 
-    // Afiliações
+    // Afiliações: vínculos e comissionamento são autoritativos no servidor.
     match /affiliations/{affId} {
       allow read: if isAuthenticated() && (
         resource.data.affiliateId == request.auth.uid ||
@@ -115,60 +164,56 @@ service cloud.firestore {
         resource.data.companyOwnerId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (
-        resource.data.affiliateId == request.auth.uid ||
-        resource.data.userId == request.auth.uid ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
-        isAdmin()
-      );
+      allow create: if false;
+      allow update: if isAdmin() || (isAuthenticated() &&
+        (resource.data.affiliateId == request.auth.uid || resource.data.userId == request.auth.uid ||
+          resource.data.user_id == request.auth.uid || resource.data.companyOwnerId == request.auth.uid ||
+          isCompanyOwner(resource.data.companyId)) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt', 'updatedAt']) &&
+        request.resource.data.status == 'Encerrada' &&
+        (resource.data.status == 'Ativo' || resource.data.status == 'active'));
+      allow delete: if isAdmin();
     }
 
-    // Saques
+    // Saques bancários são geridos pela Stripe Connect; registros legados são somente leitura.
     match /withdrawals/{withdrawalId} {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().companyId == resource.data.companyId) ||
         isAdmin()
       );
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    // Solicitações de Verificação KYC
     match /verification_requests/{requestId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow write: if isAuthenticated() && (request.auth.uid == requestId || request.resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
     }
 
-    // Cupons de desconto
     match /coupons/{couponId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
-    // Push Subscriptions
     match /push_subscriptions/{subId} {
       allow read, write: if isAuthenticated() && (request.auth.uid == subId || isAdmin());
     }
 
-    // AgencyOS Webhook Logs & Settings
     match /agencyos_webhook_logs/{logId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isAdmin();
     }
 
     match /system_settings/{settingId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isAdmin();
     }
 
     match /platform_settings/{settingId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /platform_finances/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isAdmin();
     }
   }
 }
-

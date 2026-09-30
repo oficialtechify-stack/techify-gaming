@@ -1,0 +1,179 @@
+/* LeadsPay workspace: restrained, neutral surfaces shared by every account type.
+   These rules are deliberately scoped; the marketing page keeps its own palette. */
+.leadspay-platform {
+  --lp-page: #f5f6f7;
+  --lp-surface: #ffffff;
+  --lp-surface-soft: #f0f2f3;
+  --lp-ink: #192027;
+  --lp-muted: #53606b;
+  --lp-line: #dce1e5;
+  --lp-accent: #252c33;
+  --lp-accent-soft: #e9edef;
+  --lp-shadow: 0 12px 30px rgba(25, 32, 39, .055);
+  background: var(--lp-page);
+  color: var(--lp-ink);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+.leadspay-platform[data-theme="dark"] {
+  --lp-page: #101214;
+  --lp-surface: #191c1f;
+  --lp-surface-soft: #23272b;
+  --lp-ink: #f0f2f3;
+  --lp-muted: #b2bcc4;
+  --lp-line: #3a4249;
+  --lp-accent: #f0f2f3;
+  --lp-accent-soft: #272d32;
+  --lp-shadow: 0 16px 42px rgba(0, 0, 0, .22);
+}
+
+.leadspay-platform[data-theme] {
+  background-color: var(--lp-page) !important;
+  color: var(--lp-ink) !important;
+  color-scheme: light;
+}
+.leadspay-platform[data-theme="dark"] { color-scheme: dark; }
+
+/* One type system for both themes, even in older tabs with hardcoded Syne. */
+.leadspay-platform[data-theme] :is(h1, h2, h3, h4, button, input, select, textarea),
+.leadspay-platform[data-theme] [class*="font-['Syne']"] {
+  font-family: "Manrope", system-ui, sans-serif !important;
+}
+.leadspay-platform[data-theme] h1,
+.leadspay-platform[data-theme] h2,
+.leadspay-platform[data-theme] h3 {
+  letter-spacing: -.035em;
+}
+.leadspay-platform[data-theme] [class*="font-['Syne']"] { letter-spacing: -.025em; }
+
+.leadspay-platform[data-theme] > aside,
+.leadspay-platform[data-theme] header {
+  background: var(--lp-surface) !important;
+  border-color: var(--lp-line) !important;
+  color: var(--lp-ink) !important;
+}
+.leadspay-platform[data-theme] > aside { box-shadow: 6px 0 24px rgba(18, 25, 32, .04); }
+.leadspay-platform[data-theme="dark"] > aside { box-shadow: 6px 0 24px rgba(0, 0, 0, .14); }
+.leadspay-platform[data-theme] header { background: color-mix(in srgb, var(--lp-surface) 94%, transparent) !important; }
+
+/* Legacy Tailwind surfaces all resolve to the same card/input hierarchy. */
+.leadspay-platform[data-theme] [class*="bg-[#"],
+.leadspay-platform[data-theme] [class*="bg-emerald-"],
+.leadspay-platform[data-theme] [class*="bg-green-"],
+.leadspay-platform[data-theme] [class*="bg-lime-"],
+.leadspay-platform[data-theme] [class*="bg-rose-"],
+.leadspay-platform[data-theme] [class*="bg-red-"],
+.leadspay-platform[data-theme] [class*="bg-amber-"],
+.leadspay-platform[data-theme] [class*="bg-indigo-"],
+.leadspay-platform[data-theme] [class*="bg-blue-"],
+.leadspay-platform[data-theme] [class*="bg-sky-"],
+.leadspay-platform[data-theme] [class*="bg-cyan-"],
+.leadspay-platform[data-theme] [class*="bg-purple-"],
+.leadspay-platform[data-theme] [class*="bg-violet-"],
+.leadspay-platform[data-theme] [class*="bg-fuchsia-"],
+.leadspay-platform[data-theme] [class*="bg-pink-"],
+.leadspay-platform[data-theme] [class*="bg-orange-"],
+.leadspay-platform[data-theme] [class*="bg-yellow-"] {
+  background-color: var(--lp-surface) !important;
+  border-color: var(--lp-line);
+}
+.leadspay-platform[data-theme] [class*="bg-white/"],
+.leadspay-platform[data-theme] [class*="bg-[#D9F22A]/"],
+.leadspay-platform[data-theme] [class*="bg-gradient-to-"] {
+  background: var(--lp-surface-soft) !important;
+}
+.leadspay-platform[data-theme] [class*="bg-gradient-to-"] { background-image: none !important; }
+/* Keep the dimmed mobile-drawer/modal scrim dark; it is not a card. */
+.leadspay-platform[data-theme] [class*="bg-black/"]:not(.fixed) { background-color: var(--lp-surface-soft) !important; }
+
+.leadspay-platform[data-theme] button[class*="bg-[#D9F22A]"]:not([class*="/"]),
+.leadspay-platform[data-theme] button[class*="bg-[#c8e2"]:not([class*="/"]) {
+  background: var(--lp-ink) !important;
+  color: var(--lp-surface) !important;
+  border-color: var(--lp-ink) !important;
+}
+.leadspay-platform[data-theme] button[class*="bg-[#D9F22A]"]:not([class*="/"]) :is(span, svg),
+.leadspay-platform[data-theme] button[class*="bg-[#c8e2"]:not([class*="/"]) :is(span, svg) { color: inherit !important; }
+.leadspay-platform[data-theme] nav button[class*="bg-[#D9F22A]"],
+.leadspay-platform[data-theme] nav button[aria-current="page"] {
+  background: var(--lp-accent-soft) !important;
+  color: var(--lp-ink) !important;
+  border-color: var(--lp-line) !important;
+}
+
+.leadspay-platform[data-theme] [class~="text-white"],
+.leadspay-platform[data-theme] [class*="text-white/"],
+.leadspay-platform[data-theme] [class*="text-[#D9F22A]"],
+.leadspay-platform[data-theme] [class*="text-[#a3e635]"],
+.leadspay-platform[data-theme] [class*="text-[#b5f617]"],
+.leadspay-platform[data-theme] [class*="text-[#84CC16]"],
+.leadspay-platform[data-theme] [class*="text-emerald-"],
+.leadspay-platform[data-theme] [class*="text-green-"],
+.leadspay-platform[data-theme] [class*="text-lime-"],
+.leadspay-platform[data-theme] [class*="text-rose-"],
+.leadspay-platform[data-theme] [class*="text-red-"],
+.leadspay-platform[data-theme] [class*="text-amber-"],
+.leadspay-platform[data-theme] [class*="text-indigo-"],
+.leadspay-platform[data-theme] [class*="text-blue-"],
+.leadspay-platform[data-theme] [class*="text-sky-"],
+.leadspay-platform[data-theme] [class*="text-cyan-"],
+.leadspay-platform[data-theme] [class*="text-purple-"],
+.leadspay-platform[data-theme] [class*="text-violet-"],
+.leadspay-platform[data-theme] [class*="text-fuchsia-"],
+.leadspay-platform[data-theme] [class*="text-pink-"],
+.leadspay-platform[data-theme] [class*="text-orange-"],
+.leadspay-platform[data-theme] [class*="text-yellow-"],
+.leadspay-platform[data-theme] [class*="text-[#"] {
+  color: var(--lp-muted) !important;
+}
+.leadspay-platform[data-theme] :is(h1, h2, h3, h4)[class*="text-white"],
+.leadspay-platform[data-theme] :is(h1, h2, h3, h4)[class*="text-[#"] { color: var(--lp-ink) !important; }
+.leadspay-platform[data-theme] [class*="border-white/"],
+.leadspay-platform[data-theme] [class*="border-[#D9F22A]"],
+.leadspay-platform[data-theme] [class*="border-emerald-"],
+.leadspay-platform[data-theme] [class*="border-green-"],
+.leadspay-platform[data-theme] [class*="border-red-"],
+.leadspay-platform[data-theme] [class*="border-rose-"],
+.leadspay-platform[data-theme] [class*="border-amber-"],
+.leadspay-platform[data-theme] [class*="border-blue-"],
+.leadspay-platform[data-theme] [class*="border-purple-"],
+.leadspay-platform[data-theme] [class*="border-[#"] { border-color: var(--lp-line) !important; }
+.leadspay-platform[data-theme] :is(svg, img) { filter: grayscale(1); }
+.leadspay-platform[data-theme] [class*="divide-white/"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--lp-line) !important; }
+
+.leadspay-platform[data-theme] input:not([type="checkbox"]):not([type="radio"]),
+.leadspay-platform[data-theme] select,
+.leadspay-platform[data-theme] textarea {
+  background: var(--lp-surface) !important;
+  color: var(--lp-ink) !important;
+  border-color: var(--lp-line) !important;
+}
+.leadspay-platform[data-theme] input::placeholder,
+.leadspay-platform[data-theme] textarea::placeholder { color: var(--lp-muted) !important; opacity: .8; }
+.leadspay-platform[data-theme] input:disabled,
+.leadspay-platform[data-theme] button:disabled { opacity: .58; cursor: not-allowed; }
+.leadspay-platform[data-theme] input[type="checkbox"],
+.leadspay-platform[data-theme] input[type="radio"] { accent-color: var(--lp-accent); }
+.leadspay-platform[data-theme] table thead { background: var(--lp-surface-soft) !important; color: var(--lp-muted) !important; }
+.leadspay-platform[data-theme] table tbody tr:hover { background: var(--lp-surface-soft) !important; }
+.leadspay-platform[data-theme] [class*="shadow-"] { --tw-shadow-color: rgba(22, 30, 38, .09) !important; }
+
+.leadspay-platform[data-theme] button:not(:disabled) {
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .16s ease;
+}
+.leadspay-platform[data-theme] button:active { transform: scale(.985); }
+.leadspay-platform[data-theme] :focus-visible { outline: 2px solid var(--lp-accent) !important; outline-offset: 3px; }
+.leadspay-platform[data-theme] ::selection { background: var(--lp-accent-soft); color: var(--lp-ink); }
+.leadspay-platform[data-theme] ::-webkit-scrollbar-track { background: var(--lp-page); }
+.leadspay-platform[data-theme] ::-webkit-scrollbar-thumb { background: var(--lp-line); }
+
+@media (prefers-reduced-motion: reduce) {
+  .leadspay-platform button,
+  .leadspay-platform [class*="animate-"] {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

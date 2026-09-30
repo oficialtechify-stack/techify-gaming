@@ -6,11 +6,7 @@ import {
   MessageSquare, 
   Globe, 
   Users, 
-  Key, 
-  Copy, 
-  Check, 
   ExternalLink,
-  Mail,
   ShieldCheck,
   Sparkles
 } from 'lucide-react';
@@ -37,11 +33,10 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
   onBackToHome
 }) => {
   const [plan, setPlan] = useState<CompanyPlan | null>(initialPlan || null);
-  const [loading, setLoading] = useState<boolean>(!initialPlan);
-  const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number>(5);
+  const [stripeReturnStatus, setStripeReturnStatus] = useState<'checking' | 'paid' | 'failed' | 'unverified'>('checking');
 
-  // Extract from URL params if props not supplied
+  // The payment reference comes only from Stripe's return URL and is verified server-side.
   const [txId, setTxId] = useState<string>(initialTxId || '');
   const [amount, setAmount] = useState<number>(initialAmount || 0);
   const [customerName, setCustomerName] = useState<string>(initialName || '');
@@ -51,29 +46,58 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const urlPlanId = initialPlanId || params.get('plan') || params.get('planId') || params.get('checkout') || '';
-      const urlTx = initialTxId || params.get('txId') || params.get('transactionId') || params.get('id') || `LP-${Date.now().toString().slice(-6)}`;
-      const urlAmount = initialAmount || parseFloat(params.get('amount') || params.get('value') || '0');
-      const urlName = initialName || params.get('name') || params.get('customerName') || 'Cliente';
-      const urlEmail = initialEmail || params.get('email') || params.get('customerEmail') || '';
-
-      setTxId(urlTx);
-      if (urlAmount) setAmount(urlAmount);
-      if (urlName) setCustomerName(urlName);
-      if (urlEmail) setCustomerEmail(urlEmail);
-
       if (!initialPlan && urlPlanId) {
-        setLoading(true);
         getCompanyPlanByIdOrSlug(urlPlanId)
           .then((p) => {
             if (p) setPlan(p);
           })
           .catch((err) => console.warn('Erro ao carregar plano na Thank You page:', err))
-          .finally(() => setLoading(false));
-      } else {
-        setLoading(false);
       }
     }
   }, [initialPlanId, initialTxId, initialAmount, initialName, initialEmail, initialPlan]);
+
+  useEffect(() => {
+    const paymentIntentId = new URLSearchParams(window.location.search).get('payment_intent') || '';
+    if (!paymentIntentId) {
+      setStripeReturnStatus('unverified');
+      return;
+    }
+    let cancelled = false;
+    let attempts = 0;
+    const verify = async () => {
+      try {
+        const response = await fetch(`/api/stripe/status?payment_intent=${encodeURIComponent(paymentIntentId)}`, { cache: 'no-store' });
+        const result = await response.json();
+        if (cancelled) return;
+        if (result.status === 'paid') {
+          setStripeReturnStatus('paid');
+          setTxId(String(result.orderId || ''));
+          setAmount(Number(result.amount || 0));
+          setCustomerName(String(result.buyerName || ''));
+          setCustomerEmail(String(result.buyerEmail || ''));
+          if (result.planId && !initialPlan) {
+            const verifiedPlan = await getCompanyPlanByIdOrSlug(String(result.planId));
+            if (!cancelled && verifiedPlan) setPlan(verifiedPlan);
+          }
+          return;
+        }
+        if (result.status === 'failed') {
+          setStripeReturnStatus('failed');
+          return;
+        }
+      } catch (error) {
+        console.warn('[Stripe status] Ainda aguardando confirmação do webhook.', error);
+      }
+      attempts += 1;
+      if (attempts >= 40) {
+        if (!cancelled) setStripeReturnStatus('unverified');
+        return;
+      }
+      if (!cancelled) window.setTimeout(verify, 1500);
+    };
+    void verify();
+    return () => { cancelled = true; };
+  }, [initialPlan]);
 
   const deliveryType: ProductDeliveryType = plan?.deliveryType || 'redirect';
   const deliveryUrl = plan?.deliveryUrl || plan?.thankYouPageUrl || '';
@@ -81,21 +105,35 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
 
   // Auto-redirect countdown if redirect type with URL
   useEffect(() => {
+    if (stripeReturnStatus !== 'paid') return;
     if (deliveryType === 'redirect' && deliveryUrl && countdown > 0) {
       const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
       return () => clearTimeout(timer);
     } else if (deliveryType === 'redirect' && deliveryUrl && countdown === 0) {
       window.location.href = deliveryUrl;
     }
-  }, [deliveryType, deliveryUrl, countdown]);
+  }, [deliveryType, deliveryUrl, countdown, stripeReturnStatus]);
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 3000);
-  };
-
-  const generatedApiKey = `leadspay_live_${txId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12)}_${Date.now().toString(36)}`;
+  if (stripeReturnStatus !== 'paid') {
+    const waiting = stripeReturnStatus === 'checking';
+    const failed = stripeReturnStatus === 'failed';
+    return (
+      <main className="min-h-screen bg-[#070b14] text-white flex items-center justify-center p-5" aria-live="polite">
+        <section className="max-w-lg rounded-2xl border border-white/10 bg-[#0b1322] p-8 text-center shadow-2xl">
+          <div className="mx-auto mb-4 h-10 w-10 rounded-full border-2 border-white/20 border-t-lime-400 animate-spin" aria-hidden="true" />
+          <h1 className="text-xl font-bold">{waiting ? 'Confirmando seu pagamento' : failed ? 'Pagamento não concluído' : 'Não foi possível confirmar o pagamento'}</h1>
+          <p className="mt-3 text-sm leading-6 text-white/70">
+            {waiting
+              ? 'A Stripe está confirmando a transação. O acesso será liberado somente após a confirmação segura do pagamento.'
+              : failed
+                ? 'A Stripe informou que o pagamento não foi concluído. Você pode voltar ao checkout e tentar novamente.'
+                : 'Esta página não comprova pagamento. Se você concluiu a compra, aguarde alguns instantes e consulte o e-mail da Stripe.'}
+          </p>
+          {onBackToHome && <button type="button" onClick={onBackToHome} className="mt-6 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950">Voltar ao site</button>}
+        </section>
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
@@ -236,55 +274,25 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
               <p className="text-xs text-white/70 leading-relaxed">
                 Seu material digital (PDF, Drive ou Notion) está pronto para download imediato.
               </p>
-              <a
-                href={deliveryUrl || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-black font-black py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20"
-              >
-                <Download className="w-4 h-4" /> Baixar Arquivo / Acessar Guia
-              </a>
+              {deliveryUrl ? (
+                <a
+                  href={deliveryUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-black font-black py-3.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20"
+                >
+                  <Download className="w-4 h-4" /> Baixar Arquivo / Acessar Guia
+                </a>
+              ) : <p className="text-xs text-white/60">O link de download ainda não foi configurado pela empresa.</p>}
             </div>
           )}
 
-          {/* Method 5: API Key Generation */}
+          {/* Method 5: API key provisioning is not currently configured. */}
           {deliveryType === 'api_key' && (
-            <div className="p-5 rounded-2xl bg-[#050811] border border-amber-500/30 space-y-3">
-              <div className="flex items-center gap-2 text-amber-400">
-                <Key className="w-4 h-4" />
-                <h3 className="text-sm font-black font-['Syne']">Sua Chave de API / Token de Acesso</h3>
-              </div>
-              <p className="text-xs text-white/60">
-                Utilize esta chave nos cabeçalhos das suas requisições como <code className="text-amber-300">Authorization: Bearer</code>.
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={generatedApiKey}
-                  className="flex-1 bg-[#080d1a] border border-white/15 rounded-xl px-3 py-2 text-xs font-mono text-amber-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleCopy(generatedApiKey)}
-                  className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-3.5 py-2 rounded-xl text-xs uppercase flex items-center gap-1.5 cursor-pointer"
-                >
-                  {copiedKey ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
-                  {copiedKey ? 'Copiado!' : 'Copiar'}
-                </button>
-              </div>
-              {deliveryUrl && (
-                <div className="pt-2">
-                  <a
-                    href={deliveryUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1"
-                  >
-                    Ver Documentação da API <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              )}
+            <div className="p-5 rounded-2xl bg-[#050811] border border-white/15 space-y-3">
+              <h3 className="text-sm font-semibold">Provisionamento de acesso</h3>
+              <p className="text-xs text-white/70">O pagamento está confirmado, mas a emissão automática de uma chave de API não está configurada. Entre em contato com a empresa responsável para receber seu acesso.</p>
+              {deliveryUrl && <a href={deliveryUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-white underline">Consultar documentação <ExternalLink className="inline h-3 w-3" /></a>}
             </div>
           )}
 
@@ -298,7 +306,7 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
                 Liberação Automática no Sistema
               </h3>
               <p className="text-xs text-white/70 leading-relaxed">
-                Nosso servidor notificou o sistema da empresa via Webhook com sucesso. O seu usuário já está ativo com todas as permissões liberadas.
+                A Stripe confirmou o pagamento. A empresa responsável enviará as instruções para liberar sua conta.
               </p>
               {deliveryUrl && (
                 <a
@@ -323,14 +331,6 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
             </div>
           )}
 
-          {/* Email Confirmation Notice */}
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/5 text-[11px] text-white/50">
-            <Mail className="w-4 h-4 text-[#84CC16] flex-shrink-0" />
-            <span>
-              Uma cópia deste recibo e das instruções de entrega foi enviada para{' '}
-              <strong className="text-white/80">{customerEmail || 'seu e-mail'}</strong>.
-            </span>
-          </div>
         </div>
 
         {/* Back button */}

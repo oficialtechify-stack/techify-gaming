@@ -63,6 +63,8 @@ interface DashboardViewProps {
   userAvatar?: string;
   userEmail?: string;
   onBackToHome?: () => void;
+  notificationItems?: Array<{ id: string; title: string; body: string; createdAt: string; unread: boolean }>;
+  onOpenNotifications?: () => void;
 }
 
 // 3D Glowing Wallet Illustration matching the reference screenshots (Green & Purple variants)
@@ -273,7 +275,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   userName,
   userAvatar,
   userEmail,
-  onBackToHome
+  onBackToHome,
+  notificationItems = [],
+  onOpenNotifications
 }) => {
   // Eye visibility state (masks financial values)
   const [showValues, setShowValues] = useState<boolean>(true);
@@ -786,52 +790,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="relative flex-shrink-0">
             <button
               onClick={() => {
-                setIsBellMenuOpen(!isBellMenuOpen);
+                const willOpen = !isBellMenuOpen;
+                setIsBellMenuOpen(willOpen);
+                if (willOpen) onOpenNotifications?.();
                 setIsProfileMenuOpen(false);
                 setIsPeriodMenuOpen(false);
                 setIsProductMenuOpen(false);
               }}
               className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#070d18] hover:bg-[#0c1626] border border-white/10 hover:border-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer relative shadow-sm"
-              title="Notificações e Avisos do Sistema"
+              title="Central de notificações"
+              aria-label="Abrir central de notificações"
+              aria-expanded={isBellMenuOpen}
+              aria-haspopup="dialog"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#D9F22A] animate-pulse shadow-[0_0_8px_#D9F22A]" />
+              {notificationItems.some(item => item.unread) && <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-[#D9F22A] text-[#060A15] text-[9px] font-black flex items-center justify-center">{notificationItems.filter(item => item.unread).length > 9 ? '9+' : notificationItems.filter(item => item.unread).length}</span>}
             </button>
 
             {/* Notification Popover */}
             {isBellMenuOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsBellMenuOpen(false)} />
-                <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-32px)] bg-[#070d18] border border-white/15 rounded-2xl p-3.5 shadow-2xl z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                <button type="button" aria-label="Fechar central de notificações" className="fixed inset-0 z-40 cursor-default" onClick={() => setIsBellMenuOpen(false)} />
+                <div role="dialog" aria-label="Central de notificações" className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-32px)] bg-[#070d18] border border-white/15 rounded-2xl p-3.5 shadow-2xl z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
                   <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
                     <span className="text-xs font-bold text-white font-['Syne'] flex items-center gap-1.5">
                       <Bell className="w-3.5 h-3.5 text-[#D9F22A]" />
-                      Notificações LeadsPay
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D9F22A]/10 text-[#D9F22A] font-bold border border-[#D9F22A]/20">
-                      2 Novas
+                      Avisos da sua conta
                     </span>
                   </div>
-                  <div className="space-y-2">
-                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
-                      <div className="text-[11px] font-bold text-white flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        Sistema LeadsPay 100% Online
-                      </div>
-                      <div className="text-[10px] text-white/60 mt-0.5 leading-relaxed">
-                        Split instantâneo, comissões em D+9 e PIX automático habilitados.
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
-                      <div className="text-[11px] font-bold text-[#D9F22A] flex items-center gap-1.5">
-                        <HeartHandshake className="w-3.5 h-3.5 text-[#D9F22A]" />
-                        Comunidade VIP no WhatsApp
-                      </div>
-                      <div className="text-[10px] text-white/60 mt-0.5 leading-relaxed">
-                        Participe do grupo oficial de afiliados e tire dúvidas direto com o time.
-                      </div>
-                    </div>
-                  </div>
+                  {notificationItems.length ? (
+                    <ul className="max-h-72 space-y-2 overflow-y-auto">
+                      {notificationItems.map(item => <li key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5"><p className="text-[11px] font-bold text-white">{item.title}</p><p className="mt-1 text-[10px] leading-relaxed text-white/60">{item.body}</p><time className="mt-2 block text-[10px] text-white/40" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString('pt-BR')}</time></li>)}
+                    </ul>
+                  ) : (
+                    <div className="py-5 text-center"><Bell className="mx-auto h-5 w-5 text-white/30" aria-hidden="true" /><p className="mt-2 text-[11px] font-semibold text-white/70">Nenhum aviso por enquanto</p><button type="button" onClick={() => { setIsBellMenuOpen(false); setActiveTab('meu_perfil'); }} className="mt-3 rounded-lg bg-white/5 px-3 py-2 text-[10px] font-bold text-white/80 hover:bg-white/10">Configurar avisos no perfil</button></div>
+                  )}
                 </div>
               </>
             )}
