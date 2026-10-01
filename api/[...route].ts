@@ -1,16 +1,16 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import stripeCheckoutHandler from '../server-api/stripe/checkout';
-import stripeOnboardingHandler from '../server-api/stripe/onboarding';
-import stripeConnectStatusHandler from '../server-api/stripe/connect-status';
-import stripeExpressDashboardHandler from '../server-api/stripe/express-dashboard';
-import stripeStatusHandler from '../server-api/stripe/status';
-import stripeWebhookHandler from '../server-api/stripe/webhook';
-import stripeReleasesCronHandler from '../server-api/crons/stripe-releases';
-import checkDocumentHandler from '../server-api/profile/check-document';
-import submitVerificationHandler from '../server-api/profile/submit-verification';
-import legacyLookupHandler from '../server-api/profile/legacy-lookup';
-import affiliateJoinHandler from '../server-api/affiliates/join';
-import auditIdentitiesHandler from '../server-api/admin/audit-identities';
+import stripeCheckoutHandler from '../server-api/stripe/checkout.js';
+import stripeOnboardingHandler from '../server-api/stripe/onboarding.js';
+import stripeConnectStatusHandler from '../server-api/stripe/connect-status.js';
+import stripeExpressDashboardHandler from '../server-api/stripe/express-dashboard.js';
+import stripeStatusHandler from '../server-api/stripe/status.js';
+import stripeWebhookHandler from '../server-api/stripe/webhook.js';
+import stripeReleasesCronHandler from '../server-api/crons/stripe-releases.js';
+import checkDocumentHandler from '../server-api/profile/check-document.js';
+import submitVerificationHandler from '../server-api/profile/submit-verification.js';
+import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
+import affiliateJoinHandler from '../server-api/affiliates/join.js';
+import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
 
 export const config = {
   api: {
