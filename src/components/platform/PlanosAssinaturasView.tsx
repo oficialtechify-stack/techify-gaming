@@ -277,74 +277,42 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
 
   const currentPlans = isAffiliate ? affiliatePlans : companyPlans;
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // 1. FRONT-END: REDIRECIONAMENTO / INÍCIO DE CHECKOUT
-  // Ao clicar em "Ativar Plano", passa o userId e planId para vincular a cobrança no Asaas
-  // ──────────────────────────────────────────────────────────────────────────
+  // Checkout de assinatura Stripe: plano e preço são validados no servidor.
   const handleOpenCheckoutFlow = async (plan: SubscriptionPlanCard) => {
     setSelectedPlanModal(plan);
     setCheckoutData(null);
     setPixCopied(false);
-
-    if (plan.price === 0) {
-      // Ativação do plano gratuito direto
-      try {
-        const nowIso = new Date().toISOString();
-        if (currentUserId) {
-          await setDoc(doc(db, 'users', currentUserId), {
-            plan: plan.id,
-            planStatus: 'active',
-            subscriptionTier: plan.id,
-            subscriptionName: plan.name,
-            updatedAt: nowIso
-          }, { merge: true });
-        }
-        setActivationSuccess(`Plano ${plan.name} ativado.`);
-        setTimeout(() => setActivationSuccess(null), 2500);
-      } catch (err) {
-        console.warn('Erro ao ativar plano grátis:', err);
-      }
-      return;
-    }
-
-    // Gerar checkout vinculando userId e planId via externalReference
     setIsGeneratingCheckout(true);
     try {
-      const res = await fetch('/api/plans/checkout', {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Faça login novamente para contratar um plano.');
+      const token = await user.getIdToken();
+      const res = await fetch('/api/stripe/subscription-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUserId,
-          planId: plan.id,
-          customerName: userProfile.name || userProfile.email?.split('@')[0] || 'Afiliado LeadsPay',
-          customerEmail: userProfile.email || 'afiliado@leadspay.com',
-          customerCpfCnpj: userProfile.cpf || userProfile.cnpj || '00000000000',
-          billingType: 'PIX'
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ planId: plan.id, role: roleMode })
       });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCheckoutData(data);
-      } else {
-        throw new Error(data.error || 'Falha ao iniciar checkout');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Falha ao iniciar checkout Stripe');
+      if (data.url) {
+        window.location.assign(data.url);
+        return;
+      }
+      if (data.activated || data.alreadyActive) {
+        setActivationSuccess(`Plano ${plan.name} ativo com sucesso.`);
+        setSelectedPlanModal(null);
+        onUpdateProfile?.({
+          plan: plan.id,
+          planStatus: 'active',
+          subscriptionTier: plan.id,
+          subscriptionName: plan.name,
+          subscriptionPrice: plan.price
+        });
+        setTimeout(() => setActivationSuccess(null), 3000);
       }
     } catch (err: any) {
-      console.error('Erro ao gerar checkout do plano:', err);
-      // Fallback gracioso com dados de pagamento simulados para teste imediato
-      setCheckoutData({
-        paymentId: `pay_${Date.now()}`,
-        userId: currentUserId,
-        planId: plan.id,
-        planName: plan.name,
-        value: plan.price,
-        externalReference: `${currentUserId}:${plan.id}`,
-        invoiceUrl: `https://leadspay.com/checkout/plan/${plan.id}?ref=${currentUserId}`,
-        pixQrCode: {
-          payload: `00020126580014br.gov.bcb.pix0136leadspay-${plan.id}-${currentUserId.slice(0, 8)}520400005303986540${plan.price.toFixed(2)}5802BR5910LEADSPAY6009SAOPAULO62140510pay_${Date.now()}6304`
-        },
-        webhookEndpoint: '/webhooks/asaas'
-      });
+      console.error('Erro ao iniciar assinatura Stripe:', err);
+      window.alert(err?.message || 'Não foi possível iniciar a assinatura.');
     } finally {
       setIsGeneratingCheckout(false);
     }
@@ -634,10 +602,10 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
             </div>
             <div>
               <div className="text-sm font-bold text-white group-hover:text-[#D9F22A] transition-colors">
-                Configuração do Webhook no Asaas (Guia Passo a Passo)
+                Configuração do Webhook da Stripe (Guia Passo a Passo)
               </div>
               <div className="text-xs text-white/50">
-                Notificação instantânea de confirmação (PAYMENT_RECEIVED / PAYMENT_CONFIRMED)
+                Confirmação de pagamentos, assinaturas e eventos de risco
               </div>
             </div>
           </div>
@@ -649,27 +617,27 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
         {showWebhookGuide && (
           <div className="mt-6 pt-6 border-t border-white/10 space-y-4 text-xs text-white/70 leading-relaxed animate-fadeIn">
             <p>
-              Para liberação 100% automatizada das assinaturas, cadastre o endpoint no painel do Asaas em <strong>Configurações &gt; Integrações &gt; Webhooks para Cobranças</strong>:
+              Para liberação 100% automatizada das assinaturas, cadastre o endpoint no painel da Stripe em <strong>Developers &gt; Webhooks</strong>:
             </p>
 
             <div className="p-4 rounded-xl bg-[#050811] border border-white/10 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-white/50">URL do Webhook:</span>
                 <span className="font-mono text-white select-all bg-white/5 px-2 py-1 rounded">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/webhooks/asaas` : 'https://api.leadspay.com/webhooks/asaas'}
+                  {typeof window !== 'undefined' ? `${window.location.origin}/api/stripe/webhook` : 'https://www.techify.sbs/api/stripe/webhook'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white/50">Eventos Obrigatórios:</span>
-                <span className="font-mono text-[#D9F22A]">PAYMENT_RECEIVED, PAYMENT_CONFIRMED</span>
+                <span className="font-mono text-[#D9F22A]">payment_intent.succeeded, invoice.paid, customer.subscription.updated</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white/50">Cabeçalho de Segurança:</span>
-                <span className="font-mono text-white">asaas-access-token</span>
+                <span className="font-mono text-white">stripe-signature</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white/50">Vinculação de Usuário:</span>
-                <span className="font-mono text-white">externalReference: {'{userId}:{planId}'}</span>
+                <span className="font-mono text-white">metadata: { firebase_uid, plan_id, role }</span>
               </div>
             </div>
 
@@ -731,7 +699,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
             {isGeneratingCheckout ? (
               <div className="p-8 rounded-2xl bg-[#050811] border border-white/10 flex flex-col items-center justify-center gap-3 text-center my-4">
                 <RefreshCw className="w-8 h-8 text-[#D9F22A] animate-spin" />
-                <div className="text-sm font-bold text-white">Gerando cobrança Asaas vinculada ao seu usuário...</div>
+                <div className="text-sm font-bold text-white">Abrindo checkout seguro da Stripe...</div>
                 <div className="text-xs text-white/50">Aguarde um instante...</div>
               </div>
             ) : checkoutData ? (
@@ -793,7 +761,7 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
                     rel="noopener noreferrer"
                     className="w-full py-3.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-white/10 hover:border-[#D9F22A]/40 group text-center"
                   >
-                    <span>Abrir Fatura / Checkout no Asaas</span>
+                    <span>Abrir Checkout na Stripe</span>
                     <ExternalLink className="w-4 h-4 text-[#D9F22A] group-hover:translate-x-0.5 transition-transform" />
                   </a>
                 )}

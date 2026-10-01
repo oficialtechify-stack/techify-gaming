@@ -14,7 +14,7 @@ interface CustomCheckoutPageProps {
 }
 
 export const PLATFORM_CHECKOUT_FEE = 0.99;
-const stripePublishableKey = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || (import.meta.env as any).NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_live_51UKGdQAAo6Vay4tTDm4iT1YDNqe6v9WljebIVOU6rJRSft1uJP8qGjWIqUX7Lg9CNpF5Rw3t2OG0wJxiEsSA0u5x00PSNLG2pl').trim();
+const stripePublishableKey = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || (import.meta.env as any).NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '').trim();
 const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
 const createAttemptId = () => (window.crypto?.randomUUID?.() || `${Date.now()}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`).replace(/-/g, '');
 
@@ -97,10 +97,6 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           planId: plan.id,
-          planName: plan.name || 'Cobrança LeadsPay',
-          amount: basePrice,
-          companyId: plan.companyId || '',
-          apiKey: (plan as any).apiKey || '',
           attemptId: stripeAttemptId.current,
           buyerName: fullName.trim(),
           buyerEmail: email.trim(),

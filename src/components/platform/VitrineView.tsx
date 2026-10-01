@@ -202,109 +202,35 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
   const handleAffiliateClick = async (product: CompanyPlan) => {
     if (joiningPlanId) return;
-
-    // BLOQUEIO ESTRITO: Apenas usuários verificados podem se afiliar
     if (!isVerified) {
       setShowVerificationModal(true);
       return;
     }
-
+    if (!currentUser) {
+      window.alert('Faça login novamente para se afiliar.');
+      return;
+    }
     try {
       setJoiningPlanId(product.id);
-
-      const effectiveName = userProfile?.name || currentUser?.displayName || 'Afiliado LeadsPay';
-      const effectiveEmail = userProfile?.email || currentUser?.email || 'afiliado@leadspay.com';
-
-      // Cria afiliação imediata para feedback instantâneo e permanência garantida
-      const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const userPart = effectiveUserId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
-      const generatedCode = `AFF-${userPart || 'USR'}-${randPart}`;
-      const tempAff: UserAffiliation = {
-        id: `aff_${effectiveUserId}_${product.id}`,
-        userId: effectiveUserId,
-        user_id: effectiveUserId,
-        userName: effectiveName,
-        userEmail: effectiveEmail,
-        companyId: product.companyId,
-        companyName: product.companyName,
-        companyLogo: product.companyLogo,
-        planId: product.id,
-        plan_id: product.id,
-        planName: product.name,
-        priceSetup: product.priceSetup,
-        commissionPercentage: product.commissionPercentage,
-        commissionValue: product.commissionValue,
-        affiliateCode: generatedCode,
-        affiliate_code: generatedCode,
-        affiliateLink: formatAffiliatePlanUrl(product.id, generatedCode),
-        clicks: 0,
-        salesCount: 0,
-        totalEarned: 0,
-        status: 'Ativo',
-        createdAt: new Date().toISOString()
-      };
-
-      // Grava no localStorage para permanência instantânea
-      try {
-        localStorage.setItem(`leadspay_aff_${product.id}_${effectiveUserId}`, JSON.stringify(tempAff));
-        localStorage.setItem(`leadspay_aff_${product.id}`, JSON.stringify(tempAff));
-      } catch (e) {}
-
-      // Atualiza o estado visual instantaneamente
-      setLocalAffiliations(prev => {
-        const filtered = prev.filter(a => (a.planId || a.plan_id) !== product.id);
-        return [...filtered, tempAff];
-      });
-
+      const token = await currentUser.getIdToken();
       const response = await fetch('/api/affiliates/join', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          planId: product.id,
-          userId: effectiveUserId,
-          userName: effectiveName,
-          userEmail: effectiveEmail
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ planId: product.id })
       });
-
-      const text = await response.text();
-      let data: any = {};
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success || !data.affiliation) throw new Error(data.error || 'Não foi possível concluir a afiliação.');
+      const newAff = data.affiliation as UserAffiliation;
       try {
-        data = JSON.parse(text);
-      } catch (parseErr) {
-        console.warn('Resposta não-JSON de /api/affiliates/join:', text);
-      }
-
-      if (response.ok && data.success && data.affiliation) {
-        const newAff = data.affiliation as UserAffiliation;
-        try {
-          localStorage.setItem(`leadspay_aff_${product.id}_${effectiveUserId}`, JSON.stringify(newAff));
-          localStorage.setItem(`leadspay_aff_${product.id}`, JSON.stringify(newAff));
-        } catch (e) {}
-
-        setLocalAffiliations(prev => {
-          return prev.map(a => ((a.planId || a.plan_id) === product.id ? newAff : a));
-        });
-
-        if (onJoinAffiliate) {
-          onJoinAffiliate(product);
-        }
-
-        // Abre o modal de divulgação exibindo imediatamente o link formatado com ?ref=MEU_CODIGO
-        setSelectedAffModal({ plan: product, aff: newAff });
-      } else {
-        if (onJoinAffiliate) {
-          onJoinAffiliate(product);
-        }
-        setSelectedAffModal({ plan: product, aff: tempAff });
-      }
-    } catch (err) {
+        localStorage.setItem(`leadspay_aff_${product.id}_${effectiveUserId}`, JSON.stringify(newAff));
+        localStorage.setItem(`leadspay_aff_${product.id}`, JSON.stringify(newAff));
+      } catch {}
+      setLocalAffiliations(prev => [...prev.filter(a => (a.planId || a.plan_id) !== product.id), newAff]);
+      onJoinAffiliate?.(product);
+      setSelectedAffModal({ plan: product, aff: newAff });
+    } catch (err:any) {
       console.error('Erro na requisição /api/affiliates/join:', err);
-      if (onJoinAffiliate) {
-        onJoinAffiliate(product);
-      }
+      window.alert(err?.message || 'Não foi possível concluir a afiliação.');
     } finally {
       setJoiningPlanId(null);
     }

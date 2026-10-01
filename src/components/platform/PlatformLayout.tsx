@@ -833,6 +833,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         amount: `R$ ${created.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
       setTimeout(() => setLiveToast(null), 4000);
+      return created;
     } catch (err: any) {
       console.error('Error creating plan:', err);
       setLiveToast({
@@ -841,6 +842,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         amount: 'Erro'
       });
       setTimeout(() => setLiveToast(null), 5000);
+      throw err;
     }
   };
 
@@ -1899,6 +1901,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
               onCreateCustomPlan={handleCreatePlan}
+              onDeletePlan={handleDeletePlan}
             />
           )}
           {activeTab === 'saques' && (
