@@ -4,9 +4,32 @@
       "collectionGroup": "stripe_checkout_orders",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "transferStatus", "order": "ASCENDING" },
-        { "fieldPath": "availableAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "transferStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "availableAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "balance_releases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "availableAt",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

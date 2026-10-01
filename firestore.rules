@@ -47,7 +47,7 @@ service cloud.firestore {
         isAdmin() || ((resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid) &&
           (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived', 'archivedAt']) && request.resource.data.archived == true ||
-            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus', 'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt', 'ownerId', 'userId', 'submittedBy', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan']))
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus', 'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt', 'ownerId', 'userId', 'submittedBy', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents']))
           )
       );
       allow delete: if isAdmin();
@@ -67,7 +67,11 @@ service cloud.firestore {
         (!('empresaVerificationStatus' in request.resource.data) || request.resource.data.empresaVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
         (!('companyVerificationStatus' in request.resource.data) || request.resource.data.companyVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
         (!('status' in request.resource.data) || request.resource.data.status in ['draft', 'unsubmitted', 'pending']) &&
-        (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status in ['draft', 'pending', 'unsubmitted'])
+        (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status in ['draft', 'pending', 'unsubmitted']) &&
+        (!('availableBalance' in request.resource.data) || request.resource.data.availableBalance == 0) &&
+        (!('pendingBalance' in request.resource.data) || request.resource.data.pendingBalance == 0) &&
+        !('stripeSubscriptionId' in request.resource.data) &&
+        !('stripeCustomerId' in request.resource.data)
       ));
       allow update: if isAuthenticated() && (isAdmin() || (
         request.auth.uid == userId &&
@@ -88,11 +92,15 @@ service cloud.firestore {
         (!('affiliateVerificationStatus' in request.resource.data) || request.resource.data.affiliateVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
         (!('empresaVerificationStatus' in request.resource.data) || request.resource.data.empresaVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
         (!('companyVerificationStatus' in request.resource.data) || request.resource.data.companyVerificationStatus in ['draft', 'unsubmitted', 'pending']) &&
-        (!('status' in request.resource.data) || request.resource.data.status in ['draft', 'unsubmitted', 'pending'])
+        (!('status' in request.resource.data) || request.resource.data.status in ['draft', 'unsubmitted', 'pending']) &&
+        (!('availableBalance' in request.resource.data) || request.resource.data.availableBalance == 0) &&
+        (!('pendingBalance' in request.resource.data) || request.resource.data.pendingBalance == 0) &&
+        !('stripeSubscriptionId' in request.resource.data) &&
+        !('stripeCustomerId' in request.resource.data)
       ));
       allow update: if isAuthenticated() && (isAdmin() || (
         request.auth.uid == userId &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'role', 'roleType', 'partnerLevel', 'hasAffiliateProfile', 'hasCompanyProfile', 'activeRoleMode', 'banned', 'banReason', 'verificationReviewedAt', 'isAdmin', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'status', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'role', 'roleType', 'partnerLevel', 'hasAffiliateProfile', 'hasCompanyProfile', 'activeRoleMode', 'banned', 'banReason', 'verificationReviewedAt', 'isAdmin', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'status', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents']) &&
         (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
         (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['draft', 'unsubmitted', 'pending']) &&
         (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status == 'pending')
@@ -183,6 +191,23 @@ service cloud.firestore {
         isAdmin()
       );
       allow create, update, delete: if isAdmin();
+    }
+
+    match /balance_releases/{releaseId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    match /stripe_checkout_orders/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /stripe_webhook_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /stripe_subscription_checkouts/{sessionId} {
+      allow read, write: if false;
     }
 
     match /verification_requests/{requestId} {

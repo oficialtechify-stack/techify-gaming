@@ -1,6 +1,9 @@
 import Stripe from 'stripe';
+import { createHash } from 'node:crypto';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient, getStripeWebhookSecret } from '../../lib/stripeServer.js';
+import { getSubscriptionPlan, roleAvailableCentsField, rolePendingCentsField, type PlatformRole } from '../../lib/platformBilling.js';
 
 type RequestLike = AsyncIterable<Buffer | string> & { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
@@ -29,6 +32,10 @@ function paymentMethodLabel(methodType?: string | null): string {
   return labels[methodType] || `Stripe · ${methodType.replace(/_/g, ' ')}`;
 }
 
+function addDays(from: Date, days: number): string {
+  return new Date(from.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, eventIntent: Stripe.PaymentIntent) {
   const orderId = eventIntent.metadata?.orderId;
   if (!orderId) throw new Error('PaymentIntent sem referência interna.');
@@ -38,24 +45,66 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
   const latestCharge = paymentIntent.latest_charge;
   const charge = typeof latestCharge === 'string' ? await stripe.charges.retrieve(latestCharge) : latestCharge;
   const chargeId = charge?.id;
-  if (!chargeId) throw new Error('A cobrança Stripe confirmada não retornou charge ID.');
+  if (!chargeId) throw new Error('A cobrança confirmada não retornou charge ID.');
 
   const db = getServerAdminFirestore();
   const orderRef = db.collection('stripe_checkout_orders').doc(orderId);
-  const salesRef = db.collection('sales').doc(`stripe_${orderId}`);
+  const saleRef = db.collection('sales').doc(`stripe_${orderId}`);
+
   await db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists) throw new Error('Pedido Stripe não encontrado.');
     const order = orderSnap.data()!;
     if (order.stripePaymentIntentId && order.stripePaymentIntentId !== paymentIntent.id) throw new Error('PaymentIntent não corresponde ao pedido.');
-    if (Number(order.amountCents) !== paymentIntent.amount || String(order.transferGroup || `LP_${orderId}`) !== String(paymentIntent.transfer_group || '')) throw new Error('Valor ou grupo de transferência não corresponde ao pedido.');
+    if (Number(order.amountCents) !== paymentIntent.amount || String(order.transferGroup || `LP_${orderId}`) !== String(paymentIntent.transfer_group || '')) {
+      throw new Error('Valor ou grupo de transferência não corresponde ao pedido.');
+    }
     if (order.status === 'refunded' || order.status === 'disputed') return;
-    const saleSnap = await tx.get(salesRef);
+    const saleSnap = await tx.get(saleRef);
     if (saleSnap.exists) return;
+
     const now = new Date();
-    const availableAt = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000);
+    const companyAmountCents = Number(order.companyAmountCents || 0);
+    const affiliateAmountCents = Number(order.affiliateAmountCents || 0);
+    const companyDelayDays = Number(order.companyReleaseDelayDays || 15);
+    const affiliateDelayDays = Number(order.affiliateReleaseDelayDays || 15);
+    const companyAvailableAt = addDays(now, companyDelayDays);
+    const affiliateAvailableAt = affiliateAmountCents > 0 ? addDays(now, affiliateDelayDays) : null;
+
+    const participants: Array<{ role: PlatformRole; userId: string; amountCents: number; accountId: string; availableAt: string }> = [{
+      role: 'empresa',
+      userId: String(order.companyOwnerId || ''),
+      amountCents: companyAmountCents,
+      accountId: String(order.companyAccountId || ''),
+      availableAt: companyAvailableAt,
+    }];
+    if (affiliateAmountCents > 0 && order.affiliateId) {
+      participants.push({
+        role: 'afiliado',
+        userId: String(order.affiliateId),
+        amountCents: affiliateAmountCents,
+        accountId: String(order.affiliateAccountId || ''),
+        availableAt: affiliateAvailableAt!,
+      });
+    }
+    for (const participant of participants) {
+      if (!participant.userId || !Number.isSafeInteger(participant.amountCents) || participant.amountCents <= 0) {
+        throw new Error('Participante financeiro inválido.');
+      }
+    }
+
+    const uniqueProfiles = new Map<string, FirebaseFirestore.DocumentReference>();
+    for (const participant of participants) uniqueProfiles.set(participant.userId, db.collection('user_profiles').doc(participant.userId));
+    const profileSnapshots = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+    for (const [uid, ref] of uniqueProfiles) {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new Error(`Perfil financeiro ${uid} não encontrado.`);
+      profileSnapshots.set(uid, snap);
+    }
+
+    const maxAvailableAt = [companyAvailableAt, affiliateAvailableAt].filter(Boolean).sort().at(-1) || companyAvailableAt;
     const sale = {
-      id: salesRef.id,
+      id: saleRef.id,
       source: 'stripe',
       stripeOrderId: orderId,
       stripePaymentIntentId: paymentIntent.id,
@@ -66,7 +115,6 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       companyOwnerId: order.companyOwnerId,
       companyStripeAccountId: order.companyAccountId,
       ...(order.affiliateId ? { affiliateId: String(order.affiliateId) } : {}),
-      ...(order.affiliateName ? { affiliateName: String(order.affiliateName) } : {}),
       ...(order.affiliateCode ? { affiliateCode: String(order.affiliateCode) } : {}),
       ...(order.affiliateAccountId ? { affiliateStripeAccountId: String(order.affiliateAccountId) } : {}),
       platformId: order.planId,
@@ -76,13 +124,15 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       buyerEmail: order.buyerEmail,
       buyerCompany: order.companyName,
       amount: Number(order.amountCents) / 100,
-      commissionEarned: Number(order.affiliateAmountCents) / 100,
+      commissionEarned: affiliateAmountCents / 100,
       checkoutFee: Number(order.platformFeeCents) / 100,
-      netCompanyAmount: Number(order.companyAmountCents) / 100,
+      netCompanyAmount: companyAmountCents / 100,
       method: paymentMethodLabel(charge.payment_method_details?.type),
       status: 'Aprovado',
       releaseStatus: 'pendente',
-      availableAt: availableAt.toISOString(),
+      availableAt: maxAvailableAt,
+      companyAvailableAt,
+      affiliateAvailableAt,
       date: now.toISOString().slice(0, 10),
       time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       createdAt: now.toISOString(),
@@ -92,19 +142,120 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       financialBreakdown: {
         grossAmount: Number(order.amountCents) / 100,
         platformFee: Number(order.platformFeeCents) / 100,
-        affiliateCommission: Number(order.affiliateAmountCents) / 100,
-        netCompanyAmount: Number(order.companyAmountCents) / 100,
+        affiliateCommission: affiliateAmountCents / 100,
+        netCompanyAmount: companyAmountCents / 100,
       },
     };
-    const safeSale = Object.fromEntries(Object.entries(sale).filter(([, value]) => value !== undefined));
-    tx.create(salesRef, safeSale);
+
+    tx.create(saleRef, Object.fromEntries(Object.entries(sale).filter(([, value]) => value !== undefined)));
+
+    const profileDeltas = new Map<string, { totalCents: number; roles: Record<string, number> }>();
+    for (const participant of participants) {
+      const current = profileDeltas.get(participant.userId) || { totalCents: 0, roles: {} };
+      current.totalCents += participant.amountCents;
+      current.roles[participant.role] = (current.roles[participant.role] || 0) + participant.amountCents;
+      profileDeltas.set(participant.userId, current);
+
+      const releaseId = `${orderId}_${participant.role}`;
+      tx.create(db.collection('balance_releases').doc(releaseId), {
+        id: releaseId,
+        orderId,
+        saleId: saleRef.id,
+        paymentIntentId: paymentIntent.id,
+        chargeId,
+        userId: participant.userId,
+        role: participant.role,
+        stripeAccountId: participant.accountId,
+        amountCents: participant.amountCents,
+        amount: participant.amountCents / 100,
+        status: 'pending',
+        availableAt: participant.availableAt,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        is_test: !paymentIntent.livemode,
+        environment: paymentIntent.livemode ? 'production' : 'development',
+      });
+    }
+
+    for (const [uid, delta] of profileDeltas) {
+      const update: Record<string, any> = {
+        pendingBalance: FieldValue.increment(delta.totalCents / 100),
+        totalEarned: FieldValue.increment(delta.totalCents / 100),
+        updatedAt: now.toISOString(),
+      };
+      for (const [role, cents] of Object.entries(delta.roles)) {
+        update[rolePendingCentsField(role as PlatformRole)] = FieldValue.increment(cents);
+      }
+      tx.update(uniqueProfiles.get(uid)!, update);
+    }
+
+    tx.set(db.collection('platform_finances').doc('global_summary'), {
+      totalPlatformRevenue: FieldValue.increment(Number(order.platformFeeCents || 0) / 100),
+      totalCheckoutFees: FieldValue.increment(Number(order.platformFeeCents || 0) / 100),
+      totalSalesProcessed: FieldValue.increment(1),
+      lastUpdated: now.toISOString(),
+    }, { merge: true });
+
+    if (order.planId) {
+      tx.set(db.collection('plans').doc(String(order.planId)), {
+        totalSales: FieldValue.increment(1),
+        totalSalesCount: FieldValue.increment(1),
+        totalRevenue: FieldValue.increment(Number(order.productAmountCents || 0) / 100),
+        updatedAt: now.toISOString(),
+      }, { merge: true });
+    }
+    if (order.companyId) {
+      tx.set(db.collection('companies').doc(String(order.companyId)), {
+        totalSalesCount: FieldValue.increment(1),
+        totalSalesVolume: FieldValue.increment(Number(order.productAmountCents || 0) / 100),
+        grossRevenue: FieldValue.increment(Number(order.productAmountCents || 0) / 100),
+        totalCheckoutFees: FieldValue.increment(Number(order.platformFeeCents || 0) / 100),
+        totalAffiliateCommissions: FieldValue.increment(affiliateAmountCents / 100),
+        netRevenue: FieldValue.increment(companyAmountCents / 100),
+        updatedAt: now.toISOString(),
+      }, { merge: true });
+    }
+    if (order.affiliateId && order.planId && affiliateAmountCents > 0) {
+      tx.set(db.collection('affiliations').doc(`aff_${order.affiliateId}_${order.planId}`), {
+        salesCount: FieldValue.increment(1),
+        totalEarned: FieldValue.increment(affiliateAmountCents / 100),
+        updatedAt: now.toISOString(),
+      }, { merge: true });
+    }
+
+    if (order.companyId && order.buyerEmail) {
+      const emailHash = createHash('sha256').update(String(order.buyerEmail).toLowerCase()).digest('hex').slice(0, 20);
+      const clientId = `${String(order.companyId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)}_${emailHash}`;
+      tx.set(db.collection('clients').doc(clientId), {
+        id: clientId,
+        companyId: order.companyId,
+        store_id: order.companyId,
+        empresa_id: order.companyId,
+        name: order.buyerName,
+        nome_completo: order.buyerName,
+        email: order.buyerEmail,
+        total_spent: FieldValue.increment(Number(order.productAmountCents || 0) / 100),
+        orders_count: FieldValue.increment(1),
+        last_order_at: now.toISOString(),
+        last_plan_name: order.planName,
+        status_compra: 'PAGO',
+        status: 'active',
+        updatedAt: now.toISOString(),
+        created_at: now.toISOString(),
+        environment: paymentIntent.livemode ? 'production' : 'development',
+        is_test: !paymentIntent.livemode,
+      }, { merge: true });
+    }
+
     tx.set(orderRef, {
       status: 'paid',
-      transferStatus: 'scheduled',
+      transferStatus: 'not_started',
+      releaseStatus: 'pending',
       stripePaymentIntentId: paymentIntent.id,
       stripeChargeId: chargeId,
       paidAt: now.toISOString(),
-      availableAt: availableAt.toISOString(),
+      companyAvailableAt,
+      affiliateAvailableAt,
       webhookEventId: event.id,
       updatedAt: now.toISOString(),
     }, { merge: true });
@@ -117,22 +268,126 @@ async function updateOrderRisk(event: Stripe.Event, paymentIntentId: string | nu
   const matches = await db.collection('stripe_checkout_orders').where('stripePaymentIntentId', '==', paymentIntentId).limit(1).get();
   if (matches.empty) return;
   const orderRef = matches.docs[0].ref;
+  const orderId = matches.docs[0].id;
+  const saleRef = db.collection('sales').doc(`stripe_${orderId}`);
+  const releaseRefs = [
+    db.collection('balance_releases').doc(`${orderId}_empresa`),
+    db.collection('balance_releases').doc(`${orderId}_afiliado`),
+  ];
+
   await db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists) return;
-    const order = orderSnap.data()!;
-    const wasReleased = order.transferStatus === 'completed';
-    const saleRef = db.collection('sales').doc(`stripe_${orderSnap.id}`);
     const saleSnap = await tx.get(saleRef);
+    const releaseSnaps = [];
+    for (const ref of releaseRefs) releaseSnaps.push(await tx.get(ref));
+
+    const profiles = new Map<string, FirebaseFirestore.DocumentReference>();
+    for (const snap of releaseSnaps) {
+      if (snap.exists && snap.data()!.userId) profiles.set(String(snap.data()!.userId), db.collection('user_profiles').doc(String(snap.data()!.userId)));
+    }
+    const profileSnaps = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+    for (const [uid, ref] of profiles) profileSnaps.set(uid, await tx.get(ref));
+
+    const adjustments = new Map<string, { pendingCents: number; availableCents: number; roles: Array<{ role: PlatformRole; pendingCents: number; availableCents: number }> }>();
+    for (const snap of releaseSnaps) {
+      if (!snap.exists) continue;
+      const release = snap.data()!;
+      if (release.status === 'reversed' || release.status === 'cancelled') continue;
+      const uid = String(release.userId || '');
+      const role = release.role as PlatformRole;
+      const cents = Number(release.amountCents || 0);
+      if (!uid || !Number.isSafeInteger(cents) || cents <= 0) continue;
+      const current = adjustments.get(uid) || { pendingCents: 0, availableCents: 0, roles: [] };
+      const wasPending = release.status === 'pending';
+      current.pendingCents += wasPending ? cents : 0;
+      current.availableCents += wasPending ? 0 : cents;
+      current.roles.push({ role, pendingCents: wasPending ? cents : 0, availableCents: wasPending ? 0 : cents });
+      adjustments.set(uid, current);
+      tx.set(snap.ref, { status: 'reversed', riskStatus: status, reversedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
+    }
+
+    for (const [uid, adjustment] of adjustments) {
+      const snap = profileSnaps.get(uid);
+      if (!snap?.exists) continue;
+      const update: Record<string, any> = {
+        pendingBalance: FieldValue.increment(-adjustment.pendingCents / 100),
+        availableBalance: FieldValue.increment(-adjustment.availableCents / 100),
+        updatedAt: new Date().toISOString(),
+      };
+      for (const roleDelta of adjustment.roles) {
+        if (roleDelta.pendingCents) update[rolePendingCentsField(roleDelta.role)] = FieldValue.increment(-roleDelta.pendingCents);
+        if (roleDelta.availableCents) update[roleAvailableCentsField(roleDelta.role)] = FieldValue.increment(-roleDelta.availableCents);
+      }
+      tx.update(profiles.get(uid)!, update);
+    }
+
     tx.set(orderRef, {
       status,
       riskStatus: status,
-      transferStatus: wasReleased ? 'manual_review' : 'cancelled',
+      releaseStatus: 'cancelled',
       riskEventId: event.id,
       updatedAt: new Date().toISOString(),
     }, { merge: true });
-    if (saleSnap.exists) tx.set(saleRef, { status: status === 'refunded' ? 'Estornado' : 'Em análise', releaseStatus: 'cancelado', riskEventId: event.id }, { merge: true });
+    if (saleSnap.exists) {
+      tx.set(saleRef, {
+        status: status === 'refunded' ? 'Estornado' : 'Em análise',
+        releaseStatus: 'cancelado',
+        riskEventId: event.id,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    }
   });
+}
+
+async function applySubscription(stripe: Stripe, subscriptionId: string, forcedStatus?: string) {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const uid = String(subscription.metadata?.firebase_uid || '');
+  const planId = String(subscription.metadata?.plan_id || '');
+  const role = String(subscription.metadata?.role || '');
+  const plan = getSubscriptionPlan(planId);
+  if (!uid || !plan || role !== plan.role) return;
+
+  const stripeStatus = forcedStatus || subscription.status;
+  const active = stripeStatus === 'active' || stripeStatus === 'trialing';
+  const pending = stripeStatus === 'past_due' || stripeStatus === 'incomplete';
+  const planStatus = active ? 'active' : pending ? 'pending' : 'inactive';
+  const now = new Date().toISOString();
+  const update = {
+    plan: active || pending ? plan.id : null,
+    planStatus,
+    subscriptionTier: active || pending ? plan.id : null,
+    subscriptionName: active || pending ? plan.name : null,
+    subscriptionPrice: active || pending ? plan.priceCents / 100 : 0,
+    stripeSubscriptionId: subscription.id,
+    stripeSubscriptionStatus: stripeStatus,
+    subscriptionActiveAt: active ? now : null,
+    updatedAt: now,
+  };
+  const db = getServerAdminFirestore();
+  const batch = db.batch();
+  batch.set(db.collection('user_profiles').doc(uid), update, { merge: true });
+  batch.set(db.collection('users').doc(uid), update, { merge: true });
+  await batch.commit();
+}
+
+async function processPayoutEvent(event: Stripe.Event, payout: Stripe.Payout) {
+  const db = getServerAdminFirestore();
+  const matches = await db.collection('withdrawals').where('stripePayoutId', '==', payout.id).limit(3).get();
+  if (matches.empty) return;
+  const batch = db.batch();
+  for (const doc of matches.docs) {
+    if (event.type === 'payout.paid') {
+      batch.set(doc.ref, { status: 'COMPLETED', completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
+    } else {
+      batch.set(doc.ref, {
+        status: 'PAYOUT_FAILED',
+        failureReason: payout.failure_message || payout.failure_code || 'A Stripe não concluiu o payout bancário.',
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    }
+  }
+  await batch.commit();
 }
 
 async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
@@ -142,13 +397,42 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
       return;
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
+      if (session.mode === 'subscription' && session.subscription) {
+        const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+        await applySubscription(stripe, subscriptionId);
+        const db = getServerAdminFirestore();
+        await db.collection('stripe_subscription_checkouts').doc(session.id).set({
+          status: 'completed',
+          stripeSubscriptionId: subscriptionId,
+          completedAt: new Date().toISOString(),
+        }, { merge: true });
+        return;
+      }
       if (session.payment_intent) {
         const intentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent.id;
         const intent = await stripe.paymentIntents.retrieve(intentId);
-        if (intent.status === 'succeeded') {
-          await applyPaymentIntentPaid(stripe, event, intent);
-        }
+        if (intent.status === 'succeeded') await applyPaymentIntentPaid(stripe, event, intent);
       }
+      return;
+    }
+    case 'invoice.paid': {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscription = (invoice as any).subscription;
+      const subscriptionId = typeof subscription === 'string' ? subscription : subscription?.id;
+      if (subscriptionId) await applySubscription(stripe, subscriptionId, 'active');
+      return;
+    }
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscription = (invoice as any).subscription;
+      const subscriptionId = typeof subscription === 'string' ? subscription : subscription?.id;
+      if (subscriptionId) await applySubscription(stripe, subscriptionId, 'past_due');
+      return;
+    }
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as Stripe.Subscription;
+      await applySubscription(stripe, subscription.id, event.type.endsWith('.deleted') ? 'canceled' : subscription.status);
       return;
     }
     case 'payment_intent.payment_failed':
@@ -166,27 +450,29 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
         if (order.stripePaymentIntentId && order.stripePaymentIntentId !== intent.id) return;
         tx.set(orderRef, {
           status: event.type.endsWith('.canceled') ? 'payment_canceled' : 'payment_failed',
-          transferStatus: 'cancelled',
+          releaseStatus: 'cancelled',
           updatedAt: new Date().toISOString(),
         }, { merge: true });
       });
       return;
     }
-    case 'charge.refunded':
-      {
-        const charge = event.data.object as Stripe.Charge;
-        const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
-        await updateOrderRisk(event, paymentIntentId || null, 'refunded');
-      }
+    case 'charge.refunded': {
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+      await updateOrderRisk(event, paymentIntentId || null, 'refunded');
       return;
-    case 'charge.dispute.created':
-      {
-        const dispute = event.data.object as Stripe.Dispute;
-        const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
-        const charge = await stripe.charges.retrieve(chargeId);
-        const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
-        await updateOrderRisk(event, paymentIntentId || null, 'disputed');
-      }
+    }
+    case 'charge.dispute.created': {
+      const dispute = event.data.object as Stripe.Dispute;
+      const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
+      const charge = await stripe.charges.retrieve(chargeId);
+      const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+      await updateOrderRisk(event, paymentIntentId || null, 'disputed');
+      return;
+    }
+    case 'payout.paid':
+    case 'payout.failed':
+      await processPayoutEvent(event, event.data.object as Stripe.Payout);
       return;
     default:
       return;
@@ -233,10 +519,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (eventRef && signatureValidated) {
       try {
         await eventRef.set({ status: 'retry', retryAt: new Date().toISOString() }, { merge: true });
-      } catch (markError) {
+      } catch {
         console.error('[Stripe webhook] Não foi possível liberar claim para retry.');
       }
     }
-    return res.status(signatureValidated ? 503 : 400).json({ error: signatureValidated ? 'Evento válido, mas não processado; a Stripe pode tentar novamente.' : 'Webhook Stripe inválido.' });
+    return res.status(signatureValidated ? 503 : 400).json({
+      error: signatureValidated ? 'Evento válido, mas não processado; a Stripe pode tentar novamente.' : 'Webhook Stripe inválido.',
+    });
   }
 }
