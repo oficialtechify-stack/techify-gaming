@@ -11,6 +11,9 @@ import submitVerificationHandler from '../server-api/profile/submit-verification
 import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
 import affiliateJoinHandler from '../server-api/affiliates/join.js';
 import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
+import plansHandler from '../server-api/plans.js';
+import subscriptionCheckoutHandler from '../server-api/stripe/subscription-checkout.js';
+import stripeWithdrawalHandler from '../server-api/stripe/withdrawal.js';
 
 export const config = {
   api: {
@@ -84,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cleanPath = subpath.replace(/^\/+|\/+$/g, '').toLowerCase();
 
   // Retired Asaas check
-  const retiredAsaas = /^(?:payments|checkout|pix|subaccounts|asaas|withdrawals?|subscriptions?|plans\/checkout|cron\/release-balances|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity))/i.test(cleanPath);
+  const retiredAsaas = /^(?:payments|checkout|pix|subaccounts|asaas|subscriptions?|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity))/i.test(cleanPath);
   if (retiredAsaas) {
     return res.status(410).json({
       error: true,
@@ -98,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       status: 'ok',
       gateway: 'Stripe Connect',
-      cron: 'Liberação Stripe Connect D+9 ativa',
+      cron: 'Liberação de saldo 8/15 dias ativa',
       time: new Date().toISOString(),
     });
   }
@@ -128,12 +131,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return stripeExpressDashboardHandler(req as any, res as any);
     case 'stripe/status':
       return stripeStatusHandler(req as any, res as any);
+    case 'stripe/subscription-checkout':
+    case 'plans/checkout':
+      return subscriptionCheckoutHandler(req as any, res as any);
+    case 'stripe/withdrawal':
+    case 'withdrawals/request':
+      return stripeWithdrawalHandler(req as any, res as any);
+    case 'plans':
+      return plansHandler(req as any, res as any);
     case 'stripe/webhook':
     case 'webhooks/stripe':
     case 'webhook/stripe':
       return stripeWebhookHandler(req as any, res as any);
     case 'crons/stripe-releases':
     case 'cron/stripe-releases':
+    case 'cron/release-balances':
       return stripeReleasesCronHandler(req as any, res as any);
     case 'profile/check-document':
       return checkDocumentHandler(req as any, res as any);

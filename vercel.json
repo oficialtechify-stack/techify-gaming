@@ -21,7 +21,7 @@
   ],
   "crons": [
     {
-      "path": "/api/crons/motivational",
+      "path": "/api/crons/stripe-releases",
       "schedule": "0 11 * * *"
     }
   ],
@@ -30,8 +30,13 @@
       "source": "/__/auth/:path*",
       "destination": "https://techify-gaming-106fe.firebaseapp.com/__/auth/:path*"
     },
-    { "source": "/api/(.*)", "destination": "/api/[...route]" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/[...route]"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
-
