@@ -87,8 +87,8 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       createdAt: now.toISOString(),
       paidAt: now.toISOString(),
-      is_test: true,
-      environment: 'development',
+      is_test: !paymentIntent.livemode,
+      environment: paymentIntent.livemode ? 'production' : 'development',
       financialBreakdown: {
         grossAmount: Number(order.amountCents) / 100,
         platformFee: Number(order.platformFeeCents) / 100,

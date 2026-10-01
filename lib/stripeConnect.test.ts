@@ -39,13 +39,13 @@ test('rejeita comissão inválida e valores fora do limite', () => {
   assert.throws(() => toCents(NaN), /Valor inválido/);
 });
 
-test('não inicializa Stripe sem segredo nem aceita chave live', () => {
+test('não inicializa Stripe sem segredo nem aceita chave live na variável de teste', () => {
   const old = process.env.STRIPE_SECRET_KEY;
   const oldTest = process.env.STRIPE_TEST_SECRET_KEY;
   resetStripeClientForTests();
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.STRIPE_TEST_SECRET_KEY;
-  assert.throws(() => getStripeTestClient(), /configure STRIPE_TEST_SECRET_KEY/);
+  assert.throws(() => getStripeTestClient(), /configure STRIPE_SECRET_KEY ou STRIPE_TEST_SECRET_KEY/);
   process.env.STRIPE_TEST_SECRET_KEY = 'sk_live_should_never_be_used';
   assert.throws(() => getStripeTestClient(), /somente chaves sk_test_/);
   if (old === undefined) delete process.env.STRIPE_SECRET_KEY;
@@ -86,4 +86,25 @@ test('Preview usa URL da implantação atual em vez de URL base antiga', () => {
   else delete process.env.VERCEL_URL;
   if (oldVercelEnv !== undefined) process.env.VERCEL_ENV = oldVercelEnv;
   else delete process.env.VERCEL_ENV;
+});
+
+test('preview bloqueia chaves live e produção aceita chaves restritas', () => {
+  const oldKey = process.env.STRIPE_SECRET_KEY;
+  const oldEnv = process.env.VERCEL_ENV;
+  try {
+    for (const prefix of ['sk', 'rk']) {
+      resetStripeClientForTests();
+      process.env.VERCEL_ENV = 'preview';
+      process.env.STRIPE_SECRET_KEY = `${prefix}_live_local_only`;
+      assert.throws(() => getStripeTestClient(), /somente chaves/);
+      process.env.VERCEL_ENV = 'production';
+      assert.ok(getStripeTestClient());
+    }
+  } finally {
+    if (oldKey === undefined) delete process.env.STRIPE_SECRET_KEY;
+    else process.env.STRIPE_SECRET_KEY = oldKey;
+    if (oldEnv === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = oldEnv;
+    resetStripeClientForTests();
+  }
 });

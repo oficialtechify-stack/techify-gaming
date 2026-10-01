@@ -44,7 +44,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     try {
       db = getServerAdminFirestore();
     } catch (dbErr) {
-      console.warn('[Stripe checkout] Firestore Admin indisponível, prosseguindo com checkout direto:', dbErr);
+      console.error('[Stripe checkout] Firestore Admin indisponível.');
+      return fail(res, 503, 'Não foi possível registrar o pedido. Tente novamente mais tarde.', 'ORDER_STORAGE_UNAVAILABLE');
     }
 
     let planData: Record<string, any> | null = null;
@@ -220,7 +221,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           availableAt: availableAt.toISOString(),
         }, { merge: true });
       } catch (dbSaveErr) {
-        console.warn('[Stripe checkout] Erro ao persistir pedido no Firestore:', dbSaveErr);
+        console.error('[Stripe checkout] Não foi possível persistir o pedido.');
+        return fail(res, 503, 'Não foi possível registrar o pedido. Tente novamente mais tarde.', 'ORDER_STORAGE_UNAVAILABLE');
       }
     }
 
@@ -253,7 +255,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           updatedAt: new Date().toISOString(),
         }, { merge: true });
       } catch (dbUpdateErr) {
-        console.warn('[Stripe checkout] Erro ao atualizar PaymentIntent no Firestore:', dbUpdateErr);
+        console.error('[Stripe checkout] Não foi possível vincular o pagamento ao pedido.');
+        return fail(res, 503, 'Não foi possível preparar o pagamento. Tente novamente com o mesmo pedido.', 'ORDER_STORAGE_UNAVAILABLE');
       }
     }
 

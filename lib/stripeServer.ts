@@ -5,14 +5,18 @@ dotenv.config();
 let stripeClient: Stripe | undefined;
 
 /**
- * This migration branch is intentionally test-only. It refuses live credentials
- * so a preview deployment cannot accidentally move real money.
+ * Legacy function name retained for callers. Production supports live credentials;
+ * preview deployments and the test-only variable must never use live credentials.
  */
 export function getStripeTestClient(): Stripe {
-  const secret = (process.env.STRIPE_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY || '').trim();
+  const primary = process.env.STRIPE_SECRET_KEY?.trim();
+  const secret = primary || process.env.STRIPE_TEST_SECRET_KEY?.trim() || '';
   if (!secret) throw new Error('Stripe indisponível: configure STRIPE_SECRET_KEY ou STRIPE_TEST_SECRET_KEY no servidor.');
-  if (!secret.startsWith('sk_test_') && !secret.startsWith('sk_live_')) {
-    throw new Error('Stripe bloqueado: a chave deve começar com sk_test_ ou sk_live_.');
+  if (!/^(sk|rk)_(test|live)_/.test(secret)) {
+    throw new Error('Stripe bloqueado: configure uma chave secreta ou restrita válida.');
+  }
+  if ((!primary || process.env.VERCEL_ENV === 'preview') && /^(sk|rk)_live_/.test(secret)) {
+    throw new Error('Stripe bloqueado: somente chaves sk_test_ ou rk_test_ neste ambiente.');
   }
   if (!stripeClient) stripeClient = new Stripe(secret);
   return stripeClient;
@@ -21,7 +25,7 @@ export function getStripeTestClient(): Stripe {
 export function getStripeWebhookSecret(): string {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret || !secret.startsWith('whsec_')) {
-    throw new Error('Webhook Stripe de teste não configurado no servidor.');
+    throw new Error('Webhook Stripe não configurado no servidor.');
   }
   return secret;
 }
