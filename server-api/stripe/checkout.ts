@@ -1,7 +1,7 @@
-import { getServerAdminFirestore } from '../../lib/firebaseAdminServer';
-import { getStripeTestClient } from '../../lib/stripeServer';
-import { calculateSplit, toCents } from '../../lib/stripeSplit';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility';
+import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
+import { getStripeTestClient } from '../../lib/stripeServer.js';
+import { calculateSplit, toCents } from '../../lib/stripeSplit.js';
+import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
