@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import checkoutHandler from '../stripe/checkout.js';
 
 type Req={method?:string;headers:Record<string,string|string[]|undefined>;body?:unknown};
@@ -22,7 +22,7 @@ export default async function handler(req:Req,res:Res){
     if(!planId) return res.status(400).json({error:'planId é obrigatório.'});
     const planSnap=await db.collection('plans').doc(planId).get();
     if(!planSnap.exists || String(planSnap.data()!.companyId||'')!==String(key.companyId||'')) return res.status(403).json({error:'Esta oferta não pertence à chave informada.'});
-    const attemptId=String(body.attemptId||'').trim() || ('api_'+crypto.randomUUID().replace(/-/g,''));
+    const attemptId=String(body.attemptId||'').trim() || ('api_'+randomUUID().replace(/-/g,''));
     const safeReq:any={...req,body:{
       planId,
       attemptId,

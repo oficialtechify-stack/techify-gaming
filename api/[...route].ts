@@ -14,6 +14,10 @@ import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
 import plansHandler from '../server-api/plans.js';
 import subscriptionCheckoutHandler from '../server-api/stripe/subscription-checkout.js';
 import stripeWithdrawalHandler from '../server-api/stripe/withdrawal.js';
+import partnerApiKeyHandler from '../server-api/partner/api-key.js';
+import partnerSettingsHandler from '../server-api/partner/settings.js';
+import partnerPaymentsHandler from '../server-api/partner/payments.js';
+import couponsHandler from '../server-api/coupons.js';
 
 export const config = {
   api: {
@@ -87,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cleanPath = subpath.replace(/^\/+|\/+$/g, '').toLowerCase();
 
   // Retired Asaas check
-  const retiredAsaas = /^(?:payments|checkout|pix|subaccounts|asaas|subscriptions?|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity))/i.test(cleanPath);
+  const retiredAsaas = /^(?:checkout|pix|subaccounts|asaas|subscriptions?|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity))/i.test(cleanPath);
   if (retiredAsaas) {
     return res.status(410).json({
       error: true,
@@ -139,6 +143,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return stripeWithdrawalHandler(req as any, res as any);
     case 'plans':
       return plansHandler(req as any, res as any);
+    case 'coupons':
+      return couponsHandler(req as any, res as any);
+    case 'partner/api-key':
+      return partnerApiKeyHandler(req as any, res as any);
+    case 'partner/settings':
+      return partnerSettingsHandler(req as any, res as any);
+    case 'partner/payments':
+    case 'payments':
+      return partnerPaymentsHandler(req as any, res as any);
     case 'stripe/webhook':
     case 'webhooks/stripe':
     case 'webhook/stripe':

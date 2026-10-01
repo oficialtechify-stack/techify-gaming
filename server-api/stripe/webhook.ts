@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient, getStripeWebhookSecret } from '../../lib/stripeServer.js';
@@ -139,7 +139,11 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       paidAt: now.toISOString(),
       is_test: !paymentIntent.livemode,
       environment: paymentIntent.livemode ? 'production' : 'development',
+      couponCode: order.couponCode || null,
+      discountAmount: Number(order.discountCents || 0) / 100,
       financialBreakdown: {
+        originalProductAmount: Number(order.originalProductAmountCents || order.productAmountCents || 0) / 100,
+        discountAmount: Number(order.discountCents || 0) / 100,
         grossAmount: Number(order.amountCents) / 100,
         platformFee: Number(order.platformFeeCents) / 100,
         affiliateCommission: affiliateAmountCents / 100,
@@ -215,6 +219,14 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
         updatedAt: now.toISOString(),
       }, { merge: true });
     }
+    if (order.couponId) {
+      tx.set(db.collection('coupons').doc(String(order.couponId)), {
+        usedCount: FieldValue.increment(1),
+        lastUsedAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      }, { merge: true });
+    }
+
     if (order.affiliateId && order.planId && affiliateAmountCents > 0) {
       tx.set(db.collection('affiliations').doc(`aff_${order.affiliateId}_${order.planId}`), {
         salesCount: FieldValue.increment(1),
@@ -260,6 +272,67 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       updatedAt: now.toISOString(),
     }, { merge: true });
   });
+
+  // Partner webhook delivery is best-effort and never blocks Stripe acknowledgement.
+  try {
+    const orderAfter = await orderRef.get();
+    const orderData = orderAfter.data() || {};
+    const settingsSnap = orderData.companyOwnerId
+      ? await db.collection('partner_settings').doc(String(orderData.companyOwnerId)).get()
+      : null;
+    const settings = settingsSnap?.exists ? settingsSnap.data()! : null;
+    if (settings?.webhookUrl && settings?.webhookSecret) {
+      const payloadObject = {
+        event: 'payment.succeeded',
+        orderId,
+        paymentIntentId: paymentIntent.id,
+        planId: orderData.planId,
+        companyId: orderData.companyId,
+        buyerEmail: orderData.buyerEmail,
+        amount: Number(orderData.amountCents || 0) / 100,
+        productAmount: Number(orderData.productAmountCents || 0) / 100,
+        discount: Number(orderData.discountCents || 0) / 100,
+        couponCode: orderData.couponCode || null,
+        affiliateCode: orderData.affiliateCode || null,
+        paidAt: new Date().toISOString(),
+      };
+      const payload = JSON.stringify(payloadObject);
+      const signature = createHmac('sha256', String(settings.webhookSecret)).update(payload).digest('hex');
+      const deliveryRef = db.collection('partner_webhook_deliveries').doc(`${orderId}_payment_succeeded`);
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const response = await fetch(String(settings.webhookUrl), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-leadspay-signature': signature },
+          body: payload,
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        await deliveryRef.set({
+          userId: orderData.companyOwnerId,
+          companyId: orderData.companyId,
+          event: 'payment.succeeded',
+          orderId,
+          status: response.ok ? 'delivered' : 'failed',
+          responseStatus: response.status,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (deliveryError) {
+        await deliveryRef.set({
+          userId: orderData.companyOwnerId,
+          companyId: orderData.companyId,
+          event: 'payment.succeeded',
+          orderId,
+          status: 'failed',
+          error: deliveryError instanceof Error ? deliveryError.message.slice(0, 250) : 'Falha de entrega',
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
+    }
+  } catch (deliverySetupError) {
+    console.warn('[Partner webhook]', deliverySetupError instanceof Error ? deliverySetupError.message : 'Falha');
+  }
 }
 
 async function updateOrderRisk(event: Stripe.Event, paymentIntentId: string | null, status: 'refunded' | 'disputed') {

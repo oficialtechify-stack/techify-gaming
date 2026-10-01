@@ -48,6 +48,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
 }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [couponCode, setCouponCode] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('coupon') || ''; } catch { return ''; }
+  });
   const [formError, setFormError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
@@ -101,6 +104,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           buyerName: fullName.trim(),
           buyerEmail: email.trim(),
           affiliateCode: getActiveAffiliateCode() || affiliateRef || '',
+          couponCode: couponCode.trim(),
         }),
       });
       const result = await response.json().catch(() => ({}));

@@ -71,6 +71,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const buyerName = String(body.buyerName || '').trim().slice(0, 120);
     const buyerEmail = String(body.buyerEmail || '').trim().toLowerCase().slice(0, 200);
     const affiliateCode = String(body.affiliateCode || '').trim().slice(0, 64);
+    const couponCode = String(body.couponCode || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
 
     if (!/^[A-Za-z0-9_-]{1,150}$/.test(planId)) return fail(res, 400, 'Oferta inválida.', 'INVALID_PLAN');
     if (!/^[A-Za-z0-9_-]{10,90}$/.test(attemptId)) return fail(res, 400, 'Atualize a página e tente novamente.', 'INVALID_ATTEMPT');
@@ -172,7 +173,43 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const baseAmount = authoritativePrice(plan);
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) return fail(res, 409, 'A oferta não possui preço válido.', 'INVALID_SERVER_PRICE');
 
-    const productAmountCents = toCents(baseAmount);
+    const originalProductAmountCents = toCents(baseAmount);
+    let productAmountCents = originalProductAmountCents;
+    let discountCents = 0;
+    let couponId = '';
+    let validCouponCode = '';
+
+    if (couponCode) {
+      const candidateRef = db.collection('coupons').doc(`${companyId}_${couponCode}`);
+      const couponSnap = await candidateRef.get();
+      if (!couponSnap.exists) return fail(res, 400, 'Cupom inválido ou inexistente.', 'INVALID_COUPON');
+      const coupon = couponSnap.data()!;
+      const nowMs = Date.now();
+      const expiresMs = coupon.expiresAt ? Date.parse(String(coupon.expiresAt)) : NaN;
+      const maxUses = Number(coupon.maxUses || 0);
+      const usedCount = Number(coupon.usedCount || 0);
+      const plans = Array.isArray(coupon.applicablePlans) ? coupon.applicablePlans.map(String) : ['all'];
+      const affiliates = Array.isArray(coupon.applicableAffiliates) ? coupon.applicableAffiliates.map(String) : ['all'];
+      const affiliateAllowed = affiliates.includes('all') || (!!validAffiliateCode && (affiliates.includes(validAffiliateCode) || affiliates.includes(affiliateId)));
+      if (
+        String(coupon.companyId || '') !== companyId ||
+        String(coupon.status || '').toLowerCase() !== 'active' ||
+        (Number.isFinite(expiresMs) && expiresMs < nowMs) ||
+        (maxUses > 0 && usedCount >= maxUses) ||
+        (!plans.includes('all') && !plans.includes(planId)) ||
+        !affiliateAllowed
+      ) {
+        return fail(res, 400, 'Este cupom não está disponível para esta compra.', 'COUPON_NOT_APPLICABLE');
+      }
+      const couponValue = Number(coupon.value || 0);
+      if (coupon.discountType === 'fixed') discountCents = Math.round(couponValue * 100);
+      else discountCents = Math.round(originalProductAmountCents * couponValue / 100);
+      discountCents = Math.max(0, Math.min(discountCents, Math.max(0, originalProductAmountCents - 50)));
+      productAmountCents = originalProductAmountCents - discountCents;
+      couponId = couponSnap.id;
+      validCouponCode = couponCode;
+    }
+
     const grossAmountCents = productAmountCents + 99;
     const split = calculateSplit({
       grossAmountCents,
@@ -231,7 +268,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         buyerName,
         buyerEmail,
         amountCents: split.grossAmountCents,
+        originalProductAmountCents,
         productAmountCents,
+        discountCents,
+        couponId: couponId || null,
+        couponCode: validCouponCode || null,
         platformFeeCents: split.platformFeeCents,
         affiliateAmountCents: split.affiliateAmountCents,
         companyAmountCents: split.companyAmountCents,
@@ -262,6 +303,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         companyId,
         companyOwnerId,
         affiliateId: affiliateId || '',
+        couponCode: validCouponCode || '',
         checkoutSource: 'leadspay-elements',
       },
     }, { idempotencyKey: `leadspay-pi-${orderId}` });
@@ -277,7 +319,18 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return fail(res, 503, 'Não foi possível preparar o pagamento. Tente novamente com o mesmo pedido.', 'ORDER_STORAGE_UNAVAILABLE');
     }
 
-    return res.status(200).json({ clientSecret: paymentIntent.client_secret, orderId });
+    return res.status(200).json({
+      clientSecret: paymentIntent.client_secret,
+      orderId,
+      pricing: {
+        originalProductAmountCents,
+        discountCents,
+        productAmountCents,
+        checkoutFeeCents: 99,
+        totalCents: split.grossAmountCents,
+        couponCode: validCouponCode || null,
+      },
+    });
   } catch (error) {
     console.error('[Stripe checkout]', error instanceof Error ? error.message : 'Erro desconhecido');
     return fail(res, 500, 'Não foi possível iniciar o checkout Stripe. Tente novamente.', 'CHECKOUT_UNAVAILABLE');
