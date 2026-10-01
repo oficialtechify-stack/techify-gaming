@@ -13,7 +13,7 @@ import {
   orderBy,
   limit
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { 
   CompanyStartup,
   CompanyPlan,
@@ -1290,65 +1290,19 @@ export async function getCompanyPlanByIdOrSlug(idOrSlug: string): Promise<Compan
  */
 export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'id' | 'createdAt'>) {
   if (!planData.companyId || planData.companyId === 'comp-default' || planData.companyId === 'comp_default') {
-    throw new Error('companyId é obrigatório para cadastrar um plano. O plano deve pertencer exclusivamente à sua empresa.');
+    throw new Error('companyId é obrigatório para cadastrar um plano.');
   }
-
-  // 1. Tenta salvar via endpoint com validação estrita de tenant
-  try {
-    const res = await fetch('/api/plans', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(planData)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.plan;
-    }
-  } catch (apiErr) {
-    console.warn('Fallback para Firestore local após erro na API /api/plans:', apiErr);
-  }
-
-  // 2. Gravação direta no Firestore garantindo vínculo estrito à empresa
-  const compRef = doc(db, COLLECTIONS.COMPANIES, planData.companyId);
-  const compSnap = await getDoc(compRef);
-  if (!compSnap.exists()) {
-    throw new Error(`Empresa com ID "${planData.companyId}" não encontrada no sistema. Cadastre sua empresa primeiro.`);
-  }
-
-  const compData = compSnap.data() as CompanyStartup;
-  const isVerified = compData.verified === true || compData.status === 'approved';
-  if (!isVerified) {
-    throw new Error('Empresa não verificada. Apenas empresas aprovadas pela administração podem cadastrar planos.');
-  }
-
-  const id = `plan-${Date.now()}`;
-  const now = new Date().toISOString();
-  const commissionVal = Number(((planData.priceSetup * planData.commissionPercentage) / 100).toFixed(2));
-
-  const newPlan: CompanyPlan = {
-    ...planData,
-    id,
-    companyId: compData.id,
-    companyName: compData.companyName || compData.name || planData.companyName,
-    companyLogo: compData.logo || planData.companyLogo,
-    ownerId: compData.ownerId || compData.submittedBy,
-    asaasSubaccountId: compData.asaasSubaccountId || compData.subaccountId || compData.asaasWalletId || null,
-    asaasWalletId: compData.asaasWalletId || compData.walletId || null,
-    commissionValue: commissionVal,
-    affiliatesCount: 0,
-    totalSales: 0,
-    status: 'Ativo',
-    createdAt: now
-  };
-
-  const docRef = doc(db, COLLECTIONS.PLANS, id);
-  await setDoc(docRef, sanitizeForFirestore(newPlan));
-
-  await updateDoc(compRef, sanitizeForFirestore({
-    totalPlansCount: (compData.totalPlansCount || 0) + 1
-  }));
-
-  return newPlan;
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para cadastrar uma oferta.');
+  const token = await user.getIdToken();
+  const res = await fetch('/api/plans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify(planData)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.plan) throw new Error(data.error || 'Não foi possível cadastrar a oferta.');
+  return data.plan as CompanyPlan;
 }
 
 // Alias
@@ -1436,91 +1390,18 @@ export function subscribeAllAffiliations(callback: (affiliations: UserAffiliatio
 /**
  * Create a new Affiliation in Firebase (User joins a Plan)
  */
-export async function createAffiliationInFirebase(plan: CompanyPlan, userProfile: UserSellerProfile) {
-  const isVerified = userProfile.verified === true || userProfile.verificationStatus === 'approved';
-  if (!isVerified) {
-    throw new Error('Usuário não verificado. Você só pode se afiliar a produtos após ter o perfil aprovado pela administração.');
-  }
-
-  const userId = userProfile.userId || DEFAULT_USER_ID;
-  const id = `aff_${userId}_${plan.id}`;
-  const now = new Date().toISOString();
-  
-  // Check if affiliation already exists
-  const existingDoc = await getDoc(doc(db, COLLECTIONS.AFFILIATIONS, id));
-  if (existingDoc.exists()) {
-    const existingData = existingDoc.data() as UserAffiliation;
-    return { id: existingDoc.id, ...existingData };
-  }
-
-  const randPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-  const userPart = (userId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
-  const affiliateCode = `AFF-${userPart || 'USR'}-${randPart}`;
-  const affiliateLink = formatAffiliatePlanUrl(plan.id, affiliateCode);
-
-  const affiliation: UserAffiliation = {
-    id,
-    userId: userId,
-    user_id: userId,
-    userName: userProfile.name,
-    userEmail: userProfile.email,
-    companyId: plan.companyId,
-    companyName: plan.companyName,
-    companyLogo: plan.companyLogo,
-    planId: plan.id,
-    plan_id: plan.id,
-    planName: plan.name,
-    priceSetup: plan.priceSetup,
-    commissionPercentage: plan.commissionPercentage,
-    commissionValue: plan.commissionValue,
-    affiliateCode,
-    affiliate_code: affiliateCode,
-    affiliateLink,
-    clicks: 0,
-    salesCount: 0,
-    totalEarned: 0,
-    status: 'Ativo',
-    createdAt: now
-  };
-
-  await setDoc(doc(db, COLLECTIONS.AFFILIATIONS, id), sanitizeForFirestore(affiliation));
-
-  // Atualiza o status do usuário no banco para Afiliado Ativo
-  try {
-    const userRef = doc(db, COLLECTIONS.PROFILES, userId);
-    await setDoc(userRef, sanitizeForFirestore({
-      isAffiliate: true,
-      role: 'affiliate',
-      affiliateStatus: 'active',
-      updatedAt: now
-    }), { merge: true });
-  } catch (uErr) {
-    console.warn('Erro ao atualizar status de afiliado no user_profiles:', uErr);
-  }
-
-  // Increment Plan affiliatesCount
-  const planRef = doc(db, COLLECTIONS.PLANS, plan.id);
-  const planSnap = await getDoc(planRef);
-  if (planSnap.exists()) {
-    const pData = planSnap.data() as CompanyPlan;
-    await updateDoc(planRef, sanitizeForFirestore({
-      affiliatesCount: (pData.affiliatesCount || 0) + 1
-    }));
-  }
-
-  // Increment Company affiliatesCount
-  if (plan.companyId) {
-    const compRef = doc(db, COLLECTIONS.COMPANIES, plan.companyId);
-    const compSnap = await getDoc(compRef);
-    if (compSnap.exists()) {
-      const cData = compSnap.data() as CompanyStartup;
-      await updateDoc(compRef, sanitizeForFirestore({
-        totalAffiliatesCount: (cData.totalAffiliatesCount || 0) + 1
-      }));
-    }
-  }
-
-  return affiliation;
+export async function createAffiliationInFirebase(plan: CompanyPlan, _userProfile: UserSellerProfile) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para se afiliar.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/affiliates/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ planId: plan.id })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success || !data.affiliation) throw new Error(data.error || 'Não foi possível concluir a afiliação.');
+  return data.affiliation as UserAffiliation;
 }
 
 /**
@@ -1834,39 +1715,18 @@ export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]
  */
 export async function requestWithdrawalViaBackend(
   amount: number,
-  pixKey: string,
-  pixKeyType: string,
-  userId: string = DEFAULT_USER_ID,
-  userName?: string,
-  isDevMode?: boolean,
-  environment?: 'development' | 'production'
+  role: 'empresa' | 'afiliado'
 ): Promise<{ success: boolean; withdrawal: WithdrawalRequest; message?: string }> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para solicitar o saque.');
+  const token = await user.getIdToken();
   const response = await fetch('/api/withdrawals/request', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-dev-mode': isDevMode ? 'true' : 'false',
-      'x-environment': environment || (isDevMode ? 'development' : 'production')
-    },
-    body: JSON.stringify({
-      amount,
-      requestedAmount: amount,
-      pixKey,
-      pixKeyType,
-      userId,
-      userName,
-      isDevMode,
-      environment: environment || (isDevMode ? 'development' : 'production')
-    })
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ amount, role })
   });
-
-  const data = await response.json();
-
-  if (!response.ok || data.error === true) {
-    const errorMsg = data.message || (typeof data.error === 'string' ? data.error : 'Erro ao processar solicitação de saque');
-    throw new Error(errorMsg);
-  }
-
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error === true) throw new Error(data.message || data.error || 'Erro ao processar solicitação de saque');
   return data;
 }
 
@@ -1874,71 +1734,14 @@ export async function requestWithdrawalViaBackend(
  * Trigger 9-day balance release cron manually or scheduled
  */
 export async function triggerReleaseBalancesCron(): Promise<{ releasedCount: number; message: string }> {
-  const response = await fetch('/api/cron/release-balances', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error('Falha ao acionar rotina de liberação de saldos');
-  }
-
-  return response.json();
+  return { releasedCount: 0, message: 'A liberação de saldo é automática e protegida pelo servidor.' };
 }
 
 /**
  * Direct Cashout fallback if offline/client-only
  */
-export async function createWithdrawalInFirebase(
-  amount: number, 
-  pixKey: string, 
-  pixKeyType: string,
-  userId: string = DEFAULT_USER_ID,
-  userName?: string
-) {
-  const id = `WTH-${Math.floor(1000 + Math.random() * 9000)}`;
-  const now = new Date();
-  const formattedDate = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-  const feeAmount = 2.50; // Taxa de saque fixa LeadsPay
-  const netAmount = Number(Math.max(0, amount - feeAmount).toFixed(2));
-  const endToEndId = `E31522339${Date.now()}${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-  const newWth: WithdrawalRequest = {
-    id,
-    userId: userId || DEFAULT_USER_ID,
-    userName: userName || INITIAL_USER_PROFILE.name,
-    amount,
-    feeAmount,
-    netAmount,
-    pixKey,
-    pixKeyType,
-    status: 'concluido',
-    requestedAt: formattedDate,
-    completedAt: now.toISOString(),
-    endToEndId
-  };
-
-  // 1. Save withdrawal doc
-  await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, id), sanitizeForFirestore(newWth));
-
-  // 2. Decrement full amount from available balance
-  const profileRef = doc(db, COLLECTIONS.PROFILES, userId || DEFAULT_USER_ID);
-  const profileSnap = await getDoc(profileRef);
-  if (profileSnap.exists()) {
-    const current = profileSnap.data() as UserSellerProfile;
-    const newAvailable = Math.max(0, (current.availableBalance || 0) - amount);
-    await updateDoc(profileRef, sanitizeForFirestore({
-      availableBalance: newAvailable,
-      updatedAt: now.toISOString()
-    }));
-  }
-
-  // 3. Credit R$ 2,50 to platform global account
-  await creditPlatformFinances('withdrawal', feeAmount);
-
-  return newWth;
+export async function createWithdrawalInFirebase() {
+  throw new Error('Fluxo de saque legado desativado. Use o saque seguro pela Stripe.');
 }
 
 // ==========================================

@@ -32,7 +32,7 @@ import {
   createAffiliationInFirebase,
   deleteAffiliationInFirebase,
   createSaleTransactionInFirebase,
-  createWithdrawalInFirebase,
+  requestWithdrawalViaBackend,
   updateUserProfileInFirebase,
   submitVerificationRequestInFirebase,
   updateCompanyEnvironmentInFirebase,
@@ -996,19 +996,21 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   };
 
-  // Handle withdrawal
-  const handleWithdraw = async (amount: number, pixKey: string, pixKeyType: string) => {
+  // Handle withdrawal through authenticated Stripe Connect backend
+  const handleWithdraw = async (amount: number) => {
     try {
-      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, currentUser?.displayName || userProfile?.name || 'Minha Conta');
+      if (roleMode !== 'empresa' && roleMode !== 'afiliado') throw new Error('Selecione o perfil de Empresa ou Afiliado para sacar.');
+      const result = await requestWithdrawalViaBackend(amount, roleMode);
       setLiveToast({
-        message: 'Saque PIX D+9 processado com sucesso!',
-        sub: `Chave ${pixKey} (${pixKeyType})`,
+        message: 'Saque enviado para processamento!',
+        sub: result.message || 'A Stripe encaminhará o valor para a conta bancária cadastrada.',
         amount: `- R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
       setTimeout(() => setLiveToast(null), 4500);
     } catch (err: any) {
       console.error('Error creating withdrawal:', err);
-      alert(`Erro no saque PIX: ${err.message}`);
+      alert(`Erro no saque: ${err.message}`);
+      throw err;
     }
   };
 
@@ -1902,8 +1904,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           {activeTab === 'saques' && (
             <SaquesView
               userProfile={userProfile}
+              roleMode={roleMode}
               withdrawals={withdrawals}
-              onWithdrawSuccess={handleWithdraw}
+              onWithdraw={handleWithdraw}
               onRefresh={() => {}}
             />
           )}
@@ -2078,6 +2081,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         isOpen={isWithdrawModalOpen}
         onClose={() => setIsWithdrawModalOpen(false)}
         userProfile={userProfile}
+        roleMode={roleMode}
         onWithdraw={handleWithdraw}
       />
 

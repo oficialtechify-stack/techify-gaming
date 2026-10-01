@@ -313,8 +313,12 @@ export interface WithdrawalRequest {
   fee?: number; // Taxa de saque
   feeAmount?: number; // R$ 2.50 taxa fixa de saque Pix
   netAmount?: number; // Valor transferido = amount - feeAmount
-  pixKey: string;
-  pixKeyType: string;
+  pixKey?: string;
+  pixKeyType?: string;
+  role?: 'empresa' | 'afiliado';
+  stripeAccountId?: string;
+  stripeTransferId?: string;
+  stripePayoutId?: string;
   status: 'pendente_processamento' | 'concluido' | 'recusado' | 'Concluído' | 'Em Análise' | 'Recusado' | 'COMPLETED' | string;
   requestedAt: string;
   completedAt?: string;
@@ -349,6 +353,10 @@ export interface UserSellerProfile {
   pixKeyType: string;
   availableBalance: number;
   pendingBalance: number;
+  empresaAvailableBalanceCents?: number;
+  empresaPendingBalanceCents?: number;
+  afiliadoAvailableBalanceCents?: number;
+  afiliadoPendingBalanceCents?: number;
   totalEarned: number;
   totalSalesVolume?: number;
   totalSalesCount: number;
@@ -419,6 +427,9 @@ export interface UserSellerProfile {
   subscriptionName?: string;
   subscriptionPrice?: number;
   subscriptionActiveAt?: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  stripeSubscriptionStatus?: string;
 }
 
 export interface VerificationRequest {
