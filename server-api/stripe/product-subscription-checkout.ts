@@ -44,14 +44,26 @@ async function requireReadyConnectAccount(
   companyId?: string,
 ): Promise<void> {
   if (!accountId) throw new Error('CONNECT_NOT_CONFIGURED');
-  const account = await stripe.accounts.retrieve(accountId);
+  let account = await stripe.accounts.retrieve(accountId);
   if (
     account.metadata?.firebase_uid !== uid ||
     account.metadata?.leadspay_role !== role ||
-    (role === 'empresa' && companyId && account.metadata?.leadspay_company_id !== companyId)
+    (role === 'empresa' && companyId && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
   ) {
     throw new Error('CONNECT_OWNERSHIP_MISMATCH');
   }
+
+  if (role === 'empresa' && companyId && !account.metadata?.leadspay_company_id) {
+    account = await stripe.accounts.update(accountId, {
+      metadata: {
+        ...account.metadata,
+        firebase_uid: uid,
+        leadspay_role: 'empresa',
+        leadspay_company_id: companyId,
+      },
+    });
+  }
+
   if (
     account.details_submitted !== true ||
     account.payouts_enabled !== true ||
