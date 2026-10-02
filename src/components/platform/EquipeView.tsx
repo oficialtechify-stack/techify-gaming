@@ -161,7 +161,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
     setTimeout(() => setCopiedCode(null), 2500);
   };
 
-  // Filtra as afiliações para mostrar as vinculadas às empresas/planos da empresa atual
+  // Filtra as afiliações para mostrar as vinculadas às empresas/produtos da empresa atual
   const companyIds = companies.map(c => c.id);
   const companyPlanIds = plans.map(p => p.id);
 
@@ -350,7 +350,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                 type="text"
                 value={searchAffiliate}
                 onChange={(e) => setSearchAffiliate(e.target.value)}
-                placeholder="Buscar afiliado por nome, e-mail, código ou plano..."
+                placeholder="Buscar afiliado por nome, e-mail, código ou produto..."
                 className="w-full bg-[#050811] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A]"
               />
             </div>
@@ -362,7 +362,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                   onChange={(e) => setSelectedPlanFilter(e.target.value)}
                   className="w-full bg-[#050811] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
                 >
-                  <option value="all">Todos os Planos</option>
+                  <option value="all">Todos os Produtos</option>
                   {plans.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
@@ -376,7 +376,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-bold text-white font-['Syne']">
-                  Afiliados Vinculados aos Seus Planos ({filteredAffiliations.length})
+                  Afiliados Vinculados aos Seus Produtos ({filteredAffiliations.length})
                 </h3>
                 <p className="text-xs text-white/50 mt-0.5">
                   Apenas a sua empresa possui autorização para remover ou desvincular um afiliado.
@@ -389,7 +389,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                 <Users className="w-12 h-12 text-[#D9F22A]/40 mx-auto mb-3" />
                 <h4 className="text-sm font-bold text-white">Nenhum afiliado conectado ainda</h4>
                 <p className="text-xs text-white/50 max-w-md mx-auto mt-1">
-                  Assim que os usuários clicarem em <strong>"Afiliar-se com 1 Clique"</strong> nos seus planos na Vitrine, eles aparecerão aqui instantaneamente.
+                  Assim que os usuários clicarem em <strong>"Afiliar-se com 1 Clique"</strong> nos seus produtos na Vitrine, eles aparecerão aqui instantaneamente.
                 </p>
               </div>
             ) : (
@@ -399,7 +399,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                     <tr className="text-white/40 bg-[#050811] border-b border-white/10 uppercase tracking-wider text-[11px]">
                       <th className="py-3 px-4 font-bold">Afiliado</th>
                       <th className="py-3 px-4 font-bold">Código Exclusivo</th>
-                      <th className="py-3 px-4 font-bold">Plano Vinculado</th>
+                      <th className="py-3 px-4 font-bold">Produto Vinculado</th>
                       <th className="py-3 px-4 font-bold text-center">Cliques</th>
                       <th className="py-3 px-4 font-bold text-center">Vendas</th>
                       <th className="py-3 px-4 font-bold">Comissão Paga</th>
@@ -411,7 +411,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                     {filteredAffiliations.map((aff) => {
                       const affName = aff.userName || aff.affiliateName || 'Afiliado LeadsPay';
                       const affCode = aff.affiliateCode || aff.affiliate_code || '---';
-                      const planName = aff.planName || aff.platformName || 'Plano Oficial';
+                      const planName = aff.planName || aff.platformName || 'Produto Oficial';
                       const clicksCount = aff.clicks ?? aff.clicksCount ?? 0;
                       const salesCount = aff.salesCount ?? 0;
                       const totalEarned = aff.totalEarned ?? aff.totalCommissionEarned ?? 0;
@@ -705,7 +705,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                 Remover Afiliado?
               </h3>
               <p className="text-xs text-white/70 mt-2 leading-relaxed">
-                Tem certeza que deseja desvincular o afiliado <strong className="text-white">{removingAffiliateModal.userName || removingAffiliateModal.affiliateName || 'Afiliado'}</strong> do plano <strong className="text-white">{removingAffiliateModal.planName || removingAffiliateModal.platformName}</strong>?
+                Tem certeza que deseja desvincular o afiliado <strong className="text-white">{removingAffiliateModal.userName || removingAffiliateModal.affiliateName || 'Afiliado'}</strong> do produto <strong className="text-white">{removingAffiliateModal.planName || removingAffiliateModal.platformName}</strong>?
               </p>
             </div>
 
