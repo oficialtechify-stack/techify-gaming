@@ -135,6 +135,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
       const plan = planSnap.data()!;
       const companyId = String(plan.companyId || '').trim();
+
+      if (plan.archived === true || plan.isArchived === true) {
+        return res.status(200).json({ success: true, archived: true, planId, companyId });
+      }
       const companySnap = companyId ? await db.collection('companies').doc(companyId).get() : null;
       if (
         String(plan.ownerId || '') !== identity.uid ||
@@ -178,7 +182,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
       const affiliationSnap = await db.collection('affiliations')
         .where('planId', '==', planId)
-        .limit(500)
+        .limit(400)
         .get();
 
       for (const affiliation of affiliationSnap.docs) {
