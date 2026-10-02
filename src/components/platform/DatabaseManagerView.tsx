@@ -707,58 +707,118 @@ export const DatabaseManagerView: React.FC = () => {
       });
     });
 
-    // 2. Solicitações de verificação genuínas de empresa (NUNCA converte afiliados em empresas)
+    const normalizeText = (value: unknown) =>
+      String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ');
+
+    const normalizeDoc = (value: unknown) => String(value || '').replace(/\D/g, '');
+
+    // 2. Solicitações reais de empresa.
+    // Antes de criar qualquer cartão sintético, tenta sempre localizar a empresa real
+    // por companyId, owner/submittedBy, documento ou nome+e-mail.
     verifications.forEach((v) => {
-      const isCompanyVerif = v.roleType === 'empresa' || 
-                             (Boolean(v.companyCnpj) && v.roleType !== 'afiliado' && Boolean(v.companyName));
-      if (isCompanyVerif) {
-        const key = v.companyId || (v.roleType === 'empresa' ? (v.userId || v.id) : null);
-        if (!key || deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
-        
-        const existing = map.get(key);
-        if (existing) {
-          // Funde dados reais para nunca sobrescrever com campos vazios
-          map.set(key, {
-            ...existing,
-            name: existing.name || v.companyName || v.name || '',
-            tagline: existing.tagline || v.companyTagline || '',
-            logo: existing.logo || v.companyLogo || v.avatar || '',
-            website: existing.website || v.companyWebsite || '',
-            cnpj: existing.cnpj || v.companyCnpj || v.cpf || '',
-            category: existing.category || (v.companyCategory as any) || 'SaaS / B2B',
-            description: existing.description || v.companyTagline || '',
-            email: existing.email || v.email || '',
-            whatsapp: existing.whatsapp || v.phone || '',
-            ownerId: existing.ownerId || v.userId || v.id,
-            status: existing.status || v.status || 'pending',
-            verified: Boolean(existing.verified || v.status === 'approved')
-          });
-        } else {
-          map.set(key, {
-            id: key,
-            name: v.companyName || v.name || 'Empresa Cadastrada',
-            slug: (v.companyName || v.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            tagline: v.companyTagline || '',
-            logo: v.companyLogo || v.avatar || '',
-            bannerImage: '',
-            website: v.companyWebsite || '',
-            commissionRange: '10% - 50%',
-            cnpj: v.companyCnpj || v.cpf || '',
-            category: (v.companyCategory as any) || 'SaaS / B2B',
-            description: v.companyTagline || '',
-            email: v.email || '',
-            whatsapp: v.phone || '',
-            ownerId: v.userId || v.id,
-            submittedBy: v.userId || v.id,
-            status: v.status === 'approved' ? 'approved' : (v.status || 'pending'),
-            verified: v.status === 'approved',
-            totalPlansCount: 0,
-            totalAffiliatesCount: 0,
-            totalSalesVolume: 0,
-            createdAt: v.submittedAt || new Date().toISOString()
-          } as CompanyStartup);
-        }
+      const isCompanyVerif =
+        v.roleType === 'empresa' ||
+        (Boolean(v.companyCnpj) && v.roleType !== 'afiliado' && Boolean(v.companyName));
+      if (!isCompanyVerif) return;
+
+      const requestedCompanyId = typeof v.companyId === 'string' ? v.companyId.trim() : '';
+      const verificationOwner = String(v.userId || v.id || '').trim();
+      const verificationDoc = normalizeDoc(v.companyCnpj || v.cpf);
+      const verificationEmail = normalizeText(v.email);
+      const verificationName = normalizeText(v.companyName || v.name);
+      const companySpecificStatus = String((v as any).companyStatus || '').toLowerCase();
+      const resolvedVerificationStatus =
+        companySpecificStatus === 'approved' || companySpecificStatus === 'rejected' || companySpecificStatus === 'pending'
+          ? companySpecificStatus
+          : String(v.status || 'pending').toLowerCase();
+
+      let matchedKey = requestedCompanyId && map.has(requestedCompanyId) ? requestedCompanyId : '';
+
+      if (!matchedKey && verificationOwner) {
+        const ownerMatch = Array.from(map.entries()).find(([, company]) =>
+          String(company.ownerId || company.submittedBy || '').trim() === verificationOwner
+        );
+        if (ownerMatch) matchedKey = ownerMatch[0];
       }
+
+      if (!matchedKey && verificationDoc) {
+        const documentMatch = Array.from(map.entries()).find(([, company]) =>
+          normalizeDoc(company.cnpj || company.cpf) === verificationDoc
+        );
+        if (documentMatch) matchedKey = documentMatch[0];
+      }
+
+      if (!matchedKey && verificationEmail && verificationName) {
+        const semanticMatch = Array.from(map.entries()).find(([, company]) => {
+          const companyEmail = normalizeText(company.email);
+          const companyName = normalizeText(company.name || company.companyName);
+          return companyEmail === verificationEmail && companyName === verificationName;
+        });
+        if (semanticMatch) matchedKey = semanticMatch[0];
+      }
+
+      const fallbackKey = requestedCompanyId || (v.roleType === 'empresa' ? verificationOwner : '');
+      const key = matchedKey || fallbackKey;
+      if (!key || deletedEntityIds.has(key) || deletedEntityIds.has(v.id)) return;
+
+      const existing = map.get(key);
+      if (existing) {
+        const keepApprovedCompany =
+          existing.status === 'approved' ||
+          existing.verified === true ||
+          (existing as any).kyc_status === 'verified';
+
+        map.set(key, {
+          ...existing,
+          name: existing.name || v.companyName || v.name || '',
+          tagline: existing.tagline || v.companyTagline || '',
+          logo: existing.logo || v.companyLogo || v.avatar || '',
+          website: existing.website || v.companyWebsite || '',
+          cnpj: existing.cnpj || v.companyCnpj || v.cpf || '',
+          category: existing.category || (v.companyCategory as any) || 'SaaS / B2B',
+          description: existing.description || v.companyTagline || '',
+          email: existing.email || v.email || '',
+          whatsapp: existing.whatsapp || v.phone || '',
+          ownerId: existing.ownerId || verificationOwner,
+          submittedBy: existing.submittedBy || verificationOwner,
+          status: keepApprovedCompany
+            ? 'approved'
+            : (resolvedVerificationStatus as any),
+          verified: keepApprovedCompany || resolvedVerificationStatus === 'approved',
+          submittedAt: (existing as any).submittedAt || v.submittedAt,
+        });
+        return;
+      }
+
+      map.set(key, {
+        id: key,
+        name: v.companyName || v.name || 'Empresa Cadastrada',
+        slug: (v.companyName || v.name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        tagline: v.companyTagline || '',
+        logo: v.companyLogo || v.avatar || '',
+        bannerImage: '',
+        website: v.companyWebsite || '',
+        commissionRange: '10% - 50%',
+        cnpj: v.companyCnpj || v.cpf || '',
+        category: (v.companyCategory as any) || 'SaaS / B2B',
+        description: v.companyTagline || '',
+        email: v.email || '',
+        whatsapp: v.phone || '',
+        ownerId: verificationOwner,
+        submittedBy: verificationOwner,
+        status: resolvedVerificationStatus as any,
+        verified: resolvedVerificationStatus === 'approved',
+        totalPlansCount: 0,
+        totalAffiliatesCount: 0,
+        totalSalesVolume: 0,
+        createdAt: v.submittedAt || new Date().toISOString(),
+        submittedAt: v.submittedAt,
+      } as CompanyStartup);
     });
 
     // 3. Perfis enriquecem empresas reais, mas nunca criam uma empresa fantasma.
