@@ -17,7 +17,7 @@ export const LinksPagamentoView: React.FC<LinksPagamentoViewProps> = ({ plans=[]
   const [title,setTitle]=useState('');
   const [description,setDescription]=useState('');
   const [amount,setAmount]=useState('50.00');
-  const [companyId,setCompanyId]=useState(activeCompanyId || companies[0]?.id || '');
+  const companyId = activeCompanyId || companies[0]?.id || '';
   const [error,setError]=useState('');
   const [submitting,setSubmitting]=useState(false);
   const [copied,setCopied]=useState<string|null>(null);
@@ -31,7 +31,7 @@ export const LinksPagamentoView: React.FC<LinksPagamentoViewProps> = ({ plans=[]
   const create=async(e:React.FormEvent)=>{
     e.preventDefault(); setError('');
     const value=Number(amount.replace(',','.'));
-    if(!companyId) return setError('Selecione a empresa responsável.');
+    if(!companyId) return setError('A empresa desta conta ainda não foi carregada. Atualize a página e tente novamente.');
     if(!title.trim()) return setError('Informe o título do link.');
     if(!Number.isFinite(value)||value<0.50) return setError('O valor mínimo é R$ 0,50.');
     if(!onCreateCustomPlan) return setError('Criação de ofertas indisponível.');
@@ -80,7 +80,7 @@ export const LinksPagamentoView: React.FC<LinksPagamentoViewProps> = ({ plans=[]
     {modal&&<div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"><form onSubmit={create} className="relative w-full max-w-lg bg-[#080d1a] border border-white/10 rounded-2xl p-6 text-white">
       <button type="button" onClick={()=>setModal(false)} className="absolute right-4 top-4 text-white/50"><X className="w-5 h-5"/></button><div className="flex gap-2 items-center mb-5"><CreditCard className="w-5 h-5 text-[#D9F22A]"/><h2 className="font-bold">Criar link real</h2></div>
       {error&&<div className="p-3 mb-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex gap-2"><AlertCircle className="w-4 h-4"/>{error}</div>}
-      <div className="space-y-4"><select value={companyId} onChange={e=>setCompanyId(e.target.value)} className="w-full bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"><option value="">Selecione a empresa</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Título da cobrança" className="w-full bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"/><textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Descrição" className="w-full bg-[#050811] border border-white/10 rounded-xl p-3 text-sm min-h-24"/><input type="number" min="0.50" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} className="w-full bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"/><button disabled={submitting} className="w-full py-3 rounded-xl bg-[#D9F22A] text-[#060A15] font-black text-xs disabled:opacity-50">{submitting?'Salvando...':'Criar link'}</button></div>
+      <div className="space-y-4"><div className="rounded-xl border border-white/10 bg-[#050811] p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-white/35">Empresa responsável</div><div className="mt-1 text-sm font-bold text-white">{companies.find(c=>c.id===companyId)?.name || 'Empresa da conta'}</div><div className="mt-1 text-[10px] text-white/35">Este link ficará vinculado exclusivamente à empresa autenticada.</div></div><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Título da cobrança" className="w-full bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"/><textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Descrição" className="w-full bg-[#050811] border border-white/10 rounded-xl p-3 text-sm min-h-24"/><input type="number" min="0.50" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} className="w-full bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"/><button disabled={submitting} className="w-full py-3 rounded-xl bg-[#D9F22A] text-[#060A15] font-black text-xs disabled:opacity-50">{submitting?'Salvando...':'Criar link'}</button></div>
     </form></div>}
   </div>;
 };
