@@ -72,16 +72,19 @@ export async function releaseDueStripeBalances(
   db = getServerAdminFirestore(),
   now = new Date(),
 ): Promise<{ examined: number; released: number; failed: number }> {
-  const due = await db.collection('balance_releases')
-    .where('status', '==', 'pending')
+  // Query only by availableAt so Firestore's automatic single-field index is sufficient.
+  // Status is revalidated transactionally in releaseStripeBalanceDocument.
+  const candidates = await db.collection('balance_releases')
     .where('availableAt', '<=', now.toISOString())
-    .limit(50)
+    .orderBy('availableAt', 'asc')
+    .limit(200)
     .get();
+  const due = candidates.docs.filter((doc) => doc.data().status === 'pending').slice(0, 50);
 
   let released = 0;
   let failed = 0;
 
-  for (const releaseDoc of due.docs) {
+  for (const releaseDoc of due) {
     try {
       if (await releaseStripeBalanceDocument(db, releaseDoc.ref)) released += 1;
     } catch (error) {
@@ -90,7 +93,7 @@ export async function releaseDueStripeBalances(
     }
   }
 
-  return { examined: due.size, released, failed };
+  return { examined: due.length, released, failed };
 }
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
