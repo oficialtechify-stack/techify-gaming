@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient, getStripeWebhookSecret } from '../../lib/stripeServer.js';
 import { getSubscriptionPlan, roleAvailableCentsField, rolePendingCentsField, type PlatformRole } from '../../lib/platformBilling.js';
+import { calculateSplit } from '../../lib/stripeSplit.js';
 
 type RequestLike = AsyncIterable<Buffer | string> & { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
@@ -414,6 +415,357 @@ async function updateOrderRisk(event: Stripe.Event, paymentIntentId: string | nu
       }, { merge: true });
     }
   });
+}
+
+
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string {
+  const raw = invoice as any;
+  const direct = raw.subscription;
+  if (typeof direct === 'string') return direct;
+  if (direct?.id) return String(direct.id);
+
+  const parentSubscription = raw.parent?.subscription_details?.subscription;
+  if (typeof parentSubscription === 'string') return parentSubscription;
+  if (parentSubscription?.id) return String(parentSubscription.id);
+
+  return '';
+}
+
+async function syncProductSubscriptionStatus(
+  subscription: Stripe.Subscription,
+  forcedStatus?: string,
+) {
+  if (subscription.metadata?.leadspay_product_subscription !== '1') return false;
+
+  const db = getServerAdminFirestore();
+  const now = new Date().toISOString();
+  const status = forcedStatus || subscription.status;
+  const planId = String(subscription.metadata.plan_id || '');
+  const companyId = String(subscription.metadata.company_id || '');
+  const affiliateId = String(subscription.metadata.affiliate_id || '');
+
+  await db.collection('product_subscriptions').doc(subscription.id).set({
+    id: subscription.id,
+    source: 'stripe',
+    planId,
+    companyId,
+    companyOwnerId: String(subscription.metadata.company_owner_id || ''),
+    affiliateId: affiliateId || null,
+    affiliateCode: String(subscription.metadata.affiliate_code || '') || null,
+    buyerName: String(subscription.metadata.buyer_name || ''),
+    buyerEmail: String(subscription.metadata.buyer_email || ''),
+    billingCycle: String(subscription.metadata.billing_cycle || 'MONTHLY'),
+    recurringCommissionEnabled: subscription.metadata.recurring_commission_enabled === '1',
+    affiliatePercentInitial: Number(subscription.metadata.affiliate_percent_initial || 0),
+    affiliatePercentRecurring: Number(subscription.metadata.affiliate_percent_recurring || 0),
+    status,
+    active: status === 'active' || status === 'trialing',
+    cancelAtPeriodEnd: Boolean((subscription as any).cancel_at_period_end),
+    canceledAt: (subscription as any).canceled_at
+      ? new Date(Number((subscription as any).canceled_at) * 1000).toISOString()
+      : null,
+    updatedAt: now,
+  }, { merge: true });
+
+  return true;
+}
+
+async function processProductSubscriptionInvoice(
+  stripe: Stripe,
+  event: Stripe.Event,
+  invoice: Stripe.Invoice,
+) {
+  const subscriptionId = invoiceSubscriptionId(invoice);
+  if (!subscriptionId) return false;
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  if (subscription.metadata?.leadspay_product_subscription !== '1') return false;
+
+  await syncProductSubscriptionStatus(subscription, 'active');
+
+  const invoiceAny = invoice as any;
+  if (invoiceAny.status !== 'paid' && Number(invoiceAny.amount_paid || 0) <= 0) {
+    return true;
+  }
+
+  const metadata = subscription.metadata || {};
+  const planId = String(metadata.plan_id || '');
+  const companyId = String(metadata.company_id || '');
+  const companyOwnerId = String(metadata.company_owner_id || '');
+  const companyAccountId = String(metadata.company_account_id || '');
+  const affiliateId = String(metadata.affiliate_id || '');
+  const affiliateCode = String(metadata.affiliate_code || '');
+  const affiliateAccountId = String(metadata.affiliate_account_id || '');
+  const buyerName = String(metadata.buyer_name || '');
+  const buyerEmail = String(metadata.buyer_email || '');
+  const billingCycle = String(metadata.billing_cycle || 'MONTHLY');
+  const recurringCommissionEnabled = metadata.recurring_commission_enabled === '1';
+  const initialAffiliatePercent = Number(metadata.affiliate_percent_initial || 0);
+  const recurringAffiliatePercent = recurringCommissionEnabled
+    ? Number(metadata.affiliate_percent_recurring || 0)
+    : 0;
+  const configuredProductAmountCents = Number(metadata.product_amount_cents || 0);
+  const configuredCheckoutFeeCents = Number(metadata.checkout_fee_cents || 99);
+  const companyDelayDays = Number(metadata.company_release_delay_days || 15);
+  const affiliateDelayDays = Number(metadata.affiliate_release_delay_days || 15);
+
+  if (!planId || !companyId || !companyOwnerId || !companyAccountId) {
+    throw new Error('Assinatura de produto sem metadados financeiros obrigatórios.');
+  }
+
+  const grossAmountCents = Number(invoiceAny.amount_paid || invoiceAny.total || 0);
+  if (!Number.isSafeInteger(grossAmountCents) || grossAmountCents < 50) {
+    throw new Error('Fatura recorrente paga com valor inválido.');
+  }
+
+  const checkoutFeeCents = Math.max(0, Math.min(configuredCheckoutFeeCents, grossAmountCents));
+  const productAmountCents = Math.max(
+    0,
+    Math.min(
+      configuredProductAmountCents > 0 ? configuredProductAmountCents : grossAmountCents - checkoutFeeCents,
+      grossAmountCents - checkoutFeeCents,
+    ),
+  );
+
+  const firstCharge = String(invoiceAny.billing_reason || '') === 'subscription_create';
+  const affiliatePercent = affiliateId
+    ? (firstCharge ? initialAffiliatePercent : recurringAffiliatePercent)
+    : 0;
+
+  const split = calculateSplit({
+    grossAmountCents,
+    affiliatePercent,
+    platformFeeCents: checkoutFeeCents,
+    commissionableAmountCents: productAmountCents,
+  });
+
+  if (split.companyAmountCents <= 0) {
+    throw new Error('Fatura recorrente não cobre taxa e comissão configuradas.');
+  }
+
+  const db = getServerAdminFirestore();
+  const invoiceId = String(invoice.id);
+  const saleRef = db.collection('sales').doc(`stripe_sub_${invoiceId}`);
+  const subscriptionRef = db.collection('product_subscriptions').doc(subscription.id);
+  const planRef = db.collection('plans').doc(planId);
+  const companyRef = db.collection('companies').doc(companyId);
+  const companyProfileRef = db.collection('user_profiles').doc(companyOwnerId);
+  const affiliateProfileRef = affiliateId
+    ? db.collection('user_profiles').doc(affiliateId)
+    : null;
+
+  await db.runTransaction(async (tx) => {
+    const saleSnap = await tx.get(saleRef);
+    if (saleSnap.exists) return;
+
+    const companyProfileSnap = await tx.get(companyProfileRef);
+    if (!companyProfileSnap.exists) {
+      throw new Error('Perfil financeiro da empresa não encontrado para renovação.');
+    }
+
+    let affiliateProfileSnap: FirebaseFirestore.DocumentSnapshot | null = null;
+    if (split.affiliateAmountCents > 0 && affiliateProfileRef) {
+      affiliateProfileSnap = await tx.get(affiliateProfileRef);
+      if (!affiliateProfileSnap.exists) {
+        throw new Error('Perfil financeiro do afiliado não encontrado para renovação.');
+      }
+    }
+
+    const now = new Date();
+    const companyAvailableAt = addDays(now, Number.isFinite(companyDelayDays) ? companyDelayDays : 15);
+    const affiliateAvailableAt = split.affiliateAmountCents > 0
+      ? addDays(now, Number.isFinite(affiliateDelayDays) ? affiliateDelayDays : 15)
+      : null;
+
+    const sale = {
+      id: saleRef.id,
+      source: 'stripe',
+      saleKind: firstCharge ? 'subscription_initial' : 'subscription_renewal',
+      recurring: true,
+      stripeSubscriptionId: subscription.id,
+      stripeInvoiceId: invoiceId,
+      companyId,
+      companyName: String((companyProfileSnap.data() as any)?.companyName || ''),
+      companyOwnerId,
+      companyStripeAccountId: companyAccountId,
+      ...(affiliateId ? { affiliateId } : {}),
+      ...(affiliateCode ? { affiliateCode } : {}),
+      ...(affiliateAccountId ? { affiliateStripeAccountId: affiliateAccountId } : {}),
+      platformId: planId,
+      platformName: String((await tx.get(planRef)).data()?.name || 'Assinatura'),
+      buyerName,
+      customerName: buyerName,
+      buyerEmail,
+      buyerCompany: String((await tx.get(companyRef)).data()?.name || ''),
+      amount: grossAmountCents / 100,
+      commissionEarned: split.affiliateAmountCents / 100,
+      checkoutFee: split.platformFeeCents / 100,
+      netCompanyAmount: split.companyAmountCents / 100,
+      method: 'Stripe • Assinatura',
+      status: 'Aprovado',
+      releaseStatus: 'pendente',
+      availableAt: [companyAvailableAt, affiliateAvailableAt].filter(Boolean).sort().at(-1) || companyAvailableAt,
+      companyAvailableAt,
+      affiliateAvailableAt,
+      billingCycle,
+      billingReason: String(invoiceAny.billing_reason || ''),
+      date: now.toISOString().slice(0, 10),
+      time: now.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'America/Sao_Paulo',
+      }),
+      createdAt: now.toISOString(),
+      paidAt: now.toISOString(),
+      is_test: !invoice.livemode,
+      environment: invoice.livemode ? 'production' : 'development',
+      utmSource: metadata.utm_source || null,
+      utmMedium: metadata.utm_medium || null,
+      utmCampaign: metadata.utm_campaign || null,
+      financialBreakdown: {
+        grossAmount: grossAmountCents / 100,
+        platformFee: split.platformFeeCents / 100,
+        affiliateCommission: split.affiliateAmountCents / 100,
+        netCompanyAmount: split.companyAmountCents / 100,
+      },
+    };
+
+    tx.create(
+      saleRef,
+      Object.fromEntries(Object.entries(sale).filter(([, value]) => value !== undefined)),
+    );
+
+    const companyReleaseId = `sub_${invoiceId}_empresa`;
+    tx.create(db.collection('balance_releases').doc(companyReleaseId), {
+      id: companyReleaseId,
+      subscriptionId: subscription.id,
+      invoiceId,
+      saleId: saleRef.id,
+      userId: companyOwnerId,
+      role: 'empresa',
+      stripeAccountId: companyAccountId,
+      amountCents: split.companyAmountCents,
+      amount: split.companyAmountCents / 100,
+      status: 'pending',
+      availableAt: companyAvailableAt,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      is_test: !invoice.livemode,
+      environment: invoice.livemode ? 'production' : 'development',
+    });
+
+    tx.update(companyProfileRef, {
+      pendingBalance: FieldValue.increment(split.companyAmountCents / 100),
+      totalEarned: FieldValue.increment(split.companyAmountCents / 100),
+      [rolePendingCentsField('empresa')]: FieldValue.increment(split.companyAmountCents),
+      updatedAt: now.toISOString(),
+    });
+
+    if (split.affiliateAmountCents > 0 && affiliateProfileRef && affiliateProfileSnap?.exists) {
+      const affiliateReleaseId = `sub_${invoiceId}_afiliado`;
+      tx.create(db.collection('balance_releases').doc(affiliateReleaseId), {
+        id: affiliateReleaseId,
+        subscriptionId: subscription.id,
+        invoiceId,
+        saleId: saleRef.id,
+        userId: affiliateId,
+        role: 'afiliado',
+        stripeAccountId: affiliateAccountId,
+        amountCents: split.affiliateAmountCents,
+        amount: split.affiliateAmountCents / 100,
+        status: 'pending',
+        availableAt: affiliateAvailableAt,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        is_test: !invoice.livemode,
+        environment: invoice.livemode ? 'production' : 'development',
+      });
+
+      tx.update(affiliateProfileRef, {
+        pendingBalance: FieldValue.increment(split.affiliateAmountCents / 100),
+        totalEarned: FieldValue.increment(split.affiliateAmountCents / 100),
+        [rolePendingCentsField('afiliado')]: FieldValue.increment(split.affiliateAmountCents),
+        updatedAt: now.toISOString(),
+      });
+
+      tx.set(db.collection('affiliations').doc(`aff_${affiliateId}_${planId}`), {
+        salesCount: FieldValue.increment(1),
+        totalEarned: FieldValue.increment(split.affiliateAmountCents / 100),
+        lastRecurringCommissionAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      }, { merge: true });
+    }
+
+    tx.set(db.collection('platform_finances').doc('global_summary'), {
+      totalPlatformRevenue: FieldValue.increment(split.platformFeeCents / 100),
+      totalCheckoutFees: FieldValue.increment(split.platformFeeCents / 100),
+      totalSalesProcessed: FieldValue.increment(1),
+      lastUpdated: now.toISOString(),
+    }, { merge: true });
+
+    tx.set(planRef, {
+      totalSales: FieldValue.increment(1),
+      totalSalesCount: FieldValue.increment(1),
+      totalRevenue: FieldValue.increment(productAmountCents / 100),
+      updatedAt: now.toISOString(),
+    }, { merge: true });
+
+    tx.set(companyRef, {
+      totalSalesCount: FieldValue.increment(1),
+      totalSalesVolume: FieldValue.increment(productAmountCents / 100),
+      grossRevenue: FieldValue.increment(productAmountCents / 100),
+      totalCheckoutFees: FieldValue.increment(split.platformFeeCents / 100),
+      totalAffiliateCommissions: FieldValue.increment(split.affiliateAmountCents / 100),
+      netRevenue: FieldValue.increment(split.companyAmountCents / 100),
+      updatedAt: now.toISOString(),
+    }, { merge: true });
+
+    if (buyerEmail) {
+      const emailHash = createHash('sha256').update(buyerEmail.toLowerCase()).digest('hex').slice(0, 20);
+      const clientId = `${companyId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)}_${emailHash}`;
+      tx.set(db.collection('clients').doc(clientId), {
+        id: clientId,
+        companyId,
+        store_id: companyId,
+        empresa_id: companyId,
+        name: buyerName,
+        nome_completo: buyerName,
+        email: buyerEmail,
+        total_spent: FieldValue.increment(productAmountCents / 100),
+        orders_count: FieldValue.increment(1),
+        last_order_at: now.toISOString(),
+        last_plan_name: sale.platformName,
+        status_compra: 'PAGO',
+        status: 'active',
+        subscriptionId: subscription.id,
+        updatedAt: now.toISOString(),
+        ...(firstCharge ? { created_at: now.toISOString(), data_criacao: now.toISOString() } : {}),
+      }, { merge: true });
+    }
+
+    tx.set(subscriptionRef, {
+      id: subscription.id,
+      planId,
+      companyId,
+      companyOwnerId,
+      affiliateId: affiliateId || null,
+      affiliateCode: affiliateCode || null,
+      buyerName,
+      buyerEmail,
+      billingCycle,
+      recurringCommissionEnabled,
+      affiliatePercentInitial: initialAffiliatePercent,
+      affiliatePercentRecurring: recurringAffiliatePercent,
+      status: 'active',
+      active: true,
+      lastInvoiceId: invoiceId,
+      lastPaidAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      ...(firstCharge ? { createdAt: now.toISOString() } : {}),
+    }, { merge: true });
+  });
+
+  return true;
 }
 
 async function applySubscription(stripe: Stripe, subscriptionId: string, forcedStatus?: string) {
