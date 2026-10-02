@@ -109,6 +109,71 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         });
       }
 
+      const lookup = typeof req.query?.lookup === 'string' ? req.query.lookup.trim() : '';
+      if (lookup) {
+        if (!/^[A-Za-z0-9_-]{1,150}$/.test(lookup)) {
+          return res.status(400).json({ error: 'Identificador de produto inválido.' });
+        }
+
+        let productDoc = await db.collection('plans').doc(lookup).get();
+
+        if (!productDoc.exists) {
+          const byCheckoutSlug = await db.collection('plans')
+            .where('checkoutSlug', '==', lookup)
+            .limit(1)
+            .get();
+          productDoc = byCheckoutSlug.docs[0] || productDoc;
+        }
+
+        if (!productDoc.exists) {
+          const bySlug = await db.collection('plans')
+            .where('slug', '==', lookup)
+            .limit(1)
+            .get();
+          productDoc = bySlug.docs[0] || productDoc;
+        }
+
+        if (!productDoc.exists) {
+          return res.status(404).json({ error: 'Produto não encontrado.' });
+        }
+
+        const plan = productDoc.data()!;
+        if (
+          plan.active === false ||
+          String(plan.status || '').toLowerCase() !== 'ativo' ||
+          plan.archived === true ||
+          plan.isArchived === true
+        ) {
+          return res.status(404).json({ error: 'Produto indisponível.' });
+        }
+
+        const productCompanyId = String(plan.companyId || '').trim();
+        if (!productCompanyId) {
+          return res.status(404).json({ error: 'Produto indisponível.' });
+        }
+
+        const companySnap = await db.collection('companies').doc(productCompanyId).get();
+        if (!companySnap.exists) {
+          return res.status(404).json({ error: 'Produto indisponível.' });
+        }
+
+        const company = companySnap.data()!;
+        if (
+          company.verified !== true ||
+          String(company.status || '').toLowerCase() !== 'approved' ||
+          company.archived === true ||
+          company.isArchived === true ||
+          company.banned === true
+        ) {
+          return res.status(404).json({ error: 'Produto indisponível.' });
+        }
+
+        return res.status(200).json({
+          success: true,
+          plan: { id: productDoc.id, ...plan },
+        });
+      }
+
       const companyId = typeof req.query?.companyId === 'string' ? req.query.companyId.trim() : '';
       let queryRef: FirebaseFirestore.Query = db.collection('plans');
       if (companyId) queryRef = queryRef.where('companyId', '==', companyId);
@@ -148,15 +213,18 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         return res.status(403).json({ error: 'Este produto não pertence à empresa desta conta.' });
       }
 
-      const activeSubscriptions = await db.collection('product_subscriptions')
-        .where('planId', '==', planId)
-        .limit(200)
-        .get();
+      const [activeFlag, activeStatus, trialingStatus, pastDueStatus] = await Promise.all([
+        db.collection('product_subscriptions').where('planId', '==', planId).where('active', '==', true).limit(1).get(),
+        db.collection('product_subscriptions').where('planId', '==', planId).where('status', '==', 'active').limit(1).get(),
+        db.collection('product_subscriptions').where('planId', '==', planId).where('status', '==', 'trialing').limit(1).get(),
+        db.collection('product_subscriptions').where('planId', '==', planId).where('status', '==', 'past_due').limit(1).get(),
+      ]);
 
-      const hasActiveSubscription = activeSubscriptions.docs.some((doc) => {
-        const data = doc.data();
-        return data.active === true || ['active', 'trialing', 'past_due'].includes(String(data.status || '').toLowerCase());
-      });
+      const hasActiveSubscription =
+        !activeFlag.empty ||
+        !activeStatus.empty ||
+        !trialingStatus.empty ||
+        !pastDueStatus.empty;
 
       if (hasActiveSubscription) {
         return res.status(409).json({
