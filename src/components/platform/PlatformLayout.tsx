@@ -536,6 +536,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setDbConnected(true);
     });
 
+    // Nunca abra listeners globais enquanto uma conta Empresa ainda está resolvendo seu tenant.
+    if (roleMode === 'empresa' && !effectiveCompanyId) {
+      setCompanies([]);
+      setPlans([]);
+      setAllAffiliations([]);
+      setTransactions([]);
+      setSalesDataLoaded(true);
+      return;
+    }
+
     const unsubCompanies = subscribeCompanies((compList) => {
       setCompanies(compList);
     }, effectiveCompanyId);
@@ -559,7 +569,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       unsubAllAffiliations();
       unsubSales();
     };
-  }, [effectiveCompanyId, effectiveUserId]);
+  }, [effectiveCompanyId, effectiveUserId, roleMode]);
 
   // 2. User-specific subscriptions (user affiliations, user withdrawals strictly isolated to this account)
   useEffect(() => {
