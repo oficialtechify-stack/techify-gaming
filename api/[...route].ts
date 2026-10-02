@@ -29,6 +29,7 @@ import companiesHandler from '../server-api/companies.js';
 import companyContextHandler from '../server-api/company/context.js';
 import companySubscriptionsHandler from '../server-api/company/subscriptions.js';
 import companyTeamHandler from '../server-api/company/team.js';
+import companyTrafficReportHandler from '../server-api/company/traffic-report.js';
 import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
 import mcpRestHandler from '../server-api/mcp/rest.js';
 import mcpProtocolHandler from '../server-api/mcp/protocol.js';
@@ -171,6 +172,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return companySubscriptionsHandler(req as any, res as any);
     case 'company/team':
       return companyTeamHandler(req as any, res as any);
+    case 'company/traffic-report':
+      return companyTrafficReportHandler(req as any, res as any);
     case 'profile/enable-affiliate':
       return enableAffiliateHandler(req as any, res as any);
     case 'partner/api-key':
