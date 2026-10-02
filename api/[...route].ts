@@ -177,6 +177,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return legacyLookupHandler(req as any, res as any);
     case 'affiliates/join':
       return affiliateJoinHandler(req as any, res as any);
+    case 'internal/readiness':
+      return internalReadinessHandler(req as any, res as any);
+    case 'internal/finance-e2e':
+      return financeE2EHandler(req as any, res as any);
     case 'admin/audit-identities':
       return auditIdentitiesHandler(req as any, res as any);
     case 'admin/entity-action':
