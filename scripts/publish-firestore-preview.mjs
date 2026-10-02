@@ -72,18 +72,8 @@ async function main() {
     const indexConfig = JSON.parse(await fs.readFile(new URL('../firestore.indexes.json', import.meta.url), 'utf8'));
     const source = { files: [{ name: 'firestore.rules', content: rules }] };
 
-    const validation = await request(
-      `https://firebaserules.googleapis.com/v1/projects/${TARGET_PROJECT}:test`,
-      token,
-      { method: 'POST', body: JSON.stringify({ source }) },
-      [200],
-    );
-    const validationErrors = (validation.body?.issues || []).filter((issue) => issue.severity === 'ERROR');
-    if (validationErrors.length) {
-      throw new Error('As Security Rules possuem erros: ' + JSON.stringify(validationErrors).slice(0, 1500));
-    }
-    console.log('[Firestore publish] Security Rules válidas.');
-
+    // projects.rulesets.create compila e valida a Source. Se houver erro
+    // sintático/semântico, a API rejeita a criação e o build falha.
     const createdRuleset = await request(
       `https://firebaserules.googleapis.com/v1/projects/${TARGET_PROJECT}/rulesets`,
       token,
@@ -93,19 +83,50 @@ async function main() {
     const rulesetName = createdRuleset.body?.name;
     if (!rulesetName) throw new Error('A API do Firebase não retornou o nome do ruleset.');
 
+    console.log('[Firestore publish] Security Rules compiladas e ruleset criado.');
+
     const releaseName = `projects/${TARGET_PROJECT}/releases/cloud.firestore`;
-    await request(
-      `https://firebaserules.googleapis.com/v1/${releaseName}?updateMask=rulesetName`,
+    const releases = await request(
+      `https://firebaserules.googleapis.com/v1/projects/${TARGET_PROJECT}/releases?pageSize=100`,
       token,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          name: releaseName,
-          rulesetName,
-        }),
-      },
+      {},
       [200],
     );
+    const existingRelease = (releases.body?.releases || []).find((release) =>
+      release.name === releaseName ||
+      release.name === `${releaseName}/(default)`
+    );
+
+    if (existingRelease) {
+      await request(
+        `https://firebaserules.googleapis.com/v1/${existingRelease.name}`,
+        token,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            release: {
+              name: existingRelease.name,
+              rulesetName,
+            },
+            updateMask: 'rulesetName',
+          }),
+        },
+        [200],
+      );
+    } else {
+      await request(
+        `https://firebaserules.googleapis.com/v1/projects/${TARGET_PROJECT}/releases`,
+        token,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: releaseName,
+            rulesetName,
+          }),
+        },
+        [200],
+      );
+    }
     console.log('[Firestore publish] Security Rules publicadas em cloud.firestore.');
 
     const desiredIndexes = Array.isArray(indexConfig.indexes) ? indexConfig.indexes : [];
