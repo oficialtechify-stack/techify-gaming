@@ -62,8 +62,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     let companyRef: any;
     let company: Record<string, unknown> | undefined;
+    let companyId = '';
     if (role === 'empresa') {
-      const companyId = String(profile.companyId || `comp-${identity.uid}`);
+      companyId = String(profile.companyId || '').trim();
+      if (!companyId) return fail(res, 409, 'O perfil da Empresa ainda não possui vínculo com uma empresa válida.');
+
       companyRef = db.collection('companies').doc(companyId);
       const companySnap = await companyRef.get();
       if (!companySnap.exists) return fail(res, 404, 'Cadastro de Empresa não encontrado.');
@@ -81,8 +84,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     if (accountId) {
       const account = await stripe.accounts.retrieve(accountId);
-      if (account.metadata?.firebase_uid !== identity.uid || account.metadata?.leadspay_role !== role) {
-        return fail(res, 409, 'A conta Stripe vinculada não corresponde a este perfil.');
+      if (
+        account.metadata?.firebase_uid !== identity.uid ||
+        account.metadata?.leadspay_role !== role ||
+        (role === 'empresa' && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
+      ) {
+        return fail(res, 409, 'A conta Stripe vinculada não corresponde a esta empresa.');
       }
     } else {
       const docType = String(profile.companyDocType || profile.documentType || profile.docType || '').toUpperCase();
@@ -93,7 +100,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         email: identity.email || undefined,
         business_type: businessType,
         capabilities: { transfers: { requested: true } },
-        metadata: { firebase_uid: identity.uid, leadspay_role: role },
+        metadata: {
+          firebase_uid: identity.uid,
+          leadspay_role: role,
+          ...(role === 'empresa' ? { leadspay_company_id: companyId } : {}),
+        },
       }, { idempotencyKey: `leadspay-connect-${role}-${identity.uid}` });
       accountId = account.id;
       const updatedAccounts = { ...roleAccounts, [role]: accountId };
@@ -103,7 +114,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       if (companyRef && role === 'empresa') {
-        await companyRef.set({ stripeAccountId: accountId, stripeOnboardingStatus: 'pending', updatedAt: new Date().toISOString() }, { merge: true });
+        await companyRef.set({
+          stripeAccountId: accountId,
+          stripeOnboardingStatus: 'pending',
+          stripeConnectOwnerId: identity.uid,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
       }
     }
 
