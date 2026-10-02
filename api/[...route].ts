@@ -33,6 +33,7 @@ import companyTrafficReportHandler from '../server-api/company/traffic-report.js
 import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
 import mcpRestHandler from '../server-api/mcp/rest.js';
 import mcpProtocolHandler from '../server-api/mcp/protocol.js';
+import publicMetricsHandler from '../server-api/public/metrics.js';
 
 export const config = {
   api: {
@@ -176,6 +177,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return companyTrafficReportHandler(req as any, res as any);
     case 'profile/enable-affiliate':
       return enableAffiliateHandler(req as any, res as any);
+    case 'public/metrics':
+      return publicMetricsHandler(req as any, res as any);
     case 'partner/api-key':
       return partnerApiKeyHandler(req as any, res as any);
     case 'partner/settings':
