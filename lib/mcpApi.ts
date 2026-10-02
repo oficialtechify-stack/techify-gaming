@@ -299,10 +299,33 @@ export async function executeMcpAction(
     }
 
     const snap = await queryRef.limit(200).get();
-    const plans = snap.docs
+    const candidates = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
-      .filter((plan) => plan.status === 'Ativo' && plan.active !== false)
-      .filter((plan) => scope === 'mine' || (plan.allowAffiliates !== false && Number(plan.commissionPercentage || 0) > 0))
+      .filter((plan) =>
+        String(plan.status || '').toLowerCase() === 'ativo' &&
+        plan.active !== false &&
+        plan.archived !== true &&
+        plan.isArchived !== true
+      )
+      .filter((plan) => scope === 'mine' || (plan.allowAffiliates !== false && Number(plan.commissionPercentage || 0) > 0));
+
+    const companyIds = [...new Set(candidates.map((plan) => String(plan.companyId || '')).filter(Boolean))];
+    const companyStates = new Map<string, boolean>();
+    await Promise.all(companyIds.map(async (id) => {
+      const companySnap = await db.collection('companies').doc(id).get();
+      const company = companySnap.exists ? companySnap.data()! : null;
+      companyStates.set(id, Boolean(
+        company &&
+        company.verified === true &&
+        String(company.status || '').toLowerCase() === 'approved' &&
+        company.archived !== true &&
+        company.isArchived !== true &&
+        company.banned !== true
+      ));
+    }));
+
+    const plans = candidates
+      .filter((plan) => companyStates.get(String(plan.companyId || '')) === true)
       .slice(0, limit)
       .map((plan) => ({
         id: plan.id,
@@ -364,6 +387,9 @@ export async function executeMcpAction(
     if (planId !== 'all') {
       const plan = await findPlan(planId);
       if (!plan || String(plan.companyId || '') !== principal.companyId) throw new Error('A oferta escolhida não pertence à empresa autenticada.');
+      if (String(plan.billingType || '').toLowerCase() === 'recorrente' || String(plan.paymentType || '').toLowerCase() === 'recorrente') {
+        throw new Error('Cupons desta API são válidos somente para produtos de pagamento único.');
+      }
     }
 
     const companySnap = await db.collection('companies').doc(principal.companyId).get();
@@ -419,6 +445,19 @@ export async function executeMcpAction(
     const planId = String(plan.id);
     const companyId = String(plan.companyId || '');
     if (!companyId) throw new Error('Oferta sem empresa responsável.');
+
+    const companySnap = await db.collection('companies').doc(companyId).get();
+    const company = companySnap.exists ? companySnap.data()! : null;
+    if (
+      !company ||
+      company.verified !== true ||
+      String(company.status || '').toLowerCase() !== 'approved' ||
+      company.archived === true ||
+      company.isArchived === true ||
+      company.banned === true
+    ) {
+      throw new Error('A empresa responsável não está aprovada para vender.');
+    }
 
     let affiliateCode = '';
     const isOwnCompanyPlan = principal.approvedRoles.includes('empresa') && principal.companyId === companyId;
