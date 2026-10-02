@@ -123,7 +123,7 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
       {/* Tipografia Oficial LeadsPay */}
       {shouldShowText && (
         <div className="flex flex-col justify-center leading-none">
-          <div className={`font-['Syne'] font-black tracking-tight uppercase ${currentDim.fontSize}`}>
+          <div className={`font-['Michroma'] font-black tracking-tight uppercase ${currentDim.fontSize}`}>
             <span 
               className="drop-shadow-[0_0_14px_rgba(217,242,42,0.4)] transition-colors"
               style={{ color: accentColor }}

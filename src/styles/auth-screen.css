@@ -12,7 +12,7 @@
     radial-gradient(ellipse at 50% 112%, rgba(151, 221, 81, .45), transparent 46%),
     radial-gradient(ellipse at 8% 100%, rgba(91, 166, 60, .12), transparent 35%),
     linear-gradient(180deg, #fbfcf9 0%, #f6f9f3 58%, #eef7e5 100%);
-  font-family: "Manrope", "Plus Jakarta Sans", sans-serif;
+  font-family: var(--leadspay-brand-font, 'Michroma', sans-serif);
 }
 
 .leadspay-auth-screen[data-has-image="true"] {
@@ -404,7 +404,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, .88);
   color: #526559;
-  font: 750 11px/1 "Manrope", sans-serif;
+  font: 400 11px/1 var(--leadspay-brand-font, 'Michroma', sans-serif);
   cursor: pointer;
   transition: transform 160ms cubic-bezier(.23,1,.32,1), color 160ms ease, border-color 160ms ease, background 160ms ease;
 }

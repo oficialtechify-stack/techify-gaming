@@ -1,7 +1,7 @@
 /* LeadsPay platform styles - Enhanced Fintech Dashboard Theme */
 
 .leadspay-platform {
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--leadspay-brand-font, 'Michroma', sans-serif);
   color-scheme: dark;
 }
 
@@ -9,7 +9,7 @@
 .leadspay-platform h2,
 .leadspay-platform h3,
 .leadspay-platform .font-\['Syne'\] {
-  font-family: 'Syne', 'Plus Jakarta Sans', sans-serif !important;
+  font-family: var(--leadspay-brand-font, 'Michroma', sans-serif) !important;
   letter-spacing: -0.02em;
 }
 
@@ -79,7 +79,7 @@
 
 /* =========================================================
    LIGHT THEME — visual branco completo e legível
-   Mesma tipografia da landing: Plus Jakarta Sans + Syne.
+   Tipografia única da marca: Michroma em claro e escuro.
    ========================================================= */
 
 html[data-leadspay-theme="light"],

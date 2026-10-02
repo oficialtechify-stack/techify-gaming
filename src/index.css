@@ -1,5 +1,57 @@
 @import "tailwindcss";
 
+/* =========================================================
+   LEADSPAY GLOBAL TYPOGRAPHY
+   One consistent futuristic brand font in light + dark mode.
+   Technical/code fields keep DM Mono for readability.
+   ========================================================= */
+:root {
+  --leadspay-brand-font: 'Michroma', 'Arial Narrow', sans-serif;
+  --leadspay-mono-font: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+html,
+body,
+#root,
+button,
+input,
+select,
+textarea {
+  font-family: var(--leadspay-brand-font) !important;
+}
+
+body *:not(code):not(pre):not(kbd):not(samp):not(.font-mono):not(.font-mono *) {
+  font-family: var(--leadspay-brand-font) !important;
+}
+
+code,
+pre,
+kbd,
+samp,
+.font-mono,
+.font-mono * {
+  font-family: var(--leadspay-mono-font) !important;
+}
+
+/* Michroma is naturally wide; these values keep the interface compact. */
+body {
+  letter-spacing: -0.01em;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+button,
+nav,
+[role="tab"],
+[role="menuitem"] {
+  letter-spacing: -0.02em;
+}
+
+
 @layer base {
   :root {
     --e-global-color-primary: #D9F22A;
@@ -11,12 +63,12 @@
   body {
     background-color: #060A15;
     color: #ffffff;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: 'Michroma', 'Arial Narrow', sans-serif;
     overflow-x: hidden;
   }
 
   h1, h2, h3, .elementor-heading-title {
-    font-family: 'Syne', 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Michroma', 'Arial Narrow', sans-serif;
     letter-spacing: -0.02em;
   }
 }
