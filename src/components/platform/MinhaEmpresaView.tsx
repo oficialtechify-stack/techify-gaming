@@ -210,13 +210,23 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5 w-full md:w-auto">
-          <button
-            onClick={handleCreateCompanyRequest}
-            className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 border border-white/10"
-          >
-            <Building2 className="w-4 h-4 text-[#D9F22A]" />
-            Nova Startup
-          </button>
+          {companies.length === 0 ? (
+            <button
+              onClick={handleCreateCompanyRequest}
+              className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 border border-white/10"
+            >
+              <Building2 className="w-4 h-4 text-[#D9F22A]" />
+              Cadastrar Empresa
+            </button>
+          ) : onNavigateToProfile ? (
+            <button
+              onClick={onNavigateToProfile}
+              className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 border border-white/10"
+            >
+              <Building2 className="w-4 h-4 text-[#D9F22A]" />
+              Editar Empresa
+            </button>
+          ) : null}
           <button
             onClick={() => handleCreatePlanRequest(currentCompany?.id)}
             className={`flex-1 md:flex-initial font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
