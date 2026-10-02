@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { UserAffiliation, CompanyPlan } from '../../types/platform';
 import { formatAffiliatePlanUrl, getAppBaseUrl } from '../../utils/affiliateTracking';
 import { 
@@ -48,6 +48,11 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   const [utmCampaign, setUtmCampaign] = useState('lancamento');
   const [copiedUtm, setCopiedUtm] = useState(false);
 
+  const activeAffiliations = useMemo(() => affiliations.filter((aff) => {
+    const status = String(aff.status || '').trim().toLowerCase();
+    return status === 'ativo' || status === 'active' || status === 'approved';
+  }), [affiliations]);
+
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -71,8 +76,9 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
     setLeavingAffiliationModal(null);
   };
 
-  const totalCommissions = affiliations.reduce((acc, a) => acc + (a.totalEarned || 0), 0);
-  const totalSales = affiliations.reduce((acc, a) => acc + (a.salesCount || 0), 0);
+  // Vendas e comissões permanecem históricas mesmo se uma afiliação for encerrada.
+  const totalCommissions = affiliations.reduce((acc, a) => acc + Number(a.totalEarned || 0), 0);
+  const totalSales = affiliations.reduce((acc, a) => acc + Number(a.salesCount || 0), 0);
 
   const currentOrigin = getAppBaseUrl();
 
@@ -97,7 +103,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
             Meus Produtos Afiliados & Links de Venda
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Gerencie os planos que você está divulgando, gere links personalizados com rastreamento UTM e registre vendas para receber comissões instantâneas.
+            Gerencie os planos que você divulga, gere links rastreados e acompanhe automaticamente as vendas e comissões atribuídas ao seu código.
           </p>
         </div>
 
@@ -117,8 +123,8 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
             <Link2 className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase text-white/50 block">Produtos Afiliados</span>
-            <span className="text-xl font-black text-white font-['Syne']">{affiliations.length} planos</span>
+            <span className="text-[11px] font-bold uppercase text-white/50 block">Produtos Afiliados Ativos</span>
+            <span className="text-xl font-black text-white font-['Syne']">{activeAffiliations.length} planos</span>
           </div>
         </div>
 
@@ -156,7 +162,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
               Verificação Obrigatória para Afiliações
             </h3>
             <p className="text-xs text-white/70 mb-5 leading-relaxed">
-              {verificationStatus === 'pending'
+              {verificationStatus === 'pending' || verificationStatus === 'submitted'
                 ? 'Sua conta está em análise pela administração. Assim que aprovada, você poderá se afiliar aos produtos e gerar links comissionados.'
                 : 'Nenhum usuário pode se afiliar a planos sem verificação prévia. Complete seus dados cadastrais, CPF/CNPJ e chave PIX no seu perfil para liberar a afiliação.'}
             </p>
@@ -166,12 +172,12 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                 className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2 shadow-[0_0_20px_rgba(217,242,42,0.3)]"
               >
                 <Lock className="w-4 h-4" />
-                <span>{verificationStatus === 'pending' ? 'Ver Status no Perfil' : 'Completar Verificação do Perfil'}</span>
+                <span>{verificationStatus === 'pending' || verificationStatus === 'submitted' ? 'Ver Status no Perfil' : 'Completar Verificação do Perfil'}</span>
               </button>
             )}
           </div>
         </div>
-      ) : affiliations.length === 0 ? (
+      ) : activeAffiliations.length === 0 ? (
         <div className="bg-[#080d1a] border-2 border-dashed border-[#D9F22A]/30 rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4">
           <ShoppingBag className="w-12 h-12 text-[#D9F22A]/50" />
           <div className="max-w-md">
@@ -192,7 +198,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {affiliations.map((aff) => {
+          {activeAffiliations.map((aff) => {
             const plan = plans.find(p => p.id === aff.planId);
             return (
               <div
@@ -250,11 +256,11 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                     <input
                       type="text"
                       readOnly
-                      value={formatAffiliatePlanUrl(aff.planId, aff.affiliateCode)}
+                      value={formatAffiliatePlanUrl(aff.planId || aff.plan_id || '', aff.affiliateCode || aff.affiliate_code || '')}
                       className="flex-1 bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-mono truncate select-all focus:outline-none"
                     />
                     <button
-                      onClick={() => handleCopy(formatAffiliatePlanUrl(aff.planId, aff.affiliateCode), aff.id)}
+                      onClick={() => handleCopy(formatAffiliatePlanUrl(aff.planId || aff.plan_id || '', aff.affiliateCode || aff.affiliate_code || ''), aff.id)}
                       className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
                       title="Copiar Link de Divulgação"
                     >
@@ -271,7 +277,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                       )}
                     </button>
                     <a
-                      href={formatAffiliatePlanUrl(aff.planId, aff.affiliateCode)}
+                      href={formatAffiliatePlanUrl(aff.planId || aff.plan_id || '', aff.affiliateCode || aff.affiliate_code || '')}
                       target="_blank"
                       rel="noreferrer"
                       className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center flex-shrink-0"
@@ -453,13 +459,25 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
                 Link Parametrizado Gerado:
               </span>
               <p className="text-xs font-mono text-[#D9F22A] break-all">
-                {generateUtmLink(selectedAffiliationForUtm.affiliateLink)}
+                {generateUtmLink(
+                  selectedAffiliationForUtm.affiliateLink ||
+                  formatAffiliatePlanUrl(
+                    selectedAffiliationForUtm.planId || selectedAffiliationForUtm.plan_id || '',
+                    selectedAffiliationForUtm.affiliateCode || selectedAffiliationForUtm.affiliate_code || ''
+                  )
+                )}
               </p>
             </div>
 
             <button
               onClick={() => {
-                navigator.clipboard.writeText(generateUtmLink(selectedAffiliationForUtm.affiliateLink));
+                navigator.clipboard.writeText(generateUtmLink(
+                  selectedAffiliationForUtm.affiliateLink ||
+                  formatAffiliatePlanUrl(
+                    selectedAffiliationForUtm.planId || selectedAffiliationForUtm.plan_id || '',
+                    selectedAffiliationForUtm.affiliateCode || selectedAffiliationForUtm.affiliate_code || ''
+                  )
+                ));
                 setCopiedUtm(true);
                 setTimeout(() => setCopiedUtm(false), 2000);
               }}

@@ -121,6 +121,7 @@ import {
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
 import '../../styles/platform-dashboard.css';
+import { profileRoleIsApproved, profileRoleStatus } from '../../../lib/profileEligibility';
 
 interface PlatformLayoutProps {
   onBackToHome: () => void;
@@ -550,27 +551,39 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return myCompanies[0] || companies[0] || null;
   }, [myCompanies, companies]);
 
-  // Strict User Verification State
+  // Verificação por papel: usa exatamente a mesma regra do backend.
+  const affiliateRoleStatus = useMemo(
+    () => profileRoleStatus((userProfile || {}) as Record<string, unknown>, 'afiliado'),
+    [userProfile]
+  );
+  const companyRoleStatus = useMemo(
+    () => profileRoleStatus((userProfile || {}) as Record<string, unknown>, 'empresa'),
+    [userProfile]
+  );
+  const isAffiliateVerified = useMemo(
+    () => profileRoleIsApproved((userProfile || {}) as Record<string, unknown>, 'afiliado'),
+    [userProfile]
+  );
+  const isCompanyProfileVerified = useMemo(
+    () => profileRoleIsApproved((userProfile || {}) as Record<string, unknown>, 'empresa'),
+    [userProfile]
+  );
+
   const isUserVerified = useMemo(() => {
+    if (roleMode === 'admin') return isSuperAdmin;
+    if (roleMode === 'afiliado') return isAffiliateVerified;
     return Boolean(
-      userProfile?.verified === true ||
-      userProfile?.verificationStatus === 'approved' ||
-      userProfile?.kyc_status === 'verified' ||
-      (roleMode === 'empresa' && (activeCompany?.verified || activeCompany?.kyc_status === 'verified'))
+      isCompanyProfileVerified ||
+      (activeCompany?.verified === true && activeCompany?.kyc_status === 'verified')
     );
-  }, [userProfile?.verified, userProfile?.verificationStatus, userProfile?.kyc_status, roleMode, activeCompany?.verified, activeCompany?.kyc_status]);
+  }, [roleMode, isSuperAdmin, isAffiliateVerified, isCompanyProfileVerified, activeCompany?.verified, activeCompany?.kyc_status]);
 
   const currentKycStatus: 'pending' | 'submitted' | 'verified' = useMemo(() => {
     if (isUserVerified) return 'verified';
-    if (
-      userProfile?.verificationStatus === 'pending' ||
-      userProfile?.kyc_status === 'submitted' ||
-      (roleMode === 'empresa' && activeCompany?.kyc_status === 'submitted')
-    ) {
-      return 'submitted';
-    }
+    const roleStatus = roleMode === 'empresa' ? companyRoleStatus : affiliateRoleStatus;
+    if (roleStatus === 'pending' || roleStatus === 'submitted') return 'submitted';
     return 'pending';
-  }, [isUserVerified, userProfile?.verificationStatus, userProfile?.kyc_status, roleMode, activeCompany?.kyc_status]);
+  }, [isUserVerified, roleMode, affiliateRoleStatus, companyRoleStatus]);
 
   const myCompanyIds = useMemo(() => myCompanies.map(c => c.id), [myCompanies]);
 
@@ -763,8 +776,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Handle Join Affiliate (1 Click)
   const handleJoinAffiliate = async (plan: CompanyPlan) => {
-    const isVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
-    if (!isVerified) {
+    if (!isAffiliateVerified) {
       setLiveToast({
         message: 'Afiliação Bloqueada',
         sub: 'Você só pode se afiliar a produtos após ter o perfil verificado pela administração.',
@@ -1814,8 +1826,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               platforms={plans}
               companies={companies}
               affiliations={affiliations}
-              isVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
-              verificationStatus={userProfile.verificationStatus}
+              isVerified={isAffiliateVerified}
+              verificationStatus={affiliateRoleStatus}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onJoinAffiliate={handleJoinAffiliate}
               onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
@@ -1824,7 +1836,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setLiveCheckoutPlan(plan);
               }}
               onOpenCreateCompany={() => {
-                if (!userProfile.verified && userProfile.verificationStatus !== 'approved') {
+                if (!isCompanyProfileVerified) {
                   setLiveToast({
                     message: 'Verificação Obrigatória',
                     sub: 'A empresa precisa ser verificada pela administração antes de cadastrar startups.',
@@ -1836,7 +1848,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setIsCreateCompanyModalOpen(true);
               }}
               onOpenCreatePlan={roleMode === 'empresa' ? () => {
-                if (!userProfile.verified && userProfile.verificationStatus !== 'approved') {
+                if (!isCompanyProfileVerified) {
                   setLiveToast({
                     message: 'Verificação Obrigatória',
                     sub: 'A empresa só pode cadastrar produtos após a verificação da administração.',
@@ -1861,8 +1873,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <MinhasAfiliacoesView
               affiliations={affiliations}
               plans={plans}
-              isVerified={userProfile.verified || userProfile.verificationStatus === 'approved'}
-              verificationStatus={userProfile.verificationStatus}
+              isVerified={isAffiliateVerified}
+              verificationStatus={affiliateRoleStatus}
               onNavigateToVitrine={() => setActiveTab('vitrine')}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onDeleteAffiliation={handleDeleteAffiliation}

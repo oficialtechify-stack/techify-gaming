@@ -662,38 +662,24 @@ export async function createAffiliationInFirebase(plan: CompanyPlan, _userProfil
 /**
  * Remove an Affiliation
  */
-export async function deleteAffiliationInFirebase(affiliationId: string, planId?: string, companyId?: string) {
-  await deleteDoc(doc(db, COLLECTIONS.AFFILIATIONS, affiliationId));
+export async function deleteAffiliationInFirebase(affiliationId: string, _planId?: string, _companyId?: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para encerrar a afiliação.');
 
-  if (planId) {
-    try {
-      const planRef = doc(db, COLLECTIONS.PLANS, planId);
-      const planSnap = await getDoc(planRef);
-      if (planSnap.exists()) {
-        const pData = planSnap.data() as CompanyPlan;
-        await updateDoc(planRef, sanitizeForFirestore({
-          affiliatesCount: Math.max(0, (pData.affiliatesCount || 1) - 1)
-        }));
-      }
-    } catch (e) {
-      console.warn('Erro ao atualizar contador de afiliados do plano:', e);
-    }
+  const token = await user.getIdToken();
+  const response = await fetch('/api/affiliates/leave', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ affiliationId }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Não foi possível encerrar a afiliação.');
   }
-
-  if (companyId) {
-    try {
-      const compRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-      const compSnap = await getDoc(compRef);
-      if (compSnap.exists()) {
-        const cData = compSnap.data() as CompanyStartup;
-        await updateDoc(compRef, sanitizeForFirestore({
-          totalAffiliatesCount: Math.max(0, (cData.totalAffiliatesCount || 1) - 1)
-        }));
-      }
-    } catch (e) {
-      console.warn('Erro ao atualizar contador de afiliados da empresa:', e);
-    }
-  }
+  return data;
 }
 
 /**
