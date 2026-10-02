@@ -160,6 +160,7 @@ export interface CompanyPlan {
   recurrentCommissionPercent?: number;
   recurrentCommissionValue?: number;
   recurrentCommission?: number;
+  recurringCommissionEnabled?: boolean;
   features: string[];
   bannerImage: string;
   paymentType?: 'Único' | 'Recorrente' | 'Assinatura';
