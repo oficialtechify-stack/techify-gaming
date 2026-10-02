@@ -5,7 +5,7 @@ import Cookies from 'js-cookie';
  * Salva e recupera o código de afiliado com retenção via Cookie por 15 dias (max-age=1296000) e localStorage
  */
 
-export const OFFICIAL_APP_URL = 'https://techify-gaming.vercel.app';
+export const OFFICIAL_APP_URL = 'https://www.techify.sbs';
 const COOKIE_NAME = 'affiliate_ref';
 const COOKIE_EXPIRES_DAYS = 15;
 
@@ -119,7 +119,7 @@ export function getAppBaseUrl(): string {
 
 /**
  * Formata o link exclusivo do afiliado no padrão oficial especificado:
- * https://techify-gaming.vercel.app/plan/[id]?ref=[código_do_afiliado]
+ * https://www.techify.sbs/plan/[id]?ref=[código_do_afiliado]
  */
 export function formatAffiliatePlanUrl(planIdOrSlug: string, affiliateCode: string): string {
   const baseUrl = getAppBaseUrl();
