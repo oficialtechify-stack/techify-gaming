@@ -16,6 +16,7 @@ type ResponseLike = {
 };
 
 const SUPPORTED_DELIVERY_TYPES = new Set(['redirect', 'whatsapp', 'membership', 'download']);
+const SUPPORTED_BILLING_CYCLES = new Set(['WEEKLY', 'MONTHLY', 'YEARLY']);
 
 function slugify(input: string): string {
   const clean = input
@@ -161,22 +162,35 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return res.status(403).json({ error: 'Esta empresa não está habilitada para publicar ofertas.' });
     }
 
-    const billingType = String(body.billingType || 'unico').toLowerCase();
-    if (billingType !== 'unico') {
-      return res.status(400).json({
-        error: 'Assinatura recorrente para produtos de empresas ainda não está disponível. Use pagamento único.',
-        code: 'RECURRING_PRODUCT_NOT_AVAILABLE',
-      });
+    const billingType = String(body.billingType || 'unico').toLowerCase() === 'recorrente'
+      ? 'recorrente'
+      : 'unico';
+    const billingCycle = billingType === 'recorrente'
+      ? String(body.billingCycle || 'MONTHLY').toUpperCase()
+      : '';
+    if (billingType === 'recorrente' && !SUPPORTED_BILLING_CYCLES.has(billingCycle)) {
+      return res.status(400).json({ error: 'Escolha uma recorrência semanal, mensal ou anual.' });
     }
 
-    const priceSetup = Number(body.priceSetup ?? body.price ?? 0);
+    const priceSetup = Number(body.priceSetup ?? body.price ?? body.priceMonthly ?? 0);
     const commissionPercentage = Number(body.commissionPercentage ?? 0);
+    const recurringCommissionEnabled = billingType === 'recorrente' && body.recurringCommissionEnabled !== false;
+    const recurrentCommissionPercent = recurringCommissionEnabled
+      ? Number(body.recurrentCommissionPercent ?? commissionPercentage)
+      : 0;
 
     if (!Number.isFinite(priceSetup) || priceSetup < 0.5 || priceSetup > 1_000_000) {
       return res.status(400).json({ error: 'Informe um preço entre R$ 0,50 e R$ 1.000.000,00.' });
     }
     if (!Number.isFinite(commissionPercentage) || commissionPercentage <= 0 || commissionPercentage > 100) {
       return res.status(400).json({ error: 'A comissão do afiliado deve ficar entre 0,01% e 100%.' });
+    }
+    if (
+      billingType === 'recorrente' &&
+      recurringCommissionEnabled &&
+      (!Number.isFinite(recurrentCommissionPercent) || recurrentCommissionPercent <= 0 || recurrentCommissionPercent > 100)
+    ) {
+      return res.status(400).json({ error: 'A comissão nas renovações deve ficar entre 0,01% e 100%.' });
     }
 
     const description = String(body.description || '').trim().slice(0, 5000);
@@ -240,19 +254,26 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       category: String(body.category || company.category || 'Digital').trim().slice(0, 120),
       price: Number(priceSetup.toFixed(2)),
       priceSetup: Number(priceSetup.toFixed(2)),
-      priceMonthly: 0,
+      priceMonthly: billingType === 'recorrente' ? Number(priceSetup.toFixed(2)) : 0,
       commissionPercentage: Number(commissionPercentage.toFixed(2)),
       commissionValue: Number(((priceSetup * commissionPercentage) / 100).toFixed(2)),
-      recurrentCommissionPercent: 0,
-      recurrentCommissionValue: 0,
-      recurrentCommission: 0,
+      recurrentCommissionPercent: billingType === 'recorrente' ? Number(recurrentCommissionPercent.toFixed(2)) : 0,
+      recurrentCommissionValue: billingType === 'recorrente'
+        ? Number(((priceSetup * recurrentCommissionPercent) / 100).toFixed(2))
+        : 0,
+      recurrentCommission: billingType === 'recorrente' ? Number(recurrentCommissionPercent.toFixed(2)) : 0,
+      recurringCommissionEnabled,
       features,
       bannerImage,
       badge: String(body.badge || '').trim().slice(0, 25),
       checkoutSlug,
       slug: String(body.slug || checkoutSlug).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 100),
-      paymentType: 'Único',
-      billingType: 'unico',
+      paymentType: billingType === 'recorrente' ? 'Recorrente' : 'Único',
+      billingType,
+      billingCycle: billingType === 'recorrente' ? billingCycle : FieldValue.delete(),
+      billingInterval: billingType === 'recorrente'
+        ? (billingCycle === 'WEEKLY' ? 'weekly' : billingCycle === 'YEARLY' ? 'yearly' : 'monthly')
+        : FieldValue.delete(),
       deliveryType,
       deliveryConfigured: true,
       allowAffiliates: true,
