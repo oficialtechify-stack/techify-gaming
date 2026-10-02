@@ -1881,6 +1881,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               userRole={roleMode}
               plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
+              sales={userVisibleTransactions}
             />
           )}
           {activeTab === 'cobrancas' && (
@@ -1892,6 +1893,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onRefresh={() => {}}
               onAddSale={(newTx) => setTransactions(prev => [newTx, ...prev])}
               onDeleteSale={(saleId) => setTransactions(prev => prev.filter(t => t.id !== saleId))}
+              onGoToPaymentLinks={() => setActiveTab('links_pagamento')}
             />
           )}
           {activeTab === 'links_pagamento' && (
