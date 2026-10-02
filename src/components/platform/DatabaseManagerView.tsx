@@ -776,7 +776,81 @@ export const DatabaseManagerView: React.FC = () => {
       });
     });
 
-    return Array.from(map.values());
+    // 4. Remove duplicatas históricas da mesma empresa.
+    // Prioriza o companyId que está vinculado ao perfil/verificação atual do dono.
+    const preferredCompanyIds = new Set<string>();
+    registeredProfiles.forEach((profile) => {
+      if (typeof profile.companyId === 'string' && profile.companyId.trim()) {
+        preferredCompanyIds.add(profile.companyId.trim());
+      }
+    });
+    verifications.forEach((verification) => {
+      if (typeof verification.companyId === 'string' && verification.companyId.trim()) {
+        preferredCompanyIds.add(verification.companyId.trim());
+      }
+    });
+
+    const normalizedDocument = (company: CompanyStartup) =>
+      String(company.cnpj || company.cpf || '').replace(/\D/g, '');
+
+    const timestampOf = (company: CompanyStartup) => {
+      const value = String((company as any).submittedAt || company.updatedAt || company.createdAt || '');
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const deduped = new Map<string, CompanyStartup>();
+    Array.from(map.values()).forEach((company) => {
+      const document = normalizedDocument(company);
+      const owner = String(company.ownerId || company.submittedBy || '').trim();
+      const identityKey = document
+        ? `document:${document}`
+        : owner
+          ? `owner:${owner}`
+          : `id:${company.id}`;
+
+      const existing = deduped.get(identityKey);
+      if (!existing) {
+        deduped.set(identityKey, company);
+        return;
+      }
+
+      const companyPreferred = preferredCompanyIds.has(company.id);
+      const existingPreferred = preferredCompanyIds.has(existing.id);
+      const companyIsNewer = timestampOf(company) > timestampOf(existing);
+
+      const primary = companyPreferred && !existingPreferred
+        ? company
+        : existingPreferred && !companyPreferred
+          ? existing
+          : companyIsNewer
+            ? company
+            : existing;
+      const secondary = primary.id === company.id ? existing : company;
+
+      deduped.set(identityKey, {
+        ...secondary,
+        ...primary,
+        id: primary.id,
+        name: primary.name || secondary.name || primary.companyName || secondary.companyName || 'Empresa Cadastrada',
+        logo: primary.logo || secondary.logo || '',
+        website: primary.website || secondary.website || '',
+        cnpj: primary.cnpj || secondary.cnpj || '',
+        cpf: primary.cpf || secondary.cpf || '',
+        category: primary.category || secondary.category || 'SaaS / B2B',
+        description: primary.description || secondary.description || '',
+        tagline: primary.tagline || secondary.tagline || '',
+        email: primary.email || secondary.email || '',
+        whatsapp: primary.whatsapp || secondary.whatsapp || '',
+        ownerId: primary.ownerId || secondary.ownerId,
+        submittedBy: primary.submittedBy || secondary.submittedBy,
+        commissionRange: primary.commissionRange || secondary.commissionRange,
+        status: primary.status || secondary.status,
+        verified: Boolean(primary.verified || secondary.verified),
+      });
+    });
+
+    return Array.from(deduped.values());
   }, [companies, verifications, registeredProfiles, deletedEntityIds]);
 
   // Helper para verificar status de um registro
