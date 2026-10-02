@@ -21,6 +21,7 @@ import stripeWithdrawalHandler from '../server-api/stripe/withdrawal.js';
 import partnerApiKeyHandler from '../server-api/partner/api-key.js';
 import partnerSettingsHandler from '../server-api/partner/settings.js';
 import partnerPaymentsHandler from '../server-api/partner/payments.js';
+import partnerTestWebhookHandler from '../server-api/partner/test-webhook.js';
 import couponsHandler from '../server-api/coupons.js';
 import companiesHandler from '../server-api/companies.js';
 import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
@@ -164,6 +165,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'partner/payments':
     case 'payments':
       return partnerPaymentsHandler(req as any, res as any);
+    case 'partner/test-webhook':
+      return partnerTestWebhookHandler(req as any, res as any);
     case 'stripe/webhook':
     case 'webhooks/stripe':
     case 'webhook/stripe':
