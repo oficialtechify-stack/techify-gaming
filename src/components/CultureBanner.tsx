@@ -1,26 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Shield, Zap, TrendingUp, CheckCircle } from 'lucide-react';
-import { subscribeGlobalPlatformMetrics, GlobalPlatformMetrics } from '../services/firestoreService';
+import { EMPTY_PUBLIC_METRICS, fetchPublicPlatformMetrics, PublicPlatformMetrics } from '../services/publicMetricsService';
 
 export const CultureBanner: React.FC = () => {
-  const [metrics, setMetrics] = useState<GlobalPlatformMetrics>({
-    totalRegisteredUsers: 1,
-    totalStartups: 0,
-    totalPlans: 0,
-    totalCommissionsGenerated: 0,
-    totalCommissionsPaid: 0,
-    totalGrossSales: 0,
-    totalSalesCount: 0,
-    companies: [],
-    plans: []
-  });
+  const [metrics, setMetrics] = useState<PublicPlatformMetrics>(EMPTY_PUBLIC_METRICS);
 
   useEffect(() => {
-    const unsub = subscribeGlobalPlatformMetrics((m) => {
-      setMetrics(m);
-    });
-    return () => unsub();
+    let cancelled = false;
+
+    fetchPublicPlatformMetrics()
+      .then((nextMetrics) => {
+        if (!cancelled) setMetrics(nextMetrics);
+      })
+      .catch((error) => {
+        console.warn('[Public metrics]', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const formatBRL = (val: number) => {
@@ -44,7 +43,7 @@ export const CultureBanner: React.FC = () => {
           className="text-center max-w-3xl mx-auto mb-12 sm:mb-16"
         >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase tracking-tight font-['Syne'] leading-tight text-white">
-            Construído para <span className="text-[#D9F22A] drop-shadow-[0_0_20px_rgba(217,242,42,0.3)]">escalar contratos</span> e liquidar comissões no PIX D+9.
+            Construído para <span className="text-[#D9F22A] drop-shadow-[0_0_20px_rgba(217,242,42,0.3)]">escalar vendas</span> com checkout, afiliados e Stripe Connect.
           </h2>
           <p className="mt-4 text-sm sm:text-base text-white/70">
             Nossa plataforma combina processamento financeiro em tempo real, links de alta conversão e inteligência antifraude para que nenhuma venda fique sem rastreamento.
@@ -66,7 +65,7 @@ export const CultureBanner: React.FC = () => {
             </div>
             <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">Rastreamento Anti-Perda de Comissões</h4>
             <p className="text-xs text-white/70 leading-relaxed">
-              Cookies persistentes de 90 dias, captura de parâmetros UTM e associação multi-touch para garantir a correta atribuição do afiliado.
+              Cookie de atribuição por 15 dias, parâmetros UTM e vínculo da venda ao código do afiliado para manter a origem da conversão.
             </p>
           </motion.div>
 
@@ -81,9 +80,9 @@ export const CultureBanner: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] group-hover:scale-110 transition-transform">
               <Zap className="w-5 h-5" />
             </div>
-            <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">Motor de Split Instantâneo</h4>
+            <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">Motor de Divisão Financeira</h4>
             <p className="text-xs text-white/70 leading-relaxed">
-              O comprador paga o plano via PIX ou cartão, e o sistema divide a receita instantaneamente entre a startup parceira e o afiliado.
+              Depois da confirmação da Stripe, o sistema registra separadamente a parte da empresa, a comissão do afiliado e as taxas da plataforma.
             </p>
           </motion.div>
 
@@ -100,7 +99,7 @@ export const CultureBanner: React.FC = () => {
             </div>
             <h4 className="text-base font-bold text-white font-['Syne'] group-hover:text-[#D9F22A] transition-colors">Checkout Otimizado de Alta Conversão</h4>
             <p className="text-xs text-white/70 leading-relaxed">
-              Páginas de pagamento leves com carregamento em milissegundos e suporte a múltiplos métodos (PIX, Boleto e Cartão de Crédito).
+              Checkout integrado à Stripe com os meios de pagamento habilitados para a conta e confirmação financeira no backend.
             </p>
           </motion.div>
         </div>
@@ -119,36 +118,36 @@ export const CultureBanner: React.FC = () => {
               <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">
                 {formatBRL(metrics.totalCommissionsGenerated)}
               </div>
-              <p className="text-xs text-white/60">Calculado em tempo real sobre vendas ativas dos afiliados.</p>
+              <p className="text-xs text-white/60">Somatório agregado das comissões registradas nas vendas confirmadas.</p>
             </div>
 
             <div className="flex flex-col gap-2">
-              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Comissões Pagas via PIX</div>
+              <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Saques de Afiliados Enviados</div>
               <div className="text-3xl sm:text-4xl font-extrabold text-[#D9F22A] font-['Syne']">
                 {formatBRL(metrics.totalCommissionsPaid)}
               </div>
-              <p className="text-xs text-white/60">Liquidados via PIX direto na chave cadastrada dos parceiros.</p>
+              <p className="text-xs text-white/60">Valores de afiliados enviados pela infraestrutura Stripe Connect.</p>
             </div>
 
             <div className="flex flex-col gap-2">
               <div className="text-xs uppercase tracking-widest text-[#D9F22A] font-bold">Tempo de Repasse</div>
-              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">D+9 Garantido</div>
-              <p className="text-xs text-white/60">Liquidação segura D+9 sem burocracia ou retenções ocultas.</p>
+              <div className="text-3xl sm:text-4xl font-extrabold text-white font-['Syne']">8 ou 15 dias</div>
+              <p className="text-xs text-white/60">Prazo de liberação: 8 dias com plano pago da LeadsPay ou 15 dias no plano gratuito.</p>
             </div>
           </div>
 
           <div className="mt-8 pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs font-bold text-white/80">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-              <span>{metrics.totalStartups} Startups Cadastradas</span>
+              <span>{metrics.totalStartups} Empresas Aprovadas</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-              <span>{metrics.totalRegisteredUsers} Usuários Conectados</span>
+              <span>{metrics.totalRegisteredUsers} Usuários Cadastrados</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-[#D9F22A]" />
-              <span>100% Sincronizado com Banco Firestore</span>
+              <span>Métricas públicas agregadas pelo backend</span>
             </div>
           </div>
         </motion.div>
