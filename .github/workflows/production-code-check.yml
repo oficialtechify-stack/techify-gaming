@@ -1,4 +1,5 @@
 name: Production code check
+# Release gate: validate main before production deploy.
 
 on:
   push:
