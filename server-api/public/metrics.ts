@@ -26,17 +26,13 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       usersCount,
       approvedCompanies,
       activeProductsCount,
-      affiliateCompleted,
-      affiliatePayoutPending,
-      affiliateTransferred,
+      affiliateWithdrawals,
       financeSnap,
     ] = await Promise.all([
       db.collection('user_profiles').count().get(),
       db.collection('companies').where('status', '==', 'approved').get(),
       db.collection('plans').where('status', '==', 'Ativo').count().get(),
-      db.collection('withdrawals').where('role', '==', 'afiliado').where('status', '==', 'COMPLETED').get(),
-      db.collection('withdrawals').where('role', '==', 'afiliado').where('status', '==', 'PAYOUT_PENDING').get(),
-      db.collection('withdrawals').where('role', '==', 'afiliado').where('status', '==', 'TRANSFERRED_TO_STRIPE').get(),
+      db.collection('withdrawals').where('role', '==', 'afiliado').get(),
       db.collection('platform_finances').doc('global_summary').get(),
     ]);
 
@@ -50,11 +46,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       0,
     );
 
-    const paidWithdrawalDocs = [
-      ...affiliateCompleted.docs,
-      ...affiliatePayoutPending.docs,
-      ...affiliateTransferred.docs,
-    ];
+    const paidWithdrawalDocs = affiliateWithdrawals.docs.filter((doc) =>
+      ['COMPLETED', 'PAYOUT_PENDING', 'TRANSFERRED_TO_STRIPE'].includes(String(doc.data().status || ''))
+    );
     const commissionsSent = sumField(paidWithdrawalDocs, 'netAmount');
 
     const grossSales = approvedCompanyDocs.reduce(
