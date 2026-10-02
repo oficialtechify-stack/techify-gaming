@@ -17,6 +17,8 @@ import stripeWithdrawalHandler from './server-api/stripe/withdrawal.js';
 import stripeReleasesCronHandler from './server-api/crons/stripe-releases.js';
 import plansHandler from './server-api/plans.js';
 import couponsHandler from './server-api/coupons.js';
+import companiesHandler from './server-api/companies.js';
+import enableAffiliateHandler from './server-api/profile/enable-affiliate.js';
 import affiliateJoinHandler from './server-api/affiliates/join.js';
 import checkDocumentHandler from './server-api/profile/check-document.js';
 import submitVerificationHandler from './server-api/profile/submit-verification.js';
@@ -59,6 +61,8 @@ app.all(['/api/stripe/webhook','/api/webhooks/stripe','/api/webhook/stripe'], ad
 app.all(['/api/crons/stripe-releases','/api/cron/stripe-releases','/api/cron/release-balances'], adapt(stripeReleasesCronHandler));
 app.all('/api/plans', adapt(plansHandler));
 app.all('/api/coupons', adapt(couponsHandler));
+app.all('/api/companies', adapt(companiesHandler));
+app.all('/api/profile/enable-affiliate', adapt(enableAffiliateHandler));
 app.all('/api/affiliates/join', adapt(affiliateJoinHandler));
 app.all('/api/profile/check-document', adapt(checkDocumentHandler));
 app.all('/api/profile/submit-verification', adapt(submitVerificationHandler));
