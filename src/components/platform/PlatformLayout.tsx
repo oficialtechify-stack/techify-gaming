@@ -700,7 +700,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         totalValue: pixVal,
         percentage: totalVol > 0 ? Number(((pixVal / totalVol) * 100).toFixed(1)) : 0,
         conversionRate: totalCount > 0 ? `${((pixCount / totalCount) * 100).toFixed(1)}%` : '0%',
-        badge: 'D+9 Direto',
+        badge: 'Stripe',
         iconType: 'pix' as const
       },
       {
@@ -821,9 +821,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         companyId: targetCompany?.id || planData.companyId,
         companyName: targetCompany?.companyName || targetCompany?.name || planData.companyName,
         companyLogo: targetCompany?.logo || planData.companyLogo,
-        ownerId: targetCompany?.ownerId || targetCompany?.submittedBy || effectiveUserId,
-        asaasWalletId: targetCompany?.asaasWalletId || targetCompany?.walletId || null,
-        asaasSubaccountId: targetCompany?.asaasSubaccountId || targetCompany?.subaccountId || null
+        ownerId: targetCompany?.ownerId || targetCompany?.submittedBy || effectiveUserId
       };
 
       const created = await createCompanyPlanInFirebase(sanitizedPlan);
@@ -1099,6 +1097,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
 
+  const sidebarAvailableBalance = roleMode === 'empresa'
+    ? (typeof userProfile?.empresaAvailableBalanceCents === 'number'
+        ? userProfile.empresaAvailableBalanceCents / 100
+        : Number(userProfile?.availableBalance || 0))
+    : (typeof userProfile?.afiliadoAvailableBalanceCents === 'number'
+        ? userProfile.afiliadoAvailableBalanceCents / 100
+        : Number(userProfile?.availableBalance || 0));
+
   return (
     <div className="leadspay-platform min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]" data-theme={isDarkMode ? 'dark' : 'light'}>
       {/* Background Ambience */}
@@ -1159,12 +1165,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <div className="p-3.5 m-3 rounded-2xl bg-[#080d1a] border border-white/10 shadow-lg">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
-                  {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'CARTEIRA EMPRESA (PIX)'}
+                  {roleMode === 'afiliado' ? 'Saldo disponível' : 'Carteira da empresa'}
                 </span>
-                <span className="text-[10px] text-[#D9F22A] font-black">D+9</span>
+                <span className="text-[10px] text-[#D9F22A] font-black">Stripe Connect</span>
               </div>
               <div className="text-xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-                {`R$ ${(userProfile?.availableBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                {`R$ ${sidebarAvailableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
               </div>
 
               <button
