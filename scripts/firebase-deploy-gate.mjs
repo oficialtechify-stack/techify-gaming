@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { cert, deleteApp, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const PROJECT_ID = 'techify-gaming-106fe';
 const outputUrl = new URL('../public/firebase-deploy-gate.json', import.meta.url);
@@ -111,12 +112,15 @@ async function main() {
       rulesResult={ok:false,stage:'exception',error:error instanceof Error?error.message:String(error)};
     }
 
-    return {
+    const result = {
       ok:indexResults.every(x=>x.ok) && rulesResult.ok,
       skipped:false,
       indexes:indexResults,
       rules:rulesResult,
+      updatedAt:new Date().toISOString(),
     };
+    await getFirestore(app).collection('_internal').doc('firebase_deploy_gate').set(result, { merge: true });
+    return result;
   }finally{
     await deleteApp(app).catch(()=>{});
   }
