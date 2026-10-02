@@ -53,7 +53,7 @@ function eventFor(id: string, type: Stripe.Event.Type, object: any): Stripe.Even
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   if (process.env.VERCEL_ENV !== 'preview') return res.status(404).json({ error: 'Not found' });
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido.' });
 
   const testKey = String(process.env.STRIPE_TEST_SECRET_KEY || '').trim();
   if (!/^(sk|rk)_test_/.test(testKey)) {
