@@ -896,7 +896,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setTimeout(() => setLiveToast(null), 4000);
     } catch (err: any) {
       console.error('Error updating plan:', err);
-      alert(`Erro ao atualizar plano: ${err.message}`);
+      setLiveToast({
+        message: 'Erro ao atualizar plano',
+        sub: err.message || 'Não foi possível salvar as alterações',
+        amount: 'Erro'
+      });
+      setTimeout(() => setLiveToast(null), 5000);
+      throw err;
     }
   };
 
