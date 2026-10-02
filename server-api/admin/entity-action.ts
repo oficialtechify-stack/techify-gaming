@@ -79,9 +79,15 @@ async function approveCompany(db: FirebaseFirestore.Firestore, companyId: string
   await batch.commit();
 
   await updateVerificationDocs(db, ownerId, {
+    roleType: 'empresa',
     companyId,
     companyName: company.name || company.companyName || null,
     companyStatus: 'approved',
+    status: 'approved',
+    verified: true,
+    kyc_status: 'verified',
+    rejectionReason: null,
+    companyRejectionReason: null,
     reviewedAt: now,
     reviewedBy,
     updatedAt: now,
@@ -134,6 +140,24 @@ export default async function handler(req: Req, res: Res) {
       const profileSnap = await profileRef.get();
       if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
       const profile = profileSnap.data()!;
+      const requestSnap = await db.collection('verification_requests').doc(id).get();
+      const request = requestSnap.exists ? requestSnap.data()! : {};
+      const verificationRole = String(
+        request.roleType ||
+        profile.verificationRoleType ||
+        profile.activeRoleMode ||
+        ''
+      ).toLowerCase();
+
+      if (verificationRole === 'empresa') {
+        const companyId = String(request.companyId || profile.companyId || '').trim();
+        if (!companyId) {
+          return res.status(409).json({ error: 'O perfil de empresa não possui companyId para aprovação.' });
+        }
+        const result = await approveCompany(db, companyId, reviewedBy);
+        return res.status(200).json({ success: true, entity: result });
+      }
+
       const hasCompany = profile.hasCompanyProfile === true || profile.accountType === 'empresa' || profile.accountType === 'ambos';
       const update = {
         verified: true,
