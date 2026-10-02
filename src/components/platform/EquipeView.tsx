@@ -1,11 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TeamMember, CompanyStartup, CompanyPlan, UserAffiliation } from '../../types/platform';
-import { 
-  subscribeTeamMembers, 
-  createTeamMemberInFirebase, 
-  deleteTeamMemberInFirebase,
-  deleteAffiliationInFirebase
-} from '../../services/firestoreService';
+import { deleteAffiliationInFirebase } from '../../services/firestoreService';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Users, 
   Award, 
@@ -45,6 +41,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
   currentUserId,
   onRemoveAffiliate
 }) => {
+  const { currentUser } = useAuth();
   const [activeSection, setActiveSection] = useState<'afiliados' | 'equipe_interna'>('afiliados');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -57,35 +54,77 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
   const [selectedPlanFilter, setSelectedPlanFilter] = useState('all');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [removingAffiliateModal, setRemovingAffiliateModal] = useState<UserAffiliation | null>(null);
+  const [teamError, setTeamError] = useState('');
+  const [teamNotice, setTeamNotice] = useState('');
+  const [teamLoading, setTeamLoading] = useState(true);
+
+  const loadTeamMembers = useCallback(async () => {
+    if (!currentUser) {
+      setTeamMembers([]);
+      setTeamLoading(false);
+      return;
+    }
+
+    setTeamLoading(true);
+    setTeamError('');
+    try {
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/company/team', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível carregar a equipe.');
+      setTeamMembers(Array.isArray(data.members) ? data.members : []);
+    } catch (error) {
+      setTeamMembers([]);
+      setTeamError(error instanceof Error ? error.message : 'Não foi possível carregar a equipe.');
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
-    const unsub = subscribeTeamMembers((members) => {
-      setTeamMembers(members);
-    });
-    return () => unsub();
-  }, []);
+    void loadTeamMembers();
+  }, [loadTeamMembers]);
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) return;
 
+    if (!currentUser) return;
     setLoading(true);
+    setTeamError('');
+    setTeamNotice('');
     try {
-      await createTeamMemberInFirebase({
-        name: name.trim(),
-        email: email.trim(),
-        role,
-        salesCount: 0,
-        commissionGenerated: 0,
-        bonus: 0,
-        status
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/company/team', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'create',
+          name: name.trim(),
+          email: email.trim(),
+          role,
+          status,
+        }),
       });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.member) {
+        throw new Error(data.error || 'Não foi possível adicionar o membro.');
+      }
+      setTeamMembers((current) => [data.member, ...current.filter((item) => item.id !== data.member.id)]);
       setName('');
       setEmail('');
       setIsInviteModalOpen(false);
+      setTeamNotice('Membro cadastrado na equipe desta empresa.');
     } catch (err: any) {
       console.error('Error adding team member:', err);
-      alert(`Erro ao adicionar membro: ${err.message}`);
+      setTeamError(err?.message || 'Não foi possível adicionar o membro.');
     } finally {
       setLoading(false);
     }
@@ -93,11 +132,26 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
 
   const handleDeleteMember = async (id: string, memberName: string) => {
     if (!window.confirm(`Deseja remover ${memberName} da equipe?`)) return;
+    if (!currentUser) return;
+    setTeamError('');
+    setTeamNotice('');
     try {
-      await deleteTeamMemberInFirebase(id);
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/company/team', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'delete', memberId: id }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível remover o membro.');
+      setTeamMembers((current) => current.filter((member) => member.id !== id));
+      setTeamNotice(`${memberName} foi removido da equipe.`);
     } catch (err: any) {
       console.error('Error deleting member:', err);
-      alert(`Erro ao remover: ${err.message}`);
+      setTeamError(err?.message || 'Não foi possível remover o membro.');
     }
   };
 
@@ -168,7 +222,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
             Afiliados & Equipe de Vendas
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Acompanhe todos os afiliados oficiais que estão divulgando seus planos no Marketplace, gerencie permissões, remova vínculos e organize seus vendedores internos.
+            Acompanhe os afiliados vinculados aos produtos desta empresa, remova vínculos e organize os vendedores internos do mesmo tenant.
           </p>
         </div>
 
@@ -183,6 +237,16 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
         )}
       </div>
 
+      {(teamError || teamNotice) && (
+        <div className={`rounded-xl border px-4 py-3 text-xs ${
+          teamError
+            ? 'border-red-500/20 bg-red-500/10 text-red-300'
+            : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+        }`}>
+          {teamError || teamNotice}
+        </div>
+      )}
+
       {/* Tabs Switcher */}
       <div className="flex items-center gap-2 border-b border-white/10 pb-2">
         <button
@@ -194,7 +258,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Afiliados Conectados aos Seus Planos</span>
+          <span>Afiliados dos Seus Produtos</span>
           <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
             activeSection === 'afiliados' ? 'bg-[#060A15]/20 text-[#060A15]' : 'bg-white/10 text-white'
           }`}>
@@ -462,7 +526,11 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
               Membros da Sua Rede Comercial ({teamMembers.length})
             </h3>
 
-            {teamMembers.length === 0 ? (
+            {teamLoading ? (
+            <div className="rounded-2xl border border-white/10 bg-[#080d1a] p-10 text-center text-xs text-white/50">
+              Carregando equipe desta empresa...
+            </div>
+          ) : teamMembers.length === 0 ? (
               <div className="text-center py-12 px-4 bg-[#050811] rounded-xl border border-white/5">
                 <UserCheck className="w-12 h-12 text-[#D9F22A]/40 mx-auto mb-3" />
                 <h4 className="text-sm font-bold text-white">Nenhum membro cadastrado na sua equipe</h4>
