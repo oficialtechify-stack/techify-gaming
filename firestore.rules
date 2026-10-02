@@ -44,11 +44,13 @@ service cloud.firestore {
       );
 
       allow update: if isAuthenticated() && (
-        isAdmin() || ((resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid) &&
+        isAdmin() || (
+          (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid) &&
           (
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived', 'archivedAt']) && request.resource.data.archived == true ||
-            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus', 'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt', 'ownerId', 'userId', 'submittedBy', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents']))
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived', 'archivedAt']) && request.resource.data.archived == true) ||
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus', 'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt', 'ownerId', 'userId', 'submittedBy', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents'])
           )
+        )
       );
       allow delete: if isAdmin();
     }
@@ -242,8 +244,8 @@ service cloud.firestore {
     }
 
     match /coupons/{couponId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read: if isAuthenticated() && (isCompanyOwner(resource.data.companyId) || isAdmin());
+      allow write: if false;
     }
 
     match /push_subscriptions/{subId} {
