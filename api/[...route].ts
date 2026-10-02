@@ -120,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       status: 'ok',
       gateway: 'Stripe Connect',
-      cron: 'Liberação de saldo 8/15 dias ativa',
+      cron: 'Liberação de saldo 8/15 dias configurada',
       time: new Date().toISOString(),
     });
   }
