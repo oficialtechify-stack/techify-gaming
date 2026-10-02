@@ -17,8 +17,20 @@ export default async function handler(req:Req,res:Res){
     if(!profileSnap.exists) return res.status(404).json({error:'Perfil não encontrado.'});
     const profile=applyVerificationRequest(profileSnap.data()!,requestSnap.exists?requestSnap.data()!:null) as Record<string,any>;
     if(!profileHasRole(profile,'empresa')||!profileRoleIsApproved(profile,'empresa')) return res.status(403).json({error:'Empresa não aprovada.'});
-    const companyId=String(profile.companyId||'');
+    const companyId=String(profile.companyId||'').trim();
     if(!companyId) return res.status(409).json({error:'Empresa não vinculada.'});
+
+    const companySnap=await db.collection('companies').doc(companyId).get();
+    const company=companySnap.exists?companySnap.data()!:null;
+    if(
+      !company ||
+      String(company.ownerId||company.submittedBy||'')!==identity.uid ||
+      company.verified!==true ||
+      String(company.status||'').toLowerCase()!=='approved' ||
+      company.archived===true ||
+      company.isArchived===true ||
+      company.banned===true
+    ) return res.status(403).json({error:'A empresa vinculada não está aprovada para gerenciar cupons.'});
 
     if(req.method==='GET'){
       const snap=await db.collection('coupons').where('companyId','==',companyId).limit(200).get();
@@ -44,12 +56,17 @@ export default async function handler(req:Req,res:Res){
     const maxUses=Math.max(0,Math.floor(Number(body.maxUses||0)));
     const applicablePlans=Array.isArray(body.applicablePlans)?body.applicablePlans.map(String).slice(0,100):['all'];
     const applicableAffiliates=Array.isArray(body.applicableAffiliates)?body.applicableAffiliates.map(String).slice(0,100):['all'];
-    const expiresAt=String(body.expiresAt||'');
+    const expiresAt=String(body.expiresAt||'').trim();
+    if(expiresAt && !Number.isFinite(Date.parse(expiresAt))) return res.status(400).json({error:'Data de expiração inválida.'});
     if(code.length<3) return res.status(400).json({error:'O código precisa ter pelo menos 3 caracteres.'});
     if(!Number.isFinite(value)||value<=0||(discountType==='percentage'&&value>100)) return res.status(400).json({error:'Desconto inválido.'});
     for(const planId of applicablePlans.filter((p:string)=>p!=='all')){
       const plan=await db.collection('plans').doc(planId).get();
       if(!plan.exists || String(plan.data()!.companyId||'')!==companyId) return res.status(403).json({error:'Uma das ofertas selecionadas não pertence à empresa.'});
+      const planData=plan.data()!;
+      if(String(planData.billingType||'').toLowerCase()==='recorrente' || String(planData.paymentType||'').toLowerCase()==='recorrente'){
+        return res.status(400).json({error:'Cupons são aceitos somente em produtos de pagamento único.'});
+      }
     }
     const id=`${companyId}_${code}`;
     const ref=db.collection('coupons').doc(id);
@@ -59,7 +76,11 @@ export default async function handler(req:Req,res:Res){
     await ref.set(coupon,{merge:true});
     return res.status(200).json({success:true,coupon});
   }catch(error){
-    console.error('[Coupons API]',error instanceof Error?error.message:'Falha');
-    return res.status(401).json({error:'Não foi possível gerenciar cupons.'});
+    const message=error instanceof Error?error.message:'Falha';
+    console.error('[Coupons API]',message);
+    if(/Firebase ID token|token inválido|auth\/id-token/i.test(message)){
+      return res.status(401).json({error:'Sua sessão expirou. Entre novamente.'});
+    }
+    return res.status(503).json({error:'Não foi possível gerenciar cupons agora.'});
   }
 }
