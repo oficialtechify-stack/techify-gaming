@@ -530,7 +530,7 @@ export async function getCompanyPlanByIdOrSlug(idOrSlug: string): Promise<Compan
         data.slug === cleanId ||
         data.checkoutSlug === cleanId ||
         (data.slug && data.slug.toLowerCase() === cleanId.toLowerCase()) ||
-        (data.name && data.name.toLowerCase().includes(cleanId.toLowerCase()))
+        (data.checkoutSlug && data.checkoutSlug.toLowerCase() === cleanId.toLowerCase())
       ) {
         return { id: d.id, ...data };
       }
