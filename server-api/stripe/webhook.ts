@@ -552,13 +552,6 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
   }
 }
 
-export async function processStripeEventForInternalTest(stripe: Stripe, event: Stripe.Event): Promise<void> {
-  if (process.env.VERCEL_ENV !== 'preview' && process.env.NODE_ENV === 'production') {
-    throw new Error('Internal Stripe test helper is preview-only.');
-  }
-  await processEvent(stripe, event);
-}
-
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req: RequestLike, res: ResponseLike) {

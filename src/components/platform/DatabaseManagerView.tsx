@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { 
   COLLECTIONS, 
   clearAllFirestoreData,
+  fetchAdminCollectionInFirebase,
+  deleteAdminTestDocumentInFirebase,
   subscribeVerifications,
   subscribeCompanies,
   approveVerificationInFirebase,
@@ -58,7 +60,7 @@ import {
 } from 'lucide-react';
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
-import { ADMIN_EMAILS, isSuperAdminEmail } from '../../data/platformData';
+import { isSuperAdminEmail } from '../../data/platformData';
 import firebaseConfig from '../../../firebase-applet-config.json';
 import { AdminBrandingManager } from './AdminBrandingManager';
 import { AdminModalImagesManager } from './AdminModalImagesManager';
@@ -87,7 +89,7 @@ export const DatabaseManagerView: React.FC = () => {
   const [explorerCollection, setExplorerCollection] = useState<string>(COLLECTIONS.PROFILES);
 
   const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase().trim();
-  const isSuperAdmin = ADMIN_EMAILS.includes(userEmail);
+  const isSuperAdmin = isSuperAdminEmail(userEmail);
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [verifications, setVerifications] = useState<VerificationRequest[]>([]);
@@ -173,12 +175,7 @@ export const DatabaseManagerView: React.FC = () => {
   const fetchExplorerDocs = async (collName: string) => {
     setLoading(true);
     try {
-      const q = collection(db, collName);
-      const snap = await getDocs(q);
-      const list: any[] = [];
-      snap.forEach((d) => {
-        list.push({ _id: d.id, ...d.data() });
-      });
+      const list = await fetchAdminCollectionInFirebase(collName);
       setDocuments(list);
     } catch (err: any) {
       console.error('Error fetching collection:', err);
@@ -187,6 +184,18 @@ export const DatabaseManagerView: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const isTestExplorerDocument = (item: any) => {
+    const id = String(item?._id || '').toLowerCase();
+    const environment = String(item?.environment || '').toLowerCase();
+    const email = String(item?.buyerEmail || item?.email || '').toLowerCase();
+    return item?.is_test === true ||
+      ['development', 'test', 'sandbox', 'preview'].includes(environment) ||
+      id.startsWith('e2e_') ||
+      id.startsWith('test_') ||
+      id.startsWith('evt_e2e_') ||
+      email.startsWith('e2e+');
   };
 
   useEffect(() => {
@@ -409,10 +418,10 @@ export const DatabaseManagerView: React.FC = () => {
 
       // Atualiza listas locais
       if (type === 'user') {
-        setVerifications(prev => prev.map(v => (v.userId === id || v.id === id) ? { ...v, banned: true, banReason: banModal.reason } : v));
-        setRegisteredProfiles(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, banned: true, banReason: banModal.reason } : p));
+        setVerifications(prev => prev.map(v => (v.userId === id || v.id === id) ? { ...v, banned: true, verified: false, status: 'banned', banReason: banModal.reason } : v));
+        setRegisteredProfiles(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, banned: true, verified: false, status: 'banned', banReason: banModal.reason } : p));
       } else {
-        setCompanies(prev => prev.map(c => (c.id === id || c.ownerId === id) ? { ...c, banned: true, banReason: banModal.reason, verified: false } : c));
+        setCompanies(prev => prev.map(c => c.id === id ? { ...c, banned: true, status: 'banned', banReason: banModal.reason, verified: false } : c));
         setVerifications(prev => prev.map(v => (v.companyId === id || v.id === id) ? { ...v, banned: true, banReason: banModal.reason } : v));
       }
 
@@ -430,14 +439,35 @@ export const DatabaseManagerView: React.FC = () => {
     setProcessingId(target.id);
 
     try {
-      await unbanEntityInFirebase(target.id, target.type);
+      const result = await unbanEntityInFirebase(target.id, target.type);
+      const restored = result?.entity || {};
+      const restoredStatus = restored.verificationStatus || restored.status || 'pending';
+      const restoredVerified = restored.verified === true;
 
       if (target.type === 'user') {
-        setVerifications(prev => prev.map(v => (v.userId === target.id || v.id === target.id) ? { ...v, banned: false, banReason: undefined, status: 'approved' } : v));
-        setRegisteredProfiles(prev => prev.map(p => (p.userId === target.id || p.id === target.id) ? { ...p, banned: false, banReason: undefined, status: 'approved' } : p));
+        setVerifications(prev => prev.map(v => (v.userId === target.id || v.id === target.id) ? {
+          ...v,
+          banned: false,
+          banReason: undefined,
+          status: restoredStatus,
+          verified: restoredVerified
+        } : v));
+        setRegisteredProfiles(prev => prev.map(p => (p.userId === target.id || p.id === target.id) ? {
+          ...p,
+          banned: false,
+          banReason: undefined,
+          status: restored.status || restoredStatus,
+          verificationStatus: restoredStatus,
+          verified: restoredVerified
+        } : p));
       } else {
-        setCompanies(prev => prev.map(c => (c.id === target.id || c.ownerId === target.id) ? { ...c, banned: false, banReason: undefined, status: 'approved', verified: true } : c));
-        setVerifications(prev => prev.map(v => (v.companyId === target.id || v.id === target.id) ? { ...v, banned: false, banReason: undefined, status: 'approved' } : v));
+        setCompanies(prev => prev.map(c => c.id === target.id ? {
+          ...c,
+          banned: false,
+          banReason: undefined,
+          status: restored.status || 'pending',
+          verified: restoredVerified
+        } : c));
       }
 
       setStatusMessage(`"${target.name}" foi DESBANIDO e teve seu acesso restabelecido.`);
@@ -473,17 +503,16 @@ export const DatabaseManagerView: React.FC = () => {
     try {
       const { id, type, name } = purgeModal.target;
 
-      // 1. Marca imediatamente no conjunto de IDs deletados da sessão para nunca reaparecer
+      // O servidor primeiro valida se existe histórico financeiro que precisa ser preservado.
+      await purgeEntityInFirebase(id, type, 'EXCLUIR');
+
       setDeletedEntityIds(prev => {
         const next = new Set(prev);
         next.add(id);
         return next;
       });
 
-      // 2. Chama a exclusão profunda e em cascata no servidor / Firestore
-      await purgeEntityInFirebase(id, type, 'EXCLUIR');
-
-      // 3. Remove de TODOS os estados locais
+      // Remove dos estados locais somente após confirmação do backend
       setVerifications(prev => prev.filter(v => v.userId !== id && v.id !== id && v.companyId !== id));
       setCompanies(prev => prev.filter(c => c.id !== id && c.ownerId !== id));
       setRegisteredProfiles(prev => prev.filter(p => p.id !== id && p.userId !== id).map(p => 
@@ -501,7 +530,7 @@ export const DatabaseManagerView: React.FC = () => {
         }
       } catch (e) {}
 
-      setStatusMessage(`"${name}" e todos os seus vínculos foram COMPLETAMENTE EXCLUÍDOS do banco de dados como se nunca tivessem existido.`);
+      setStatusMessage(`"${name}" foi excluído com segurança. Contas com histórico financeiro são preservadas e não podem ser expurgadas.`);
       setTimeout(() => setStatusMessage(''), 8000);
       setPurgeModal({ isOpen: false, target: null, confirmationInput: '', isProcessing: false });
     } catch (err: any) {
@@ -510,22 +539,22 @@ export const DatabaseManagerView: React.FC = () => {
     }
   };
 
-  // Limpeza Geral do Banco de Dados
+  // Limpeza segura: remove somente documentos marcados como teste/sandbox.
   const handleWipeAllData = async () => {
-    const confirmation = prompt('ZONA DE PERIGO EXTREMO: Para zerar TODOS os dados de testes do banco em nuvem, digite "ZERAR BANCO":');
-    if (confirmation !== 'ZERAR BANCO') return;
+    const confirmation = prompt('Para remover SOMENTE registros de teste, digite "LIMPAR TESTES". Dados reais serão preservados.');
+    if (confirmation !== 'LIMPAR TESTES') return;
 
     setLoading(true);
     const res = await clearAllFirestoreData();
     if (res.success) {
-      setStatusMessage('Banco de dados zerado e sincronizado com sucesso!');
+      setStatusMessage(res.message || 'Registros de teste removidos com segurança.');
       if (mainTab === 'database_explorer') {
         await fetchExplorerDocs(explorerCollection);
       }
     } else {
-      setErrorMessage(`Erro ao limpar: ${res.error}`);
+      setErrorMessage(`Erro ao limpar testes: ${res.error}`);
     }
-    setTimeout(() => setStatusMessage(''), 5000);
+    setTimeout(() => setStatusMessage(''), 6000);
     setLoading(false);
   };
 
@@ -627,6 +656,12 @@ export const DatabaseManagerView: React.FC = () => {
           submittedAt: existing.submittedAt || p.submittedAt || p.createdAt || p.updatedAt || new Date().toISOString()
         } as VerificationRequest);
       } else {
+        const submittedStatus = String(p.affiliateVerificationStatus || p.verificationStatus || '').toLowerCase();
+        const submittedKyc = String(p.kyc_status || '').toLowerCase();
+        const hasSubmittedKyc = ['pending', 'approved', 'rejected'].includes(submittedStatus) ||
+          ['submitted', 'verified', 'rejected'].includes(submittedKyc);
+        if (!hasSubmittedKyc) return;
+
         map.set(key, {
           id: key,
           userId: key,
@@ -726,79 +761,19 @@ export const DatabaseManagerView: React.FC = () => {
       }
     });
 
-    // 3. Perfis cadastrados com perfil de empresa
+    // 3. Perfis enriquecem empresas reais, mas nunca criam uma empresa fantasma.
     registeredProfiles.forEach((p) => {
-      // Ignorar contas de admin sem empresa
-      const isAdmin = p.accountType === 'admin' || 
-                      isSuperAdminEmail(p.email) || 
-                      p.role === 'Administrador do Sistema' || 
-                      p.partnerLevel === 'Super Administrador';
-      if (isAdmin && !p.companyId && !p.companyName) return;
-
-      const isCompanyProfile = p.accountType === 'empresa' ||
-                               p.hasCompanyProfile === true ||
-                               Boolean(p.companyId?.trim()) ||
-                               Boolean(p.companyName?.trim()) ||
-                               p.activeRoleMode === 'empresa' ||
-                               p.verificationRoleType === 'empresa' ||
-                               (typeof p.role === 'string' && (
-                                 p.role.toLowerCase().includes('startup') || 
-                                 p.role.toLowerCase().includes('empresa') || 
-                                 p.role.toLowerCase().includes('produtor') ||
-                                 p.role.toLowerCase().includes('fundador')
-                               )) ||
-                               (typeof p.partnerLevel === 'string' && p.partnerLevel.toLowerCase().includes('empresa'));
-
-      if (!isCompanyProfile) return;
-
-      const compId = p.companyId || (p.userId || p.id);
-      if (compId && !deletedEntityIds.has(compId) && !deletedEntityIds.has(p.id) && !deletedEntityIds.has(p.userId)) {
-        const existing = map.get(compId);
-        const isApprv = Boolean(p.verified || p.verificationStatus === 'approved');
-        const companyDisplayName = p.companyName?.trim() || p.name?.trim() || 'Empresa Cadastrada';
-
-        if (existing) {
-          map.set(compId, {
-            ...existing,
-            name: existing.name || companyDisplayName,
-            tagline: existing.tagline || p.companyTagline || p.tagline || '',
-            logo: existing.logo || p.companyLogo || p.logo || p.avatar || '',
-            website: existing.website || p.companyWebsite || p.website || '',
-            cnpj: existing.cnpj || p.companyCnpj || p.cnpj || p.cpf || '',
-            category: existing.category || (p.companyCategory as any) || 'SaaS / B2B',
-            description: existing.description || p.companyDescription || '',
-            email: existing.email || p.companyEmail || p.email || '',
-            whatsapp: existing.whatsapp || p.companyWhatsapp || p.whatsapp || p.phone || '',
-            ownerId: existing.ownerId || p.userId || p.id,
-            status: existing.status || (isApprv ? 'approved' : (p.verificationStatus || 'pending')),
-            verified: Boolean(existing.verified || isApprv)
-          });
-        } else {
-          map.set(compId, {
-            id: compId,
-            name: companyDisplayName,
-            slug: companyDisplayName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            tagline: p.companyTagline || p.tagline || '',
-            logo: p.companyLogo || p.logo || p.avatar || '',
-            bannerImage: '',
-            website: p.companyWebsite || p.website || '',
-            commissionRange: '10% - 50%',
-            cnpj: p.companyCnpj || p.cnpj || p.cpf || '',
-            category: (p.companyCategory as any) || 'SaaS / B2B',
-            description: p.companyDescription || '',
-            email: p.companyEmail || p.email || '',
-            whatsapp: p.companyWhatsapp || p.whatsapp || p.phone || '',
-            ownerId: p.userId || p.id,
-            submittedBy: p.userId || p.id,
-            status: isApprv ? 'approved' : (p.verificationStatus || 'pending'),
-            verified: isApprv,
-            totalPlansCount: 0,
-            totalAffiliatesCount: 0,
-            totalSalesVolume: 0,
-            createdAt: p.createdAt || new Date().toISOString()
-          } as CompanyStartup);
-        }
-      }
+      const compId = typeof p.companyId === 'string' ? p.companyId.trim() : '';
+      if (!compId) return;
+      const existing = map.get(compId);
+      if (!existing) return;
+      map.set(compId, {
+        ...existing,
+        name: existing.name || p.companyName || p.name || 'Empresa Cadastrada',
+        email: existing.email || p.companyEmail || p.email || '',
+        whatsapp: existing.whatsapp || p.companyWhatsapp || p.whatsapp || p.phone || '',
+        ownerId: existing.ownerId || p.userId || p.id,
+      });
     });
 
     return Array.from(map.values());
@@ -910,10 +885,10 @@ export const DatabaseManagerView: React.FC = () => {
             onClick={handleWipeAllData}
             disabled={loading}
             className="bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
-            title="Limpeza geral para testes"
+            title="Remove somente registros marcados como teste/sandbox"
           >
             <Trash2 className="w-4 h-4" />
-            <span>Zerar Banco</span>
+            <span>Limpar Testes</span>
           </button>
         </div>
       </div>
@@ -1332,7 +1307,7 @@ export const DatabaseManagerView: React.FC = () => {
                             {/* Informações de Chave PIX se houver */}
                             {req.pixKey && (
                               <div className="bg-[#050811] p-3 rounded-xl border border-white/5 sm:col-span-2">
-                                <span className="text-[10px] font-bold text-[#D9F22A] uppercase block">Chave PIX Cadastrada</span>
+                                <span className="text-[10px] font-bold text-[#D9F22A] uppercase block">Chave informada no cadastro (não usada para saque)</span>
                                 <span className="font-mono font-bold text-white mt-0.5 block">{req.pixKey} ({req.pixKeyType || 'Aleatória'})</span>
                               </div>
                             )}
@@ -1730,7 +1705,7 @@ export const DatabaseManagerView: React.FC = () => {
                 <option value={COLLECTIONS.PLANS}>Planos e Produtos ({COLLECTIONS.PLANS})</option>
                 <option value={COLLECTIONS.AFFILIATIONS}>Afiliações Ativas ({COLLECTIONS.AFFILIATIONS})</option>
                 <option value={COLLECTIONS.SALES}>Histórico de Vendas ({COLLECTIONS.SALES})</option>
-                <option value={COLLECTIONS.WITHDRAWALS}>Saques PIX ({COLLECTIONS.WITHDRAWALS})</option>
+                <option value={COLLECTIONS.WITHDRAWALS}>Saques Stripe ({COLLECTIONS.WITHDRAWALS})</option>
                 <option value={COLLECTIONS.TEAM}>Equipe de Vendedores ({COLLECTIONS.TEAM})</option>
                 <option value="settings">Configurações Gerais (settings)</option>
               </select>
@@ -1786,17 +1761,31 @@ export const DatabaseManagerView: React.FC = () => {
                           >
                             <Copy className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={async () => {
-                              if (!confirm(`Excluir documento ${item._id}?`)) return;
-                              await deleteDoc(doc(db, explorerCollection, item._id));
-                              setDocuments(prev => prev.filter(d => d._id !== item._id));
-                            }}
-                            className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer"
-                            title="Excluir Documento"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isTestExplorerDocument(item) ? (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Excluir somente o documento de TESTE ${item._id}?`)) return;
+                                try {
+                                  await deleteAdminTestDocumentInFirebase(explorerCollection, item._id);
+                                  setDocuments(prev => prev.filter(d => d._id !== item._id));
+                                  setStatusMessage('Documento de teste removido com segurança.');
+                                } catch (err: any) {
+                                  setErrorMessage(err.message || 'Não foi possível excluir o documento de teste.');
+                                }
+                              }}
+                              className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 cursor-pointer"
+                              title="Excluir documento de teste"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span
+                              className="p-1.5 rounded-lg bg-white/5 text-white/30"
+                              title="Documento real protegido. Use as ações específicas do Admin."
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                            </span>
+                          )}
                         </div>
                       </div>
 

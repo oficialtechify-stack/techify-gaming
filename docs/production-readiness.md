@@ -36,3 +36,10 @@ Verificação em 01/10/2026, baseada no commit c8d5a58. Esta revisão não certi
 4. No sandbox: compra → webhook assinado → venda única → comissão → repasse; repetir eventos, simular falhas de armazenamento, reembolso e disputa.
 5. Confirmar regra de prazo (o código atual usa D+9), taxa de R$ 0,99, responsável pelas tarifas Stripe e comportamento das cobranças avulsas.
 6. Só então ativar o agendamento de repasses e validar a implantação final.
+
+
+## Atualização final desta rodada
+- O E2E financeiro sandbox passou no Preview: PaymentIntent de teste aprovado, webhook assinado, venda persistida, comissão/saldos lançados, liberação isolada e refund com reversão de saldos.
+- O Admin foi endurecido: aprovação de afiliado não aprova empresa automaticamente; rejeição de uma função não derruba a outra; ban/desban restaura o estado anterior; o explorador não apaga dados reais; a limpeza global foi substituída por limpeza apenas de registros de teste.
+- O Preview exige STRIPE_TEST_SECRET_KEY e bloqueia chave live.
+- Bloqueio externo restante: firestore.rules e firestore.indexes.json ainda precisam ser publicados no Firebase de produção com uma credencial que tenha permissões administrativas de Firebase Rules/Datastore Indexes. A credencial atual da Vercel acessa dados, mas não possui essas permissões.

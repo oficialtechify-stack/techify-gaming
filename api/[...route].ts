@@ -12,6 +12,7 @@ import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
 import affiliateJoinHandler from '../server-api/affiliates/join.js';
 import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
 import adminEntityActionHandler from '../server-api/admin/entity-action.js';
+import adminExplorerHandler from '../server-api/admin/explorer.js';
 import plansHandler from '../server-api/plans.js';
 import subscriptionCheckoutHandler from '../server-api/stripe/subscription-checkout.js';
 import stripeWithdrawalHandler from '../server-api/stripe/withdrawal.js';
@@ -19,8 +20,6 @@ import partnerApiKeyHandler from '../server-api/partner/api-key.js';
 import partnerSettingsHandler from '../server-api/partner/settings.js';
 import partnerPaymentsHandler from '../server-api/partner/payments.js';
 import couponsHandler from '../server-api/coupons.js';
-import internalReadinessHandler from '../server-api/internal/readiness.js';
-import financeE2EHandler from '../server-api/internal/finance-e2e.js';
 import companiesHandler from '../server-api/companies.js';
 import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
 
@@ -177,12 +176,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return legacyLookupHandler(req as any, res as any);
     case 'affiliates/join':
       return affiliateJoinHandler(req as any, res as any);
-    case 'internal/readiness':
-      return internalReadinessHandler(req as any, res as any);
-    case 'internal/finance-e2e':
-      return financeE2EHandler(req as any, res as any);
     case 'admin/audit-identities':
       return auditIdentitiesHandler(req as any, res as any);
+    case 'admin/explorer':
+      return adminExplorerHandler(req as any, res as any);
     case 'admin/entity-action':
     case 'admin/approve-company':
     case 'admin/reject-entity':

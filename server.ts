@@ -25,6 +25,7 @@ import submitVerificationHandler from './server-api/profile/submit-verification.
 import legacyLookupHandler from './server-api/profile/legacy-lookup.js';
 import auditIdentitiesHandler from './server-api/admin/audit-identities.js';
 import adminEntityActionHandler from './server-api/admin/entity-action.js';
+import adminExplorerHandler from './server-api/admin/explorer.js';
 import partnerApiKeyHandler from './server-api/partner/api-key.js';
 import partnerSettingsHandler from './server-api/partner/settings.js';
 import partnerPaymentsHandler from './server-api/partner/payments.js';
@@ -69,6 +70,7 @@ app.all('/api/profile/submit-verification', adapt(submitVerificationHandler));
 app.all('/api/profile/legacy-lookup', adapt(legacyLookupHandler));
 app.all('/api/admin/audit-identities', adapt(auditIdentitiesHandler));
 app.all('/api/admin/entity-action', adapt(adminEntityActionHandler));
+app.all('/api/admin/explorer', adapt(adminExplorerHandler));
 
 for (const action of ['approve-company','reject-entity','ban-entity','unban-entity','purge-entity']) {
   app.all('/api/admin/' + action, (req, res) => {

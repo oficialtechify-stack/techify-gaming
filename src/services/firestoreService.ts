@@ -122,30 +122,47 @@ export async function seedFirestoreIfEmpty() {
 /**
  * Clear ALL documents in Firebase Firestore
  */
+async function callAdminExplorer(action: string, payload: Record<string, unknown> = {}) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para usar o painel administrativo.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/admin/explorer', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Não foi possível executar a ação administrativa.');
+  return data;
+}
+
+export async function fetchAdminCollectionInFirebase(collectionName: string) {
+  const result = await callAdminExplorer('list', { collection: collectionName });
+  return Array.isArray(result.documents) ? result.documents : [];
+}
+
+export async function deleteAdminTestDocumentInFirebase(collectionName: string, id: string) {
+  return callAdminExplorer('delete-test-document', { collection: collectionName, id });
+}
+
+/**
+ * Remove somente registros marcados como teste/desenvolvimento.
+ * Dados reais nunca são apagados por esta ação.
+ */
 export async function clearAllFirestoreData() {
   try {
-    const collectionsToClear = [
-      COLLECTIONS.COMPANIES,
-      COLLECTIONS.PLANS,
-      COLLECTIONS.AFFILIATIONS,
-      COLLECTIONS.SALES,
-      COLLECTIONS.WITHDRAWALS,
-      COLLECTIONS.AFFILIATE_LINKS,
-      COLLECTIONS.TEAM
-    ];
-
-    for (const collName of collectionsToClear) {
-      const collRef = collection(db, collName);
-      const snap = await getDocs(collRef);
-      for (const d of snap.docs) {
-        await deleteDoc(d.ref);
-      }
-    }
-
-    return { success: true, message: 'Todas as coleções e dados foram zerados com sucesso!' };
+    const result = await callAdminExplorer('cleanup-test-data');
+    return {
+      success: true,
+      message: result.message || 'Limpeza de registros de teste concluída.',
+      deleted: Number(result.deleted || 0),
+      byCollection: result.byCollection || {},
+    };
   } catch (error: any) {
-    console.error('Erro ao limpar Firestore:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Falha ao limpar registros de teste.' };
   }
 }
 

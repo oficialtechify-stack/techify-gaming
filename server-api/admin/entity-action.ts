@@ -1,10 +1,7 @@
 import { getAuth } from 'firebase-admin/auth';
-import { getServerAdminApp, getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
-
-const BUILTIN_ADMINS = new Set([
-  'rickmarketing81@gmail.com',
-  'leadspay.oficial@gmail.com',
-]);
+import { FieldValue } from 'firebase-admin/firestore';
+import { getServerAdminApp, getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
+import { requireAdminIdentity } from '../../lib/adminAccess.js';
 
 type Req = {
   method?: string;
@@ -16,24 +13,6 @@ type Res = {
   status(code: number): Res;
   json(body: unknown): unknown;
 };
-
-function configuredAdmins(): Set<string> {
-  const extra = String(process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  return new Set([...BUILTIN_ADMINS, ...extra]);
-}
-
-async function requireAdmin(req: Req) {
-  const identity = await verifyFirebaseIdentity(
-    typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
-  );
-  if (!identity.email || !configuredAdmins().has(identity.email.toLowerCase())) {
-    throw Object.assign(new Error('Acesso administrativo não autorizado.'), { statusCode: 403 });
-  }
-  return identity;
-}
 
 async function updateVerificationDocs(
   db: FirebaseFirestore.Firestore,
@@ -56,7 +35,12 @@ async function approveCompany(db: FirebaseFirestore.Firestore, companyId: string
   const ownerId = String(company.ownerId || company.submittedBy || '');
   if (!ownerId) throw Object.assign(new Error('Empresa sem proprietário válido.'), { statusCode: 409 });
 
+  const profileRef = db.collection('user_profiles').doc(ownerId);
+  const profileSnap = await profileRef.get();
+  const profile = profileSnap.exists ? profileSnap.data()! : {};
+  const hadAffiliate = profile.hasAffiliateProfile === true || profile.accountType === 'afiliado' || profile.accountType === 'ambos';
   const now = new Date().toISOString();
+
   const batch = db.batch();
   batch.set(ref, {
     status: 'approved',
@@ -71,11 +55,6 @@ async function approveCompany(db: FirebaseFirestore.Firestore, companyId: string
     reviewedBy,
     updatedAt: now,
   }, { merge: true });
-
-  const profileRef = db.collection('user_profiles').doc(ownerId);
-  const profileSnap = await profileRef.get();
-  const profile = profileSnap.exists ? profileSnap.data()! : {};
-  const hadAffiliate = profile.hasAffiliateProfile === true || profile.accountType === 'afiliado' || profile.accountType === 'ambos';
   batch.set(profileRef, {
     verified: true,
     verificationStatus: 'approved',
@@ -83,13 +62,12 @@ async function approveCompany(db: FirebaseFirestore.Firestore, companyId: string
     companyVerificationStatus: 'approved',
     kyc_status: 'verified',
     hasCompanyProfile: true,
-    hasAffiliateProfile: hadAffiliate || profile.hasAffiliateProfile === true,
+    hasAffiliateProfile: hadAffiliate,
     accountType: hadAffiliate ? 'ambos' : 'empresa',
     companyId,
     companyName: company.name || company.companyName || null,
     updatedAt: now,
   }, { merge: true });
-
   batch.set(db.collection('users').doc(ownerId), {
     verified: true,
     verificationStatus: 'approved',
@@ -98,18 +76,17 @@ async function approveCompany(db: FirebaseFirestore.Firestore, companyId: string
     companyId,
     updatedAt: now,
   }, { merge: true });
-
   await batch.commit();
+
   await updateVerificationDocs(db, ownerId, {
-    status: 'approved',
-    verified: true,
-    kyc_status: 'verified',
+    companyId,
+    companyName: company.name || company.companyName || null,
+    companyStatus: 'approved',
     reviewedAt: now,
     reviewedBy,
-    rejectionReason: null,
     updatedAt: now,
   });
-  return { companyId, ownerId };
+  return { companyId, ownerId, status: 'approved', verified: true };
 }
 
 async function hasFinancialHistory(db: FirebaseFirestore.Firestore, id: string, type: 'user' | 'company') {
@@ -121,6 +98,7 @@ async function hasFinancialHistory(db: FirebaseFirestore.Firestore, id: string, 
       db.collection('sales').where('companyOwnerId', '==', id).limit(1).get(),
       db.collection('sales').where('affiliateId', '==', id).limit(1).get(),
       db.collection('withdrawals').where('userId', '==', id).limit(1).get(),
+      db.collection('balance_releases').where('userId', '==', id).limit(1).get(),
     );
   }
   const snaps = await Promise.all(checks);
@@ -132,7 +110,7 @@ export default async function handler(req: Req, res: Res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
-    const admin = await requireAdmin(req);
+    const admin = await requireAdminIdentity(req.headers);
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const action = String(body.action || '').trim();
     const id = String(body.id || '').trim();
@@ -148,7 +126,7 @@ export default async function handler(req: Req, res: Res) {
 
     if (action === 'approve-company') {
       const result = await approveCompany(db, id, reviewedBy);
-      return res.status(200).json({ success: true, ...result });
+      return res.status(200).json({ success: true, entity: result });
     }
 
     if (action === 'approve-verification') {
@@ -156,30 +134,27 @@ export default async function handler(req: Req, res: Res) {
       const profileSnap = await profileRef.get();
       if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
       const profile = profileSnap.data()!;
-      const isAffiliate = profile.accountType === 'afiliado' || profile.accountType === 'ambos' || profile.hasAffiliateProfile === true;
-      const isCompany = profile.accountType === 'empresa' || profile.accountType === 'ambos' || profile.hasCompanyProfile === true;
-      const accountType = isAffiliate && isCompany ? 'ambos' : isCompany ? 'empresa' : 'afiliado';
-
-      const batch = db.batch();
-      const common = {
+      const hasCompany = profile.hasCompanyProfile === true || profile.accountType === 'empresa' || profile.accountType === 'ambos';
+      const update = {
         verified: true,
         verificationStatus: 'approved',
+        affiliateVerificationStatus: 'approved',
         kyc_status: 'verified',
-        accountType,
-        affiliateVerificationStatus: isAffiliate ? 'approved' : (profile.affiliateVerificationStatus || null),
-        empresaVerificationStatus: isCompany ? 'approved' : (profile.empresaVerificationStatus || null),
-        companyVerificationStatus: isCompany ? 'approved' : (profile.companyVerificationStatus || null),
+        hasAffiliateProfile: true,
+        accountType: hasCompany ? 'ambos' : 'afiliado',
         banned: false,
         banReason: null,
-        rejectionReason: null,
+        verificationRejectionReason: null,
         verificationReviewedAt: now,
         reviewedBy,
         updatedAt: now,
       };
-      batch.set(profileRef, common, { merge: true });
-      batch.set(db.collection('users').doc(id), common, { merge: true });
+      const batch = db.batch();
+      batch.set(profileRef, update, { merge: true });
+      batch.set(db.collection('users').doc(id), update, { merge: true });
       await batch.commit();
       await updateVerificationDocs(db, id, {
+        roleType: 'afiliado',
         status: 'approved',
         verified: true,
         kyc_status: 'verified',
@@ -188,85 +163,206 @@ export default async function handler(req: Req, res: Res) {
         rejectionReason: null,
         updatedAt: now,
       });
-
-      if (isCompany) {
-        const owned = await db.collection('companies').where('ownerId', '==', id).limit(20).get();
-        for (const companyDoc of owned.docs) await approveCompany(db, companyDoc.id, reviewedBy);
-      }
-      return res.status(200).json({ success: true, id });
+      return res.status(200).json({ success: true, entity: { id, status: 'approved', verified: true } });
     }
 
     if (action === 'reject-entity') {
       if (!reason) return res.status(400).json({ error: 'Informe o motivo da rejeição.' });
+
       if (type === 'company') {
         const ref = db.collection('companies').doc(id);
         const snap = await ref.get();
         if (!snap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
-        const ownerId = String(snap.data()!.ownerId || snap.data()!.submittedBy || '');
+        const company = snap.data()!;
+        const ownerId = String(company.ownerId || company.submittedBy || '');
         await ref.set({
-          status: 'rejected', verified: false, rejectionReason: reason,
-          reviewedAt: now, reviewedBy, updatedAt: now,
+          status: 'rejected',
+          verified: false,
+          kyc_status: 'rejected',
+          rejectionReason: reason,
+          reviewedAt: now,
+          reviewedBy,
+          updatedAt: now,
         }, { merge: true });
+
         if (ownerId) {
-          await db.collection('user_profiles').doc(ownerId).set({
-            verified: false,
-            verificationStatus: 'rejected',
+          const profileRef = db.collection('user_profiles').doc(ownerId);
+          const profileSnap = await profileRef.get();
+          const profile = profileSnap.exists ? profileSnap.data()! : {};
+          const affiliateApproved = profile.affiliateVerificationStatus === 'approved';
+          const update = {
+            verified: affiliateApproved,
+            verificationStatus: affiliateApproved ? 'approved' : 'rejected',
             empresaVerificationStatus: 'rejected',
             companyVerificationStatus: 'rejected',
-            kyc_status: 'rejected',
+            kyc_status: affiliateApproved ? 'verified' : 'rejected',
             rejectionReason: reason,
             updatedAt: now,
-          }, { merge: true });
+          };
+          const batch = db.batch();
+          batch.set(profileRef, update, { merge: true });
+          batch.set(db.collection('users').doc(ownerId), update, { merge: true });
+          await batch.commit();
           await updateVerificationDocs(db, ownerId, {
-            status: 'rejected', verified: false, kyc_status: 'rejected',
-            rejectionReason: reason, reviewedAt: now, reviewedBy, updatedAt: now,
+            companyId: id,
+            companyStatus: 'rejected',
+            companyRejectionReason: reason,
+            reviewedAt: now,
+            reviewedBy,
+            updatedAt: now,
           });
         }
-      } else {
-        const batch = db.batch();
-        const update = {
-          verified: false, verificationStatus: 'rejected', kyc_status: 'rejected',
-          rejectionReason: reason, verificationRejectionReason: reason,
-          verificationReviewedAt: now, reviewedBy, updatedAt: now,
-        };
-        batch.set(db.collection('user_profiles').doc(id), update, { merge: true });
-        batch.set(db.collection('users').doc(id), update, { merge: true });
-        await batch.commit();
-        await updateVerificationDocs(db, id, {
-          status: 'rejected', verified: false, kyc_status: 'rejected',
-          rejectionReason: reason, reviewedAt: now, reviewedBy, updatedAt: now,
-        });
-        const companies = await db.collection('companies').where('ownerId', '==', id).limit(20).get();
-        for (const company of companies.docs) {
-          await company.ref.set({ status: 'rejected', verified: false, rejectionReason: reason, reviewedAt: now, reviewedBy, updatedAt: now }, { merge: true });
-        }
+        return res.status(200).json({ success: true, entity: { id, status: 'rejected', verified: false } });
       }
-      return res.status(200).json({ success: true });
+
+      const profileRef = db.collection('user_profiles').doc(id);
+      const profileSnap = await profileRef.get();
+      if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
+      const profile = profileSnap.data()!;
+      const companyApproved = profile.empresaVerificationStatus === 'approved' || profile.companyVerificationStatus === 'approved';
+      const update = {
+        verified: companyApproved,
+        verificationStatus: companyApproved ? 'approved' : 'rejected',
+        affiliateVerificationStatus: 'rejected',
+        kyc_status: companyApproved ? 'verified' : 'rejected',
+        rejectionReason: reason,
+        verificationRejectionReason: reason,
+        verificationReviewedAt: now,
+        reviewedBy,
+        updatedAt: now,
+      };
+      const batch = db.batch();
+      batch.set(profileRef, update, { merge: true });
+      batch.set(db.collection('users').doc(id), update, { merge: true });
+      await batch.commit();
+      await updateVerificationDocs(db, id, {
+        roleType: 'afiliado',
+        status: 'rejected',
+        verified: false,
+        kyc_status: 'rejected',
+        rejectionReason: reason,
+        reviewedAt: now,
+        reviewedBy,
+        updatedAt: now,
+      });
+      return res.status(200).json({ success: true, entity: { id, status: 'rejected', verified: companyApproved } });
     }
 
     if (action === 'ban-entity' || action === 'unban-entity') {
       const banning = action === 'ban-entity';
       if (banning && !reason) return res.status(400).json({ error: 'Informe o motivo do bloqueio.' });
-      const status = banning ? 'banned' : 'approved';
-      const update = banning ? {
-        status, verified: false, banned: true, banReason: reason, bannedAt: now, reviewedBy, updatedAt: now,
-      } : {
-        status, verified: true, banned: false, banReason: null, unbannedAt: now, reviewedBy, updatedAt: now,
-      };
+
       if (type === 'company') {
         const ref = db.collection('companies').doc(id);
-        if (!(await ref.get()).exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
-        await ref.set(update, { merge: true });
-      } else {
-        const batch = db.batch();
-        batch.set(db.collection('user_profiles').doc(id), update, { merge: true });
-        batch.set(db.collection('users').doc(id), update, { merge: true });
-        batch.set(db.collection('verification_requests').doc(id), {
-          status, banReason: banning ? reason : null, reviewedAt: now, reviewedBy, updatedAt: now,
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
+        const data = snap.data()!;
+
+        if (banning) {
+          await ref.set({
+            statusBeforeBan: data.status || 'pending',
+            verifiedBeforeBan: data.verified === true,
+            kycStatusBeforeBan: data.kyc_status || null,
+            status: 'banned',
+            verified: false,
+            banned: true,
+            banReason: reason,
+            bannedAt: now,
+            reviewedBy,
+            updatedAt: now,
+          }, { merge: true });
+          return res.status(200).json({ success: true, entity: { id, status: 'banned', verified: false, banned: true } });
+        }
+
+        const restoredStatus = String(data.statusBeforeBan || (data.verifiedBeforeBan ? 'approved' : 'pending'));
+        const restoredVerified = data.verifiedBeforeBan === true;
+        const restoredKyc = String(data.kycStatusBeforeBan || (restoredVerified ? 'verified' : 'pending'));
+        await ref.set({
+          status: restoredStatus,
+          verified: restoredVerified,
+          kyc_status: restoredKyc,
+          banned: false,
+          banReason: null,
+          unbannedAt: now,
+          reviewedBy,
+          updatedAt: now,
+          statusBeforeBan: FieldValue.delete(),
+          verifiedBeforeBan: FieldValue.delete(),
+          kycStatusBeforeBan: FieldValue.delete(),
         }, { merge: true });
-        await batch.commit();
+        return res.status(200).json({ success: true, entity: { id, status: restoredStatus, verified: restoredVerified, banned: false } });
       }
-      return res.status(200).json({ success: true });
+
+      const profileRef = db.collection('user_profiles').doc(id);
+      const profileSnap = await profileRef.get();
+      if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
+      const profile = profileSnap.data()!;
+
+      if (banning) {
+        const update = {
+          statusBeforeBan: profile.status || profile.verificationStatus || 'pending',
+          verifiedBeforeBan: profile.verified === true,
+          verificationStatusBeforeBan: profile.verificationStatus || 'pending',
+          kycStatusBeforeBan: profile.kyc_status || 'pending',
+          status: 'banned',
+          verified: false,
+          banned: true,
+          banReason: reason,
+          bannedAt: now,
+          reviewedBy,
+          updatedAt: now,
+        };
+        const batch = db.batch();
+        batch.set(profileRef, update, { merge: true });
+        batch.set(db.collection('users').doc(id), update, { merge: true });
+        await batch.commit();
+        await updateVerificationDocs(db, id, {
+          status: 'banned',
+          banned: true,
+          banReason: reason,
+          reviewedAt: now,
+          reviewedBy,
+          updatedAt: now,
+        });
+        return res.status(200).json({ success: true, entity: { id, status: 'banned', verified: false, banned: true } });
+      }
+
+      const restoredVerified = profile.verifiedBeforeBan === true;
+      const restoredVerification = String(profile.verificationStatusBeforeBan || (restoredVerified ? 'approved' : 'pending'));
+      const restoredStatus = String(profile.statusBeforeBan || restoredVerification);
+      const restoredKyc = String(profile.kycStatusBeforeBan || (restoredVerified ? 'verified' : 'pending'));
+      const restore = {
+        status: restoredStatus,
+        verified: restoredVerified,
+        verificationStatus: restoredVerification,
+        kyc_status: restoredKyc,
+        banned: false,
+        banReason: null,
+        unbannedAt: now,
+        reviewedBy,
+        updatedAt: now,
+        statusBeforeBan: FieldValue.delete(),
+        verifiedBeforeBan: FieldValue.delete(),
+        verificationStatusBeforeBan: FieldValue.delete(),
+        kycStatusBeforeBan: FieldValue.delete(),
+      };
+      const batch = db.batch();
+      batch.set(profileRef, restore, { merge: true });
+      batch.set(db.collection('users').doc(id), restore, { merge: true });
+      await batch.commit();
+      await updateVerificationDocs(db, id, {
+        status: restoredVerification,
+        verified: restoredVerified,
+        banned: false,
+        banReason: null,
+        reviewedAt: now,
+        reviewedBy,
+        updatedAt: now,
+      });
+      return res.status(200).json({
+        success: true,
+        entity: { id, status: restoredStatus, verificationStatus: restoredVerification, verified: restoredVerified, banned: false },
+      });
     }
 
     if (action === 'purge-entity') {
@@ -293,9 +389,20 @@ export default async function handler(req: Req, res: Res) {
         batch.delete(companyRef);
         for (const item of plans.docs) batch.delete(item.ref);
         for (const item of affiliations.docs) batch.delete(item.ref);
-        if (ownerId) batch.set(db.collection('user_profiles').doc(ownerId), {
-          companyId: null, companyName: null, hasCompanyProfile: false, updatedAt: now,
-        }, { merge: true });
+        if (ownerId) {
+          const profileRef = db.collection('user_profiles').doc(ownerId);
+          const profileSnap = await profileRef.get();
+          const profile = profileSnap.exists ? profileSnap.data()! : {};
+          const keepAffiliate = profile.hasAffiliateProfile === true || profile.accountType === 'afiliado' || profile.accountType === 'ambos';
+          batch.set(profileRef, {
+            companyId: null,
+            companyName: null,
+            hasCompanyProfile: false,
+            accountType: keepAffiliate ? 'afiliado' : (profile.accountType || 'empresa'),
+            activeRoleMode: keepAffiliate ? 'afiliado' : profile.activeRoleMode || 'empresa',
+            updatedAt: now,
+          }, { merge: true });
+        }
         await batch.commit();
       } else {
         const [aff1, aff2, companies] = await Promise.all([
@@ -321,7 +428,7 @@ export default async function handler(req: Req, res: Res) {
         await batch.commit();
         try { await getAuth(getServerAdminApp()).deleteUser(id); } catch {}
       }
-      return res.status(200).json({ success: true });
+      return res.status(200).json({ success: true, entity: { id, deleted: true } });
     }
 
     return res.status(400).json({ error: 'Ação administrativa não reconhecida.' });
