@@ -35,6 +35,9 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
   const [plan, setPlan] = useState<CompanyPlan | null>(initialPlan || null);
   const [countdown, setCountdown] = useState<number>(5);
   const [stripeReturnStatus, setStripeReturnStatus] = useState<'checking' | 'paid' | 'failed' | 'unverified'>('checking');
+  const [deliveryType, setDeliveryType] = useState<ProductDeliveryType>(initialPlan?.deliveryType || 'redirect');
+  const [deliveryUrl, setDeliveryUrl] = useState<string>(initialPlan?.deliveryUrl || initialPlan?.thankYouPageUrl || '');
+  const [deliveryInstructions, setDeliveryInstructions] = useState<string>(initialPlan?.deliveryInstructions || '');
 
   // The payment reference comes only from Stripe's return URL and is verified server-side.
   const [txId, setTxId] = useState<string>(initialTxId || '');
@@ -75,6 +78,11 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
           setAmount(Number(result.amount || 0));
           setCustomerName(String(result.buyerName || ''));
           setCustomerEmail(String(result.buyerEmail || ''));
+          if (result.delivery) {
+            setDeliveryType((result.delivery.deliveryType || 'redirect') as ProductDeliveryType);
+            setDeliveryUrl(String(result.delivery.deliveryUrl || ''));
+            setDeliveryInstructions(String(result.delivery.deliveryInstructions || ''));
+          }
           if (result.planId && !initialPlan) {
             const verifiedPlan = await getCompanyPlanByIdOrSlug(String(result.planId));
             if (!cancelled && verifiedPlan) setPlan(verifiedPlan);
@@ -99,9 +107,16 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
     return () => { cancelled = true; };
   }, [initialPlan]);
 
-  const deliveryType: ProductDeliveryType = plan?.deliveryType || 'redirect';
-  const deliveryUrl = plan?.deliveryUrl || plan?.thankYouPageUrl || '';
-  const deliveryInstructions = plan?.deliveryInstructions;
+  useEffect(() => {
+    // Compatibilidade com ofertas antigas. Nas novas ofertas, a configuração privada
+    // chega somente pelo endpoint de status depois do pagamento confirmado.
+    if (stripeReturnStatus !== 'paid' || !plan) return;
+    if (!deliveryUrl && (plan.deliveryUrl || plan.thankYouPageUrl)) {
+      setDeliveryType(plan.deliveryType || 'redirect');
+      setDeliveryUrl(plan.deliveryUrl || plan.thankYouPageUrl || '');
+      setDeliveryInstructions(plan.deliveryInstructions || '');
+    }
+  }, [plan, stripeReturnStatus, deliveryUrl]);
 
   // Auto-redirect countdown if redirect type with URL
   useEffect(() => {
