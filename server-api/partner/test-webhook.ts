@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { assertSafeWebhookUrl, webhookUrlErrorMessage } from '../../lib/webhookSecurity.js';
 
 type Req = {
   method?: string;
@@ -45,30 +46,43 @@ export default async function handler(req: Req, res: Res) {
       return res.status(403).json({ error: 'A Empresa precisa estar aprovada para testar integrações.' });
     }
 
+    const companyId = String(profile.companyId || '').trim();
+    if (!companyId) {
+      return res.status(409).json({ error: 'A conta ainda não está vinculada a uma empresa válida.' });
+    }
+
+    const companySnap = await db.collection('companies').doc(companyId).get();
+    const company = companySnap.exists ? companySnap.data()! : null;
+    if (
+      !company ||
+      String(company.ownerId || company.submittedBy || '') !== identity.uid ||
+      company.verified !== true ||
+      String(company.status || '').toLowerCase() !== 'approved' ||
+      company.archived === true ||
+      company.isArchived === true ||
+      company.banned === true
+    ) {
+      return res.status(403).json({ error: 'A empresa vinculada não está aprovada para testar integrações.' });
+    }
+
     if (!settingsSnap.exists) {
       return res.status(400).json({ error: 'Configure e salve um webhook antes de enviar o teste.' });
     }
 
     const settings = settingsSnap.data() as Record<string, any>;
-    const webhookUrl = String(settings.webhookUrl || '').trim();
+    const rawWebhookUrl = String(settings.webhookUrl || '').trim();
     const webhookSecret = String(settings.webhookSecret || '').trim();
 
-    if (!webhookUrl || !webhookSecret) {
+    if (!rawWebhookUrl || !webhookSecret) {
       return res.status(400).json({ error: 'Configure e salve um webhook antes de enviar o teste.' });
     }
 
-    let parsedUrl: URL;
+    let webhookUrl: string;
     try {
-      parsedUrl = new URL(webhookUrl);
-    } catch {
-      return res.status(400).json({ error: 'A URL do webhook é inválida.' });
+      webhookUrl = await assertSafeWebhookUrl(rawWebhookUrl);
+    } catch (error) {
+      return res.status(400).json({ error: webhookUrlErrorMessage(error) });
     }
-
-    if (parsedUrl.protocol !== 'https:' || ['localhost', '127.0.0.1', '::1'].includes(parsedUrl.hostname)) {
-      return res.status(400).json({ error: 'O webhook precisa usar uma URL HTTPS pública válida.' });
-    }
-
-    const companyId = String(profile.companyId || settings.companyId || '').trim();
     const testId = `wht_${randomUUID().replace(/-/g, '')}`;
     const payloadObject = {
       event: 'integration.test',
