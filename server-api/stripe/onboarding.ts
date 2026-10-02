@@ -107,6 +107,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
     }
 
+    try {
+      await stripe.accounts.update(accountId, {
+        settings: { payouts: { schedule: { interval: 'manual' } } },
+      } as any);
+    } catch (scheduleError) {
+      console.warn('[Stripe Connect onboarding] Não foi possível definir payout manual:', scheduleError instanceof Error ? scheduleError.message : 'falha');
+    }
+
     const baseUrl = getLeadspayBaseUrl();
     const accountLink = await stripe.accountLinks.create({
       account: accountId,

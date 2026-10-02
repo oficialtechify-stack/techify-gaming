@@ -55,7 +55,7 @@ export const INITIAL_PAYMENT_STATS: PaymentMethodStat[] = [
     totalValue: 0,
     percentage: 0,
     conversionRate: '0%',
-    badge: 'D+9 Direto',
+    badge: 'Stripe',
     iconType: 'pix'
   },
   {
@@ -64,25 +64,25 @@ export const INITIAL_PAYMENT_STATS: PaymentMethodStat[] = [
     totalValue: 0,
     percentage: 0,
     conversionRate: '0%',
-    badge: '12x Sem Juros',
+    badge: 'Stripe',
     iconType: 'credit-card'
   },
   {
-    method: 'PicPay Carteira',
+    method: 'Boleto',
     count: 0,
     totalValue: 0,
     percentage: 0,
     conversionRate: '0%',
-    badge: 'QR Code',
-    iconType: 'picpay'
+    badge: 'Stripe',
+    iconType: 'boleto'
   },
   {
-    method: 'Crypto USDT (TRC-20)',
+    method: 'Outros métodos Stripe',
     count: 0,
     totalValue: 0,
     percentage: 0,
     conversionRate: '0%',
-    badge: 'Global Web3',
-    iconType: 'crypto'
+    badge: 'Stripe',
+    iconType: 'credit-card'
   }
 ];

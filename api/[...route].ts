@@ -1,16 +1,29 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import stripeCheckoutHandler from '../server-api/stripe/checkout';
-import stripeOnboardingHandler from '../server-api/stripe/onboarding';
-import stripeConnectStatusHandler from '../server-api/stripe/connect-status';
-import stripeExpressDashboardHandler from '../server-api/stripe/express-dashboard';
-import stripeStatusHandler from '../server-api/stripe/status';
-import stripeWebhookHandler from '../server-api/stripe/webhook';
-import stripeReleasesCronHandler from '../server-api/crons/stripe-releases';
-import checkDocumentHandler from '../server-api/profile/check-document';
-import submitVerificationHandler from '../server-api/profile/submit-verification';
-import legacyLookupHandler from '../server-api/profile/legacy-lookup';
-import affiliateJoinHandler from '../server-api/affiliates/join';
-import auditIdentitiesHandler from '../server-api/admin/audit-identities';
+import stripeCheckoutHandler from '../server-api/stripe/checkout.js';
+import stripeOnboardingHandler from '../server-api/stripe/onboarding.js';
+import stripeConnectStatusHandler from '../server-api/stripe/connect-status.js';
+import stripeExpressDashboardHandler from '../server-api/stripe/express-dashboard.js';
+import stripeStatusHandler from '../server-api/stripe/status.js';
+import stripeWebhookHandler from '../server-api/stripe/webhook.js';
+import stripeReleasesCronHandler from '../server-api/crons/stripe-releases.js';
+import checkDocumentHandler from '../server-api/profile/check-document.js';
+import submitVerificationHandler from '../server-api/profile/submit-verification.js';
+import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
+import affiliateJoinHandler from '../server-api/affiliates/join.js';
+import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
+import adminEntityActionHandler from '../server-api/admin/entity-action.js';
+import adminExplorerHandler from '../server-api/admin/explorer.js';
+import plansHandler from '../server-api/plans.js';
+import subscriptionCheckoutHandler from '../server-api/stripe/subscription-checkout.js';
+import stripeWithdrawalHandler from '../server-api/stripe/withdrawal.js';
+import partnerApiKeyHandler from '../server-api/partner/api-key.js';
+import partnerSettingsHandler from '../server-api/partner/settings.js';
+import partnerPaymentsHandler from '../server-api/partner/payments.js';
+import couponsHandler from '../server-api/coupons.js';
+import companiesHandler from '../server-api/companies.js';
+import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
+import mcpRestHandler from '../server-api/mcp/rest.js';
+import mcpProtocolHandler from '../server-api/mcp/protocol.js';
 
 export const config = {
   api: {
@@ -84,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cleanPath = subpath.replace(/^\/+|\/+$/g, '').toLowerCase();
 
   // Retired Asaas check
-  const retiredAsaas = /^(?:payments|checkout|pix|subaccounts|asaas|withdrawals?|subscriptions?|plans\/checkout|cron\/release-balances|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity))/i.test(cleanPath);
+  const retiredAsaas = /^(?:checkout|pix|subaccounts|asaas|subscriptions?|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas)/i.test(cleanPath);
   if (retiredAsaas) {
     return res.status(410).json({
       error: true,
@@ -98,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       status: 'ok',
       gateway: 'Stripe Connect',
-      cron: 'Liberação Stripe Connect D+9 ativa',
+      cron: 'Liberação de saldo 8/15 dias ativa',
       time: new Date().toISOString(),
     });
   }
@@ -128,12 +141,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return stripeExpressDashboardHandler(req as any, res as any);
     case 'stripe/status':
       return stripeStatusHandler(req as any, res as any);
+    case 'stripe/subscription-checkout':
+    case 'plans/checkout':
+      return subscriptionCheckoutHandler(req as any, res as any);
+    case 'stripe/withdrawal':
+    case 'withdrawals/request':
+      return stripeWithdrawalHandler(req as any, res as any);
+    case 'plans':
+      return plansHandler(req as any, res as any);
+    case 'coupons':
+      return couponsHandler(req as any, res as any);
+    case 'companies':
+      return companiesHandler(req as any, res as any);
+    case 'profile/enable-affiliate':
+      return enableAffiliateHandler(req as any, res as any);
+    case 'partner/api-key':
+      return partnerApiKeyHandler(req as any, res as any);
+    case 'partner/settings':
+      return partnerSettingsHandler(req as any, res as any);
+    case 'partner/payments':
+    case 'payments':
+      return partnerPaymentsHandler(req as any, res as any);
     case 'stripe/webhook':
     case 'webhooks/stripe':
     case 'webhook/stripe':
       return stripeWebhookHandler(req as any, res as any);
     case 'crons/stripe-releases':
     case 'cron/stripe-releases':
+    case 'cron/release-balances':
       return stripeReleasesCronHandler(req as any, res as any);
     case 'profile/check-document':
       return checkDocumentHandler(req as any, res as any);
@@ -143,8 +178,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return legacyLookupHandler(req as any, res as any);
     case 'affiliates/join':
       return affiliateJoinHandler(req as any, res as any);
+    case 'mcp':
+      return mcpProtocolHandler(req as any, res as any);
+    case 'mcp/v1':
+      (req as any).mcpRoute = '';
+      return mcpRestHandler(req as any, res as any);
+    case 'mcp/v1/status':
+    case 'mcp/v1/balance':
+    case 'mcp/v1/products':
+    case 'mcp/v1/affiliations':
+    case 'mcp/v1/coupons':
+    case 'mcp/v1/checkout':
+      (req as any).mcpRoute = cleanPath.replace(/^mcp\/v1\/?/, '');
+      return mcpRestHandler(req as any, res as any);
     case 'admin/audit-identities':
       return auditIdentitiesHandler(req as any, res as any);
+    case 'admin/explorer':
+      return adminExplorerHandler(req as any, res as any);
+    case 'admin/entity-action':
+    case 'admin/approve-company':
+    case 'admin/reject-entity':
+    case 'admin/ban-entity':
+    case 'admin/unban-entity':
+    case 'admin/purge-entity':
+      if (cleanPath !== 'admin/entity-action') {
+        req.body = { ...(req.body || {}), action: cleanPath.replace(/^admin\//, '') };
+      }
+      return adminEntityActionHandler(req as any, res as any);
     default:
       return res.status(404).json({ error: `Endpoint /api/${cleanPath} não encontrado.` });
   }

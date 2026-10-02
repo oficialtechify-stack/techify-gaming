@@ -32,7 +32,7 @@ import {
   createAffiliationInFirebase,
   deleteAffiliationInFirebase,
   createSaleTransactionInFirebase,
-  createWithdrawalInFirebase,
+  requestWithdrawalViaBackend,
   updateUserProfileInFirebase,
   submitVerificationRequestInFirebase,
   updateCompanyEnvironmentInFirebase,
@@ -440,7 +440,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     setActiveTab('dashboard');
     setLiveToast({
       message: 'Cadastro de Afiliado Concluído!',
-      sub: 'Conta ativada com repasse PIX D+9',
+      sub: 'Conta ativada com recebimentos via Stripe Connect',
       amount: 'Sucesso'
     });
     setTimeout(() => setLiveToast(null), 4500);
@@ -700,7 +700,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         totalValue: pixVal,
         percentage: totalVol > 0 ? Number(((pixVal / totalVol) * 100).toFixed(1)) : 0,
         conversionRate: totalCount > 0 ? `${((pixCount / totalCount) * 100).toFixed(1)}%` : '0%',
-        badge: 'D+9 Direto',
+        badge: 'Stripe',
         iconType: 'pix' as const
       },
       {
@@ -821,9 +821,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         companyId: targetCompany?.id || planData.companyId,
         companyName: targetCompany?.companyName || targetCompany?.name || planData.companyName,
         companyLogo: targetCompany?.logo || planData.companyLogo,
-        ownerId: targetCompany?.ownerId || targetCompany?.submittedBy || effectiveUserId,
-        asaasWalletId: targetCompany?.asaasWalletId || targetCompany?.walletId || null,
-        asaasSubaccountId: targetCompany?.asaasSubaccountId || targetCompany?.subaccountId || null
+        ownerId: targetCompany?.ownerId || targetCompany?.submittedBy || effectiveUserId
       };
 
       const created = await createCompanyPlanInFirebase(sanitizedPlan);
@@ -833,6 +831,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         amount: `R$ ${created.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
       setTimeout(() => setLiveToast(null), 4000);
+      return created;
     } catch (err: any) {
       console.error('Error creating plan:', err);
       setLiveToast({
@@ -841,6 +840,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         amount: 'Erro'
       });
       setTimeout(() => setLiveToast(null), 5000);
+      throw err;
     }
   };
 
@@ -996,19 +996,21 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   };
 
-  // Handle withdrawal
-  const handleWithdraw = async (amount: number, pixKey: string, pixKeyType: string) => {
+  // Handle withdrawal through authenticated Stripe Connect backend
+  const handleWithdraw = async (amount: number) => {
     try {
-      await createWithdrawalInFirebase(amount, pixKey, pixKeyType, currentUser?.uid, currentUser?.displayName || userProfile?.name || 'Minha Conta');
+      if (roleMode !== 'empresa' && roleMode !== 'afiliado') throw new Error('Selecione o perfil de Empresa ou Afiliado para sacar.');
+      const result = await requestWithdrawalViaBackend(amount, roleMode);
       setLiveToast({
-        message: 'Saque PIX D+9 processado com sucesso!',
-        sub: `Chave ${pixKey} (${pixKeyType})`,
+        message: 'Saque enviado para processamento!',
+        sub: result.message || 'A Stripe encaminhará o valor para a conta bancária cadastrada.',
         amount: `- R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
       setTimeout(() => setLiveToast(null), 4500);
     } catch (err: any) {
       console.error('Error creating withdrawal:', err);
-      alert(`Erro no saque PIX: ${err.message}`);
+      alert(`Erro no saque: ${err.message}`);
+      throw err;
     }
   };
 
@@ -1071,7 +1073,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'dashboard' as PlatformTab, label: 'Visão geral e carteira', icon: LayoutDashboard },
     { id: 'comunidade' as PlatformTab, label: 'Comunidade VIP (Família)', icon: HeartHandshake, badge: 'WhatsApp' },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
-    { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
+    { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Ativo' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
@@ -1094,6 +1096,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
+
+  const sidebarAvailableBalance = roleMode === 'empresa'
+    ? (typeof userProfile?.empresaAvailableBalanceCents === 'number'
+        ? userProfile.empresaAvailableBalanceCents / 100
+        : Number(userProfile?.availableBalance || 0))
+    : (typeof userProfile?.afiliadoAvailableBalanceCents === 'number'
+        ? userProfile.afiliadoAvailableBalanceCents / 100
+        : Number(userProfile?.availableBalance || 0));
 
   return (
     <div className="leadspay-platform min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]" data-theme={isDarkMode ? 'dark' : 'light'}>
@@ -1155,12 +1165,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <div className="p-3.5 m-3 rounded-2xl bg-[#080d1a] border border-white/10 shadow-lg">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
-                  {roleMode === 'afiliado' ? 'Saldo p/ Saque PIX' : 'CARTEIRA EMPRESA (PIX)'}
+                  {roleMode === 'afiliado' ? 'Saldo disponível' : 'Carteira da empresa'}
                 </span>
-                <span className="text-[10px] text-[#D9F22A] font-black">D+9</span>
+                <span className="text-[10px] text-[#D9F22A] font-black">Stripe Connect</span>
               </div>
               <div className="text-xl font-black text-[#D9F22A] font-['Syne'] tracking-tight">
-                {`R$ ${(userProfile?.availableBalance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                {`R$ ${sidebarAvailableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
               </div>
 
               <button
@@ -1877,6 +1887,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               userRole={roleMode}
               plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
+              sales={userVisibleTransactions}
             />
           )}
           {activeTab === 'cobrancas' && (
@@ -1888,6 +1899,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onRefresh={() => {}}
               onAddSale={(newTx) => setTransactions(prev => [newTx, ...prev])}
               onDeleteSale={(saleId) => setTransactions(prev => prev.filter(t => t.id !== saleId))}
+              onGoToPaymentLinks={() => setActiveTab('links_pagamento')}
             />
           )}
           {activeTab === 'links_pagamento' && (
@@ -1897,13 +1909,15 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
               onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
               onCreateCustomPlan={handleCreatePlan}
+              onDeletePlan={handleDeletePlan}
             />
           )}
           {activeTab === 'saques' && (
             <SaquesView
               userProfile={userProfile}
+              roleMode={roleMode}
               withdrawals={withdrawals}
-              onWithdrawSuccess={handleWithdraw}
+              onWithdraw={handleWithdraw}
               onRefresh={() => {}}
             />
           )}
@@ -2078,6 +2092,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         isOpen={isWithdrawModalOpen}
         onClose={() => setIsWithdrawModalOpen(false)}
         userProfile={userProfile}
+        roleMode={roleMode}
         onWithdraw={handleWithdraw}
       />
 

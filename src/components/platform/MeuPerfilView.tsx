@@ -314,51 +314,11 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
       const formattedCompanyPhone = formatPhone(cleanPhoneDigits);
 
-      // Criação e vinculação imediata da subconta no Asaas v3
-      let subaccountId: string | undefined = userProfile.asaasSubaccountId || (company as any)?.asaasSubaccountId;
-      let walletId: string | undefined = userProfile.asaasWalletId || (company as any)?.asaasWalletId;
-      let resolvedDocType: 'CNPJ' | 'MEI' | 'CPF' = cleanCnpjDigits.length === 14
+      // A aprovação cadastral é separada da configuração financeira.
+      // Stripe Connect só é iniciado após a aprovação do perfil/empresa.
+      const resolvedDocType: 'CNPJ' | 'MEI' | 'CPF' = cleanCnpjDigits.length === 14
         ? (companyDocType === 'CPF' ? 'MEI' : 'CNPJ')
         : 'CPF';
-
-      try {
-        console.log('[MeuPerfilView] Gerando e vinculando subconta Asaas...');
-        const subRes = await fetch('/api/subaccounts/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: userProfile.userId || (userProfile as any).id || (userProfile as any).uid || '',
-            ownerId: userProfile.userId || (userProfile as any).id || (userProfile as any).uid || '',
-            companyId: company?.id,
-            companyName: companyName.trim(),
-            companyLegalName: companyName.trim(),
-            ownerName: companyOwnerName.trim() || userProfile.name,
-            companyOwnerName: companyOwnerName.trim() || userProfile.name,
-            email: companyEmail.trim(),
-            companyEmail: companyEmail.trim(),
-            phone: formattedCompanyPhone,
-            companyPhone: formattedCompanyPhone,
-            document: cleanCnpjDigits,
-            documentType: resolvedDocType,
-            cep: cep.trim(),
-            address: endereco.trim(),
-            state: estado.trim(),
-            city: cidade.trim()
-          })
-        });
-
-        const subData = await subRes.json().catch(() => null);
-        if (subRes.ok && subData?.asaasSubaccountId) {
-          subaccountId = subData.asaasSubaccountId;
-          walletId = subData.asaasWalletId;
-          resolvedDocType = subData.documentType || resolvedDocType;
-          console.log('✅ [MeuPerfilView] Subconta Asaas vinculada com sucesso:', subaccountId);
-        } else if (!subRes.ok) {
-          console.warn('⚠️ [MeuPerfilView] Aviso ao criar subconta no Asaas:', subData?.message);
-        }
-      } catch (subErr) {
-        console.warn('⚠️ [MeuPerfilView] Erro ao conectar com /api/subaccounts/create:', subErr);
-      }
 
       updates = {
         name: companyOwnerName.trim() || userProfile.name,
@@ -366,10 +326,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         companyLegalName: companyName.trim(),
         companyCnpj: formattedDoc,
         cleanCnpj: cleanCnpjDigits,
-        companyDocType: companyDocType,
-        asaasSubaccountId: subaccountId,
-        asaasWalletId: walletId,
-        documentType: resolvedDocType,
+        companyDocType: companyDocType,        documentType: resolvedDocType,
         companyPhone: formattedCompanyPhone,
         whatsapp: formattedCompanyPhone,
         phone: formattedCompanyPhone,

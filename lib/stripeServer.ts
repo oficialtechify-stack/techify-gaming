@@ -5,23 +5,38 @@ dotenv.config();
 let stripeClient: Stripe | undefined;
 
 /**
- * This migration branch is intentionally test-only. It refuses live credentials
- * so a preview deployment cannot accidentally move real money.
+ * Legacy function name retained for callers. Production supports live credentials;
+ * preview deployments and the test-only variable must never use live credentials.
  */
 export function getStripeTestClient(): Stripe {
-  const secret = (process.env.STRIPE_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY || '').trim();
-  if (!secret) throw new Error('Stripe indisponível: configure STRIPE_SECRET_KEY ou STRIPE_TEST_SECRET_KEY no servidor.');
-  if (!secret.startsWith('sk_test_') && !secret.startsWith('sk_live_')) {
-    throw new Error('Stripe bloqueado: a chave deve começar com sk_test_ ou sk_live_.');
+  const primary = process.env.STRIPE_SECRET_KEY?.trim() || '';
+  const testSecret = process.env.STRIPE_TEST_SECRET_KEY?.trim() || '';
+  const isPreview = process.env.VERCEL_ENV === 'preview';
+  if (testSecret && !/^(sk|rk)_test_/.test(testSecret)) {
+    throw new Error('Stripe bloqueado: STRIPE_TEST_SECRET_KEY aceita somente chaves sk_test_ ou rk_test_.');
+  }
+  const secret = isPreview ? testSecret : (primary || testSecret);
+  if (!secret) {
+    throw new Error(isPreview
+      ? 'Stripe de Preview indisponível: configure STRIPE_TEST_SECRET_KEY.'
+      : 'Stripe indisponível: configure STRIPE_SECRET_KEY ou STRIPE_TEST_SECRET_KEY no servidor.');
+  }
+  if (!/^(sk|rk)_(test|live)_/.test(secret)) {
+    throw new Error('Stripe bloqueado: configure uma chave secreta ou restrita válida.');
+  }
+  if (isPreview && !/^(sk|rk)_test_/.test(secret)) {
+    throw new Error('Stripe bloqueado: Preview aceita somente chaves de teste em STRIPE_TEST_SECRET_KEY.');
   }
   if (!stripeClient) stripeClient = new Stripe(secret);
   return stripeClient;
 }
 
 export function getStripeWebhookSecret(): string {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  const secret = (process.env.VERCEL_ENV === 'preview'
+    ? process.env.STRIPE_TEST_WEBHOOK_SECRET?.trim()
+    : '') || process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret || !secret.startsWith('whsec_')) {
-    throw new Error('Webhook Stripe de teste não configurado no servidor.');
+    throw new Error('Webhook Stripe não configurado no servidor.');
   }
   return secret;
 }

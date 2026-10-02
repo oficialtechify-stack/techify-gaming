@@ -1102,62 +1102,29 @@ export async function completeAffiliateProfile(
     whatsapp?: string;
   }
 ): Promise<UserSellerProfile> {
-  const cleanCpf = cleanDigits(data.cpf);
-  const formattedCpf = formatCPF(cleanCpf);
-
-  if (cleanCpf.length !== 11 || !isValidCPF(cleanCpf)) {
-    const err = new Error('custom/invalid-cpf');
-    (err as any).code = 'custom/invalid-cpf';
+  const user = auth.currentUser;
+  if (!user || user.uid !== userId) throw new Error('Faça login novamente para ativar o perfil de afiliado.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/profile/enable-affiliate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.profile) {
+    const err = new Error(result.error || 'Não foi possível ativar o perfil de afiliado.');
+    (err as any).code = result.code || 'custom/affiliate-profile-failed';
     throw err;
   }
-
-  const cpfInUse = await checkCpfAlreadyExists(cleanCpf, userId);
-  if (cpfInUse) {
-    const err = new Error('custom/cpf-already-in-use');
-    (err as any).code = 'custom/cpf-already-in-use';
-    throw err;
-  }
-
-  const profileRef = doc(db, COLLECTIONS.PROFILES, userId);
-  const snap = await getDoc(profileRef);
-  const existing = snap.exists() ? (snap.data() as UserSellerProfile) : null;
-
-  const now = new Date().toISOString();
-  const updatedProfile: UserSellerProfile = {
-    userId,
-    name: data.name.trim() || existing?.name || 'Afiliado LeadsPay',
-    email: existing?.email || '',
-    role: 'Afiliado de Alta Performance',
-    avatar: existing?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(userId)}`,
-    pixKey: data.pixKey.trim(),
-    pixKeyType: data.pixKeyType,
-    availableBalance: existing?.availableBalance ?? 0,
-    pendingBalance: existing?.pendingBalance ?? 0,
-    totalEarned: existing?.totalEarned ?? 0,
-    totalSalesCount: existing?.totalSalesCount ?? 0,
-    partnerLevel: existing?.partnerLevel || 'Afiliado Starter',
-    targetGoal: existing?.targetGoal || 100000,
-    currentSalesProgress: existing?.currentSalesProgress || 0,
-    hasAffiliateProfile: true,
-    hasCompanyProfile: existing?.hasCompanyProfile || false,
-    activeRoleMode: 'afiliado',
-    whatsapp: data.whatsapp ? formatPhone(data.whatsapp) : (existing?.whatsapp || ''),
-    cpf: formattedCpf,
-    cleanCpf: cleanCpf,
-    companyId: existing?.companyId,
-    companyName: existing?.companyName,
-    cnpj: existing?.cnpj,
-    cleanCnpj: existing?.cleanCnpj,
-    updatedAt: now
-  };
-
-  await setDoc(profileRef, sanitizeForFirestore(updatedProfile), { merge: true });
-  return updatedProfile;
+  return result.profile as UserSellerProfile;
 }
 
-/**
- * Completar / Registrar Empresa e vincular ao perfil do usuário autenticado
- */
+/** Completar / Registrar Empresa e vincular ao perfil do usuário autenticado */
+
+
 export async function completeCompanyProfile(
   userId: string,
   companyData: {
