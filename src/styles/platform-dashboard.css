@@ -161,6 +161,8 @@ body[data-leadspay-theme="light"] {
 /* Gradientes escuros do dashboard e cards */
 .leadspay-platform[data-theme="light"] [class*="from-[#0"],
 .leadspay-platform[data-theme="light"] [class*="from-[#1"],
+.leadspay-platform[data-theme="light"] [class*="via-[#0"],
+.leadspay-platform[data-theme="light"] [class*="via-[#1"],
 .leadspay-platform[data-theme="light"] [class*="to-[#0"],
 .leadspay-platform[data-theme="light"] [class*="to-[#1"] {
   --tw-gradient-from: #ffffff var(--tw-gradient-from-position) !important;
