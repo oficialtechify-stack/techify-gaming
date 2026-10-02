@@ -827,6 +827,21 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.mode === 'subscription' && session.subscription) {
         const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+        if (session.metadata?.leadspay_product_subscription === '1') {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          await syncProductSubscriptionStatus(subscription);
+          const db = getServerAdminFirestore();
+          const attemptId = String(session.client_reference_id || '');
+          if (attemptId) {
+            await db.collection('stripe_product_subscription_checkouts').doc(attemptId).set({
+              status: 'completed',
+              stripeSubscriptionId: subscriptionId,
+              completedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+          }
+          return;
+        }
         await applySubscription(stripe, subscriptionId);
         const db = getServerAdminFirestore();
         await db.collection('stripe_subscription_checkouts').doc(session.id).set({
@@ -845,22 +860,26 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
     }
     case 'invoice.paid': {
       const invoice = event.data.object as Stripe.Invoice;
-      const subscription = (invoice as any).subscription;
-      const subscriptionId = typeof subscription === 'string' ? subscription : subscription?.id;
+      if (await processProductSubscriptionInvoice(stripe, event, invoice)) return;
+      const subscriptionId = invoiceSubscriptionId(invoice);
       if (subscriptionId) await applySubscription(stripe, subscriptionId, 'active');
       return;
     }
     case 'invoice.payment_failed': {
       const invoice = event.data.object as Stripe.Invoice;
-      const subscription = (invoice as any).subscription;
-      const subscriptionId = typeof subscription === 'string' ? subscription : subscription?.id;
-      if (subscriptionId) await applySubscription(stripe, subscriptionId, 'past_due');
+      const subscriptionId = invoiceSubscriptionId(invoice);
+      if (!subscriptionId) return;
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      if (await syncProductSubscriptionStatus(subscription, 'past_due')) return;
+      await applySubscription(stripe, subscriptionId, 'past_due');
       return;
     }
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
       const subscription = event.data.object as Stripe.Subscription;
-      await applySubscription(stripe, subscription.id, event.type.endsWith('.deleted') ? 'canceled' : subscription.status);
+      const forcedStatus = event.type.endsWith('.deleted') ? 'canceled' : subscription.status;
+      if (await syncProductSubscriptionStatus(subscription, forcedStatus)) return;
+      await applySubscription(stripe, subscription.id, forcedStatus);
       return;
     }
     case 'payment_intent.payment_failed':
