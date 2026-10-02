@@ -768,6 +768,121 @@ async function processProductSubscriptionInvoice(
   return true;
 }
 
+async function updateRecurringSaleRisk(
+  event: Stripe.Event,
+  invoiceId: string,
+  status: 'refunded' | 'disputed',
+) {
+  if (!invoiceId) return false;
+
+  const db = getServerAdminFirestore();
+  const saleRef = db.collection('sales').doc(`stripe_sub_${invoiceId}`);
+  const saleSnap = await saleRef.get();
+  if (!saleSnap.exists) return false;
+
+  const releaseRefs = [
+    db.collection('balance_releases').doc(`sub_${invoiceId}_empresa`),
+    db.collection('balance_releases').doc(`sub_${invoiceId}_afiliado`),
+  ];
+
+  await db.runTransaction(async (tx) => {
+    const currentSale = await tx.get(saleRef);
+    if (!currentSale.exists) return;
+    if (currentSale.data()!.releaseStatus === 'cancelado') return;
+
+    const releaseSnaps: FirebaseFirestore.DocumentSnapshot[] = [];
+    for (const ref of releaseRefs) releaseSnaps.push(await tx.get(ref));
+
+    const profileRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+    for (const snap of releaseSnaps) {
+      if (snap.exists && snap.data()!.userId) {
+        const uid = String(snap.data()!.userId);
+        profileRefs.set(uid, db.collection('user_profiles').doc(uid));
+      }
+    }
+
+    const profileSnaps = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+    for (const [uid, ref] of profileRefs) {
+      profileSnaps.set(uid, await tx.get(ref));
+    }
+
+    const adjustments = new Map<
+      string,
+      {
+        pendingCents: number;
+        availableCents: number;
+        roles: Array<{ role: PlatformRole; pendingCents: number; availableCents: number }>;
+      }
+    >();
+
+    for (const snap of releaseSnaps) {
+      if (!snap.exists) continue;
+      const release = snap.data()!;
+      if (release.status === 'reversed' || release.status === 'cancelled') continue;
+
+      const uid = String(release.userId || '');
+      const role = release.role as PlatformRole;
+      const cents = Number(release.amountCents || 0);
+      if (!uid || !Number.isSafeInteger(cents) || cents <= 0) continue;
+
+      const current = adjustments.get(uid) || {
+        pendingCents: 0,
+        availableCents: 0,
+        roles: [],
+      };
+      const wasPending = release.status === 'pending';
+
+      current.pendingCents += wasPending ? cents : 0;
+      current.availableCents += wasPending ? 0 : cents;
+      current.roles.push({
+        role,
+        pendingCents: wasPending ? cents : 0,
+        availableCents: wasPending ? 0 : cents,
+      });
+      adjustments.set(uid, current);
+
+      tx.set(snap.ref, {
+        status: 'reversed',
+        riskStatus: status,
+        reversedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    }
+
+    for (const [uid, adjustment] of adjustments) {
+      const profileSnap = profileSnaps.get(uid);
+      const profileRef = profileRefs.get(uid);
+      if (!profileSnap?.exists || !profileRef) continue;
+
+      const update: Record<string, any> = {
+        pendingBalance: FieldValue.increment(-adjustment.pendingCents / 100),
+        availableBalance: FieldValue.increment(-adjustment.availableCents / 100),
+        updatedAt: new Date().toISOString(),
+      };
+
+      for (const roleDelta of adjustment.roles) {
+        if (roleDelta.pendingCents) {
+          update[rolePendingCentsField(roleDelta.role)] = FieldValue.increment(-roleDelta.pendingCents);
+        }
+        if (roleDelta.availableCents) {
+          update[roleAvailableCentsField(roleDelta.role)] = FieldValue.increment(-roleDelta.availableCents);
+        }
+      }
+
+      tx.update(profileRef, update);
+    }
+
+    tx.set(saleRef, {
+      status: status === 'refunded' ? 'Estornado' : 'Em análise',
+      releaseStatus: 'cancelado',
+      riskEventId: event.id,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  });
+
+  return true;
+}
+
 async function applySubscription(stripe: Stripe, subscriptionId: string, forcedStatus?: string) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const uid = String(subscription.metadata?.firebase_uid || '');
@@ -905,6 +1020,9 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
     }
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
+      const chargeAny = charge as any;
+      const invoiceId = typeof chargeAny.invoice === 'string' ? chargeAny.invoice : chargeAny.invoice?.id || '';
+      if (invoiceId && await updateRecurringSaleRisk(event, invoiceId, 'refunded')) return;
       const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
       await updateOrderRisk(event, paymentIntentId || null, 'refunded');
       return;
@@ -913,6 +1031,9 @@ async function processEvent(stripe: Stripe, event: Stripe.Event): Promise<void> 
       const dispute = event.data.object as Stripe.Dispute;
       const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
       const charge = await stripe.charges.retrieve(chargeId);
+      const chargeAny = charge as any;
+      const invoiceId = typeof chargeAny.invoice === 'string' ? chargeAny.invoice : chargeAny.invoice?.id || '';
+      if (invoiceId && await updateRecurringSaleRisk(event, invoiceId, 'disputed')) return;
       const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
       await updateOrderRisk(event, paymentIntentId || null, 'disputed');
       return;
