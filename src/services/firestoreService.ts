@@ -743,10 +743,16 @@ export async function findAffiliationByCode(code: string): Promise<UserAffiliati
 /**
  * Realtime Sales Listener
  */
-export function subscribeSales(callback: (sales: SaleTransaction[]) => void, companyId?: string) {
-  const q = companyId 
+export function subscribeSales(
+  callback: (sales: SaleTransaction[]) => void,
+  companyId?: string,
+  affiliateId?: string
+) {
+  const q = companyId
     ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId))
-    : collection(db, COLLECTIONS.SALES);
+    : affiliateId
+      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId))
+      : collection(db, COLLECTIONS.SALES);
   return onSnapshot(q, (snap) => {
     const list: SaleTransaction[] = [];
     snap.forEach((d) => {
