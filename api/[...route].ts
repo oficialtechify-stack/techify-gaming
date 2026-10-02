@@ -19,6 +19,8 @@ import partnerApiKeyHandler from '../server-api/partner/api-key.js';
 import partnerSettingsHandler from '../server-api/partner/settings.js';
 import partnerPaymentsHandler from '../server-api/partner/payments.js';
 import couponsHandler from '../server-api/coupons.js';
+import companiesHandler from '../server-api/companies.js';
+import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
 
 export const config = {
   api: {
@@ -146,6 +148,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return plansHandler(req as any, res as any);
     case 'coupons':
       return couponsHandler(req as any, res as any);
+    case 'companies':
+      return companiesHandler(req as any, res as any);
+    case 'profile/enable-affiliate':
+      return enableAffiliateHandler(req as any, res as any);
     case 'partner/api-key':
       return partnerApiKeyHandler(req as any, res as any);
     case 'partner/settings':
