@@ -12,6 +12,9 @@ export function getStripeTestClient(): Stripe {
   const primary = process.env.STRIPE_SECRET_KEY?.trim() || '';
   const testSecret = process.env.STRIPE_TEST_SECRET_KEY?.trim() || '';
   const isPreview = process.env.VERCEL_ENV === 'preview';
+  if (testSecret && !/^(sk|rk)_test_/.test(testSecret)) {
+    throw new Error('Stripe bloqueado: STRIPE_TEST_SECRET_KEY aceita somente chaves sk_test_ ou rk_test_.');
+  }
   const secret = isPreview ? testSecret : (primary || testSecret);
   if (!secret) {
     throw new Error(isPreview
@@ -22,7 +25,7 @@ export function getStripeTestClient(): Stripe {
     throw new Error('Stripe bloqueado: configure uma chave secreta ou restrita válida.');
   }
   if (isPreview && !/^(sk|rk)_test_/.test(secret)) {
-    throw new Error('Stripe bloqueado: Preview aceita somente STRIPE_TEST_SECRET_KEY.');
+    throw new Error('Stripe bloqueado: Preview aceita somente chaves de teste em STRIPE_TEST_SECRET_KEY.');
   }
   if (!stripeClient) stripeClient = new Stripe(secret);
   return stripeClient;
