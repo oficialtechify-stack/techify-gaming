@@ -58,11 +58,51 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     const accountId = String(profile.stripeAccounts?.[role] || '');
     if (!accountId) return fail(res, 409, 'Conecte sua conta Stripe para receber saques.', 'CONNECT_NOT_CONFIGURED');
+
+    let companyId = '';
+    if (role === 'empresa') {
+      companyId = String(profile.companyId || '').trim();
+      if (!companyId) {
+        return fail(res, 409, 'A conta Empresa não possui vínculo com uma empresa válida.', 'COMPANY_NOT_LINKED');
+      }
+
+      const companySnap = await db.collection('companies').doc(companyId).get();
+      if (!companySnap.exists) {
+        return fail(res, 404, 'A empresa vinculada não foi encontrada.', 'COMPANY_NOT_FOUND');
+      }
+
+      const company = companySnap.data()!;
+      if (
+        String(company.ownerId || company.submittedBy || '') !== identity.uid ||
+        company.verified !== true ||
+        String(company.status || '').toLowerCase() !== 'approved'
+      ) {
+        return fail(res, 403, 'A empresa vinculada não está aprovada para movimentar saldo.', 'COMPANY_NOT_APPROVED');
+      }
+    }
+
     const stripe = getStripeTestClient();
-    const account = await stripe.accounts.retrieve(accountId);
+    let account = await stripe.accounts.retrieve(accountId);
     if (
       account.metadata?.firebase_uid !== identity.uid ||
       account.metadata?.leadspay_role !== role ||
+      (role === 'empresa' && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
+    ) {
+      return fail(res, 409, 'A conta Stripe não corresponde a este perfil/empresa.', 'CONNECT_OWNERSHIP_MISMATCH');
+    }
+
+    if (role === 'empresa' && companyId && !account.metadata?.leadspay_company_id) {
+      account = await stripe.accounts.update(accountId, {
+        metadata: {
+          ...account.metadata,
+          firebase_uid: identity.uid,
+          leadspay_role: 'empresa',
+          leadspay_company_id: companyId,
+        },
+      });
+    }
+
+    if (
       account.details_submitted !== true ||
       account.payouts_enabled !== true ||
       account.capabilities?.transfers !== 'active'
@@ -94,6 +134,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         userId: identity.uid,
         userName: String(profile.name || identity.email || 'Conta LeadsPay').slice(0, 160),
         role,
+        ...(companyId ? { companyId } : {}),
         requestedAmount: amountCents / 100,
         amount: amountCents / 100,
         amountCents,
@@ -125,6 +166,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           leadspay_withdrawal_id: withdrawalId,
           leadspay_user_id: identity.uid,
           leadspay_role: role,
+          ...(companyId ? { leadspay_company_id: companyId } : {}),
         },
       }, { idempotencyKey: `leadspay-withdrawal-transfer-${withdrawalId}` });
       transferId = transfer.id;
