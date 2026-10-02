@@ -29,24 +29,22 @@ function loadAdminApp(): App {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   const projectId = process.env.FIREBASE_PROJECT_ID?.trim() || ADMIN_PROJECT_ID;
 
-  if (raw) {
-    try {
-      const parsed = parseServerServiceAccount(raw);
-      return initializeApp({
-        credential: cert({ projectId, clientEmail: parsed.clientEmail, privateKey: parsed.privateKey }),
-        projectId,
-      }, 'leadspay-server');
-    } catch (err) {
-      console.warn('Falha ao autenticar com FIREBASE_SERVICE_ACCOUNT_JSON:', err);
-    }
+  if (!raw) {
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT_JSON não está configurado neste ambiente da Vercel. ' +
+      'Adicione a variável também em Production e faça um novo deploy.'
+    );
   }
 
-  // Inicialização segura com projectId padrão para não quebrar invocação da função
-  try {
-    return initializeApp({ projectId }, 'leadspay-server');
-  } catch {
-    return getApps()[0] || initializeApp({ projectId });
-  }
+  const parsed = parseServerServiceAccount(raw);
+  return initializeApp({
+    credential: cert({
+      projectId: parsed.projectId,
+      clientEmail: parsed.clientEmail,
+      privateKey: parsed.privateKey,
+    }),
+    projectId: parsed.projectId,
+  }, 'leadspay-server');
 }
 
 export function getServerAdminApp(): App {
