@@ -2065,6 +2065,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <CuponsView 
               plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans} 
               affiliations={roleMode === 'admin' && isSuperAdmin ? allAffiliations : myCompanyAffiliations}
+              activeCompanyId={activeCompany?.id}
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
