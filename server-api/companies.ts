@@ -13,17 +13,63 @@ function digits(value: unknown): string {
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
+  if (req.method !== 'POST' && req.method !== 'DELETE') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
     const identity = await verifyFirebaseIdentity(
       typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
     );
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+    const db = getServerAdminFirestore();
+
+    if (req.method === 'DELETE') {
+      const companyId = cleanText(body.companyId, 180);
+      if (!companyId) return res.status(400).json({ error: 'Empresa inválida.' });
+      const companyRef = db.collection('companies').doc(companyId);
+      const companySnap = await companyRef.get();
+      if (!companySnap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
+      const company = companySnap.data()!;
+      if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
+        return res.status(403).json({ error: 'Você não é o proprietário desta empresa.' });
+      }
+
+      const now = new Date().toISOString();
+      const plans = await db.collection('plans').where('companyId', '==', companyId).limit(500).get();
+      const batch = db.batch();
+      batch.set(companyRef, {
+        archived: true,
+        isArchived: true,
+        archivedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      for (const plan of plans.docs) {
+        batch.set(plan.ref, { active: false, status: 'Pausado', updatedAt: now }, { merge: true });
+      }
+
+      const profileRef = db.collection('user_profiles').doc(identity.uid);
+      const profileSnap = await profileRef.get();
+      const profile = profileSnap.exists ? profileSnap.data()! : {};
+      const keepAffiliate = profile.hasAffiliateProfile === true || profile.accountType === 'afiliado' || profile.accountType === 'ambos';
+      batch.set(profileRef, {
+        companyId: null,
+        companyName: null,
+        hasCompanyProfile: false,
+        accountType: keepAffiliate ? 'afiliado' : (profile.accountType || 'empresa'),
+        activeRoleMode: keepAffiliate ? 'afiliado' : (profile.activeRoleMode || 'empresa'),
+        updatedAt: now,
+      }, { merge: true });
+      batch.set(db.collection('users').doc(identity.uid), {
+        companyId: null,
+        companyName: null,
+        updatedAt: now,
+      }, { merge: true });
+      await batch.commit();
+      return res.status(200).json({ success: true, archived: true, companyId });
+    }
+
     const name = cleanText(body.name || body.companyName, 160);
     if (!name) return res.status(400).json({ error: 'Informe o nome da empresa.' });
 
-    const db = getServerAdminFirestore();
     const profileRef = db.collection('user_profiles').doc(identity.uid);
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
