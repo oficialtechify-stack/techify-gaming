@@ -1960,6 +1960,17 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setActiveTab('meu_perfil');
                   return;
                 }
+                const companyId = activeCompany?.id || canonicalCompanyId;
+                if (!companyId || companyContextLoading) {
+                  setLiveToast({
+                    message: 'Empresa ainda não carregada',
+                    sub: 'Aguarde a vinculação da conta antes de cadastrar o produto.',
+                    amount: 'Aguarde'
+                  });
+                  setTimeout(() => setLiveToast(null), 3500);
+                  return;
+                }
+                setSelectedCompanyIdForPlan(companyId);
                 setEditingPlan(null);
                 setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
@@ -2076,7 +2087,17 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               userProfile={userProfile}
               onNavigateToProducts={() => setActiveTab('produtos')}
               onOpenCreatePlan={() => {
-                setSelectedCompanyIdForPlan(activeCompany?.id || canonicalCompanyId);
+                const companyId = activeCompany?.id || canonicalCompanyId;
+                if (!companyId || companyContextLoading) {
+                  setLiveToast({
+                    message: 'Empresa ainda não carregada',
+                    sub: 'Aguarde a vinculação da conta antes de criar uma assinatura.',
+                    amount: 'Aguarde'
+                  });
+                  setTimeout(() => setLiveToast(null), 3500);
+                  return;
+                }
+                setSelectedCompanyIdForPlan(companyId);
                 setEditingPlan(null);
                 setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
