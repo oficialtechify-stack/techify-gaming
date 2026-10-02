@@ -185,8 +185,10 @@ async function main() {
       .get();
     console.log('[Firestore publish] Consulta financeira do cron validada.');
 
-    const apiKey = String(process.env.VITE_FIREBASE_API_KEY || '').trim();
-    if (!apiKey) throw new Error('VITE_FIREBASE_API_KEY não está configurado; não foi possível validar as Rules publicamente.');
+    const apiKey = String(
+      process.env.VITE_FIREBASE_API_KEY ||
+      'AIzaSyBZY9m-CFG7-l9H1bptd4eGcd6IL_aEWIM'
+    ).trim();
 
     // Pequena espera para propagação da release.
     let plansStatus = 0;
