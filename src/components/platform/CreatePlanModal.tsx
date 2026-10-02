@@ -1,27 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { CompanyPlan, CompanyStartup, ProductDeliveryType } from '../../types/platform';
-import { 
-  Layers, 
-  Sparkles, 
-  X, 
-  Plus, 
-  Trash2, 
-  CheckCircle2, 
-  Building2, 
-  Upload, 
-  Link as LinkIcon, 
-  Image as ImageIcon, 
-  Edit3,
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  BadgeCheck,
+  Building2,
   Check,
-  Globe,
-  MessageSquare,
-  Users,
-  Download,
-  Key,
-  Webhook,
-  Send
+  CheckCircle2,
+  CircleDollarSign,
+  Image as ImageIcon,
+  Layers,
+  Link as LinkIcon,
+  Loader2,
+  PackageCheck,
+  Plus,
+  Send,
+  Sparkles,
+  Trash2,
+  Upload,
+  X,
 } from 'lucide-react';
-
+import { CompanyPlan, CompanyStartup, ProductDeliveryType } from '../../types/platform';
+import { getCompanyPlanDeliverySettings } from '../../services/firestoreService';
 
 interface CreatePlanModalProps {
   isOpen: boolean;
@@ -29,17 +29,139 @@ interface CreatePlanModalProps {
   companies: CompanyStartup[];
   defaultCompanyId?: string;
   initialData?: CompanyPlan | null;
-  onPlanCreated: (plan: Omit<CompanyPlan, 'id' | 'createdAt'>) => void;
-  onPlanUpdated?: (planId: string, plan: Partial<CompanyPlan>) => void;
+  onPlanCreated: (plan: Omit<CompanyPlan, 'id' | 'createdAt'>) => Promise<unknown> | unknown;
+  onPlanUpdated?: (planId: string, plan: Partial<CompanyPlan>) => Promise<unknown> | unknown;
 }
 
+type MainTab = 'produto' | 'pagamento';
+type ImageTab = 'upload' | 'url' | 'presets';
+
 const PRESET_BANNERS = [
-  { name: 'SaaS Dashboard', url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=80' },
-  { name: 'Fintech Terminal', url: 'https://images.unsplash.com/photo-1642543492481-44e81e3914a7?auto=format&fit=crop&w=600&q=80' },
-  { name: 'AI Platform', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80' },
-  { name: 'Marketing & Vendas', url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&q=80' },
-  { name: 'Casino & Jogos', url: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=600&q=80' }
+  {
+    name: 'SaaS Dashboard',
+    url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=82',
+  },
+  {
+    name: 'Fintech',
+    url: 'https://images.unsplash.com/photo-1642543492481-44e81e3914a7?auto=format&fit=crop&w=1200&q=82',
+  },
+  {
+    name: 'IA & Automação',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=82',
+  },
+  {
+    name: 'Marketing & Vendas',
+    url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=82',
+  },
 ];
+
+const DELIVERY_OPTIONS: Array<{
+  value: ProductDeliveryType;
+  label: string;
+  description: string;
+  placeholder: string;
+}> = [
+  {
+    value: 'redirect',
+    label: 'Página / URL externa',
+    description: 'O cliente recebe o link somente depois do pagamento confirmado.',
+    placeholder: 'https://seusite.com/acesso',
+  },
+  {
+    value: 'whatsapp',
+    label: 'WhatsApp / Grupo VIP',
+    description: 'Libera um botão para grupo ou atendimento no WhatsApp.',
+    placeholder: 'https://chat.whatsapp.com/... ou https://wa.me/55...',
+  },
+  {
+    value: 'membership',
+    label: 'Área de membros / App',
+    description: 'Libera o endereço da área de membros após a compra.',
+    placeholder: 'https://membros.seusite.com/login',
+  },
+  {
+    value: 'download',
+    label: 'Download / Material digital',
+    description: 'Libera um arquivo, Drive, Notion ou material hospedado.',
+    placeholder: 'https://drive.google.com/... ou https://notion.so/...',
+  },
+];
+
+const fieldClass =
+  'w-full rounded-xl border border-white/10 bg-[#070c16] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-[#D9F22A]/70 focus:ring-2 focus:ring-[#D9F22A]/10';
+
+const labelClass =
+  'mb-1.5 block text-[11px] font-bold uppercase tracking-[0.08em] text-white/60';
+
+function formatMoney(value: number) {
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
+function isHttpsUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function compressImageFile(file: File): Promise<string> {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Use uma imagem JPG, PNG ou WebP.');
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error('A imagem original deve ter no máximo 8 MB.');
+  }
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(file);
+  });
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('Não foi possível processar a imagem.'));
+    element.src = dataUrl;
+  });
+
+  const maxWidth = 1400;
+  const maxHeight = 900;
+  const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Seu navegador não conseguiu preparar a imagem.');
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+
+  let quality = 0.84;
+  let output = canvas.toDataURL('image/webp', quality);
+  while (output.length > 520_000 && quality > 0.42) {
+    quality -= 0.08;
+    output = canvas.toDataURL('image/webp', quality);
+  }
+
+  if (output.length > 580_000) {
+    throw new Error('A imagem continuou grande demais após a compactação. Tente outra imagem.');
+  }
+
+  return output;
+}
 
 export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   isOpen,
@@ -48,214 +170,266 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   defaultCompanyId,
   initialData,
   onPlanCreated,
-  onPlanUpdated
+  onPlanUpdated,
 }) => {
   const isEditMode = Boolean(initialData);
 
-  const [companyId, setCompanyId] = useState<string>('');
-  const [customCompanyName, setCustomCompanyName] = useState<string>('');
-  const [name, setName] = useState<string>('');
-  const [category, setCategory] = useState<string>('SaaS / B2B');
-  const [billingType, setBillingType] = useState<'unico' | 'recorrente'>('unico');
-  const [billingCycle, setBillingCycle] = useState<'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUALLY' | 'YEARLY'>('MONTHLY');
-  const [priceSetup, setPriceSetup] = useState<string>('');
-  const [priceMonthly, setPriceMonthly] = useState<string>('');
-  const [commissionPercentage, setCommissionPercentage] = useState<string>('');
-  const [recurrentCommissionPercent, setRecurrentCommissionPercent] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
-  const [badge, setBadge] = useState<string>('');
-  const [bannerImage, setBannerImage] = useState<string>('');
-  const [checkoutUrl, setCheckoutUrl] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<MainTab>('produto');
+  const [companyId, setCompanyId] = useState('');
+  const [name, setName] = useState('');
+  const [badge, setBadge] = useState('');
+  const [category, setCategory] = useState('SaaS / B2B');
+  const [description, setDescription] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
-  const [newFeatureText, setNewFeatureText] = useState<string>('');
+  const [newFeatureText, setNewFeatureText] = useState('');
   const [deliveryType, setDeliveryType] = useState<ProductDeliveryType>('redirect');
-  const [deliveryUrl, setDeliveryUrl] = useState<string>('');
-  const [deliveryInstructions, setDeliveryInstructions] = useState<string>('');
-  const [deliveryWebhookUrl, setDeliveryWebhookUrl] = useState<string>('');
-  const [imageTab, setImageTab] = useState<'upload' | 'url' | 'presets'>('upload');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [deliveryUrl, setDeliveryUrl] = useState('');
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
+  const [bannerImage, setBannerImage] = useState('');
+  const [imageTab, setImageTab] = useState<ImageTab>('upload');
+
+  const [priceSetup, setPriceSetup] = useState('');
+  const [commissionPercentage, setCommissionPercentage] = useState('');
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingPrivateSettings, setIsLoadingPrivateSettings] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [formError, setFormError] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize or reset form state based on mode
   useEffect(() => {
     if (!isOpen) return;
 
+    setActiveTab('produto');
+    setFormError('');
+    setNewFeatureText('');
+    setImageTab('upload');
+
     if (initialData) {
-      setCompanyId(initialData.companyId || (companies[0]?.id || ''));
-      setCustomCompanyName(initialData.companyName || '');
+      setCompanyId(initialData.companyId || companies[0]?.id || '');
       setName(initialData.name || '');
-      setCategory(initialData.category || 'SaaS / B2B');
-      setBillingType(initialData.billingType === 'recorrente' || initialData.paymentType === 'Recorrente' || initialData.paymentType === 'Assinatura' ? 'recorrente' : 'unico');
-      setBillingCycle((initialData.billingCycle as any) || (initialData.billingInterval === 'weekly' ? 'WEEKLY' : initialData.billingInterval === 'quarterly' ? 'QUARTERLY' : initialData.billingInterval === 'semiannually' ? 'SEMIANNUALLY' : initialData.billingInterval === 'yearly' ? 'YEARLY' : 'MONTHLY'));
-      setPriceSetup(initialData.priceSetup !== undefined ? String(initialData.priceSetup) : '');
-      setPriceMonthly(initialData.priceMonthly ? String(initialData.priceMonthly) : '');
-      setCommissionPercentage(initialData.commissionPercentage !== undefined ? String(initialData.commissionPercentage) : '');
-      setRecurrentCommissionPercent(initialData.recurrentCommissionPercent ? String(initialData.recurrentCommissionPercent) : '');
-      setDescription(initialData.description || '');
       setBadge(initialData.badge || '');
-      setBannerImage(initialData.bannerImage || '');
-      setCheckoutUrl(initialData.checkoutUrl || '');
+      setCategory(initialData.category || 'SaaS / B2B');
+      setDescription(initialData.description || '');
       setFeatures(initialData.features ? [...initialData.features] : []);
+      setBannerImage(initialData.bannerImage || '');
+      setPriceSetup(initialData.priceSetup !== undefined ? String(initialData.priceSetup) : '');
+      setCommissionPercentage(
+        initialData.commissionPercentage !== undefined
+          ? String(initialData.commissionPercentage)
+          : '',
+      );
+
       setDeliveryType(initialData.deliveryType || 'redirect');
       setDeliveryUrl(initialData.deliveryUrl || initialData.thankYouPageUrl || '');
       setDeliveryInstructions(initialData.deliveryInstructions || '');
-      setDeliveryWebhookUrl(initialData.deliveryWebhookUrl || '');
-    } else {
-      // Create mode - start clean and empty
-      const targetComp = (defaultCompanyId && companies.find(c => c.id === defaultCompanyId)?.id) || (companies.length > 0 ? companies[0].id : '');
-      setCompanyId(targetComp);
-      setCustomCompanyName('');
-      setName('');
-      setCategory(companies.find(c => c.id === targetComp)?.category || 'SaaS / B2B');
-      setPriceSetup('');
-      setPriceMonthly('');
-      setCommissionPercentage('');
-      setRecurrentCommissionPercent('');
-      setDescription('');
-      setBadge('');
-      setBannerImage('');
-      setCheckoutUrl('');
-      setFeatures([]);
-      setDeliveryType('redirect');
-      setDeliveryUrl('');
-      setDeliveryInstructions('');
-      setDeliveryWebhookUrl('');
+
+      let cancelled = false;
+      setIsLoadingPrivateSettings(true);
+
+      getCompanyPlanDeliverySettings(initialData.id)
+        .then((settings) => {
+          if (cancelled) return;
+          setDeliveryType(settings.deliveryType || 'redirect');
+          setDeliveryUrl(settings.deliveryUrl || '');
+          setDeliveryInstructions(settings.deliveryInstructions || '');
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          console.warn('[Plan delivery settings]', error);
+          setFormError(
+            error instanceof Error
+              ? error.message
+              : 'Não foi possível carregar a configuração privada de entrega.',
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoadingPrivateSettings(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
     }
+
+    const targetCompany =
+      (defaultCompanyId && companies.find((company) => company.id === defaultCompanyId)) ||
+      companies[0];
+
+    setCompanyId(targetCompany?.id || '');
+    setName('');
+    setBadge('');
+    setCategory(targetCompany?.category || 'SaaS / B2B');
+    setDescription('');
+    setFeatures([]);
+    setDeliveryType('redirect');
+    setDeliveryUrl('');
+    setDeliveryInstructions('');
+    setBannerImage('');
+    setPriceSetup('');
+    setCommissionPercentage('');
+    setIsLoadingPrivateSettings(false);
   }, [isOpen, initialData, defaultCompanyId, companies]);
 
+  const currentCompany = useMemo(
+    () => companies.find((company) => company.id === companyId),
+    [companies, companyId],
+  );
+
+  const price = Number.parseFloat(priceSetup.replace(',', '.')) || 0;
+  const commissionPercent =
+    Number.parseFloat(commissionPercentage.replace(',', '.')) || 0;
+  const commissionValue = Number(((price * commissionPercent) / 100).toFixed(2));
+  const companyBeforeFees = Math.max(0, price - commissionValue);
+
+  const deliveryOption =
+    DELIVERY_OPTIONS.find((option) => option.value === deliveryType) || DELIVERY_OPTIONS[0];
 
   if (!isOpen) return null;
 
-  const currentCompany = companies.find(c => c.id === companyId);
-  const numSetup = parseFloat(priceSetup) || 0;
-  const numMonthly = parseFloat(priceMonthly) || 0;
-  const numCommission = parseFloat(commissionPercentage) || 0;
-  const numRecurrentCommission = parseFloat(recurrentCommissionPercent) || 0;
+  const addFeature = () => {
+    const clean = newFeatureText.trim();
+    if (!clean) return;
 
-  const calculatedCommissionValue = Number(((numSetup * numCommission) / 100).toFixed(2));
-  const calculatedRecurrentVal = Number(((numMonthly * numRecurrentCommission) / 100).toFixed(2));
-
-  // Handle local file image upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('A imagem deve ter no máximo 5MB.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setBannerImage(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+    if (features.length >= 30) {
+      setFormError('Você pode cadastrar até 30 benefícios por produto.');
+      return;
     }
-  };
 
-  const handleAddFeature = () => {
-    if (newFeatureText.trim()) {
-      setFeatures([...features, newFeatureText.trim()]);
-      setNewFeatureText('');
+    if (features.some((feature) => feature.toLowerCase() === clean.toLowerCase())) {
+      setFormError('Esse benefício já foi adicionado.');
+      return;
     }
+
+    setFeatures((current) => [...current, clean.slice(0, 180)]);
+    setNewFeatureText('');
+    setFormError('');
   };
 
-  const handleRemoveFeature = (index: number) => {
-    setFeatures(features.filter((_, i) => i !== index));
-  };
-
-  const handleSuggestFeatures = () => {
+  const suggestFeatures = () => {
     setFeatures([
-      'Suporte Técnico Dedicado 24/7',
-      'Landing Page ou Site Institucional de Ultra Velocidade',
-      'Design Responsivo para Celulares e Computadores',
-      'Botão Direto para Conversão no WhatsApp',
-      'Hospedagem em Nuvem de Alta Disponibilidade'
+      'Acesso imediato após aprovação do pagamento',
+      'Suporte ao cliente',
+      'Atualizações incluídas',
+      'Compatível com celular e computador',
     ]);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    if (!name.trim()) {
-      alert('Por favor, preencha o nome do plano ou produto.');
-      return;
-    }
-
-    if (!priceSetup || numSetup <= 0) {
-      alert('Por favor, defina um preço de setup válido (ex: 197 ou 5000).');
-      return;
-    }
-
-    if (!commissionPercentage || numCommission <= 0) {
-      alert('Por favor, defina a porcentagem de comissão do afiliado (ex: 35 ou 50).');
-      return;
-    }
-
-    if (!description.trim()) {
-      alert('Por favor, preencha a descrição do plano.');
-      return;
-    }
-
-    if (!isEditMode && (!companies || companies.length === 0)) {
-      alert('Atenção: Você precisa cadastrar sua empresa e aguardar a aprovação da administração antes de cadastrar planos.');
-      return;
-    }
-
-    const targetComp = currentCompany || (defaultCompanyId ? companies.find(c => c.id === defaultCompanyId) : null) || companies[0];
-
-    if (!isEditMode && targetComp && targetComp.verified === false && targetComp.status !== 'approved') {
-      alert('Atenção: Esta empresa ainda não foi aprovada pela administração. Apenas empresas com cadastro fiscal aprovado podem publicar planos.');
-      return;
-    }
-
-    const compId = isEditMode ? (currentCompany?.id || initialData?.companyId || targetComp?.id) : targetComp?.id;
-
-    if (!compId || compId === 'comp-default' || compId === 'comp_default') {
-      alert('Erro: Não foi possível identificar a empresa vinculada. Certifique-se de selecionar sua empresa.');
-      return;
-    }
-
-    setIsSubmitting(true);
+    setIsProcessingImage(true);
+    setFormError('');
 
     try {
-      const compName = targetComp?.companyName || targetComp?.name || initialData?.companyName || 'Empresa Parceira';
-      const compLogo = targetComp?.logo || initialData?.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80';
-      const compCategory = category || targetComp?.category || initialData?.category || 'SaaS / B2B';
-      const finalImage = bannerImage.trim() || PRESET_BANNERS[0].url;
+      const compressed = await compressImageFile(file);
+      setBannerImage(compressed);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Não foi possível carregar a imagem.');
+    } finally {
+      setIsProcessingImage(false);
+      event.target.value = '';
+    }
+  };
 
+  const validateProductTab = () => {
+    if (!currentCompany) return 'Selecione uma empresa válida.';
+    if (currentCompany.verified !== true || currentCompany.status !== 'approved') {
+      return 'A empresa precisa estar aprovada antes de publicar produtos.';
+    }
+    if (name.trim().length < 3) {
+      return 'Informe um nome de produto com pelo menos 3 caracteres.';
+    }
+    if (description.trim().length < 10) {
+      return 'Descreva o produto com pelo menos 10 caracteres.';
+    }
+    if (!DELIVERY_OPTIONS.some((option) => option.value === deliveryType)) {
+      return 'Escolha um método de entrega disponível.';
+    }
+    if (!deliveryUrl.trim() || !isHttpsUrl(deliveryUrl.trim())) {
+      return 'Informe uma URL HTTPS pública válida para a entrega.';
+    }
+    if (bannerImage && !bannerImage.startsWith('data:image/') && !isHttpsUrl(bannerImage)) {
+      return 'A URL da imagem precisa usar HTTPS.';
+    }
+    return '';
+  };
+
+  const validatePaymentTab = () => {
+    if (price < 0.5) {
+      return 'O preço mínimo da oferta é R$ 0,50.';
+    }
+    if (commissionPercent <= 0 || commissionPercent > 100) {
+      return 'A comissão do afiliado deve ficar entre 0,01% e 100%.';
+    }
+    return '';
+  };
+
+  const goToPaymentTab = () => {
+    const error = validateProductTab();
+    if (error) {
+      setFormError(error);
+      setActiveTab('produto');
+      return;
+    }
+    setFormError('');
+    setActiveTab('pagamento');
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isSubmitting || isLoadingPrivateSettings || isProcessingImage) return;
+
+    const productError = validateProductTab();
+    if (productError) {
+      setFormError(productError);
+      setActiveTab('produto');
+      return;
+    }
+
+    const paymentError = validatePaymentTab();
+    if (paymentError) {
+      setFormError(paymentError);
+      setActiveTab('pagamento');
+      return;
+    }
+
+    const targetCompany = currentCompany!;
+    setIsSubmitting(true);
+    setFormError('');
+
+    try {
       const planPayload: Omit<CompanyPlan, 'id' | 'createdAt'> = {
-        companyId: compId,
-        companyName: compName,
-        companyLogo: compLogo,
-        category: compCategory,
+        companyId: targetCompany.id,
+        companyName: targetCompany.companyName || targetCompany.name,
+        companyLogo: targetCompany.logo || '',
+        category,
         name: name.trim(),
         description: description.trim(),
-        priceSetup: numSetup,
-        priceMonthly: numMonthly,
-        paymentType: billingType === 'recorrente' ? 'Recorrente' : 'Único',
-        billingType: billingType,
-        billingCycle: billingType === 'recorrente' ? billingCycle : undefined,
-        billingInterval: billingType === 'recorrente' ? (billingCycle.toLowerCase() as any) : undefined,
-        commissionPercentage: numCommission,
-        commissionValue: calculatedCommissionValue,
-        recurrentCommissionPercent: numRecurrentCommission,
-        recurrentCommissionValue: calculatedRecurrentVal,
-        recurrentCommission: numRecurrentCommission,
-        features: features.length > 0 ? features : ['Ativação e setup imediato', 'Suporte dedicado'],
-        bannerImage: finalImage,
+        price: Number(price.toFixed(2)),
+        priceSetup: Number(price.toFixed(2)),
+        priceMonthly: 0,
+        paymentType: 'Único',
+        billingType: 'unico',
+        commissionPercentage: Number(commissionPercent.toFixed(2)),
+        commissionValue,
+        recurrentCommissionPercent: 0,
+        recurrentCommissionValue: 0,
+        recurrentCommission: 0,
+        features,
+        bannerImage: bannerImage.trim(),
         affiliatesCount: initialData?.affiliatesCount || 0,
         totalSales: initialData?.totalSales || 0,
-        badge: badge.trim() || 'Destaque',
-        checkoutUrl: checkoutUrl.trim() || 'https://pay.leadspay.com/checkout',
-        deliveryType: deliveryType,
-        deliveryUrl: deliveryUrl.trim() || undefined,
+        badge: badge.trim(),
+        deliveryType,
+        deliveryUrl: deliveryUrl.trim(),
         deliveryInstructions: deliveryInstructions.trim() || undefined,
-        deliveryWebhookUrl: deliveryType === 'webhook' ? deliveryWebhookUrl.trim() : undefined,
-        thankYouPageUrl: deliveryUrl.trim() || undefined,
-        status: initialData?.status || 'Ativo'
+        thankYouPageUrl: deliveryUrl.trim(),
+        status: initialData?.status || 'Ativo',
+        allowAffiliates: true,
       };
-
 
       if (isEditMode && initialData && onPlanUpdated) {
         await onPlanUpdated(initialData.id, planPayload);
@@ -264,652 +438,713 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       }
 
       onClose();
-    } catch (err: any) {
-      console.error('Error saving plan:', err);
-      alert(`Erro ao salvar plano: ${err?.message || err}`);
+    } catch (error) {
+      console.error('[CreatePlanModal]', error);
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível salvar o produto. Tente novamente.',
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-[#080d1a] border border-[#D9F22A]/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(217,242,42,0.15)] max-h-[90vh] overflow-y-auto no-scrollbar">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 text-white/50 hover:text-white transition-colors cursor-pointer w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        {/* Modal Header */}
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
-          <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />
-          {isEditMode ? 'Edição de Produto / Plano' : 'Novo Plano & Comissões'}
-        </div>
-
-        <h3 className="text-xl sm:text-2xl font-black text-white font-['Syne'] mb-1">
-          {isEditMode ? `Editar Plano: ${initialData?.name}` : 'Cadastrar Novo Plano da Empresa'}
-        </h3>
-        <p className="text-xs text-white/70 mb-5">
-          {isEditMode 
-            ? 'Atualize valores, comissões, imagem e benefícios deste produto no catálogo.'
-            : 'Preencha os dados do plano e a comissão que os afiliados receberão a cada venda confirmada.'}
-        </p>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* Select Company or Single Company Badge */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-              Empresa / Produtor Responsável *
-            </label>
-            {companies.length === 1 ? (
-              <div className="bg-[#050811] border border-[#D9F22A]/40 rounded-xl p-3 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center">
-                    {companies[0].logo ? (
-                      <img src={companies[0].logo} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <Building2 className="w-4 h-4 text-[#D9F22A]" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block">{companies[0].name}</span>
-                    <span className="text-[10px] text-[#D9F22A] font-mono">
-                      {companies[0].cpfCnpj ? `Doc: ${companies[0].cpfCnpj}` : 'Subconta Homologada'}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[10px] bg-[#D9F22A]/10 text-[#D9F22A] border border-[#D9F22A]/20 px-2 py-0.5 rounded-full font-bold">
-                  Plano Individual & Exclusivo
-                </span>
-              </div>
-            ) : companies.length > 1 ? (
-              <select
-                value={companyId}
-                onChange={(e) => {
-                  setCompanyId(e.target.value);
-                  const found = companies.find(c => c.id === e.target.value);
-                  if (found) setCategory(found.category);
-                }}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
-              >
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-[#080d1a]">
-                    {c.name} ({c.category})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300">
-                Você precisa ter uma empresa aprovada cadastrada para publicar planos.
-              </div>
-            )}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 backdrop-blur-md sm:p-5"
+      role="dialog"
+      aria-modal="true"
+      aria-label={isEditMode ? 'Editar produto' : 'Cadastrar novo produto'}
+    >
+      <div className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#0A101C] shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-5 sm:px-7">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D9F22A]/25 bg-[#D9F22A]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#D9F22A]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#D9F22A]" />
+                {isEditMode ? 'Editar oferta' : 'Nova oferta'}
+              </span>
+              <span className="text-[11px] text-white/35">Stripe Connect • Pagamento único</span>
+            </div>
+            <h2 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl">
+              {isEditMode ? 'Editar produto e comissão' : 'Cadastrar novo produto'}
+            </h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">
+              Primeiro configure o produto. Depois defina preço e comissão na aba de pagamento.
+            </p>
           </div>
 
-          {/* Plan Name & Badge */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-                Nome do Plano / Produto *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: Starter • Tração & Vendas"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
-            </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+            aria-label="Fechar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-white/80">
-                  Selo Curto / Tag (opcional)
-                </label>
-                <span className="text-[10px] text-white/40">max 25 letras</span>
-              </div>
-              <input
-                type="text"
-                maxLength={25}
-                placeholder="Ex: Mais Vendido, Destaque"
-                value={badge}
-                onChange={(e) => setBadge(e.target.value)}
-                className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A]"
-              />
-            </div>
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-              Categoria do Produto
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D9F22A]"
+        <div className="shrink-0 border-b border-white/10 bg-[#080d17] px-5 py-3 sm:px-7">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFormError('');
+                setActiveTab('produto');
+              }}
+              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                activeTab === 'produto'
+                  ? 'border-[#D9F22A]/45 bg-[#D9F22A]/10'
+                  : 'border-white/8 bg-white/[0.025] hover:bg-white/[0.04]'
+              }`}
             >
-              <option value="SaaS / B2B">SaaS / B2B</option>
-              <option value="iGaming & Apostas">iGaming & Apostas</option>
-              <option value="Fintech & Pagamentos">Fintech & Pagamentos</option>
-              <option value="Marketing & Vendas">Marketing & Vendas</option>
-              <option value="IA & Automação">IA & Automação</option>
-              <option value="Educação / Cursos">Educação / Cursos</option>
-            </select>
-          </div>
-
-          {/* Tipo de Cobrança (ETAPA 3 - LEADSPAY) */}
-          <div className="p-4 rounded-2xl bg-[#050811] border border-white/10 space-y-3">
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#D9F22A]">
-              Modelo de Cobrança do Produto *
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setBillingType('unico')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  billingType === 'unico'
-                    ? 'border-[#D9F22A] bg-[#D9F22A]/10 text-white'
-                    : 'border-white/10 bg-[#080d1a] text-white/60 hover:text-white'
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  activeTab === 'produto'
+                    ? 'bg-[#D9F22A] text-[#07100A]'
+                    : 'bg-white/5 text-white/45'
                 }`}
               >
-                <div className="font-bold text-xs flex items-center justify-between">
-                  Pagamento Único
-                  {billingType === 'unico' && <Check className="w-3.5 h-3.5 text-[#D9F22A]" />}
-                </div>
-                <span className="text-[11px] text-white/40 block mt-0.5">Cobrado apenas uma vez no checkout</span>
-              </button>
-
-              <button
-                type="button"
-                disabled
-                title="Stripe Billing ainda não está disponível neste piloto."
-                className="p-3 rounded-xl border border-slate-200 bg-slate-100 text-left text-slate-400 opacity-70 cursor-not-allowed"
-              >
-                <div className="font-bold text-xs flex items-center justify-between">
-                  Assinatura Recorrente
-                </div>
-                <span className="text-[11px] block mt-0.5">Indisponível até a integração com Stripe Billing.</span>
-              </button>
-            </div>
-
-            {billingType === 'recorrente' && (
-              <div className="pt-2" role="status">
-                <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-                  Este é um plano recorrente legado. Stripe Billing ainda não foi habilitado; o checkout não cobra renovação. Não é possível salvar ou publicar alterações recorrentes nesta versão.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Pricing & Commission Setup */}
-          <div className="p-4 rounded-2xl bg-[#050811] border border-white/10 space-y-3.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#D9F22A]">
-                Preços & Repasse de Comissão aos Afiliados
+                <PackageCheck className="h-4 w-4" />
               </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[11px] font-bold text-white/80 mb-1">
-                  Preço de Venda / Setup Inicial (R$) *
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="1"
-                  required
-                  placeholder="Ex: 197.00 ou 5000"
-                  value={priceSetup}
-                  onChange={(e) => setPriceSetup(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white font-bold placeholder-white/30 focus:border-[#D9F22A] focus:outline-none"
-                />
+                <div className={`text-xs font-bold ${activeTab === 'produto' ? 'text-white' : 'text-white/60'}`}>
+                  1. Produto
+                </div>
+                <div className="mt-0.5 hidden text-[10px] text-white/35 sm:block">
+                  Dados, entrega e imagem
+                </div>
               </div>
+            </button>
 
-              <div>
-                <label className="block text-[11px] font-bold text-white/80 mb-1">
-                  Comissão do Afiliado no Setup (%) *
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="1"
-                  max="100"
-                  required
-                  placeholder="Ex: 35 ou 50"
-                  value={commissionPercentage}
-                  onChange={(e) => setCommissionPercentage(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-[#D9F22A]/40 rounded-xl px-3.5 py-2 text-xs text-[#D9F22A] font-black placeholder-white/30 focus:border-[#D9F22A] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold text-white/60 mb-1">
-                  Mensalidade Recorrente (R$/mês) (opcional)
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  placeholder="Ex: 499 (deixe vazio se não houver)"
-                  value={priceMonthly}
-                  onChange={(e) => setPriceMonthly(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#D9F22A] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-white/60 mb-1">
-                  Comissão Recorrente Mensal (%) (opcional)
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  max="100"
-                  placeholder="Ex: 10"
-                  value={recurrentCommissionPercent}
-                  onChange={(e) => setRecurrentCommissionPercent(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#D9F22A] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Live Calculation Preview */}
-            <div className="p-3.5 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-white/70 block">
-                  Valor Pago pelo Cliente:
-                </span>
-                <span className="text-sm font-bold text-white">
-                  {numSetup > 0 ? `R$ ${numSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-                  {numMonthly > 0 ? ` + R$ ${numMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês` : ''}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase tracking-wider text-[#D9F22A] font-bold block">
-                  Comissão do Afiliado ({numCommission || 0}%):
-                </span>
-                <span className="text-base font-black text-[#D9F22A]">
-                  + R$ {calculatedCommissionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por venda
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5">
-              Descrição do Plano & Soluções Incluídas *
-            </label>
-            <textarea
-              required
-              rows={2}
-              placeholder="Explique o que o cliente recebe ao adquirir este plano..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-[#050811] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#D9F22A] resize-none"
-            />
-          </div>
-
-          {/* Features Builder */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-white/80">
-                Benefícios & Recursos Inclusos ({features.length})
-              </label>
-              {features.length === 0 && (
-                <button
-                  type="button"
-                  onClick={handleSuggestFeatures}
-                  className="text-[11px] text-[#D9F22A] hover:underline cursor-pointer flex items-center gap-1 font-bold"
-                >
-                  <Sparkles className="w-3 h-3" /> Inserir exemplos
-                </button>
-              )}
-            </div>
-
-            {features.length > 0 && (
-              <div className="space-y-1.5 mb-2 max-h-36 overflow-y-auto no-scrollbar">
-                {features.map((feat, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811] border border-white/10 text-xs text-white/90">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#D9F22A] flex-shrink-0" />
-                      <span>{feat}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFeature(idx)}
-                      className="text-white/40 hover:text-red-400 cursor-pointer p-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Adicionar benefício (ex: Suporte VIP via WhatsApp, Integração com PIX)"
-                value={newFeatureText}
-                onChange={(e) => setNewFeatureText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddFeature();
-                  }
-                }}
-                className="flex-1 bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30"
-              />
-              <button
-                type="button"
-                onClick={handleAddFeature}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" /> Adicionar
-              </button>
-            </div>
-          </div>
-
-          {/* 🚀 OPÇÕES DE ENTREGA DO PRODUTO / PLANO */}
-          <div className="p-4 rounded-2xl bg-[#050811] border border-[#84CC16]/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#84CC16] flex items-center gap-1.5">
-                <Send className="w-3.5 h-3.5" /> Método de Entrega do Produto / Plano *
-              </label>
-              <span className="text-[10px] text-white/50 bg-white/5 px-2 py-0.5 rounded-full">
-                Pós-pagamento automático
-              </span>
-            </div>
-
-            <p className="text-[11px] text-white/70">
-              Escolha como o comprador receberá o acesso imediatamente após a aprovação do pagamento no checkout:
-            </p>
-
-            <select 
-              value={deliveryType} 
-              onChange={(e) => setDeliveryType(e.target.value as any)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-lime-500 cursor-pointer"
+            <button
+              type="button"
+              onClick={goToPaymentTab}
+              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                activeTab === 'pagamento'
+                  ? 'border-[#D9F22A]/45 bg-[#D9F22A]/10'
+                  : 'border-white/8 bg-white/[0.025] hover:bg-white/[0.04]'
+              }`}
             >
-              <option value="redirect">Redirecionar para Site / URL Externa</option>
-              <option value="whatsapp">Grupo / Suporte VIP no WhatsApp</option>
-              <option value="membership">Liberação Automática por E-mail (Área de Membros / App)</option>
-              <option value="download">Download de Arquivo Digital / Guia (Drive, Notion, PDF)</option>
-              <option value="api_key">Geração de Chave de API / Token</option>
-              <option value="webhook">Webhook Personalizado para Sistema Próprio</option>
-            </select>
-
-            {/* Contextual Input according to deliveryType */}
-            {deliveryType === 'redirect' && (
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
-                  URL de Redirecionamento (Site / Aplicação Externa) *
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://seusite.com/obrigado ou https://seusite.com/acesso"
-                  value={deliveryUrl}
-                  onChange={(e) => setDeliveryUrl(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
-                />
-                <span className="text-[10px] text-white/50 block">
-                  O cliente será redirecionado para este endereço assim que o pagamento for aprovado.
-                </span>
-              </div>
-            )}
-
-            {deliveryType === 'whatsapp' && (
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
-                  Link do Grupo VIP ou Atendimento no WhatsApp *
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://chat.whatsapp.com/ExemploGrupoVip ou https://wa.me/55..."
-                  value={deliveryUrl}
-                  onChange={(e) => setDeliveryUrl(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
-                />
-                <span className="text-[10px] text-white/50 block">
-                  O comprador verá um botão direto para entrar no seu Grupo VIP ou conversar com o suporte.
-                </span>
-              </div>
-            )}
-
-            {deliveryType === 'membership' && (
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
-                  URL de Acesso / Login da Área de Membros *
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://membros.seusite.com/login"
-                  value={deliveryUrl}
-                  onChange={(e) => setDeliveryUrl(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
-                />
-                <span className="text-[10px] text-white/50 block">
-                  O cliente receberá instruções para acessar sua plataforma ou área de membros com o e-mail de compra.
-                </span>
-              </div>
-            )}
-
-            {deliveryType === 'download' && (
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
-                  Link para Download do Arquivo / Material Digital (PDF, Google Drive, Notion) *
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://drive.google.com/... ou https://notion.so/..."
-                  value={deliveryUrl}
-                  onChange={(e) => setDeliveryUrl(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
-                />
-                <span className="text-[10px] text-white/50 block">
-                  Link direto onde o comprador poderá baixar ou visualizar o conteúdo digital.
-                </span>
-              </div>
-            )}
-
-            {deliveryType === 'api_key' && (
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
-                  URL da Documentação ou Dashboard da API (Opcional)
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://api.seusite.com/docs"
-                  value={deliveryUrl}
-                  onChange={(e) => setDeliveryUrl(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
-                />
-                <span className="text-[10px] text-white/50 block">
-                  Uma chave de acesso exclusiva será gerada e enviada para o comprador por e-mail e na tela pós-venda.
-                </span>
-              </div>
-            )}
-
-            {deliveryType === 'webhook' && (
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
-                  URL do Webhook do seu Sistema (POST) *
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://seusite.com/api/webhooks/leadspay-custom"
-                  value={deliveryWebhookUrl}
-                  onChange={(e) => setDeliveryWebhookUrl(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none"
-                />
-                <span className="text-[10px] text-white/50 block">
-                  Enviaremos um evento POST com os dados da compra e do cliente para o seu servidor liberar o acesso automaticamente.
-                </span>
-              </div>
-            )}
-
-            {/* Instructions for all delivery types */}
-            <div className="space-y-1.5 pt-1">
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-white/80">
-                Instruções de Acesso ao Comprador (Exibidas na tela e enviadas no e-mail)
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Ex: Seu login é o seu e-mail cadastrado. Clique no botão para acessar seu grupo VIP ou baixar seu material..."
-                value={deliveryInstructions}
-                onChange={(e) => setDeliveryInstructions(e.target.value)}
-                className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#84CC16] focus:outline-none resize-none"
-              />
-            </div>
-          </div>
-
-
-          {/* 🖼️ IMAGE UPLOAD / URL / PRESET SELECTION */}
-          <div className="p-4 rounded-2xl bg-[#050811] border border-white/10 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-[#D9F22A] block">
-                Imagem do Produto / Banner
-              </label>
-              <div className="flex items-center gap-1 bg-[#080d1a] p-1 rounded-xl border border-white/10 text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => setImageTab('upload')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    imageTab === 'upload' ? 'bg-[#D9F22A] text-[#060A15]' : 'text-white/60 hover:text-white'
-                  }`}
-                >
-                  <Upload className="w-3 h-3" /> Fazer Upload
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImageTab('url')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    imageTab === 'url' ? 'bg-[#D9F22A] text-[#060A15]' : 'text-white/60 hover:text-white'
-                  }`}
-                >
-                  <LinkIcon className="w-3 h-3" /> Link / URL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImageTab('presets')}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    imageTab === 'presets' ? 'bg-[#D9F22A] text-[#060A15]' : 'text-white/60 hover:text-white'
-                  }`}
-                >
-                  <ImageIcon className="w-3 h-3" /> Modelos
-                </button>
-              </div>
-            </div>
-
-            {/* TAB 1: UPLOAD FILE */}
-            {imageTab === 'upload' && (
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  activeTab === 'pagamento'
+                    ? 'bg-[#D9F22A] text-[#07100A]'
+                    : 'bg-white/5 text-white/45'
+                }`}
+              >
+                <CircleDollarSign className="h-4 w-4" />
+              </span>
               <div>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-white/20 hover:border-[#D9F22A] rounded-xl p-5 text-center cursor-pointer transition-all bg-[#080d1a]/50 hover:bg-[#080d1a]"
-                >
-                  <Upload className="w-6 h-6 text-[#D9F22A] mx-auto mb-2" />
-                  <p className="text-xs font-bold text-white">Clique para selecionar imagem do seu dispositivo</p>
-                  <p className="text-[10px] text-white/50 mt-1">PNG, JPG, WebP (máximo 5MB)</p>
+                <div className={`text-xs font-bold ${activeTab === 'pagamento' ? 'text-white' : 'text-white/60'}`}>
+                  2. Pagamento
+                </div>
+                <div className="mt-0.5 hidden text-[10px] text-white/35 sm:block">
+                  Preço e comissão
                 </div>
               </div>
-            )}
+            </button>
+          </div>
+        </div>
 
-            {/* TAB 2: PASTE URL */}
-            {imageTab === 'url' && (
-              <div>
-                <input
-                  type="url"
-                  placeholder="https://exemplo.com/minha-imagem.png"
-                  value={bannerImage}
-                  onChange={(e) => setBannerImage(e.target.value)}
-                  className="w-full bg-[#080d1a] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/30 focus:border-[#D9F22A] focus:outline-none"
-                />
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
+            {formError && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs leading-5 text-red-300">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{formError}</span>
               </div>
             )}
 
-            {/* TAB 3: PRESETS */}
-            {imageTab === 'presets' && (
-              <div className="flex flex-wrap gap-2">
-                {PRESET_BANNERS.map((b, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setBannerImage(b.url)}
-                    className={`text-[10px] px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                      bannerImage === b.url
-                        ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A] font-bold shadow-sm'
-                        : 'border-white/10 text-white/60 hover:text-white bg-[#080d1a]'
-                    }`}
-                  >
-                    {b.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            {activeTab === 'produto' && (
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+                <div className="space-y-5">
+                  <section className="rounded-2xl border border-white/10 bg-[#0D1422] p-4 sm:p-5">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-[#D9F22A]" />
+                      <div>
+                        <h3 className="text-sm font-bold text-white">Informações do produto</h3>
+                        <p className="text-[11px] text-white/40">Dados exibidos no catálogo e no checkout.</p>
+                      </div>
+                    </div>
 
-            {/* IMAGE PREVIEW */}
-            {bannerImage && (
-              <div className="relative rounded-xl overflow-hidden h-28 border border-[#D9F22A]/30 bg-black/40">
-                <img
-                  src={bannerImage}
-                  alt="Prévia do produto"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end justify-between p-2.5">
-                  <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-sm">
-                    ✓ Imagem selecionada
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setBannerImage('')}
-                    className="p-1 rounded-md bg-red-500/80 hover:bg-red-500 text-white text-[10px] cursor-pointer flex items-center gap-1 font-bold"
-                  >
-                    <Trash2 className="w-3 h-3" /> Remover
-                  </button>
+                    <div className="mb-4">
+                      <label className={labelClass}>Empresa responsável</label>
+                      {companies.length === 0 ? (
+                        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+                          Nenhuma empresa aprovada disponível.
+                        </div>
+                      ) : companies.length === 1 ? (
+                        <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#070c16] p-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                              {companies[0].logo ? (
+                                <img src={companies[0].logo} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <Building2 className="h-4 w-4 text-[#D9F22A]" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-bold text-white">{companies[0].name}</div>
+                              <div className="mt-0.5 flex items-center gap-1 text-[10px] text-emerald-400">
+                                <BadgeCheck className="h-3 w-3" />
+                                Empresa vinculada
+                              </div>
+                            </div>
+                          </div>
+                          <span className="hidden rounded-full border border-[#D9F22A]/20 bg-[#D9F22A]/10 px-2.5 py-1 text-[10px] font-bold text-[#D9F22A] sm:inline-flex">
+                            Oferta exclusiva
+                          </span>
+                        </div>
+                      ) : (
+                        <select
+                          value={companyId}
+                          onChange={(event) => {
+                            const nextId = event.target.value;
+                            setCompanyId(nextId);
+                            const nextCompany = companies.find((company) => company.id === nextId);
+                            if (nextCompany?.category) setCategory(nextCompany.category);
+                          }}
+                          className={fieldClass}
+                        >
+                          {companies.map((company) => (
+                            <option key={company.id} value={company.id} className="bg-[#0A101C]">
+                              {company.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>Nome do produto *</label>
+                        <input
+                          value={name}
+                          onChange={(event) => setName(event.target.value)}
+                          maxLength={160}
+                          placeholder="Ex: Starter • Tração & Vendas"
+                          className={fieldClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Selo / tag</label>
+                        <input
+                          value={badge}
+                          onChange={(event) => setBadge(event.target.value)}
+                          maxLength={25}
+                          placeholder="Ex: Mais vendido"
+                          className={fieldClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className={labelClass}>Categoria</label>
+                      <select
+                        value={category}
+                        onChange={(event) => setCategory(event.target.value)}
+                        className={fieldClass}
+                      >
+                        <option value="SaaS / B2B">SaaS / B2B</option>
+                        <option value="iGaming & Apostas">iGaming & Apostas</option>
+                        <option value="Fintech & Pagamentos">Fintech & Pagamentos</option>
+                        <option value="Marketing & Vendas">Marketing & Vendas</option>
+                        <option value="IA & Automação">IA & Automação</option>
+                        <option value="Educação / Cursos">Educação / Cursos</option>
+                        <option value="E-commerce / Dropship">E-commerce / Dropship</option>
+                      </select>
+                    </div>
+
+                    <div className="mt-4">
+                      <label className={labelClass}>Descrição *</label>
+                      <textarea
+                        rows={4}
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        maxLength={5000}
+                        placeholder="Explique claramente o que o cliente recebe ao comprar este produto."
+                        className={`${fieldClass} resize-none`}
+                      />
+                      <div className="mt-1 text-right text-[10px] text-white/25">
+                        {description.length}/5000
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-white/10 bg-[#0D1422] p-4 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-[#D9F22A]" />
+                        <div>
+                          <h3 className="text-sm font-bold text-white">Benefícios e recursos</h3>
+                          <p className="text-[11px] text-white/40">{features.length} item(ns) cadastrados.</p>
+                        </div>
+                      </div>
+                      {features.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={suggestFeatures}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#D9F22A] hover:underline"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          Inserir exemplos
+                        </button>
+                      )}
+                    </div>
+
+                    {features.length > 0 && (
+                      <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                        {features.map((feature, index) => (
+                          <div
+                            key={`${feature}-${index}`}
+                            className="flex items-start justify-between gap-2 rounded-xl border border-white/8 bg-[#070c16] px-3 py-2.5"
+                          >
+                            <div className="flex min-w-0 items-start gap-2">
+                              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#D9F22A]" />
+                              <span className="text-xs leading-5 text-white/75">{feature}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFeatures((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                              }
+                              className="shrink-0 rounded-md p-1 text-white/30 transition hover:bg-red-500/10 hover:text-red-400"
+                              aria-label="Remover benefício"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        value={newFeatureText}
+                        onChange={(event) => setNewFeatureText(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            addFeature();
+                          }
+                        }}
+                        maxLength={180}
+                        placeholder="Ex: Suporte VIP via WhatsApp"
+                        className={`${fieldClass} flex-1`}
+                      />
+                      <button
+                        type="button"
+                        onClick={addFeature}
+                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-white transition hover:bg-white/10"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Adicionar
+                      </button>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-[#D9F22A]/15 bg-[#0D1422] p-4 sm:p-5">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Send className="h-4 w-4 text-[#D9F22A]" />
+                        <div>
+                          <h3 className="text-sm font-bold text-white">Entrega após o pagamento</h3>
+                          <p className="text-[11px] text-white/40">
+                            O endereço fica privado e só é liberado depois da confirmação da Stripe.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="hidden rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-400 sm:inline-flex">
+                        Protegido
+                      </span>
+                    </div>
+
+                    {isLoadingPrivateSettings ? (
+                      <div className="flex items-center gap-2 rounded-xl border border-white/8 bg-[#070c16] p-4 text-xs text-white/50">
+                        <Loader2 className="h-4 w-4 animate-spin text-[#D9F22A]" />
+                        Carregando configuração privada de entrega...
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {DELIVERY_OPTIONS.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setDeliveryType(option.value)}
+                              className={`rounded-xl border p-3 text-left transition ${
+                                deliveryType === option.value
+                                  ? 'border-[#D9F22A]/45 bg-[#D9F22A]/10'
+                                  : 'border-white/8 bg-[#070c16] hover:border-white/15'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-white">{option.label}</span>
+                                {deliveryType === option.value && <Check className="h-3.5 w-3.5 text-[#D9F22A]" />}
+                              </div>
+                              <p className="mt-1 text-[10px] leading-4 text-white/40">{option.description}</p>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mt-4">
+                          <label className={labelClass}>URL de entrega *</label>
+                          <input
+                            type="url"
+                            value={deliveryUrl}
+                            onChange={(event) => setDeliveryUrl(event.target.value)}
+                            placeholder={deliveryOption.placeholder}
+                            className={fieldClass}
+                          />
+                          <p className="mt-1.5 text-[10px] leading-4 text-white/35">
+                            Use HTTPS. O cliente não verá esse link antes do pagamento aprovado.
+                          </p>
+                        </div>
+
+                        <div className="mt-4">
+                          <label className={labelClass}>Instruções para o comprador</label>
+                          <textarea
+                            rows={3}
+                            value={deliveryInstructions}
+                            onChange={(event) => setDeliveryInstructions(event.target.value)}
+                            maxLength={3000}
+                            placeholder="Ex: Use o mesmo e-mail da compra para acessar sua conta."
+                            className={`${fieldClass} resize-none`}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </section>
                 </div>
+
+                <aside className="space-y-5">
+                  <section className="rounded-2xl border border-white/10 bg-[#0D1422] p-4 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-white">Imagem do produto</h3>
+                        <p className="mt-0.5 text-[11px] text-white/40">Usada no catálogo e no checkout.</p>
+                      </div>
+                      <ImageIcon className="h-4 w-4 text-[#D9F22A]" />
+                    </div>
+
+                    <div className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-white/8 bg-[#070c16] p-1">
+                      {([
+                        ['upload', 'Upload'],
+                        ['url', 'URL'],
+                        ['presets', 'Modelos'],
+                      ] as Array<[ImageTab, string]>).map(([tab, text]) => (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setImageTab(tab)}
+                          className={`rounded-lg px-2 py-2 text-[10px] font-bold transition ${
+                            imageTab === tab
+                              ? 'bg-[#D9F22A] text-[#07100A]'
+                              : 'text-white/45 hover:text-white'
+                          }`}
+                        >
+                          {text}
+                        </button>
+                      ))}
+                    </div>
+
+                    {imageTab === 'upload' && (
+                      <>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isProcessingImage}
+                          className="flex min-h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#070c16] p-4 text-center transition hover:border-[#D9F22A]/45 disabled:opacity-50"
+                        >
+                          {isProcessingImage ? (
+                            <Loader2 className="mb-2 h-6 w-6 animate-spin text-[#D9F22A]" />
+                          ) : (
+                            <Upload className="mb-2 h-6 w-6 text-[#D9F22A]" />
+                          )}
+                          <span className="text-xs font-bold text-white">
+                            {isProcessingImage ? 'Compactando imagem...' : 'Selecionar imagem'}
+                          </span>
+                          <span className="mt-1 text-[10px] text-white/35">JPG, PNG ou WebP • até 8 MB</span>
+                        </button>
+                      </>
+                    )}
+
+                    {imageTab === 'url' && (
+                      <div>
+                        <label className={labelClass}>Link HTTPS da imagem</label>
+                        <div className="relative">
+                          <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
+                          <input
+                            type="url"
+                            value={bannerImage.startsWith('data:image/') ? '' : bannerImage}
+                            onChange={(event) => setBannerImage(event.target.value)}
+                            placeholder="https://..."
+                            className={`${fieldClass} pl-9`}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {imageTab === 'presets' && (
+                      <div className="grid gap-2">
+                        {PRESET_BANNERS.map((banner) => (
+                          <button
+                            key={banner.name}
+                            type="button"
+                            onClick={() => setBannerImage(banner.url)}
+                            className={`flex items-center gap-3 rounded-xl border p-2 text-left transition ${
+                              bannerImage === banner.url
+                                ? 'border-[#D9F22A]/45 bg-[#D9F22A]/10'
+                                : 'border-white/8 bg-[#070c16] hover:border-white/15'
+                            }`}
+                          >
+                            <img
+                              src={banner.url}
+                              alt=""
+                              className="h-10 w-14 rounded-lg object-cover"
+                            />
+                            <span className="text-[11px] font-semibold text-white/70">{banner.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {bannerImage && (
+                      <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
+                        <div className="relative h-40 bg-[#070c16]">
+                          <img src={bannerImage} alt="Prévia" className="h-full w-full object-cover" />
+                          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/90 to-transparent p-3 pt-10">
+                            <span className="text-[10px] font-bold text-white">Prévia selecionada</span>
+                            <button
+                              type="button"
+                              onClick={() => setBannerImage('')}
+                              className="rounded-lg bg-black/60 p-1.5 text-white/60 backdrop-blur transition hover:text-red-400"
+                              aria-label="Remover imagem"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="rounded-2xl border border-white/10 bg-[#0D1422] p-4 sm:p-5">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/35">
+                      Visão rápida
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <div className="text-[10px] text-white/35">Produto</div>
+                        <div className="mt-0.5 text-sm font-bold text-white">
+                          {name.trim() || 'Nome do produto'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-white/35">Empresa</div>
+                        <div className="mt-0.5 text-xs font-medium text-white/70">
+                          {currentCompany?.name || 'Não selecionada'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-white/35">Entrega</div>
+                        <div className="mt-0.5 text-xs font-medium text-white/70">
+                          {deliveryOption.label}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </aside>
+              </div>
+            )}
+
+            {activeTab === 'pagamento' && (
+              <div className="mx-auto max-w-4xl space-y-5">
+                <section className="rounded-2xl border border-white/10 bg-[#0D1422] p-4 sm:p-6">
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#D9F22A]/10 text-[#D9F22A]">
+                        <CircleDollarSign className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-white">Pagamento do produto</h3>
+                        <p className="mt-1 text-xs leading-5 text-white/45">
+                          Estes valores são usados pelo checkout real da Stripe. A empresa e o afiliado recebem conforme as regras da plataforma.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="hidden rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-400 sm:inline-flex">
+                      Stripe Connect
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-[#D9F22A]/40 bg-[#D9F22A]/10 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-bold text-white">Pagamento único</div>
+                        <Check className="h-4 w-4 text-[#D9F22A]" />
+                      </div>
+                      <p className="mt-1 text-[11px] leading-5 text-white/45">
+                        O cliente paga uma única vez no checkout.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/8 bg-[#070c16] p-4 opacity-55">
+                      <div className="text-sm font-bold text-white/60">Assinatura recorrente</div>
+                      <p className="mt-1 text-[11px] leading-5 text-white/35">
+                        Ainda não está liberada para produtos de empresas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Preço de venda (R$) *</label>
+                      <input
+                        inputMode="decimal"
+                        value={priceSetup}
+                        onChange={(event) =>
+                          setPriceSetup(event.target.value.replace(/[^0-9.,]/g, ''))
+                        }
+                        placeholder="197,00"
+                        className={fieldClass}
+                      />
+                      <p className="mt-1.5 text-[10px] text-white/35">Mínimo: R$ 0,50.</p>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Comissão do afiliado (%) *</label>
+                      <input
+                        inputMode="decimal"
+                        value={commissionPercentage}
+                        onChange={(event) =>
+                          setCommissionPercentage(event.target.value.replace(/[^0-9.,]/g, ''))
+                        }
+                        placeholder="40"
+                        className={fieldClass}
+                      />
+                      <p className="mt-1.5 text-[10px] text-white/35">De 0,01% até 100%.</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="overflow-hidden rounded-2xl border border-[#D9F22A]/20 bg-[#0D1422]">
+                  <div className="border-b border-white/8 px-5 py-4">
+                    <div className="text-sm font-bold text-white">Resumo da venda</div>
+                    <div className="mt-1 text-[11px] text-white/40">
+                      Prévia antes das taxas operacionais da plataforma.
+                    </div>
+                  </div>
+
+                  <div className="grid gap-px bg-white/8 sm:grid-cols-3">
+                    <div className="bg-[#0D1422] p-5">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-white/35">
+                        Cliente paga
+                      </div>
+                      <div className="mt-2 text-xl font-black text-white">{formatMoney(price)}</div>
+                    </div>
+                    <div className="bg-[#0D1422] p-5">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#D9F22A]/70">
+                        Afiliado recebe
+                      </div>
+                      <div className="mt-2 text-xl font-black text-[#D9F22A]">
+                        {formatMoney(commissionValue)}
+                      </div>
+                      <div className="mt-1 text-[10px] text-white/35">
+                        {commissionPercent > 0 ? `${commissionPercent}% por venda` : 'Defina a comissão'}
+                      </div>
+                    </div>
+                    <div className="bg-[#0D1422] p-5">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-white/35">
+                        Empresa antes das taxas
+                      </div>
+                      <div className="mt-2 text-xl font-black text-white">
+                        {formatMoney(companyBeforeFees)}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-white/10 bg-[#0D1422] p-5">
+                  <div className="flex items-start gap-3">
+                    <Layers className="mt-0.5 h-4 w-4 shrink-0 text-[#D9F22A]" />
+                    <div>
+                      <div className="text-sm font-bold text-white">{name.trim() || 'Seu produto'}</div>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        Ao salvar, a oferta ficará disponível para afiliação quando estiver ativa e a empresa estiver aprovada.
+                      </p>
+                    </div>
+                  </div>
+                </section>
               </div>
             )}
           </div>
 
-          {/* SUBMIT BUTTON */}
-          <button
-            type="submit"
-            disabled={isSubmitting || billingType === 'recorrente'}
-            className="mt-2 w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isEditMode ? (
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 bg-[#080d17] px-5 py-4 sm:px-7">
+            {activeTab === 'produto' ? (
               <>
-                <Check className="w-4 h-4 stroke-[3]" />
-                {billingType === 'recorrente' ? 'Stripe Billing indisponível' : isSubmitting ? 'Salvando Alterações...' : 'Salvar Alterações do Plano'}
+                <div className="hidden text-[11px] text-white/35 sm:block">
+                  Etapa 1 de 2 • Dados do produto
+                </div>
+                <button
+                  type="button"
+                  onClick={goToPaymentTab}
+                  disabled={isLoadingPrivateSettings || isProcessingImage}
+                  className="ml-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-5 text-xs font-black text-[#07100A] transition hover:bg-[#cde71f] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Ir para pagamento
+                  <ArrowRight className="h-4 w-4" />
+                </button>
               </>
             ) : (
               <>
-                <Layers className="w-4 h-4" />
-                {billingType === 'recorrente' ? 'Stripe Billing indisponível' : isSubmitting ? 'Salvando Plano...' : 'Salvar Plano & Liberar para Afiliados'}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormError('');
+                    setActiveTab('produto');
+                  }}
+                  disabled={isSubmitting}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-white transition hover:bg-white/10 disabled:opacity-50"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Voltar ao produto
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isLoadingPrivateSettings || isProcessingImage}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-5 text-xs font-black text-[#07100A] shadow-[0_0_25px_rgba(217,242,42,0.18)] transition hover:bg-[#cde71f] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : isEditMode ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Salvar alterações
+                    </>
+                  ) : (
+                    <>
+                      <Layers className="h-4 w-4" />
+                      Salvar e liberar para afiliados
+                    </>
+                  )}
+                </button>
               </>
             )}
-          </button>
+          </footer>
         </form>
       </div>
     </div>
