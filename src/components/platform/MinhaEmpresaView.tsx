@@ -535,7 +535,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                     className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
                   >
                     <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>Novo Plano</span>
+                    <span>Novo Produto</span>
                   </button>
                 </div>
               </div>
@@ -544,7 +544,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 <div className="text-center py-12 px-4 bg-[#080d1a] border border-white/10 rounded-2xl">
                   <Layers className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
                   <h4 className="text-base font-bold text-white font-['Syne']">
-                    {planSearch ? 'Nenhum plano corresponde à pesquisa' : 'Nenhum plano cadastrado nesta empresa'}
+                    {planSearch ? 'Nenhum produto corresponde à pesquisa' : 'Nenhum produto cadastrado nesta empresa'}
                   </h4>
                   <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
                     {isVerified 
@@ -557,11 +557,11 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                   >
                     {isVerified ? (
                       <>
-                        <Plus className="w-4 h-4 stroke-[3]" /> Cadastrar Primeiro Plano
+                        <Plus className="w-4 h-4 stroke-[3]" /> Cadastrar Primeiro Produto
                       </>
                     ) : (
                       <>
-                        <Lock className="w-4 h-4" /> Cadastrar Primeiro Plano (Verificar)
+                        <Lock className="w-4 h-4" /> Cadastrar Primeiro Produto (Verificar)
                       </>
                     )}
                   </button>
@@ -730,7 +730,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                                         type="button"
                                         onClick={() => {
                                           setActivePlanDropdownId(null);
-                                          if (confirm(`Tem certeza que deseja excluir o plano "${plan.name}"?`)) {
+                                          if (confirm(`Tem certeza que deseja excluir o produto "${plan.name}"?`)) {
                                             onDeletePlan(plan.id, plan.companyId);
                                           }
                                         }}
@@ -998,7 +998,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                     <thead>
                       <tr className="border-b border-white/10 text-[11px] font-bold text-white/40 uppercase">
                         <th className="py-3 px-4">Transação</th>
-                        <th className="py-3 px-4">Plano</th>
+                        <th className="py-3 px-4">Produto</th>
                         <th className="py-3 px-4">Cliente</th>
                         <th className="py-3 px-4">Afiliado</th>
                         <th className="py-3 px-4">Valor Bruto</th>
@@ -1064,7 +1064,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 Desvincular Afiliado?
               </h3>
               <p className="text-xs text-white/70 mt-2 leading-relaxed">
-                Tem certeza que deseja remover o afiliado <strong className="text-white">{removingAffiliateModal.userName || removingAffiliateModal.affiliateName || 'Afiliado'}</strong> do plano <strong className="text-white">{removingAffiliateModal.planName || removingAffiliateModal.platformName}</strong>?
+                Tem certeza que deseja remover o afiliado <strong className="text-white">{removingAffiliateModal.userName || removingAffiliateModal.affiliateName || 'Afiliado'}</strong> do produto <strong className="text-white">{removingAffiliateModal.planName || removingAffiliateModal.platformName}</strong>?
               </p>
             </div>
 
