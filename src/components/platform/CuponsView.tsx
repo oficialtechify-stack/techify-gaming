@@ -22,6 +22,10 @@ interface CuponsViewProps { plans?:CompanyPlan[]; affiliations?:UserAffiliation[
 export const CuponsView:React.FC<CuponsViewProps>=({plans=[],affiliations=[],activeCompanyId})=>{
   const {currentUser}=useAuth();
   const companyId=activeCompanyId || plans[0]?.companyId || '';
+  const couponEligiblePlans=useMemo(
+    ()=>plans.filter(p=>p.billingType!=='recorrente' && p.paymentType!=='Recorrente' && p.paymentType!=='Assinatura'),
+    [plans]
+  );
   const [coupons,setCoupons]=useState<CouponItem[]>([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(false);
@@ -81,8 +85,8 @@ export const CuponsView:React.FC<CuponsViewProps>=({plans=[],affiliations=[],act
     }catch(err:any){setError(err?.message||'Falha ao excluir cupom.');}
   };
   const linkFor=(item:CouponItem)=>{
-    const target=item.applicablePlans.find(p=>p!=='all') || plans[0]?.id;
-    const plan=plans.find(p=>p.id===target);
+    const target=item.applicablePlans.find(p=>p!=='all') || couponEligiblePlans[0]?.id;
+    const plan=couponEligiblePlans.find(p=>p.id===target);
     if(!plan) return '';
     return `${window.location.origin}/checkout/${encodeURIComponent(plan.checkoutSlug||plan.slug||plan.id)}?coupon=${encodeURIComponent(item.code)}`;
   };
@@ -90,7 +94,7 @@ export const CuponsView:React.FC<CuponsViewProps>=({plans=[],affiliations=[],act
 
   if(loading) return <div className="p-8 text-sm text-white/50">Carregando cupons...</div>;
   return <div className="space-y-6 animate-fadeIn">
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><div className="flex gap-2 items-center text-xs font-bold uppercase tracking-widest text-[#D9F22A]"><Tag className="w-4 h-4"/>Descontos reais</div><h1 className="text-2xl font-black text-white font-['Syne']">Cupons</h1><p className="text-xs text-white/50 mt-1">O desconto é validado no backend e aplicado ao PaymentIntent da Stripe.</p></div><button onClick={()=>setModal(true)} disabled={!companyId} className="px-4 py-2.5 rounded-xl bg-[#D9F22A] text-[#060A15] font-black text-xs flex gap-2 disabled:opacity-40"><Plus className="w-4 h-4"/>Novo cupom</button></div>
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><div className="flex gap-2 items-center text-xs font-bold uppercase tracking-widest text-[#D9F22A]"><Tag className="w-4 h-4"/>Descontos reais</div><h1 className="text-2xl font-black text-white font-['Syne']">Cupons</h1><p className="text-xs text-white/50 mt-1">O desconto é validado no backend e aplicado ao pagamento único da Stripe. Assinaturas recorrentes usam preço recorrente próprio e não aceitam estes cupons.</p></div><button onClick={()=>setModal(true)} disabled={!companyId || couponEligiblePlans.length===0} className="px-4 py-2.5 rounded-xl bg-[#D9F22A] text-[#060A15] font-black text-xs flex gap-2 disabled:opacity-40"><Plus className="w-4 h-4"/>Novo cupom</button></div>
     {error&&<div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex gap-2"><AlertCircle className="w-4 h-4"/>{error}</div>}
     <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-white/30"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cupom..." className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#080d1a] border border-white/10 text-sm text-white"/></div>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -108,7 +112,7 @@ export const CuponsView:React.FC<CuponsViewProps>=({plans=[],affiliations=[],act
         <input type="number" min="0.01" step="0.01" value={value} onChange={e=>setValue(Number(e.target.value))} className="bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"/>
         <input type="number" min="0" value={maxUses} onChange={e=>setMaxUses(Number(e.target.value))} placeholder="Máximo de usos" className="bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"/>
         <input type="datetime-local" value={expiresAt} onChange={e=>setExpiresAt(e.target.value)} className="bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"/>
-        <select value={planId} onChange={e=>setPlanId(e.target.value)} className="bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"><option value="all">Todas as ofertas</option>{plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <select value={planId} onChange={e=>setPlanId(e.target.value)} className="bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"><option value="all">Todos os produtos de pagamento único</option>{couponEligiblePlans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
         <select value={affiliateCode} onChange={e=>setAffiliateCode(e.target.value)} className="bg-[#050811] border border-white/10 rounded-xl p-3 text-sm"><option value="all">Todos os afiliados</option>{uniqueAffiliates.map(([c,n])=><option key={c} value={c}>{n} · {c}</option>)}</select>
       </div>
       <button className="w-full mt-5 py-3 rounded-xl bg-[#D9F22A] text-[#060A15] font-black text-xs">Salvar cupom</button>
