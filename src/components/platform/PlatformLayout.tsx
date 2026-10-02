@@ -31,7 +31,6 @@ import {
   deleteCompanyPlanInFirebase,
   createAffiliationInFirebase,
   deleteAffiliationInFirebase,
-  createSaleTransactionInFirebase,
   requestWithdrawalViaBackend,
   updateUserProfileInFirebase,
   submitVerificationRequestInFirebase,
