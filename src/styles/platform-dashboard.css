@@ -1,16 +1,47 @@
 /* LeadsPay platform styles - Enhanced Fintech Dashboard Theme */
 
 .leadspay-platform {
-  font-family: var(--leadspay-brand-font, 'Manrope', sans-serif);
+  font-family: var(--leadspay-brand-font, 'Manrope', sans-serif) !important;
   color-scheme: dark;
+}
+
+/* A mesma Manrope da landing em TODA a plataforma.
+   Apenas conteúdos técnicos como API keys e JSON usam DM Mono. */
+.leadspay-platform *:not(code):not(pre):not(kbd):not(samp):not(.font-mono):not(.font-mono *),
+.leadspay-platform *::before,
+.leadspay-platform *::after {
+  font-family: var(--leadspay-brand-font, 'Manrope', sans-serif) !important;
+}
+
+.leadspay-platform code,
+.leadspay-platform pre,
+.leadspay-platform kbd,
+.leadspay-platform samp,
+.leadspay-platform .font-mono,
+.leadspay-platform .font-mono * {
+  font-family: var(--leadspay-mono-font, 'DM Mono', monospace) !important;
 }
 
 .leadspay-platform h1,
 .leadspay-platform h2,
 .leadspay-platform h3,
-.leadspay-platform .font-\['Syne'\] {
+.leadspay-platform h4,
+.leadspay-platform h5,
+.leadspay-platform h6 {
   font-family: var(--leadspay-brand-font, 'Manrope', sans-serif) !important;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+}
+
+.leadspay-platform button,
+.leadspay-platform a,
+.leadspay-platform nav,
+.leadspay-platform [role="tab"],
+.leadspay-platform [role="menuitem"],
+.leadspay-platform input,
+.leadspay-platform select,
+.leadspay-platform textarea {
+  font-family: var(--leadspay-brand-font, 'Manrope', sans-serif) !important;
 }
 
 .leadspay-platform[data-theme="light"] {
