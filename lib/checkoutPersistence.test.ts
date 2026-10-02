@@ -7,12 +7,15 @@ import { getStripeTestClient, resetStripeClientForTests } from './stripeServer';
 for (const failedWrite of [1, 2]) {
   test(`checkout não entrega client secret quando a gravação ${failedWrite} falha`, async (t) => {
     const oldKey = process.env.STRIPE_SECRET_KEY;
+    const oldTestKey = process.env.STRIPE_TEST_SECRET_KEY;
     const oldEnv = process.env.VERCEL_ENV;
-    process.env.STRIPE_SECRET_KEY = 'sk_test_local_only';
+    delete process.env.STRIPE_SECRET_KEY;
+    process.env.STRIPE_TEST_SECRET_KEY = 'sk_test_local_only';
     process.env.VERCEL_ENV = 'preview';
     resetStripeClientForTests();
     t.after(() => {
       if (oldKey === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = oldKey;
+      if (oldTestKey === undefined) delete process.env.STRIPE_TEST_SECRET_KEY; else process.env.STRIPE_TEST_SECRET_KEY = oldTestKey;
       if (oldEnv === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = oldEnv;
       resetStripeClientForTests();
     });
