@@ -1305,7 +1305,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 className="w-full mt-2.5 bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 py-2 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
               >
                 <Wallet className="w-3 h-3 text-[#D9F22A]" />
-                SACAR VIA PIX
+                SACAR VIA STRIPE
               </button>
             </div>
           )}
