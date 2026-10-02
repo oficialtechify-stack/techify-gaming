@@ -666,11 +666,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return monthlyChartPoints[midIdx] || monthlyChartPoints[0];
   }, [hoveredPointIndex, monthlyChartPoints, chartHasSales]);
 
-  // Available balance and Pending balance
-  const availableBalance = Number(userProfile?.availableBalance) || 0;
-  const pendingBalance = userProfile?.pendingBalance !== undefined
-    ? Number(userProfile.pendingBalance)
-    : filteredSales.filter(s => s.status === 'pending').reduce((acc, s) => acc + (s.amount || 0), 0);
+  // Saldos reais separados por papel. Isso evita misturar saldo de afiliado e empresa
+  // em contas que historicamente tiveram os dois perfis habilitados.
+  const roleAvailableCents = roleMode === 'empresa'
+    ? Number(userProfile?.empresaAvailableBalanceCents)
+    : Number(userProfile?.afiliadoAvailableBalanceCents);
+  const rolePendingCents = roleMode === 'empresa'
+    ? Number(userProfile?.empresaPendingBalanceCents)
+    : Number(userProfile?.afiliadoPendingBalanceCents);
+
+  const availableBalance = Number.isFinite(roleAvailableCents)
+    ? roleAvailableCents / 100
+    : Number(userProfile?.availableBalance || 0);
+
+  const pendingBalance = Number.isFinite(rolePendingCents)
+    ? rolePendingCents / 100
+    : Number(userProfile?.pendingBalance || 0);
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-6 text-white min-w-0" id="leadspay-dashboard-exact">
