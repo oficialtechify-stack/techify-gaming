@@ -11,7 +11,7 @@
   --deep: #153f32;
   color: var(--ink);
   background: var(--paper);
-  font-family: var(--leadspay-brand-font, 'Michroma', sans-serif);
+  font-family: var(--leadspay-brand-font, 'Manrope', sans-serif);
   overflow: clip;
   transition: color 240ms ease, background-color 240ms ease;
 }
@@ -27,7 +27,7 @@
   --lime: #b5ec76;
   --deep: #0b1511;
 }
-.leadspay-site h1, .leadspay-site h2, .leadspay-site h3 { font-family: var(--leadspay-brand-font, 'Michroma', sans-serif); }
+.leadspay-site h1, .leadspay-site h2, .leadspay-site h3 { font-family: var(--leadspay-brand-font, 'Manrope', sans-serif); }
 .leadspay-site *, .leadspay-site *::before, .leadspay-site *::after { box-sizing: border-box; }
 .leadspay-site .container { width: min(100% - 56px, 1280px); margin-inline: auto; }
 

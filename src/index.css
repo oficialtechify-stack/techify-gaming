@@ -2,11 +2,11 @@
 
 /* =========================================================
    LEADSPAY GLOBAL TYPOGRAPHY
-   One consistent futuristic brand font in light + dark mode.
+   One consistent landing-page font in light + dark mode.
    Technical/code fields keep DM Mono for readability.
    ========================================================= */
 :root {
-  --leadspay-brand-font: 'Michroma', 'Arial Narrow', sans-serif;
+  --leadspay-brand-font: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --leadspay-mono-font: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -33,9 +33,10 @@ samp,
   font-family: var(--leadspay-mono-font) !important;
 }
 
-/* Michroma is naturally wide; these values keep the interface compact. */
+/* Landing typography rhythm */
 body {
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  font-weight: 500;
 }
 
 h1,
@@ -43,12 +44,17 @@ h2,
 h3,
 h4,
 h5,
-h6,
+h6 {
+  letter-spacing: -0.045em;
+  font-weight: 800;
+}
+
 button,
 nav,
 [role="tab"],
 [role="menuitem"] {
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
+  font-weight: 700;
 }
 
 
@@ -63,12 +69,12 @@ nav,
   body {
     background-color: #060A15;
     color: #ffffff;
-    font-family: 'Michroma', 'Arial Narrow', sans-serif;
+    font-family: var(--leadspay-brand-font);
     overflow-x: hidden;
   }
 
   h1, h2, h3, .elementor-heading-title {
-    font-family: 'Michroma', 'Arial Narrow', sans-serif;
+    font-family: var(--leadspay-brand-font);
     letter-spacing: -0.02em;
   }
 }
