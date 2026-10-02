@@ -210,4 +210,22 @@ async function main() {
   }
 }
 
-await main();
+const resultPath = new URL('../public/firestore-publish-result.json', import.meta.url);
+try {
+  await main();
+  await fs.writeFile(resultPath, JSON.stringify({
+    ok: true,
+    project: TARGET_PROJECT,
+    message: 'Publicação e validação do Firestore concluídas.',
+    at: new Date().toISOString(),
+  }, null, 2) + '\n', 'utf8');
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('[Firestore publish]', message);
+  await fs.writeFile(resultPath, JSON.stringify({
+    ok: false,
+    project: TARGET_PROJECT,
+    error: message.slice(0, 2000),
+    at: new Date().toISOString(),
+  }, null, 2) + '\n', 'utf8');
+}
