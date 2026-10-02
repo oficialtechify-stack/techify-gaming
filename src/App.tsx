@@ -79,8 +79,44 @@ function MainApp() {
           setCheckoutError(null);
           getCompanyPlanByIdOrSlug(targetPlanId).then((plan) => {
             setIsLoadingCheckout(false);
-            if (plan) setCheckoutPlan(plan);
-            else setCheckoutError(`Não encontramos a oferta para "${targetPlanId}". O link pode estar incorreto, pausado ou expirado.`);
+            if (plan) {
+              setCheckoutPlan(plan);
+
+              const directRef = params.get('ref') || params.get('r') || '';
+              if (directRef.trim()) {
+                const utmSource = params.get('utm_source') || '';
+                const utmMedium = params.get('utm_medium') || '';
+                const utmCampaign = params.get('utm_campaign') || '';
+                const sessionKey = `leadspay-click:${plan.id}:${directRef}:${utmSource}:${utmMedium}:${utmCampaign}`;
+                try {
+                  let eventId = sessionStorage.getItem(sessionKey) || '';
+                  if (!eventId) {
+                    const randomPart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                      ? crypto.randomUUID().replace(/-/g, '')
+                      : `${Date.now()}${Math.random().toString(36).slice(2)}`;
+                    eventId = `clk_${randomPart}`;
+                    sessionStorage.setItem(sessionKey, eventId);
+                  }
+                  fetch('/api/affiliates/click', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      planId: plan.id,
+                      affiliateCode: directRef.trim(),
+                      eventId,
+                      utmSource,
+                      utmMedium,
+                      utmCampaign,
+                    }),
+                    keepalive: true,
+                  }).catch(() => {});
+                } catch {
+                  // Analytics must never block checkout.
+                }
+              }
+            } else {
+              setCheckoutError(`Não encontramos a oferta para "${targetPlanId}". O link pode estar incorreto, pausado ou expirado.`);
+            }
           }).catch((err) => {
             console.error('Erro ao buscar plano para checkout:', err);
             setIsLoadingCheckout(false);

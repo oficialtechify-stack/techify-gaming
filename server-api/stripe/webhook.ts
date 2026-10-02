@@ -140,6 +140,9 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       is_test: !paymentIntent.livemode,
       environment: paymentIntent.livemode ? 'production' : 'development',
       couponCode: order.couponCode || null,
+      utmSource: order.utmSource || null,
+      utmMedium: order.utmMedium || null,
+      utmCampaign: order.utmCampaign || null,
       discountAmount: Number(order.discountCents || 0) / 100,
       financialBreakdown: {
         originalProductAmount: Number(order.originalProductAmountCents || order.productAmountCents || 0) / 100,

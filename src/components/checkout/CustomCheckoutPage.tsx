@@ -105,6 +105,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           buyerEmail: email.trim(),
           affiliateCode: getActiveAffiliateCode() || affiliateRef || '',
           couponCode: couponCode.trim(),
+          utmSource: new URLSearchParams(window.location.search).get('utm_source') || '',
+          utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || '',
+          utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || '',
         }),
       });
       const result = await response.json().catch(() => ({}));

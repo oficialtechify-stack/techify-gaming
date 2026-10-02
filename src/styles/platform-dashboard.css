@@ -329,3 +329,164 @@ body[data-leadspay-theme="light"] {
   transition-duration: 180ms;
   transition-timing-function: ease;
 }
+
+
+/* =========================================================
+   Affiliate Link Generator — readable in both themes
+   ========================================================= */
+#leadspay-afiliados-view .affiliate-links-hero,
+#leadspay-afiliados-view .affiliate-links-card,
+#leadspay-afiliados-view .affiliate-social-option,
+#leadspay-afiliados-view .affiliate-channel-option,
+#leadspay-afiliados-view .affiliate-link-result,
+#leadspay-afiliados-view .affiliate-collapsible,
+#leadspay-afiliados-view .affiliate-links-empty {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-links-hero {
+  background: #0b1220;
+  border: 1px solid rgba(255,255,255,.11);
+  color: #f8fafc;
+  box-shadow: 0 16px 40px rgba(0,0,0,.2);
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-links-card,
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-collapsible,
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-links-empty {
+  background: #080d1a;
+  border: 1px solid rgba(255,255,255,.1);
+  color: #f8fafc;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-links-input,
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-social-option,
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-channel-option,
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-link-code {
+  background: #050811 !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  color: #f8fafc !important;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-social-option.is-selected,
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-channel-option.is-selected {
+  background: #d9f22a !important;
+  border-color: #d9f22a !important;
+  color: #081018 !important;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-link-result {
+  background: #07110d;
+  border: 1px solid rgba(217,242,42,.36);
+  color: #f8fafc;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-collapsible-body {
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-secondary-button {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  color: #f8fafc;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-links-muted { color: #aeb8c8 !important; }
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-links-accent { color: #d9f22a !important; }
+
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-links-hero {
+  background: #f7faef !important;
+  border: 1px solid #dce8c9 !important;
+  color: #173d31 !important;
+  box-shadow: 0 12px 28px rgba(28,62,41,.07);
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-links-card,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-collapsible,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-links-empty {
+  background: #ffffff !important;
+  border: 1px solid #dfe7dc !important;
+  color: #172033 !important;
+  box-shadow: 0 8px 24px rgba(15,23,42,.04);
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-links-input,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-social-option,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-channel-option,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-link-code {
+  background: #ffffff !important;
+  border: 1px solid #d8e0e9 !important;
+  color: #172033 !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-social-option:hover,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-channel-option:hover {
+  background: #f5f8f2 !important;
+  border-color: #b8ca9d !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-social-option.is-selected,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-channel-option.is-selected {
+  background: #eaf7d9 !important;
+  border: 2px solid #83ad49 !important;
+  color: #244315 !important;
+  box-shadow: 0 6px 16px rgba(91,166,60,.10);
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-link-result {
+  background: #f8fbea !important;
+  border: 1px solid #bfd58f !important;
+  color: #173d31 !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-link-code {
+  background: #ffffff !important;
+  border-color: #cddbb6 !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-collapsible-body {
+  border-top: 1px solid #e2e8f0 !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-secondary-button {
+  background: #ffffff !important;
+  border: 1px solid #d4dde7 !important;
+  color: #172033 !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-links-muted {
+  color: #667085 !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-links-accent {
+  color: #587900 !important;
+}
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view .affiliate-links-kicker {
+  background: #eef6df !important;
+  border: 1px solid #bfd39e !important;
+  color: #55731b !important;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-links-kicker {
+  background: rgba(217,242,42,.10);
+  border: 1px solid rgba(217,242,42,.28);
+  color: #d9f22a;
+}
+#leadspay-afiliados-view .affiliate-primary-button {
+  background: #d9f22a;
+  color: #081018;
+  border: 1px solid #c4dc1f;
+}
+#leadspay-afiliados-view .affiliate-primary-button:hover {
+  background: #cbe51f;
+}
+#leadspay-afiliados-view .affiliate-locked-box {
+  background: #fff8e8;
+  border: 1px solid #f2c66d;
+  color: #6f4b00;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-locked-box {
+  background: rgba(245,158,11,.10);
+  border-color: rgba(245,158,11,.34);
+  color: #f6c86b;
+}
+#leadspay-afiliados-view .affiliate-lock-icon {
+  background: rgba(245,158,11,.12);
+  border: 1px solid rgba(245,158,11,.3);
+}
+#leadspay-afiliados-view .affiliate-result-divider {
+  border-bottom: 1px solid rgba(100,116,139,.16);
+}
+#leadspay-afiliados-view .affiliate-pulse-dot { background: #8caf00; }
+#leadspay-afiliados-view .affiliate-info-box {
+  background: #f6f8fb;
+  border: 1px solid #dce3eb;
+  color: #475467;
+}
+.leadspay-platform[data-theme="dark"] #leadspay-afiliados-view .affiliate-info-box {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.09);
+  color: #aeb8c8;
+}

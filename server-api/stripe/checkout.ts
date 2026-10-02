@@ -72,6 +72,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const buyerEmail = String(body.buyerEmail || '').trim().toLowerCase().slice(0, 200);
     const affiliateCode = String(body.affiliateCode || '').trim().slice(0, 64);
     const couponCode = String(body.couponCode || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
+    const utmSource = String(body.utmSource || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 100);
+    const utmMedium = String(body.utmMedium || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 100);
+    const utmCampaign = String(body.utmCampaign || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 140);
 
     if (!/^[A-Za-z0-9_-]{1,150}$/.test(planId)) return fail(res, 400, 'Oferta inválida.', 'INVALID_PLAN');
     if (!/^[A-Za-z0-9_-]{10,90}$/.test(attemptId)) return fail(res, 400, 'Atualize a página e tente novamente.', 'INVALID_ATTEMPT');
@@ -278,6 +281,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         companyAmountCents: split.companyAmountCents,
         companyReleaseDelayDays: companyDelayDays,
         affiliateReleaseDelayDays: affiliateDelayDays,
+        utmSource: utmSource || null,
+        utmMedium: utmMedium || null,
+        utmCampaign: utmCampaign || null,
         currency: 'brl',
         status: 'checkout_pending',
         transferStatus: 'not_started',
@@ -304,6 +310,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         companyOwnerId,
         affiliateId: affiliateId || '',
         couponCode: validCouponCode || '',
+        utmSource,
+        utmMedium,
+        utmCampaign,
         checkoutSource: 'leadspay-elements',
       },
     }, { idempotencyKey: `leadspay-pi-${orderId}` });
