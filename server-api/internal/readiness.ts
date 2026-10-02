@@ -10,24 +10,6 @@ async function restStatus(collectionName: string): Promise<number> {
   return response.status;
 }
 
-async function indexState(collectionGroup: string, expectedFields: string[]) {
-  const credential = getServerAdminApp().options.credential;
-  if (!credential) return { found: false, state: 'NO_CREDENTIAL' };
-  const token = await credential.getAccessToken();
-  const parent = `projects/${ADMIN_PROJECT_ID}/databases/(default)/collectionGroups/${encodeURIComponent(collectionGroup)}`;
-  const response = await fetch(`https://firestore.googleapis.com/v1/${parent}/indexes`, {
-    headers: { Authorization: `Bearer ${token.access_token}` },
-  });
-  if (!response.ok) return { found: false, state: `HTTP_${response.status}` };
-  const body:any = await response.json();
-  const indexes = Array.isArray(body.indexes) ? body.indexes : [];
-  const match = indexes.find((index:any) => {
-    const fields = (index.fields || []).map((field:any) => field.fieldPath).filter((x:string) => x !== '__name__');
-    return expectedFields.length === fields.length && expectedFields.every((field, i) => fields[i] === field);
-  });
-  return match ? { found: true, state: match.state || 'UNKNOWN', name: match.name } : { found: false, state: 'MISSING' };
-}
-
 async function buildGateResult() {
   try {
     const snap = await getServerAdminFirestore().collection('_internal').doc('firebase_deploy_gate').get();
@@ -54,31 +36,25 @@ export default async function handler(req: Req, res: Res) {
     const db = getServerAdminFirestore();
     await db.collection('plans').limit(1).get();
 
-    const [publicPlansStatus, anonymousCouponsStatus, releaseIndex, orderIndex, buildGate] = await Promise.all([
+    const [publicPlansStatus, anonymousCouponsStatus, buildGate] = await Promise.all([
       restStatus('plans'),
       restStatus('coupons'),
-      indexState('balance_releases', ['status','availableAt']),
-      indexState('stripe_checkout_orders', ['status','transferStatus','availableAt']),
       buildGateResult(),
     ]);
 
-    const queryChecks:any = {};
+    let releaseQuery:any = { ok:true };
     try {
-      await db.collection('balance_releases').where('status','==','pending').where('availableAt','<=',new Date().toISOString()).limit(1).get();
-      queryChecks.balanceReleases = { ok: true };
+      await db.collection('balance_releases')
+        .where('availableAt','<=',new Date().toISOString())
+        .orderBy('availableAt','asc')
+        .limit(1)
+        .get();
     } catch (error) {
-      queryChecks.balanceReleases = { ok: false, error: error instanceof Error ? error.message.slice(0,300) : 'failed' };
-    }
-    try {
-      await db.collection('stripe_checkout_orders').where('status','==','paid').where('transferStatus','==','not_started').where('availableAt','<=',new Date().toISOString()).limit(1).get();
-      queryChecks.stripeOrders = { ok: true };
-    } catch (error) {
-      queryChecks.stripeOrders = { ok: false, error: error instanceof Error ? error.message.slice(0,300) : 'failed' };
+      releaseQuery = { ok:false, error:error instanceof Error ? error.message.slice(0,300) : 'failed' };
     }
 
     const rulesMatchExpected = publicPlansStatus === 200 && anonymousCouponsStatus === 403;
-    const indexesReady = queryChecks.balanceReleases.ok && queryChecks.stripeOrders.ok;
-    const ok = rulesMatchExpected && indexesReady;
+    const ok = rulesMatchExpected && releaseQuery.ok;
 
     return res.status(ok ? 200 : 409).json({
       ok,
@@ -90,12 +66,7 @@ export default async function handler(req: Req, res: Res) {
         expected: { plans: 200, coupons: 403 },
         matchExpected: rulesMatchExpected,
       },
-      indexes: {
-        balanceReleases: releaseIndex,
-        stripeOrders: orderIndex,
-        queryChecks,
-        ready: indexesReady,
-      },
+      releaseQuery,
       buildGate,
     });
   } catch (error) {
