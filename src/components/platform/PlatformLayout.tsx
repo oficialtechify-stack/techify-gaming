@@ -476,8 +476,57 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   };
 
   const effectiveUserId = currentUser?.uid || userProfile?.id || userProfile?.userId || '';
-  const userCompanyId = userProfile?.companyId || (roleMode === 'empresa' ? (companies.find(c => c.ownerId === effectiveUserId)?.id) : undefined);
-  const effectiveCompanyId = (isSuperAdmin && roleMode === 'admin') ? undefined : userCompanyId;
+  const [canonicalCompanyId, setCanonicalCompanyId] = useState<string | undefined>(
+    userProfile?.companyId || undefined
+  );
+  const [companyContextLoading, setCompanyContextLoading] = useState(false);
+
+  // Empresa é um tenant único. Sempre resolve o companyId canônico pelo backend
+  // antes de carregar produtos, afiliados, vendas e demais dados corporativos.
+  useEffect(() => {
+    if (roleMode !== 'empresa' || !currentUser?.uid) {
+      if (roleMode !== 'empresa') setCanonicalCompanyId(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    setCompanyContextLoading(true);
+
+    currentUser.getIdToken()
+      .then((token) => fetch('/api/company/context', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }))
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível carregar a empresa desta conta.');
+        if (!cancelled) setCanonicalCompanyId(String(data.companyId || data.company?.id || '') || undefined);
+      })
+      .catch((error) => {
+        console.error('[Company context]', error);
+        if (!cancelled) setCanonicalCompanyId(userProfile?.companyId || undefined);
+      })
+      .finally(() => {
+        if (!cancelled) setCompanyContextLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    roleMode,
+    currentUser?.uid,
+    userProfile?.companyId,
+    userProfile?.empresaVerificationStatus,
+    userProfile?.companyVerificationStatus,
+  ]);
+
+  // Afiliados enxergam o marketplace global. Empresa enxerga somente o próprio tenant.
+  const effectiveCompanyId =
+    roleMode === 'empresa' && !(isSuperAdmin && roleMode === 'admin')
+      ? (canonicalCompanyId || userProfile?.companyId || undefined)
+      : undefined;
 
   // 1. Company-isolated or Global subscriptions (companies, plans, affiliations, and sales)
   useEffect(() => {
@@ -543,13 +592,15 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return companies.filter(c => 
       c.ownerId === effectiveUserId || 
       c.submittedBy === effectiveUserId || 
-      (userProfile?.companyId && c.id === userProfile.companyId)
+      (userProfile?.companyId && c.id === userProfile.companyId) ||
+      (canonicalCompanyId && c.id === canonicalCompanyId)
     );
-  }, [companies, effectiveUserId, userProfile?.companyId, roleMode, isSuperAdmin]);
+  }, [companies, effectiveUserId, userProfile?.companyId, canonicalCompanyId, roleMode, isSuperAdmin]);
 
   const activeCompany = useMemo(() => {
-    return myCompanies[0] || companies[0] || null;
-  }, [myCompanies, companies]);
+    if (roleMode === 'admin' && isSuperAdmin) return companies[0] || null;
+    return myCompanies[0] || null;
+  }, [myCompanies, companies, roleMode, isSuperAdmin]);
 
   // Verificação por papel: usa exatamente a mesma regra do backend.
   const affiliateRoleStatus = useMemo(
@@ -1776,7 +1827,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onSubmitForVerification={handleSubmitForVerification}
               onNavigateToTab={setActiveTab}
               roleMode={roleMode}
-              company={myCompanies[0] || companies[0]}
+              company={activeCompany || undefined}
             />
           )}
 
@@ -1803,7 +1854,25 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setIsCreateCompanyModalOpen(true);
               }}
               onOpenCreatePlan={(compId) => {
-                const targetCompId = compId || (myCompanies.length > 0 ? myCompanies[0].id : undefined);
+                const targetCompId = compId || activeCompany?.id || canonicalCompanyId;
+                if (!targetCompId || companyContextLoading) {
+                  setLiveToast({
+                    message: 'Empresa ainda não carregada',
+                    sub: 'Aguarde a vinculação da conta e tente novamente.',
+                    amount: 'Aguarde'
+                  });
+                  setTimeout(() => setLiveToast(null), 3500);
+                  return;
+                }
+                if (activeCompany && targetCompId !== activeCompany.id) {
+                  setLiveToast({
+                    message: 'Empresa inválida',
+                    sub: 'Produtos só podem ser cadastrados para a empresa desta conta.',
+                    amount: 'Bloqueado'
+                  });
+                  setTimeout(() => setLiveToast(null), 4000);
+                  return;
+                }
                 setSelectedCompanyIdForPlan(targetCompId);
                 setEditingPlan(null);
                 setIsCreateCompanyModalOpen(false);
@@ -1914,7 +1983,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <FinanceiroView
               roleMode={roleMode}
               userProfile={userProfile}
-              company={myCompanies[0] || companies[0] || null}
+              company={activeCompany}
               transactions={userVisibleTransactions}
               withdrawals={withdrawals}
               onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
@@ -1939,19 +2008,19 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'clientes' && (
             <ClientesView
-              companies={myCompanies.length > 0 ? myCompanies : companies}
-              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
+              companies={roleMode === 'admin' && isSuperAdmin ? companies : myCompanies}
+              activeCompanyId={activeCompany?.id}
               userRole={roleMode}
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
+              plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans}
               sales={userVisibleTransactions}
             />
           )}
           {activeTab === 'cobrancas' && (
             <CobrancasView
               sales={userVisibleTransactions}
-              companies={myCompanies.length > 0 ? myCompanies : companies}
-              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
+              companies={roleMode === 'admin' && isSuperAdmin ? companies : myCompanies}
+              activeCompanyId={activeCompany?.id}
+              plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans}
               onRefresh={() => {}}
               onAddSale={(newTx) => setTransactions(prev => [newTx, ...prev])}
               onDeleteSale={(saleId) => setTransactions(prev => prev.filter(t => t.id !== saleId))}
@@ -1960,9 +2029,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'links_pagamento' && (
             <LinksPagamentoView
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans}
-              companies={myCompanies.length > 0 ? myCompanies : companies}
-              activeCompanyId={myCompanies[0]?.id || companies[0]?.id}
+              plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans}
+              companies={roleMode === 'admin' && isSuperAdmin ? companies : myCompanies}
+              activeCompanyId={activeCompany?.id}
               onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
               onCreateCustomPlan={handleCreatePlan}
               onDeletePlan={handleDeletePlan}
@@ -1979,12 +2048,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'assinaturas' && (
             <AssinaturasView 
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
+              plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans} 
               sales={userVisibleTransactions} 
               userProfile={userProfile}
               onNavigateToProducts={() => setActiveTab('produtos')}
               onOpenCreatePlan={() => {
-                setSelectedCompanyIdForPlan(myCompanies[0]?.id);
+                setSelectedCompanyIdForPlan(activeCompany?.id || canonicalCompanyId);
                 setEditingPlan(null);
                 setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
@@ -1994,8 +2063,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'cupons' && (
             <CuponsView 
-              plans={myCompanyPlans.length > 0 ? myCompanyPlans : plans} 
-              affiliations={myCompanyAffiliations.length > 0 ? myCompanyAffiliations : allAffiliations}
+              plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans} 
+              affiliations={roleMode === 'admin' && isSuperAdmin ? allAffiliations : myCompanyAffiliations}
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
@@ -2138,8 +2207,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           setEditingPlan(null);
           setSelectedCompanyIdForPlan(undefined);
         }}
-        companies={myCompanies.length > 0 && !(isSuperAdmin && roleMode === 'admin') ? myCompanies : companies}
-        defaultCompanyId={selectedCompanyIdForPlan || (myCompanies.length > 0 ? myCompanies[0].id : undefined)}
+        companies={roleMode === 'admin' && isSuperAdmin ? companies : myCompanies}
+        defaultCompanyId={selectedCompanyIdForPlan || activeCompany?.id}
         initialData={editingPlan}
         onPlanCreated={handleCreatePlan}
         onPlanUpdated={handleUpdatePlan}
