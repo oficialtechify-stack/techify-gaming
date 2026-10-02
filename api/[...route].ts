@@ -26,6 +26,7 @@ import partnerPaymentsHandler from '../server-api/partner/payments.js';
 import partnerTestWebhookHandler from '../server-api/partner/test-webhook.js';
 import couponsHandler from '../server-api/coupons.js';
 import companiesHandler from '../server-api/companies.js';
+import companyContextHandler from '../server-api/company/context.js';
 import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
 import mcpRestHandler from '../server-api/mcp/rest.js';
 import mcpProtocolHandler from '../server-api/mcp/protocol.js';
@@ -162,6 +163,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return couponsHandler(req as any, res as any);
     case 'companies':
       return companiesHandler(req as any, res as any);
+    case 'company/context':
+      return companyContextHandler(req as any, res as any);
     case 'profile/enable-affiliate':
       return enableAffiliateHandler(req as any, res as any);
     case 'partner/api-key':
