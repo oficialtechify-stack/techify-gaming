@@ -101,7 +101,26 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     'Educação / Cursos'
   ];
 
+  const approvedCompanyIds = new Set(
+    companies
+      .filter((company) =>
+        company.verified === true &&
+        String(company.status || '').toLowerCase() === 'approved' &&
+        company.archived !== true &&
+        company.isArchived !== true &&
+        company.banned !== true
+      )
+      .map((company) => company.id)
+  );
+
   const filteredPlatforms = platforms.filter(p => {
+    if (
+      p.active === false ||
+      String(p.status || '').toLowerCase() !== 'ativo' ||
+      (p as any).archived === true ||
+      (p as any).isArchived === true ||
+      !approvedCompanyIds.has(p.companyId)
+    ) return false;
     if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
     if (minCommission > 0 && p.commissionPercentage < minCommission) return false;
     if (searchTerm) {
