@@ -491,6 +491,8 @@ export interface AffiliateLinkItem {
 
 export interface TeamMember {
   id: string;
+  companyId?: string;
+  ownerId?: string;
   name: string;
   email: string;
   role: string;
@@ -498,6 +500,8 @@ export interface TeamMember {
   commissionGenerated: number;
   bonus: number;
   status: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PlatformClient {
