@@ -479,7 +479,7 @@ export async function deleteCompanyInFirebase(companyId: string) {
 
 
 // ==========================================
-// 📦 PLANOS & PRODUTOS (COMPANY PLANS)
+// 📦 PRODUTOS & OFERTAS (COMPANY PLANS)
 // ==========================================
 
 /**
@@ -548,7 +548,7 @@ export async function getCompanyPlanByIdOrSlug(idOrSlug: string): Promise<Compan
  */
 export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'id' | 'createdAt'>) {
   if (!planData.companyId || planData.companyId === 'comp-default' || planData.companyId === 'comp_default') {
-    throw new Error('companyId é obrigatório para cadastrar um plano.');
+    throw new Error('companyId é obrigatório para cadastrar um produto.');
   }
   const user = auth.currentUser;
   if (!user) throw new Error('Faça login novamente para cadastrar uma oferta.');
@@ -567,7 +567,7 @@ export async function createCompanyPlanInFirebase(planData: Omit<CompanyPlan, 'i
 export const createPlatformInFirebase = createCompanyPlanInFirebase;
 
 /**
- * Delete a Plan from Firestore
+ * Archive a Product through the secure backend
  */
 export async function deleteCompanyPlanInFirebase(planId: string, companyId?: string) {
   const user = auth.currentUser;
@@ -590,7 +590,7 @@ export async function deleteCompanyPlanInFirebase(planId: string, companyId?: st
 export const deletePlatformInFirebase = (planId: string) => deleteCompanyPlanInFirebase(planId);
 
 /**
- * Update Plan in Firestore
+ * Update Product through the secure backend
  */
 export async function updateCompanyPlanInFirebase(planId: string, updates: Partial<CompanyPlan>) {
   const user = auth.currentUser;
@@ -775,46 +775,6 @@ export function subscribeSales(callback: (sales: SaleTransaction[]) => void, com
   });
 }
 
-/**
- * Update Platform Global Finances (Checkout Fee R$ 0,99, Withdrawal Fee R$ 2,50)
- */
-export async function creditPlatformFinances(type: 'checkout' | 'withdrawal', feeAmount: number) {
-  try {
-    const docRef = doc(db, COLLECTIONS.PLATFORM_FINANCES, 'global_summary');
-    const snap = await getDoc(docRef);
-    const now = new Date().toISOString();
-
-    if (snap.exists()) {
-      const data = snap.data();
-      const currentRevenue = data.totalPlatformRevenue || 0;
-      const currentCheckoutFees = data.totalCheckoutFees || 0;
-      const currentWithdrawalFees = data.totalWithdrawalFees || 0;
-      const currentSales = data.totalSalesProcessed || 0;
-      const currentWithdrawals = data.totalWithdrawalsProcessed || 0;
-
-      await updateDoc(docRef, sanitizeForFirestore({
-        totalPlatformRevenue: Number((currentRevenue + feeAmount).toFixed(2)),
-        totalCheckoutFees: type === 'checkout' ? Number((currentCheckoutFees + feeAmount).toFixed(2)) : currentCheckoutFees,
-        totalWithdrawalFees: type === 'withdrawal' ? Number((currentWithdrawalFees + feeAmount).toFixed(2)) : currentWithdrawalFees,
-        totalSalesProcessed: type === 'checkout' ? currentSales + 1 : currentSales,
-        totalWithdrawalsProcessed: type === 'withdrawal' ? currentWithdrawals + 1 : currentWithdrawals,
-        lastUpdated: now
-      }));
-    } else {
-      await setDoc(docRef, sanitizeForFirestore({
-        totalPlatformRevenue: feeAmount,
-        totalCheckoutFees: type === 'checkout' ? feeAmount : 0,
-        totalWithdrawalFees: type === 'withdrawal' ? feeAmount : 0,
-        totalSalesProcessed: type === 'checkout' ? 1 : 0,
-        totalWithdrawalsProcessed: type === 'withdrawal' ? 1 : 0,
-        lastUpdated: now
-      }));
-    }
-  } catch (err) {
-    console.warn('[Platform Finances] Warning updating global summary:', err);
-  }
-}
-
 // ==========================================
 // 🏧 SAQUES VIA STRIPE CONNECT (WITHDRAWALS)
 // ==========================================
@@ -868,271 +828,6 @@ export async function requestWithdrawalViaBackend(
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.error === true) throw new Error(data.message || data.error || 'Erro ao processar solicitação de saque');
   return data;
-}
-
-/**
- * Trigger 9-day balance release cron manually or scheduled
- */
-export async function triggerReleaseBalancesCron(): Promise<{ releasedCount: number; message: string }> {
-  return { releasedCount: 0, message: 'A liberação de saldo é automática e protegida pelo servidor.' };
-}
-
-/**
- * Direct Cashout fallback if offline/client-only
- */
-export async function createWithdrawalInFirebase() {
-  throw new Error('Fluxo de saque legado desativado. Use o saque seguro pela Stripe.');
-}
-
-// ==========================================
-// 👥 EQUIPE & OUTROS
-// ==========================================
-
-export async function saveAffiliateLinkInFirebase(link: Omit<AffiliateLinkItem, 'id' | 'createdAt'>) {
-  const id = `aff-${Date.now()}`;
-  const now = new Date().toISOString();
-  const linkItem: AffiliateLinkItem = {
-    ...link,
-    id,
-    createdAt: now
-  };
-  await setDoc(doc(db, COLLECTIONS.AFFILIATE_LINKS, id), sanitizeForFirestore(linkItem));
-  return linkItem;
-}
-
-// ==========================================
-// 📊 MÉTRICAS GLOBAIS EM TEMPO REAL (FIREBASE)
-// ==========================================
-
-export interface GlobalPlatformMetrics {
-  totalRegisteredUsers: number;
-  totalStartups: number;
-  totalPlans: number;
-  totalCommissionsGenerated: number;
-  totalCommissionsPaid: number;
-  totalGrossSales: number;
-  totalSalesCount: number;
-  companies: CompanyStartup[];
-  plans: CompanyPlan[];
-}
-
-/**
- * Subscribes to realtime updates across collections to calculate live stats:
- * - Real users / affiliates count
- * - Real startups and plans count
- * - Real generated commissions
- * - Real paid commissions via PIX
- */
-export function subscribeGlobalPlatformMetrics(
-  callback: (metrics: GlobalPlatformMetrics) => void
-) {
-  let companiesList: CompanyStartup[] = [];
-  let plansList: CompanyPlan[] = [];
-  let salesList: SaleTransaction[] = [];
-  let withdrawalsList: WithdrawalRequest[] = [];
-  let userProfilesCount = 1;
-
-  const emit = () => {
-    const totalCommissionsGenerated = salesList.reduce((acc, s) => acc + (s.commissionEarned || 0), 0);
-    const totalCommissionsPaid = withdrawalsList
-      .filter(w => w.status === 'Concluído' || w.status === 'Aprovado')
-      .reduce((acc, w) => acc + (w.amount || 0), 0);
-    const totalGrossSales = salesList.reduce((acc, s) => acc + (s.amount || 0), 0);
-
-    callback({
-      totalRegisteredUsers: Math.max(userProfilesCount, 1),
-      totalStartups: companiesList.length,
-      totalPlans: plansList.length,
-      totalCommissionsGenerated,
-      totalCommissionsPaid,
-      totalGrossSales,
-      totalSalesCount: salesList.length,
-      companies: companiesList,
-      plans: plansList
-    });
-  };
-
-  // 1. Companies listener
-  const unsubCompanies = onSnapshot(collection(db, COLLECTIONS.COMPANIES), (snap) => {
-    companiesList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) }));
-    emit();
-  }, (err) => console.error('Error in metrics companies listener:', err));
-
-  // 2. Plans listener
-  const unsubPlans = onSnapshot(collection(db, COLLECTIONS.PLANS), (snap) => {
-    plansList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<CompanyPlan, 'id'>) }));
-    emit();
-  }, (err) => console.error('Error in metrics plans listener:', err));
-
-  // 3. Sales listener
-  const unsubSales = onSnapshot(collection(db, COLLECTIONS.SALES), (snap) => {
-    salesList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<SaleTransaction, 'id'>) }));
-    emit();
-  }, (err) => console.error('Error in metrics sales listener:', err));
-
-  // 4. Withdrawals listener
-  const unsubWithdrawals = onSnapshot(collection(db, COLLECTIONS.WITHDRAWALS), (snap) => {
-    withdrawalsList = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, 'id'>) }));
-    emit();
-  }, (err) => console.error('Error in metrics withdrawals listener:', err));
-
-  // 5. User Profiles count listener
-  const unsubProfiles = onSnapshot(collection(db, COLLECTIONS.PROFILES), (snap) => {
-    userProfilesCount = Math.max(snap.size, 1);
-    emit();
-  }, (err) => console.error('Error in metrics profiles listener:', err));
-
-  return () => {
-    unsubCompanies();
-    unsubPlans();
-    unsubSales();
-    unsubWithdrawals();
-    unsubProfiles();
-  };
-}
-
-/**
- * Busca o ID da subconta Asaas do vendedor/empresa/plano (ex: "acc_...")
- * Prioriza users/{sellerId}.asaasSubaccountId, user_profiles e companies
- */
-export async function fetchSellerSubaccountId(param: string | CompanyPlan | any): Promise<string | null> {
-  if (!param) return null;
-
-  try {
-    // Se for objeto do plano
-    if (typeof param === 'object') {
-      const plan = param as any;
-      if (plan.asaasSubaccountId) return String(plan.asaasSubaccountId).trim();
-      if (plan.subaccountId) return String(plan.subaccountId).trim();
-
-      const candidateIds: string[] = [
-        plan.sellerId,
-        plan.ownerId,
-        plan.userId,
-        plan.companyId
-      ].filter((v): v is string => Boolean(v));
-
-      for (const sellerId of candidateIds) {
-        // 1. users/{sellerId} (conforme requisito específico users/{sellerId}.asaasSubaccountId)
-        try {
-          const userDoc = await getDoc(doc(db, 'users', String(sellerId)));
-          if (userDoc.exists()) {
-            const uData = userDoc.data();
-            const subId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
-            if (subId) return String(subId).trim();
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar users/{sellerId} no Firestore:', e);
-        }
-
-        // 2. user_profiles/{sellerId}
-        try {
-          const profDoc = await getDoc(doc(db, COLLECTIONS.PROFILES, String(sellerId)));
-          if (profDoc.exists()) {
-            const pData = profDoc.data();
-            const subId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
-            if (subId) return String(subId).trim();
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar user_profiles/{sellerId} no Firestore:', e);
-        }
-      }
-
-      // 3. companies/{companyId}
-      if (plan.companyId) {
-        try {
-          const compDoc = await getDoc(doc(db, COLLECTIONS.COMPANIES, String(plan.companyId)));
-          if (compDoc.exists()) {
-            const cData = compDoc.data();
-            const subId = cData?.asaasSubaccountId || cData?.subaccountId;
-            if (subId) return String(subId).trim();
-            if (cData?.ownerId) {
-              const ownerUserDoc = await getDoc(doc(db, 'users', String(cData.ownerId)));
-              if (ownerUserDoc.exists()) {
-                const oData = ownerUserDoc.data();
-                const ownerSubId = oData?.asaasSubaccountId || oData?.subaccountId;
-                if (ownerSubId) return String(ownerSubId).trim();
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar companies/{companyId} no Firestore:', e);
-        }
-      }
-
-      // 4. plans/{plan.id}
-      if (plan.id) {
-        try {
-          const planDoc = await getDoc(doc(db, COLLECTIONS.PLANS, String(plan.id)));
-          if (planDoc.exists()) {
-            const plData = planDoc.data();
-            const subId = plData?.asaasSubaccountId || plData?.subaccountId;
-            if (subId) return String(subId).trim();
-          }
-        } catch (e) {
-          console.warn('Erro ao consultar plans/{plan.id} no Firestore:', e);
-        }
-      }
-
-      return null;
-    }
-
-    // Se for string com sellerId / companyId / planId
-    const sellerId = String(param).trim();
-    if (!sellerId) return null;
-
-    // 1. users/{sellerId}
-    try {
-      const uDoc = await getDoc(doc(db, 'users', sellerId));
-      if (uDoc.exists()) {
-        const uData = uDoc.data();
-        const subId = uData?.asaasSubaccountId || uData?.subaccountId || uData?.subaccount_id || uData?.walletId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar users no Firestore:', e);
-    }
-
-    // 2. user_profiles/{sellerId}
-    try {
-      const pDoc = await getDoc(doc(db, COLLECTIONS.PROFILES, sellerId));
-      if (pDoc.exists()) {
-        const pData = pDoc.data();
-        const subId = pData?.asaasSubaccountId || pData?.subaccountId || pData?.subaccount_id || pData?.walletId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar user_profiles no Firestore:', e);
-    }
-
-    // 3. companies/{sellerId}
-    try {
-      const cDoc = await getDoc(doc(db, COLLECTIONS.COMPANIES, sellerId));
-      if (cDoc.exists()) {
-        const cData = cDoc.data();
-        const subId = cData?.asaasSubaccountId || cData?.subaccountId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar companies no Firestore:', e);
-    }
-
-    // 4. plans/{sellerId}
-    try {
-      const plDoc = await getDoc(doc(db, COLLECTIONS.PLANS, sellerId));
-      if (plDoc.exists()) {
-        const plData = plDoc.data();
-        const subId = plData?.asaasSubaccountId || plData?.subaccountId;
-        if (subId) return String(subId).trim();
-      }
-    } catch (e) {
-      console.warn('Erro ao consultar plans no Firestore:', e);
-    }
-  } catch (err) {
-    console.warn('Erro geral ao buscar subaccountId no Firestore:', err);
-  }
-
-  return null;
 }
 
 // ==========================================
