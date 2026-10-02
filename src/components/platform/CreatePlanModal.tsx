@@ -1033,26 +1033,74 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-[#D9F22A]/40 bg-[#D9F22A]/10 p-4">
+                    <button
+                      type="button"
+                      onClick={() => setBillingType('unico')}
+                      className={`rounded-xl border p-4 text-left transition ${
+                        billingType === 'unico'
+                          ? 'border-[#D9F22A]/45 bg-[#D9F22A]/10'
+                          : 'border-white/8 bg-[#070c16] hover:border-white/15'
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-sm font-bold text-white">Pagamento único</div>
-                        <Check className="h-4 w-4 text-[#D9F22A]" />
+                        {billingType === 'unico' && <Check className="h-4 w-4 text-[#D9F22A]" />}
                       </div>
                       <p className="mt-1 text-[11px] leading-5 text-white/45">
                         O cliente paga uma única vez no checkout.
                       </p>
-                    </div>
-                    <div className="rounded-xl border border-white/8 bg-[#070c16] p-4 opacity-55">
-                      <div className="text-sm font-bold text-white/60">Assinatura recorrente</div>
-                      <p className="mt-1 text-[11px] leading-5 text-white/35">
-                        Ainda não está liberada para produtos de empresas.
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBillingType('recorrente')}
+                      className={`rounded-xl border p-4 text-left transition ${
+                        billingType === 'recorrente'
+                          ? 'border-[#D9F22A]/45 bg-[#D9F22A]/10'
+                          : 'border-white/8 bg-[#070c16] hover:border-white/15'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-bold text-white">Assinatura recorrente</div>
+                        {billingType === 'recorrente' && <Check className="h-4 w-4 text-[#D9F22A]" />}
+                      </div>
+                      <p className="mt-1 text-[11px] leading-5 text-white/45">
+                        A Stripe cobra automaticamente a cada renovação.
                       </p>
-                    </div>
+                    </button>
                   </div>
+
+                  {billingType === 'recorrente' && (
+                    <div className="mt-5 rounded-2xl border border-white/8 bg-[#070c16] p-4">
+                      <label className={labelClass}>Período da assinatura *</label>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {([
+                          ['WEEKLY', 'Semanal'],
+                          ['MONTHLY', 'Mensal'],
+                          ['YEARLY', 'Anual'],
+                        ] as Array<['WEEKLY' | 'MONTHLY' | 'YEARLY', string]>).map(([cycle, label]) => (
+                          <button
+                            key={cycle}
+                            type="button"
+                            onClick={() => setBillingCycle(cycle)}
+                            className={`rounded-xl border px-3 py-3 text-xs font-bold transition ${
+                              billingCycle === cycle
+                                ? 'border-[#D9F22A]/45 bg-[#D9F22A]/10 text-white'
+                                : 'border-white/8 bg-[#0D1422] text-white/50 hover:text-white'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className={labelClass}>Preço de venda (R$) *</label>
+                      <label className={labelClass}>
+                        {billingType === 'recorrente' ? `Valor por ${billingCycleLabel} (R$) *` : 'Preço de venda (R$) *'}
+                      </label>
                       <input
                         inputMode="decimal"
                         value={priceSetup}
@@ -1066,7 +1114,9 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                     </div>
 
                     <div>
-                      <label className={labelClass}>Comissão do afiliado (%) *</label>
+                      <label className={labelClass}>
+                        {billingType === 'recorrente' ? 'Comissão na primeira cobrança (%) *' : 'Comissão do afiliado (%) *'}
+                      </label>
                       <input
                         inputMode="decimal"
                         value={commissionPercentage}
@@ -1079,6 +1129,53 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                       <p className="mt-1.5 text-[10px] text-white/35">De 0,01% até 100%.</p>
                     </div>
                   </div>
+
+                  {billingType === 'recorrente' && (
+                    <div className="mt-5 rounded-2xl border border-[#D9F22A]/15 bg-[#D9F22A]/[0.04] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm font-bold text-white">Comissão recorrente do afiliado</div>
+                          <p className="mt-1 max-w-xl text-[11px] leading-5 text-white/45">
+                            Quando ativada, o afiliado continua recebendo comissão em cada renovação enquanto o cliente mantiver a assinatura ativa.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRecurringCommissionEnabled((value) => !value)}
+                          className={`relative h-7 w-12 shrink-0 rounded-full border transition ${
+                            recurringCommissionEnabled
+                              ? 'border-[#D9F22A]/60 bg-[#D9F22A]'
+                              : 'border-white/15 bg-white/5'
+                          }`}
+                          aria-pressed={recurringCommissionEnabled}
+                        >
+                          <span
+                            className={`absolute top-1 h-5 w-5 rounded-full bg-[#07100A] transition-all ${
+                              recurringCommissionEnabled ? 'left-6' : 'left-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {recurringCommissionEnabled && (
+                        <div className="mt-4 max-w-sm">
+                          <label className={labelClass}>Comissão em cada renovação (%) *</label>
+                          <input
+                            inputMode="decimal"
+                            value={recurrentCommissionPercent}
+                            onChange={(event) =>
+                              setRecurrentCommissionPercent(event.target.value.replace(/[^0-9.,]/g, ''))
+                            }
+                            placeholder={commissionPercentage || '40'}
+                            className={fieldClass}
+                          />
+                          <p className="mt-1.5 text-[10px] leading-4 text-white/35">
+                            Ex.: em uma assinatura de {formatMoney(price)}, {recurrentPercent || 0}% gera {formatMoney(recurrentCommissionValue)} para o afiliado a cada renovação.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </section>
 
                 <section className="overflow-hidden rounded-2xl border border-[#D9F22A]/20 bg-[#0D1422]">
