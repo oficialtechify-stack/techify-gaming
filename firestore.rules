@@ -231,6 +231,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /stripe_product_subscription_checkouts/{sessionId} {
+      allow read, write: if false;
+    }
+
+    match /product_subscriptions/{subscriptionId} {
+      allow read, write: if false;
+    }
+
     match /partner_api_keys/{keyId} {
       allow read, write: if false;
     }
