@@ -440,7 +440,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     setActiveTab('dashboard');
     setLiveToast({
       message: 'Cadastro de Afiliado Concluído!',
-      sub: 'Conta ativada com repasse PIX D+9',
+      sub: 'Conta ativada com recebimentos via Stripe Connect',
       amount: 'Sucesso'
     });
     setTimeout(() => setLiveToast(null), 4500);
@@ -1075,7 +1075,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'dashboard' as PlatformTab, label: 'Visão geral e carteira', icon: LayoutDashboard },
     { id: 'comunidade' as PlatformTab, label: 'Comunidade VIP (Família)', icon: HeartHandshake, badge: 'WhatsApp' },
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
-    { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
+    { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Ativo' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },

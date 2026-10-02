@@ -22,6 +22,8 @@ import partnerPaymentsHandler from '../server-api/partner/payments.js';
 import couponsHandler from '../server-api/coupons.js';
 import companiesHandler from '../server-api/companies.js';
 import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
+import mcpRestHandler from '../server-api/mcp/rest.js';
+import mcpProtocolHandler from '../server-api/mcp/protocol.js';
 
 export const config = {
   api: {
@@ -176,6 +178,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return legacyLookupHandler(req as any, res as any);
     case 'affiliates/join':
       return affiliateJoinHandler(req as any, res as any);
+    case 'mcp':
+      return mcpProtocolHandler(req as any, res as any);
+    case 'mcp/v1':
+      (req as any).mcpRoute = '';
+      return mcpRestHandler(req as any, res as any);
+    case 'mcp/v1/status':
+    case 'mcp/v1/balance':
+    case 'mcp/v1/products':
+    case 'mcp/v1/affiliations':
+    case 'mcp/v1/coupons':
+    case 'mcp/v1/checkout':
+      (req as any).mcpRoute = cleanPath.replace(/^mcp\/v1\/?/, '');
+      return mcpRestHandler(req as any, res as any);
     case 'admin/audit-identities':
       return auditIdentitiesHandler(req as any, res as any);
     case 'admin/explorer':

@@ -11,17 +11,32 @@ export default async function handler(req:Req,res:Res){
     const raw=typeof req.headers['x-api-key']==='string'?req.headers['x-api-key'] as string:
       (typeof req.headers.authorization==='string'?req.headers.authorization.replace(/^Bearer\s+/i,''):'');
     if(!raw) return res.status(401).json({error:'API Key ausente.'});
+
+    const isProduction=process.env.VERCEL_ENV==='production';
+    if(isProduction && !raw.startsWith('lp_live_')) return res.status(401).json({error:'Use uma chave live em produção.'});
+    if(!isProduction && raw.startsWith('lp_live_')) return res.status(401).json({error:'Chave live não permitida neste ambiente.'});
+
     const {getServerAdminFirestore}=await import('../../lib/firebaseAdminServer.js');
     const db=getServerAdminFirestore();
     const keyHash=createHash('sha256').update(raw).digest('hex');
-    const keySnap=await db.collection('partner_api_keys').where('keyHash','==',keyHash).where('active','==',true).limit(1).get();
-    if(keySnap.empty) return res.status(401).json({error:'API Key inválida ou revogada.'});
-    const key=keySnap.docs[0].data();
+    const keySnap=await db.collection('partner_api_keys').where('keyHash','==',keyHash).limit(2).get();
+    const keyDoc=keySnap.docs.find(doc=>doc.data().active===true);
+    if(!keyDoc) return res.status(401).json({error:'API Key inválida ou revogada.'});
+    const key=keyDoc.data();
+
+    const scopes=Array.isArray(key.scopes)?key.scopes.map(String):[];
+    if(!scopes.includes('payments:create')) return res.status(403).json({error:'Esta chave não possui permissão para criar pagamentos pela API.'});
+    const companyId=String(key.companyId||'').trim();
+    if(!companyId) return res.status(403).json({error:'Esta chave não está vinculada a uma empresa.'});
+
     const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
     const planId=String(body.planId||'').trim();
     if(!planId) return res.status(400).json({error:'planId é obrigatório.'});
     const planSnap=await db.collection('plans').doc(planId).get();
-    if(!planSnap.exists || String(planSnap.data()!.companyId||'')!==String(key.companyId||'')) return res.status(403).json({error:'Esta oferta não pertence à chave informada.'});
+    if(!planSnap.exists || String(planSnap.data()!.companyId||'')!==companyId){
+      return res.status(403).json({error:'Esta oferta não pertence à empresa vinculada à chave.'});
+    }
+
     const attemptId=String(body.attemptId||'').trim() || ('api_'+randomUUID().replace(/-/g,''));
     const safeReq:any={...req,body:{
       planId,
