@@ -72,6 +72,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     const withdrawalId = `wth_${randomUUID().replace(/-/g, '')}`;
     const withdrawalRef = db.collection('withdrawals').doc(withdrawalId);
+    const configuredStripeKey = String(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY || '');
+    const stripeIsTest = configuredStripeKey.includes('_test_');
     const availableField = roleAvailableCentsField(role);
     const now = new Date().toISOString();
 
@@ -104,8 +106,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         status: 'PROCESSING',
         createdAt: now,
         requestedAt: now,
-        is_test: !account.livemode,
-        environment: account.livemode ? 'production' : 'development',
+        is_test: stripeIsTest,
+        environment: stripeIsTest ? 'development' : 'production',
       });
       return true;
     });
