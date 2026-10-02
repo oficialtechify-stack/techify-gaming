@@ -17,11 +17,11 @@ export interface CouponItem {
   companyId?:string;
 }
 
-interface CuponsViewProps { plans?:CompanyPlan[]; affiliations?:UserAffiliation[]; }
+interface CuponsViewProps { plans?:CompanyPlan[]; affiliations?:UserAffiliation[]; activeCompanyId?:string; }
 
-export const CuponsView:React.FC<CuponsViewProps>=({plans=[],affiliations=[]})=>{
+export const CuponsView:React.FC<CuponsViewProps>=({plans=[],affiliations=[],activeCompanyId})=>{
   const {currentUser}=useAuth();
-  const companyId=plans[0]?.companyId||'';
+  const companyId=activeCompanyId || plans[0]?.companyId || '';
   const [coupons,setCoupons]=useState<CouponItem[]>([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(false);
