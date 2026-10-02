@@ -34,7 +34,13 @@ async function buildGateResult() {
   try {
     const raw = await fs.readFile(path.join(process.cwd(), 'public', 'firebase-deploy-gate.json'), 'utf8');
     const data = JSON.parse(raw);
-    return { ok: data.ok === true, error: data.error || null, at: data.at || null };
+    return {
+      ok: data.ok === true,
+      error: data.error || null,
+      at: data.at || null,
+      indexes: Array.isArray(data.indexes) ? data.indexes : null,
+      rules: data.rules || null,
+    };
   } catch {
     return { ok: false, error: 'Build gate result unavailable.', at: null };
   }
