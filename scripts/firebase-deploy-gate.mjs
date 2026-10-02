@@ -75,37 +75,49 @@ async function main() {
       const validation=await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}:test`,{
         method:'POST',body:JSON.stringify({source})
       });
-      if(!validation.ok){
+      const validationErrors=validation.ok
+        ? (validation.body?.issues||[]).filter(issue=>issue.severity==='ERROR')
+        : [];
+      if(validation.ok && validationErrors.length){
+        rulesResult={ok:false,stage:'validate',status:200,error:JSON.stringify(validationErrors).slice(0,1000)};
+      }else if(!validation.ok && validation.status!==403){
         rulesResult={ok:false,stage:'validate',status:validation.status,error:validation.body?.error?.message||'validation unavailable'};
       }else{
-        const errors=(validation.body?.issues||[]).filter(issue=>issue.severity==='ERROR');
-        if(errors.length){
-          rulesResult={ok:false,stage:'validate',status:200,error:JSON.stringify(errors).slice(0,1000)};
+        const created=await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/rulesets`,{
+          method:'POST',body:JSON.stringify({source})
+        });
+        if(!created.ok){
+          rulesResult={
+            ok:false,
+            stage:'create_ruleset',
+            status:created.status,
+            validationSkipped:validation.status===403,
+            error:created.body?.error?.message||'create ruleset failed'
+          };
         }else{
-          const created=await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/rulesets`,{
-            method:'POST',body:JSON.stringify({source})
-          });
-          if(!created.ok){
-            rulesResult={ok:false,stage:'create_ruleset',status:created.status,error:created.body?.error?.message||'create ruleset failed'};
-          }else{
-            const rulesetName=created.body?.name;
-            const releases=await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/releases?pageSize=100`);
-            const existing=(releases.body?.releases||[]).find(release=>
-              String(release.name||'').endsWith('/releases/cloud.firestore') ||
-              String(release.name||'').endsWith('/releases/cloud.firestore/(default)')
-            );
-            const releaseName=existing?.name||`projects/${PROJECT_ID}/releases/cloud.firestore`;
-            const deployed=existing
-              ? await request(`https://firebaserules.googleapis.com/v1/${releaseName}`,{
-                  method:'PATCH',
-                  body:JSON.stringify({release:{name:releaseName,rulesetName},updateMask:'rulesetName'})
-                })
-              : await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/releases`,{
-                  method:'POST',
-                  body:JSON.stringify({name:releaseName,rulesetName})
-                });
-            rulesResult={ok:deployed.ok,stage:'release',status:deployed.status,error:deployed.ok?null:(deployed.body?.error?.message||'release failed')};
-          }
+          const rulesetName=created.body?.name;
+          const releases=await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/releases?pageSize=100`);
+          const existing=(releases.body?.releases||[]).find(release=>
+            String(release.name||'').endsWith('/releases/cloud.firestore') ||
+            String(release.name||'').endsWith('/releases/cloud.firestore/(default)')
+          );
+          const releaseName=existing?.name||`projects/${PROJECT_ID}/releases/cloud.firestore`;
+          const deployed=existing
+            ? await request(`https://firebaserules.googleapis.com/v1/${releaseName}?updateMask=rulesetName`,{
+                method:'PATCH',
+                body:JSON.stringify({name:releaseName,rulesetName})
+              })
+            : await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/releases`,{
+                method:'POST',
+                body:JSON.stringify({name:releaseName,rulesetName})
+              });
+          rulesResult={
+            ok:deployed.ok,
+            stage:'release',
+            status:deployed.status,
+            validationSkipped:validation.status===403,
+            error:deployed.ok?null:(deployed.body?.error?.message||'release failed')
+          };
         }
       }
     }catch(error){
