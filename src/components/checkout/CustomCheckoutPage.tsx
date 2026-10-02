@@ -57,7 +57,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [orderId, setOrderId] = useState('');
   const stripeAttemptId = useRef('');
 
-  const basePrice = Number(plan.priceSetup ?? plan.price ?? plan.priceMonthly ?? 0);
+  const isRecurring = plan.billingType === 'recorrente' || plan.paymentType === 'Recorrente' || plan.paymentType === 'Assinatura';
+  const billingCycle = plan.billingCycle || 'MONTHLY';
+  const billingCycleLabel = billingCycle === 'WEEKLY' ? 'semana' : billingCycle === 'YEARLY' ? 'ano' : 'mês';
+  const basePrice = Number((isRecurring ? plan.priceMonthly : plan.priceSetup) ?? plan.priceSetup ?? plan.price ?? plan.priceMonthly ?? 0);
   const finalTotal = Number((basePrice + PLATFORM_CHECKOUT_FEE).toFixed(2));
 
   useEffect(() => {
@@ -95,7 +98,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       if (!stripeAttemptId.current) {
         stripeAttemptId.current = createAttemptId();
       }
-      const response = await fetch('/api/stripe/checkout', {
+      const response = await fetch(isRecurring ? '/api/stripe/product-subscription-checkout' : '/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -111,6 +114,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         }),
       });
       const result = await response.json().catch(() => ({}));
+      if (isRecurring && response.ok && result.checkoutUrl) {
+        window.location.assign(String(result.checkoutUrl));
+        return;
+      }
       if (response.ok && result.paid === true && result.orderId) {
         const confirmation = new URL('/?thank-you=true', window.location.origin);
         confirmation.searchParams.set('plan', plan.id);
@@ -118,7 +125,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         window.location.assign(confirmation.toString());
         return;
       }
-      if (!response.ok || !result.clientSecret || !result.orderId) {
+      if (!response.ok || (!isRecurring && (!result.clientSecret || !result.orderId))) {
         if (result.code === 'PAYMENT_ATTEMPT_CANCELED' || result.code === 'CHECKOUT_SNAPSHOT_MISMATCH') {
           stripeAttemptId.current = '';
         }
@@ -159,7 +166,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             )}
             <div>
               <div className="text-[13px] font-black tracking-[0.2em] text-[#D9F22A]">LEADSPAY</div>
-              <div className="mt-0.5 text-[11px] text-white/50">Checkout Oficial Seguro</div>
+              <div className="mt-0.5 text-[11px] text-white/50">
+                {isRecurring ? 'Assinatura recorrente segura' : 'Checkout Oficial Seguro'}
+              </div>
             </div>
           </div>
           <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-400">
@@ -239,11 +248,13 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   {isProcessing ? (
                     <><span className="h-4 w-4 animate-spin rounded-full border-2 border-[#060A15]/40 border-t-[#060A15]" aria-hidden="true" />Iniciando Stripe…</>
                   ) : (
-                    <>Ir para pagamento <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></>
+                    <>{isRecurring ? 'Assinar com Stripe' : 'Ir para pagamento'} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></>
                   )}
                 </button>
                 <p className="text-center text-[11px] leading-relaxed text-white/40">
-                  Ao clicar em continuar, as formas de pagamento disponíveis (Cartão, PIX, Boleto) serão carregadas na próxima etapa.
+                  {isRecurring
+                    ? `A assinatura será renovada automaticamente a cada ${billingCycleLabel}. A Stripe mostrará os meios compatíveis com cobranças recorrentes.`
+                    : 'Ao clicar em continuar, as formas de pagamento disponíveis (Cartão, PIX, Boleto) serão carregadas na próxima etapa.'}
                 </p>
               </form>
             ) : stripePromise ? (
@@ -280,7 +291,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               <div className="flex items-start justify-between gap-4 text-sm">
                 <div>
                   <p className="font-semibold text-white">{plan.name}</p>
-                  <p className="mt-0.5 text-xs text-white/50">Cobrança única</p>
+                  <p className="mt-0.5 text-xs text-white/50">
+                    {isRecurring ? `Assinatura • a cada ${billingCycleLabel}` : 'Cobrança única'}
+                  </p>
                 </div>
                 <span className="whitespace-nowrap font-bold text-white">{formatBRL(basePrice)}</span>
               </div>
@@ -291,7 +304,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             </div>
             <div className="flex items-center justify-between gap-4 py-4">
               <span className="text-sm font-semibold text-white/80">Total a pagar</span>
-              <span className="text-2xl font-black tracking-tight text-[#D9F22A]">{formatBRL(finalTotal)}</span>
+              <span className="text-2xl font-black tracking-tight text-[#D9F22A]">
+                {formatBRL(finalTotal)}{isRecurring ? `/${billingCycleLabel}` : ''}
+              </span>
             </div>
             {Array.isArray(plan.features) && plan.features.length > 0 && (
               <div className="border-t border-white/10 pt-4">
