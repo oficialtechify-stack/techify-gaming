@@ -637,12 +637,12 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white/50">Vinculação de Usuário:</span>
-                <span className="font-mono text-white">metadata: { firebase_uid, plan_id, role }</span>
+                <span className="font-mono text-white">{'metadata: { firebase_uid, plan_id, role }'}</span>
               </div>
             </div>
 
             <div className="text-[11px] text-white/50 bg-[#050811] p-3 rounded-lg border border-white/5 font-mono">
-              // O backend recebe o POST, valida o token, lê o externalReference e atualiza users/{'{userId}'} com planStatus: 'active'. O frontend React sincroniza imediatamente via Firestore onSnapshot.
+              // A Stripe envia eventos assinados. O backend valida stripe-signature e atualiza a assinatura no Firestore.
             </div>
           </div>
         )}
