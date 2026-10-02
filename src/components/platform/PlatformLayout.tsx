@@ -1072,50 +1072,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   };
 
-  // Handle new sale registered
-  const handleSaleCreated = async (newSale: SaleTransaction) => {
-    try {
-      const isAffiliate = roleMode === 'afiliado';
-      const saved = await createSaleTransactionInFirebase({
-        companyId: newSale.companyId,
-        companyName: newSale.companyName,
-        platformId: newSale.platformId,
-        platformName: newSale.platformName,
-        buyerName: newSale.buyerName,
-        buyerEmail: newSale.buyerEmail,
-        buyerCompany: newSale.buyerCompany,
-        amount: newSale.amount,
-        commissionEarned: newSale.commissionEarned,
-        method: newSale.method,
-        status: newSale.status,
-        utmSource: newSale.utmSource || (isAffiliate ? 'link_afiliado' : 'direto_empresa'),
-        date: newSale.date,
-        time: newSale.time,
-        sellerId: newSale.sellerId || effectiveUserId,
-        affiliateId: newSale.affiliateId || (isAffiliate ? effectiveUserId : undefined),
-        affiliateName: newSale.affiliateName || (isAffiliate ? (userProfile.name || 'Afiliado') : undefined),
-        affiliateCode: newSale.affiliateCode || (isAffiliate ? userAffiliationCodes[0] : undefined),
-        companyOwnerId: newSale.companyOwnerId || (!isAffiliate ? effectiveUserId : undefined)
-      });
-
-      // Trigger toast
-      setLiveToast({
-        message: `Venda aprovada com sucesso (${saved.method})!`,
-        sub: `${saved.platformName} - Registrada na sua conta`,
-        amount: isAffiliate 
-          ? `+ R$ ${saved.commissionEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-          : `+ R$ ${saved.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-      });
-
-      setTimeout(() => {
-        setLiveToast(null);
-      }, 5000);
-    } catch (err: any) {
-      console.error('Error saving sale:', err);
-      alert(`Erro ao salvar venda: ${err.message}`);
-    }
-  };
-
   // Handle withdrawal through authenticated Stripe Connect backend
   const handleWithdraw = async (amount: number) => {
     try {
@@ -2056,7 +2012,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeCompanyId={activeCompany?.id}
               plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans}
               onRefresh={() => {}}
-              onAddSale={(newTx) => setTransactions(prev => [newTx, ...prev])}
               onDeleteSale={(saleId) => setTransactions(prev => prev.filter(t => t.id !== saleId))}
               onGoToPaymentLinks={() => setActiveTab('links_pagamento')}
             />
