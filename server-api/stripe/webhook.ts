@@ -5,6 +5,7 @@ import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient, getStripeWebhookSecret } from '../../lib/stripeServer.js';
 import { getSubscriptionPlan, roleAvailableCentsField, rolePendingCentsField, type PlatformRole } from '../../lib/platformBilling.js';
 import { calculateSplit } from '../../lib/stripeSplit.js';
+import { assertSafeWebhookUrl } from '../../lib/webhookSecurity.js';
 
 type RequestLike = AsyncIterable<Buffer | string> & { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
@@ -304,15 +305,24 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       const signature = createHmac('sha256', String(settings.webhookSecret)).update(payload).digest('hex');
       const deliveryRef = db.collection('partner_webhook_deliveries').doc(`${orderId}_payment_succeeded`);
       try {
+        const webhookUrl = await assertSafeWebhookUrl(settings.webhookUrl);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(String(settings.webhookUrl), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-leadspay-signature': signature },
-          body: payload,
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
+        let response: Response;
+        try {
+          response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-leadspay-signature': signature,
+              'x-leadspay-event': 'payment.succeeded',
+            },
+            body: payload,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
         await deliveryRef.set({
           userId: orderData.companyOwnerId,
           companyId: orderData.companyId,
