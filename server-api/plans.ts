@@ -295,14 +295,19 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     batch.set(deliveryRef, privateDelivery, { merge: true });
     await batch.commit();
 
-    const responsePlan = {
-      id: planId,
-      ...payload,
-      deliveryUrl,
-      deliveryInstructions,
-    };
+    const savedPlanSnap = await planRef.get();
+    const savedPlan = savedPlanSnap.exists ? savedPlanSnap.data() || {} : {};
 
-    return res.status(200).json({ success: true, plan: responsePlan });
+    return res.status(200).json({
+      success: true,
+      plan: {
+        id: planId,
+        ...savedPlan,
+        deliveryType,
+        deliveryUrl,
+        deliveryInstructions,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Falha desconhecida';
     console.error('[Plans API]', message);
