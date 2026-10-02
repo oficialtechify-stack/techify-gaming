@@ -553,14 +553,23 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setPlans(planList);
     }, effectiveCompanyId);
 
-    const unsubAllAffiliations = subscribeAllAffiliations((allAffList) => {
-      setAllAffiliations(allAffList);
-    }, effectiveCompanyId);
+    const unsubAllAffiliations = roleMode === 'afiliado'
+      ? (() => {
+          setAllAffiliations([]);
+          return () => {};
+        })()
+      : subscribeAllAffiliations((allAffList) => {
+          setAllAffiliations(allAffList);
+        }, effectiveCompanyId);
 
-    const unsubSales = subscribeSales((salesList) => {
-      setTransactions(salesList);
-      setSalesDataLoaded(true);
-    }, effectiveCompanyId);
+    const unsubSales = subscribeSales(
+      (salesList) => {
+        setTransactions(salesList);
+        setSalesDataLoaded(true);
+      },
+      effectiveCompanyId,
+      roleMode === 'afiliado' ? effectiveUserId : undefined
+    );
 
     return () => {
       unsubCompanies();
