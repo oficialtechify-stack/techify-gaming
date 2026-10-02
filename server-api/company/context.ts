@@ -163,9 +163,14 @@ export default async function handler(req: Req, res: Res) {
       return res.status(403).json({ error: 'A empresa encontrada não pertence à conta autenticada.' });
     }
 
+    const companyAlreadyApproved =
+      company.verified === true &&
+      String(company.status || '').toLowerCase() === 'approved' &&
+      String(company.kyc_status || 'verified').toLowerCase() === 'verified';
+
     const shouldBeApproved =
-      approvedByAdmin &&
-      profileRoleIsApproved(effectiveProfile, 'empresa');
+      companyAlreadyApproved ||
+      (approvedByAdmin && profileRoleIsApproved(effectiveProfile, 'empresa'));
 
     const now = new Date().toISOString();
     const batch = db.batch();
@@ -175,8 +180,11 @@ export default async function handler(req: Req, res: Res) {
       companyName: company.name || company.companyName || rawProfile.companyName || null,
       hasCompanyProfile: true,
       ...(shouldBeApproved ? {
+        verified: true,
+        verificationStatus: 'approved',
         empresaVerificationStatus: 'approved',
         companyVerificationStatus: 'approved',
+        kyc_status: 'verified',
       } : {}),
       updatedAt: now,
     }, { merge: true });
@@ -184,6 +192,13 @@ export default async function handler(req: Req, res: Res) {
     batch.set(userRef, {
       companyId,
       companyName: company.name || company.companyName || rawProfile.companyName || null,
+      ...(shouldBeApproved ? {
+        verified: true,
+        verificationStatus: 'approved',
+        empresaVerificationStatus: 'approved',
+        companyVerificationStatus: 'approved',
+        kyc_status: 'verified',
+      } : {}),
       updatedAt: now,
     }, { merge: true });
 
