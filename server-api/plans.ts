@@ -119,6 +119,80 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return res.status(200).json({ success: true, plans });
     }
 
+    if (req.method === 'DELETE') {
+      const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined;
+      const identity = await verifyFirebaseIdentity(authHeader);
+      const body = req.body && typeof req.body === 'object' ? (req.body as Record<string, any>) : {};
+      const planId = String(body.planId || body.id || '').trim();
+
+      if (!/^[A-Za-z0-9_-]{1,150}$/.test(planId)) {
+        return res.status(400).json({ error: 'Produto inválido.' });
+      }
+
+      const planRef = db.collection('plans').doc(planId);
+      const planSnap = await planRef.get();
+      if (!planSnap.exists) return res.status(404).json({ error: 'Produto não encontrado.' });
+
+      const plan = planSnap.data()!;
+      const companyId = String(plan.companyId || '').trim();
+      const companySnap = companyId ? await db.collection('companies').doc(companyId).get() : null;
+      if (
+        String(plan.ownerId || '') !== identity.uid ||
+        !companySnap?.exists ||
+        String(companySnap.data()!.ownerId || companySnap.data()!.submittedBy || '') !== identity.uid
+      ) {
+        return res.status(403).json({ error: 'Este produto não pertence à empresa desta conta.' });
+      }
+
+      const activeSubscriptions = await db.collection('product_subscriptions')
+        .where('planId', '==', planId)
+        .limit(200)
+        .get();
+
+      const hasActiveSubscription = activeSubscriptions.docs.some((doc) => {
+        const data = doc.data();
+        return data.active === true || ['active', 'trialing', 'past_due'].includes(String(data.status || '').toLowerCase());
+      });
+
+      if (hasActiveSubscription) {
+        return res.status(409).json({
+          error: 'Este produto possui assinaturas ativas. Cancele as renovações antes de arquivar o produto.',
+          code: 'ACTIVE_SUBSCRIPTIONS_EXIST',
+        });
+      }
+
+      const now = new Date().toISOString();
+      const batch = db.batch();
+      batch.set(planRef, {
+        active: false,
+        status: 'Pausado',
+        archived: true,
+        archivedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+
+      batch.set(companySnap.ref, {
+        totalPlansCount: FieldValue.increment(-1),
+        updatedAt: now,
+      }, { merge: true });
+
+      const affiliationSnap = await db.collection('affiliations')
+        .where('planId', '==', planId)
+        .limit(500)
+        .get();
+
+      for (const affiliation of affiliationSnap.docs) {
+        batch.set(affiliation.ref, {
+          status: 'Encerrada',
+          endedAt: now,
+          updatedAt: now,
+        }, { merge: true });
+      }
+
+      await batch.commit();
+      return res.status(200).json({ success: true, archived: true, planId, companyId });
+    }
+
     if (req.method !== 'POST' && req.method !== 'PUT') {
       return res.status(405).json({ error: 'Método não permitido.' });
     }
