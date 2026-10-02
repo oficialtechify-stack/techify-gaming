@@ -91,6 +91,17 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       ) {
         return fail(res, 409, 'A conta Stripe vinculada não corresponde a esta empresa.');
       }
+
+      if (role === 'empresa' && !account.metadata?.leadspay_company_id) {
+        await stripe.accounts.update(accountId, {
+          metadata: {
+            ...account.metadata,
+            firebase_uid: identity.uid,
+            leadspay_role: 'empresa',
+            leadspay_company_id: companyId,
+          },
+        });
+      }
     } else {
       const docType = String(profile.companyDocType || profile.documentType || profile.docType || '').toUpperCase();
       const businessType = role === 'empresa' && ['CNPJ', 'MEI'].includes(docType) ? 'company' : 'individual';
