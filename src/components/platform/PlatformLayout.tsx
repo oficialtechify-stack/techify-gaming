@@ -523,7 +523,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Afiliados enxergam o marketplace global. Empresa enxerga somente o próprio tenant.
   const effectiveCompanyId =
-    roleMode === 'empresa' && !(isSuperAdmin && roleMode === 'admin')
+    roleMode === 'empresa'
       ? (canonicalCompanyId || userProfile?.companyId || undefined)
       : undefined;
 
