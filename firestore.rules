@@ -239,6 +239,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Equipe interna é um recurso privado da empresa e passa somente pelo backend autenticado.
+    match /team_members/{memberId} {
+      allow read, write: if false;
+    }
+
     match /partner_api_keys/{keyId} {
       allow read, write: if false;
     }
