@@ -43,13 +43,24 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const stripe = getStripeTestClient();
-    const account = await stripe.accounts.retrieve(accountId);
+    let account = await stripe.accounts.retrieve(accountId);
     if (
       account.metadata?.firebase_uid !== identity.uid ||
       account.metadata?.leadspay_role !== role ||
       (role === 'empresa' && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
     ) {
       return res.status(409).json({ error: 'A conta Stripe precisa ser reconectada à empresa correta.' });
+    }
+
+    if (role === 'empresa' && !account.metadata?.leadspay_company_id) {
+      account = await stripe.accounts.update(accountId, {
+        metadata: {
+          ...account.metadata,
+          firebase_uid: identity.uid,
+          leadspay_role: 'empresa',
+          leadspay_company_id: companyId,
+        },
+      });
     }
 
     const ready =
