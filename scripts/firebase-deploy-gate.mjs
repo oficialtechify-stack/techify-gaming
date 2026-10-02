@@ -49,9 +49,19 @@ async function main() {
     }
   
     const rules = await fs.readFile(new URL('../firestore.rules', import.meta.url), 'utf8');
+    const source = { files: [{ name: 'firestore.rules', content: rules }] };
+    const validation = await api(
+      `https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}:test`,
+      { method: 'POST', body: JSON.stringify({ source }) },
+      [200],
+    );
+    const ruleErrors = (validation.body?.issues || []).filter((issue) => issue.severity === 'ERROR');
+    if (ruleErrors.length) {
+      throw new Error('Firestore rules validation failed: ' + JSON.stringify(ruleErrors).slice(0, 1800));
+    }
     const rulesetResult = await api(
       `https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/rulesets`,
-      { method: 'POST', body: JSON.stringify({ source: { files: [{ name: 'firestore.rules', content: rules }] } }) },
+      { method: 'POST', body: JSON.stringify({ source }) },
       [200],
     );
     const rulesetName = rulesetResult.body?.name;
