@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
+import { StripeConnectCompanyPanel } from './StripeConnectCompanyPanel';
 
 interface MeuPerfilViewProps {
   userProfile: UserSellerProfile;
@@ -530,7 +531,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 </div>
                 <p className="text-xs text-emerald-200/80 mt-1 leading-relaxed">
                   {roleMode === 'empresa'
-                    ? 'Sua empresa foi homologada e aprovada pela Administração. O cadastro de novos planos, produtos, checkout e comissões para afiliados está 100% liberado!'
+                    ? 'Sua empresa foi homologada e aprovada pela Administração. O cadastro de produtos, checkout e comissões para afiliados está 100% liberado!'
                     : 'Seus dados foram validados pelo Administrador. Você agora tem acesso total e ilimitado para afiliar-se a qualquer produto no Marketplace!'}
                 </p>
               </div>
@@ -545,7 +546,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 {roleMode === 'empresa' ? (
                   <>
                     <Plus className="w-4 h-4 stroke-[3]" />
-                    Cadastrar Novo Plano / Produto
+                    Cadastrar Produto
                   </>
                 ) : (
                   <>
@@ -576,7 +577,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               </div>
               <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
                 {roleMode === 'empresa'
-                  ? 'Os dados e documentos da sua empresa foram enviados e estão bloqueados para edição enquanto o Administrador audita o cadastro. Assim que for aprovada, o cadastro de planos e produtos será liberado imediatamente.'
+                  ? 'Os dados e documentos da sua empresa foram enviados e estão bloqueados para edição enquanto o Administrador audita o cadastro. Assim que for aprovada, o cadastro de produtos será liberado imediatamente.'
                   : 'Seus dados foram enviados com sucesso e estão bloqueados para edição enquanto a equipe administrativa faz a validação dos documentos. Assim que for aprovado, seu selo de Verificado será concedido automaticamente.'}
               </p>
             </div>
@@ -640,6 +641,10 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         )}
       </div>
+
+      {roleMode === 'empresa' && isApproved && (
+        <StripeConnectCompanyPanel companyId={company?.id || userProfile.companyId} />
+      )}
 
       <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
@@ -1305,7 +1310,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   <span>
                     {roleMode === 'empresa'
-                      ? 'Empresa verificada e aprovada! Cadastro de planos e checkout liberados.'
+                      ? 'Empresa verificada e aprovada! Cadastro de produtos e checkout liberados.'
                       : 'Seus dados foram verificados com sucesso. Registro protegido.'}
                   </span>
                 </div>
@@ -1315,7 +1320,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                     onClick={() => onNavigateToTab('minha_empresa')}
                     className="text-[#D9F22A] hover:underline text-xs font-black cursor-pointer"
                   >
-                    Gerenciar Planos →
+                    Gerenciar Produtos →
                   </button>
                 )}
               </div>
