@@ -772,14 +772,27 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     let cryptoVal = 0, cryptoCount = 0;
 
     userVisibleTransactions.forEach((s) => {
-      // Apenas transações aprovadas contabilizam valor e faturamento no painel
-      const isApproved = s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED';
+      // Apenas transações aprovadas contabilizam valor e faturamento no painel.
+      const normalizedStatus = String(s.status || '').trim().toLowerCase();
+      const isApproved = ['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(normalizedStatus);
       if (!isApproved) return;
-      const amount = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
-      if (s.method === 'PIX') { pixVal += amount; pixCount++; }
-      else if (s.method === 'Cartão de Crédito') { cardVal += amount; cardCount++; }
-      else if (s.method === 'PicPay') { picpayVal += amount; picpayCount++; }
-      else if (s.method === 'Crypto USDT') { cryptoVal += amount; cryptoCount++; }
+
+      const amount = roleMode === 'afiliado' ? Number(s.commissionEarned || 0) : Number(s.amount || 0);
+      const method = String(s.method || '').trim().toLowerCase();
+
+      if (method.includes('pix')) {
+        pixVal += amount;
+        pixCount++;
+      } else if (method.includes('cartão') || method.includes('cartao') || method.includes('card')) {
+        cardVal += amount;
+        cardCount++;
+      } else if (method.includes('boleto')) {
+        picpayVal += amount;
+        picpayCount++;
+      } else {
+        cryptoVal += amount;
+        cryptoCount++;
+      }
     });
 
     const totalCount = pixCount + cardCount + picpayCount + cryptoCount;
@@ -805,13 +818,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         iconType: 'credit-card' as const
       },
       {
-        method: 'PicPay Carteira',
+        method: 'Boleto',
         count: picpayCount,
         totalValue: picpayVal,
         percentage: totalVol > 0 ? Number(((picpayVal / totalVol) * 100).toFixed(1)) : 0,
         conversionRate: totalCount > 0 ? `${((picpayCount / totalCount) * 100).toFixed(1)}%` : '0%',
         badge: 'QR Code',
-        iconType: 'picpay' as const
+        iconType: 'boleto' as const
       },
       {
         method: 'Crypto USDT (TRC-20)',
@@ -820,7 +833,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         percentage: totalVol > 0 ? Number(((cryptoVal / totalVol) * 100).toFixed(1)) : 0,
         conversionRate: totalCount > 0 ? `${((cryptoCount / totalCount) * 100).toFixed(1)}%` : '0%',
         badge: 'Global Web3',
-        iconType: 'crypto' as const
+        iconType: 'credit-card' as const
       }
     ];
   }, [userVisibleTransactions, roleMode]);
