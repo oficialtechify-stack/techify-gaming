@@ -140,6 +140,16 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         return res.status(409).json({ error: 'O cadastro da empresa não pertence a esta conta.' });
       }
       const companyName = String(body.companyName).trim();
+
+      // A conta Empresa e o documento da empresa precisam compartilhar um único companyId.
+      profileFields.companyId = companyId;
+      profileFields.companyName = companyName;
+      profileFields.hasCompanyProfile = true;
+      profileFields.accountType = current.hasAffiliateProfile === true || current.accountType === 'afiliado' || current.accountType === 'ambos'
+        ? 'ambos'
+        : 'empresa';
+      profileFields.activeRoleMode = 'empresa';
+
       const slug = companyName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
       batch.set(companyRef, {
         ...(companySnap.exists ? {} : { id: companyId, createdAt: now, totalPlansCount: 0, totalAffiliatesCount: 0, totalSalesVolume: 0, commissionRange: '10% - 50%' }),
@@ -170,6 +180,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }, { merge: true });
       requestData.companyId = companyId;
       requestData.companyName = companyName;
+
+      batch.set(db.collection('users').doc(identity.uid), {
+        companyId,
+        companyName,
+        hasCompanyProfile: true,
+        activeRoleMode: 'empresa',
+        updatedAt: now,
+      }, { merge: true });
     }
     batch.set(requestRef, requestData, { merge: true });
     await batch.commit();
