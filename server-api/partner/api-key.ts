@@ -32,8 +32,23 @@ export default async function handler(req:Req,res:Res){
 
     const allowedRoles:PlatformRole[]=[];
     if(profileHasRole(profile,'afiliado')&&profileRoleIsApproved(profile,'afiliado')) allowedRoles.push('afiliado');
-    if(profileHasRole(profile,'empresa')&&profileRoleIsApproved(profile,'empresa')) allowedRoles.push('empresa');
-    if(!allowedRoles.length) return res.status(403).json({error:'Seu perfil precisa estar aprovado para usar integrações de IA/API.'});
+
+    const companyId=String(profile.companyId||'').trim();
+    if(profileHasRole(profile,'empresa')&&profileRoleIsApproved(profile,'empresa')&&companyId){
+      const companySnap=await db.collection('companies').doc(companyId).get();
+      const company=companySnap.exists?companySnap.data()!:null;
+      if(
+        company &&
+        String(company.ownerId||company.submittedBy||'')===identity.uid &&
+        company.verified===true &&
+        String(company.status||'').toLowerCase()==='approved' &&
+        company.archived!==true &&
+        company.isArchived!==true &&
+        company.banned!==true
+      ) allowedRoles.push('empresa');
+    }
+
+    if(!allowedRoles.length) return res.status(403).json({error:'Seu perfil precisa estar aprovado e ativo para usar integrações de IA/API.'});
 
     const keys=await db.collection('partner_api_keys').where('userId','==',identity.uid).limit(20).get();
     const active=keys.docs.map(d=>({id:d.id,...d.data()} as Record<string,any>)).find(x=>x.active===true);
@@ -84,7 +99,6 @@ export default async function handler(req:Req,res:Res){
     const keyId='key_'+randomBytes(12).toString('hex');
     const now=new Date().toISOString();
     const scopes=scopesForApprovedRoles(allowedRoles);
-    const companyId=String(profile.companyId||'').trim();
 
     const batch=db.batch();
     for(const doc of keys.docs){
