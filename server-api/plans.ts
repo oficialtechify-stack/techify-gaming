@@ -178,9 +178,31 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       let queryRef: FirebaseFirestore.Query = db.collection('plans');
       if (companyId) queryRef = queryRef.where('companyId', '==', companyId);
       const snap = await queryRef.limit(200).get();
-      const plans = snap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((plan: any) => plan.status === 'Ativo' && plan.active !== false);
+      const candidates = snap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
+        .filter((plan) =>
+          String(plan.status || '').toLowerCase() === 'ativo' &&
+          plan.active !== false &&
+          plan.archived !== true &&
+          plan.isArchived !== true
+        );
+
+      const companyIds = [...new Set(candidates.map((plan) => String(plan.companyId || '')).filter(Boolean))];
+      const companyStates = new Map<string, boolean>();
+      await Promise.all(companyIds.map(async (id) => {
+        const companySnap = await db.collection('companies').doc(id).get();
+        const company = companySnap.exists ? companySnap.data()! : null;
+        companyStates.set(id, Boolean(
+          company &&
+          company.verified === true &&
+          String(company.status || '').toLowerCase() === 'approved' &&
+          company.archived !== true &&
+          company.isArchived !== true &&
+          company.banned !== true
+        ));
+      }));
+
+      const plans = candidates.filter((plan) => companyStates.get(String(plan.companyId || '')) === true);
       return res.status(200).json({ success: true, plans });
     }
 
