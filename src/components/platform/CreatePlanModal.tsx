@@ -188,8 +188,12 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   const [bannerImage, setBannerImage] = useState('');
   const [imageTab, setImageTab] = useState<ImageTab>('upload');
 
+  const [billingType, setBillingType] = useState<'unico' | 'recorrente'>('unico');
+  const [billingCycle, setBillingCycle] = useState<'WEEKLY' | 'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [priceSetup, setPriceSetup] = useState('');
   const [commissionPercentage, setCommissionPercentage] = useState('');
+  const [recurringCommissionEnabled, setRecurringCommissionEnabled] = useState(true);
+  const [recurrentCommissionPercent, setRecurrentCommissionPercent] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPrivateSettings, setIsLoadingPrivateSettings] = useState(false);
@@ -214,11 +218,25 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       setDescription(initialData.description || '');
       setFeatures(initialData.features ? [...initialData.features] : []);
       setBannerImage(initialData.bannerImage || '');
+      setBillingType(initialData.billingType === 'recorrente' || initialData.paymentType === 'Recorrente' || initialData.paymentType === 'Assinatura' ? 'recorrente' : 'unico');
+      setBillingCycle(
+        initialData.billingCycle === 'WEEKLY' || initialData.billingCycle === 'YEARLY'
+          ? initialData.billingCycle
+          : 'MONTHLY',
+      );
       setPriceSetup(initialData.priceSetup !== undefined ? String(initialData.priceSetup) : '');
       setCommissionPercentage(
         initialData.commissionPercentage !== undefined
           ? String(initialData.commissionPercentage)
           : '',
+      );
+      setRecurringCommissionEnabled(initialData.recurringCommissionEnabled !== false);
+      setRecurrentCommissionPercent(
+        initialData.recurrentCommissionPercent !== undefined
+          ? String(initialData.recurrentCommissionPercent)
+          : initialData.commissionPercentage !== undefined
+            ? String(initialData.commissionPercentage)
+            : '',
       );
 
       setDeliveryType(initialData.deliveryType || 'redirect');
@@ -267,8 +285,12 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     setDeliveryUrl('');
     setDeliveryInstructions('');
     setBannerImage('');
+    setBillingType('unico');
+    setBillingCycle('MONTHLY');
     setPriceSetup('');
     setCommissionPercentage('');
+    setRecurringCommissionEnabled(true);
+    setRecurrentCommissionPercent('');
     setIsLoadingPrivateSettings(false);
   }, [isOpen, initialData, defaultCompanyId, companies]);
 
@@ -281,7 +303,11 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   const commissionPercent =
     Number.parseFloat(commissionPercentage.replace(',', '.')) || 0;
   const commissionValue = Number(((price * commissionPercent) / 100).toFixed(2));
+  const recurrentPercent = Number.parseFloat(recurrentCommissionPercent.replace(',', '.')) || 0;
+  const recurrentCommissionValue = Number(((price * recurrentPercent) / 100).toFixed(2));
   const companyBeforeFees = Math.max(0, price - commissionValue);
+  const recurringCompanyBeforeFees = Math.max(0, price - (recurringCommissionEnabled ? recurrentCommissionValue : 0));
+  const billingCycleLabel = billingCycle === 'WEEKLY' ? 'semana' : billingCycle === 'YEARLY' ? 'ano' : 'mês';
 
   const deliveryOption =
     DELIVERY_OPTIONS.find((option) => option.value === deliveryType) || DELIVERY_OPTIONS[0];
@@ -364,6 +390,13 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     if (commissionPercent <= 0 || commissionPercent > 100) {
       return 'A comissão do afiliado deve ficar entre 0,01% e 100%.';
     }
+    if (
+      billingType === 'recorrente' &&
+      recurringCommissionEnabled &&
+      (recurrentPercent <= 0 || recurrentPercent > 100)
+    ) {
+      return 'A comissão nas renovações deve ficar entre 0,01% e 100%.';
+    }
     return '';
   };
 
@@ -410,14 +443,25 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         description: description.trim(),
         price: Number(price.toFixed(2)),
         priceSetup: Number(price.toFixed(2)),
-        priceMonthly: 0,
-        paymentType: 'Único',
-        billingType: 'unico',
+        priceMonthly: billingType === 'recorrente' ? Number(price.toFixed(2)) : 0,
+        paymentType: billingType === 'recorrente' ? 'Recorrente' : 'Único',
+        billingType,
+        billingCycle: billingType === 'recorrente' ? billingCycle : undefined,
+        billingInterval: billingType === 'recorrente'
+          ? (billingCycle === 'WEEKLY' ? 'weekly' : billingCycle === 'YEARLY' ? 'yearly' : 'monthly')
+          : undefined,
         commissionPercentage: Number(commissionPercent.toFixed(2)),
         commissionValue,
-        recurrentCommissionPercent: 0,
-        recurrentCommissionValue: 0,
-        recurrentCommission: 0,
+        recurringCommissionEnabled: billingType === 'recorrente' ? recurringCommissionEnabled : false,
+        recurrentCommissionPercent: billingType === 'recorrente' && recurringCommissionEnabled
+          ? Number(recurrentPercent.toFixed(2))
+          : 0,
+        recurrentCommissionValue: billingType === 'recorrente' && recurringCommissionEnabled
+          ? recurrentCommissionValue
+          : 0,
+        recurrentCommission: billingType === 'recorrente' && recurringCommissionEnabled
+          ? Number(recurrentPercent.toFixed(2))
+          : 0,
         features,
         bannerImage: bannerImage.trim(),
         affiliatesCount: initialData?.affiliatesCount || 0,
@@ -465,7 +509,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                 <span className="h-1.5 w-1.5 rounded-full bg-[#D9F22A]" />
                 {isEditMode ? 'Editar oferta' : 'Nova oferta'}
               </span>
-              <span className="text-[11px] text-white/35">Stripe Connect • Pagamento único</span>
+              <span className="text-[11px] text-white/35">Stripe Connect • Compra única e assinaturas</span>
             </div>
             <h2 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl">
               {isEditMode ? 'Editar produto e comissão' : 'Cadastrar novo produto'}
