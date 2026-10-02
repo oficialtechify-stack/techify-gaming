@@ -492,7 +492,9 @@ export function subscribePlans(callback: (plans: CompanyPlan[]) => void, company
   return onSnapshot(q, (snap) => {
     const list: CompanyPlan[] = [];
     snap.forEach((d) => {
-      list.push({ id: d.id, ...(d.data() as Omit<CompanyPlan, 'id'>) });
+      const data = d.data() as Omit<CompanyPlan, 'id'> & { archived?: boolean; isArchived?: boolean };
+      if (data.archived === true || data.isArchived === true) return;
+      list.push({ id: d.id, ...data });
     });
     list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     callback(list);
@@ -568,19 +570,21 @@ export const createPlatformInFirebase = createCompanyPlanInFirebase;
  * Delete a Plan from Firestore
  */
 export async function deleteCompanyPlanInFirebase(planId: string, companyId?: string) {
-  const docRef = doc(db, COLLECTIONS.PLANS, planId);
-  await deleteDoc(docRef);
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para arquivar o produto.');
 
-  if (companyId) {
-    const compRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-    const compSnap = await getDoc(compRef);
-    if (compSnap.exists()) {
-      const compData = compSnap.data() as CompanyStartup;
-      await updateDoc(compRef, sanitizeForFirestore({
-        totalPlansCount: Math.max(0, (compData.totalPlansCount || 1) - 1)
-      }));
-    }
-  }
+  const token = await user.getIdToken();
+  const response = await fetch('/api/plans', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ planId, companyId }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Não foi possível arquivar o produto.');
+  return data;
 }
 
 export const deletePlatformInFirebase = (planId: string) => deleteCompanyPlanInFirebase(planId);
@@ -883,34 +887,6 @@ export async function createWithdrawalInFirebase() {
 // ==========================================
 // 👥 EQUIPE & OUTROS
 // ==========================================
-
-export function subscribeTeamMembers(callback: (team: TeamMember[]) => void) {
-  const q = collection(db, COLLECTIONS.TEAM);
-  return onSnapshot(q, (snap) => {
-    const list: TeamMember[] = [];
-    snap.forEach((d) => {
-      list.push({ id: d.id, ...(d.data() as Omit<TeamMember, 'id'>) });
-    });
-    callback(list);
-  }, (err) => {
-    console.error('Firestore team listener error:', err);
-    callback([]);
-  });
-}
-
-export async function createTeamMemberInFirebase(memberData: Omit<TeamMember, 'id'>) {
-  const id = `team-${Date.now()}`;
-  const newMember: TeamMember = {
-    ...memberData,
-    id
-  };
-  await setDoc(doc(db, COLLECTIONS.TEAM, id), sanitizeForFirestore(newMember));
-  return newMember;
-}
-
-export async function deleteTeamMemberInFirebase(id: string) {
-  await deleteDoc(doc(db, COLLECTIONS.TEAM, id));
-}
 
 export async function saveAffiliateLinkInFirebase(link: Omit<AffiliateLinkItem, 'id' | 'createdAt'>) {
   const id = `aff-${Date.now()}`;
