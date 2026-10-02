@@ -9,21 +9,29 @@ let stripeClient: Stripe | undefined;
  * preview deployments and the test-only variable must never use live credentials.
  */
 export function getStripeTestClient(): Stripe {
-  const primary = process.env.STRIPE_SECRET_KEY?.trim();
-  const secret = primary || process.env.STRIPE_TEST_SECRET_KEY?.trim() || '';
-  if (!secret) throw new Error('Stripe indisponível: configure STRIPE_SECRET_KEY ou STRIPE_TEST_SECRET_KEY no servidor.');
+  const primary = process.env.STRIPE_SECRET_KEY?.trim() || '';
+  const testSecret = process.env.STRIPE_TEST_SECRET_KEY?.trim() || '';
+  const isPreview = process.env.VERCEL_ENV === 'preview';
+  const secret = isPreview ? testSecret : (primary || testSecret);
+  if (!secret) {
+    throw new Error(isPreview
+      ? 'Stripe de Preview indisponível: configure STRIPE_TEST_SECRET_KEY.'
+      : 'Stripe indisponível: configure STRIPE_SECRET_KEY ou STRIPE_TEST_SECRET_KEY no servidor.');
+  }
   if (!/^(sk|rk)_(test|live)_/.test(secret)) {
     throw new Error('Stripe bloqueado: configure uma chave secreta ou restrita válida.');
   }
-  if ((!primary || process.env.VERCEL_ENV === 'preview') && /^(sk|rk)_live_/.test(secret)) {
-    throw new Error('Stripe bloqueado: somente chaves sk_test_ ou rk_test_ neste ambiente.');
+  if (isPreview && !/^(sk|rk)_test_/.test(secret)) {
+    throw new Error('Stripe bloqueado: Preview aceita somente STRIPE_TEST_SECRET_KEY.');
   }
   if (!stripeClient) stripeClient = new Stripe(secret);
   return stripeClient;
 }
 
 export function getStripeWebhookSecret(): string {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  const secret = (process.env.VERCEL_ENV === 'preview'
+    ? process.env.STRIPE_TEST_WEBHOOK_SECRET?.trim()
+    : '') || process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret || !secret.startsWith('whsec_')) {
     throw new Error('Webhook Stripe não configurado no servidor.');
   }
