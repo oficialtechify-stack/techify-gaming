@@ -164,8 +164,32 @@ export async function authenticateMcpApiKey(rawKey: string): Promise<McpPrincipa
 
   const approvedRoles: PlatformRole[] = [];
   if (profileHasRole(profile, 'afiliado') && profileRoleIsApproved(profile, 'afiliado')) approvedRoles.push('afiliado');
-  if (profileHasRole(profile, 'empresa') && profileRoleIsApproved(profile, 'empresa')) approvedRoles.push('empresa');
-  if (!approvedRoles.length) throw new Error('A conta ainda não possui um perfil aprovado para usar a API.');
+
+  const profileCompanyId = String(profile.companyId || '').trim();
+  const storedCompanyId = String(keyData.companyId || '').trim();
+  let validatedCompanyId = '';
+
+  if (profileHasRole(profile, 'empresa') && profileRoleIsApproved(profile, 'empresa') && profileCompanyId) {
+    const companySnap = await db.collection('companies').doc(profileCompanyId).get();
+    const company = companySnap.exists ? companySnap.data()! : null;
+    const keyMatchesTenant = !storedCompanyId || storedCompanyId === profileCompanyId;
+
+    if (
+      keyMatchesTenant &&
+      company &&
+      String(company.ownerId || company.submittedBy || '') === userId &&
+      company.verified === true &&
+      String(company.status || '').toLowerCase() === 'approved' &&
+      company.archived !== true &&
+      company.isArchived !== true &&
+      company.banned !== true
+    ) {
+      approvedRoles.push('empresa');
+      validatedCompanyId = profileCompanyId;
+    }
+  }
+
+  if (!approvedRoles.length) throw new Error('A conta ainda não possui um perfil aprovado e ativo para usar a API.');
 
   const storedRoles = Array.isArray(keyData.allowedRoles)
     ? keyData.allowedRoles.map(normalizeRole).filter(Boolean) as PlatformRole[]
@@ -181,7 +205,7 @@ export async function authenticateMcpApiKey(rawKey: string): Promise<McpPrincipa
   return {
     userId,
     keyId: keyDoc.id,
-    companyId: String(profile.companyId || keyData.companyId || '').trim(),
+    companyId: validatedCompanyId,
     profile,
     approvedRoles: effectiveRoles,
     preferredRole: preferredRole && effectiveRoles.includes(preferredRole) ? preferredRole : undefined,
