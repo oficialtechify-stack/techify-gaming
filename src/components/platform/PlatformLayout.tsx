@@ -1798,12 +1798,15 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               isCompanyVerified={isUserVerified}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
               onOpenCreateCompany={() => {
+                setIsCreatePlanModalOpen(false);
+                setEditingPlan(null);
                 setIsCreateCompanyModalOpen(true);
               }}
               onOpenCreatePlan={(compId) => {
                 const targetCompId = compId || (myCompanies.length > 0 ? myCompanies[0].id : undefined);
                 setSelectedCompanyIdForPlan(targetCompId);
                 setEditingPlan(null);
+                setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
               }}
               onEditPlan={(plan) => {
@@ -1851,6 +1854,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setActiveTab('meu_perfil');
                   return;
                 }
+                setIsCreatePlanModalOpen(false);
+                setEditingPlan(null);
                 setIsCreateCompanyModalOpen(true);
               }}
               onOpenCreatePlan={roleMode === 'empresa' ? () => {
@@ -1864,10 +1869,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   return;
                 }
                 setEditingPlan(null);
+                setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
               } : undefined}
               onEditPlatform={roleMode === 'empresa' ? (prod) => {
                 setEditingPlan(prod);
+                setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
               } : undefined}
               onDeletePlatform={roleMode === 'empresa' ? handleDeletePlan : undefined}
@@ -1979,6 +1986,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onOpenCreatePlan={() => {
                 setSelectedCompanyIdForPlan(myCompanies[0]?.id);
                 setEditingPlan(null);
+                setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
               }}
               onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
