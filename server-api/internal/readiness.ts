@@ -1,5 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { getServerAdminApp, getServerAdminFirestore, ADMIN_PROJECT_ID } from '../../lib/firebaseAdminServer.js';
 
 type Req = { method?: string };
@@ -32,17 +30,18 @@ async function indexState(collectionGroup: string, expectedFields: string[]) {
 
 async function buildGateResult() {
   try {
-    const raw = await fs.readFile(path.join(process.cwd(), 'public', 'firebase-deploy-gate.json'), 'utf8');
-    const data = JSON.parse(raw);
+    const snap = await getServerAdminFirestore().collection('_internal').doc('firebase_deploy_gate').get();
+    if (!snap.exists) return { ok:false, error:'Build gate result unavailable.', at:null };
+    const data:any = snap.data() || {};
     return {
       ok: data.ok === true,
       error: data.error || null,
-      at: data.at || null,
+      at: data.updatedAt || null,
       indexes: Array.isArray(data.indexes) ? data.indexes : null,
       rules: data.rules || null,
     };
   } catch {
-    return { ok: false, error: 'Build gate result unavailable.', at: null };
+    return { ok:false, error:'Build gate result unavailable.', at:null };
   }
 }
 
