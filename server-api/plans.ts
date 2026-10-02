@@ -152,6 +152,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const company = companySnap.data()!;
+    const profileCompanyId = String(profile.companyId || '').trim();
+    if (profileCompanyId && profileCompanyId !== companyId) {
+      return res.status(403).json({ error: 'Este produto só pode pertencer à empresa vinculada a esta conta.' });
+    }
     if (
       String(company.ownerId || company.submittedBy || '') !== identity.uid ||
       company.verified !== true ||
@@ -162,9 +166,13 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return res.status(403).json({ error: 'Esta empresa não está habilitada para publicar ofertas.' });
     }
 
-    const billingType = String(body.billingType || 'unico').toLowerCase() === 'recorrente'
+    const requestedBillingType = String(body.billingType || 'unico').toLowerCase();
+    const billingType = requestedBillingType === 'recorrente'
       ? 'recorrente'
-      : 'unico';
+      : requestedBillingType === 'avulso'
+        ? 'avulso'
+        : 'unico';
+    const isPaymentLink = billingType === 'avulso';
     const billingCycle = billingType === 'recorrente'
       ? String(body.billingCycle || 'MONTHLY').toUpperCase()
       : '';
@@ -182,8 +190,18 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!Number.isFinite(priceSetup) || priceSetup < 0.5 || priceSetup > 1_000_000) {
       return res.status(400).json({ error: 'Informe um preço entre R$ 0,50 e R$ 1.000.000,00.' });
     }
-    if (!Number.isFinite(commissionPercentage) || commissionPercentage <= 0 || commissionPercentage > 100) {
-      return res.status(400).json({ error: 'A comissão do afiliado deve ficar entre 0,01% e 100%.' });
+    const allowAffiliates = isPaymentLink ? false : body.allowAffiliates !== false;
+    if (
+      !Number.isFinite(commissionPercentage) ||
+      commissionPercentage < 0 ||
+      commissionPercentage > 100 ||
+      (allowAffiliates && commissionPercentage <= 0)
+    ) {
+      return res.status(400).json({
+        error: allowAffiliates
+          ? 'A comissão do afiliado deve ficar entre 0,01% e 100%.'
+          : 'A comissão informada é inválida.',
+      });
     }
     if (
       billingType === 'recorrente' &&
@@ -199,14 +217,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const deliveryType = String(body.deliveryType || 'redirect').trim();
-    if (!SUPPORTED_DELIVERY_TYPES.has(deliveryType)) {
+    if (!isPaymentLink && !SUPPORTED_DELIVERY_TYPES.has(deliveryType)) {
       return res.status(400).json({
         error: 'Escolha um método de entrega disponível: redirecionamento, WhatsApp, área de membros ou download.',
       });
     }
 
     const deliveryUrl = safeHttpsUrl(body.deliveryUrl || body.thankYouPageUrl);
-    if (!deliveryUrl) {
+    if (!isPaymentLink && !deliveryUrl) {
       return res.status(400).json({ error: 'Informe uma URL HTTPS pública válida para a entrega do produto.' });
     }
 
@@ -274,9 +292,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       billingInterval: billingType === 'recorrente'
         ? (billingCycle === 'WEEKLY' ? 'weekly' : billingCycle === 'YEARLY' ? 'yearly' : 'monthly')
         : FieldValue.delete(),
-      deliveryType,
-      deliveryConfigured: true,
-      allowAffiliates: true,
+      deliveryType: isPaymentLink ? 'redirect' : deliveryType,
+      deliveryConfigured: !isPaymentLink,
+      allowAffiliates,
       status,
       active: status === 'Ativo',
       updatedAt: now,
@@ -304,9 +322,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       planId,
       companyId,
       ownerId: identity.uid,
-      deliveryType,
-      deliveryUrl,
-      deliveryInstructions,
+      deliveryType: isPaymentLink ? 'redirect' : deliveryType,
+      deliveryUrl: isPaymentLink ? '' : deliveryUrl,
+      deliveryInstructions: isPaymentLink ? '' : deliveryInstructions,
       updatedAt: now,
       ...(existing.exists ? {} : { createdAt: now }),
     };
@@ -314,6 +332,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const batch = db.batch();
     batch.set(planRef, payload, { merge: true });
     batch.set(deliveryRef, privateDelivery, { merge: true });
+    if (!existing.exists) {
+      batch.set(companySnap.ref, {
+        totalPlansCount: FieldValue.increment(1),
+        updatedAt: now,
+      }, { merge: true });
+    }
     await batch.commit();
 
     const savedPlanSnap = await planRef.get();
