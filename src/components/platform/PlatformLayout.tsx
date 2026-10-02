@@ -250,18 +250,46 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
-      const stored = window.localStorage.getItem('leadspay-landing-theme');
-      if (stored) return stored === 'dark';
-      return true; // Default to dark mode with full vibrant LeadsPay brand colors
+      const platformTheme = window.localStorage.getItem('leadspay-platform-theme');
+      if (platformTheme === 'light' || platformTheme === 'dark') return platformTheme === 'dark';
+
+      const legacyTheme = window.localStorage.getItem('leadspay-landing-theme');
+      if (legacyTheme === 'light' || legacyTheme === 'dark') return legacyTheme === 'dark';
+
+      return true;
     } catch {
       return true;
     }
   });
 
   useEffect(() => {
+    const theme: 'light' | 'dark' = isDarkMode ? 'dark' : 'light';
+
+    document.documentElement.setAttribute('data-leadspay-theme', theme);
+    document.body.setAttribute('data-leadspay-theme', theme);
+
+    try {
+      window.localStorage.setItem('leadspay-platform-theme', theme);
+      // Mantém compatibilidade com componentes antigos que ainda escutam a chave da landing.
+      window.localStorage.setItem('leadspay-landing-theme', theme);
+    } catch {
+      // O tema continua funcionando na sessão mesmo sem localStorage.
+    }
+
+    window.dispatchEvent(new CustomEvent('leadspay-theme-change', { detail: theme }));
+
+    return () => {
+      document.documentElement.removeAttribute('data-leadspay-theme');
+      document.body.removeAttribute('data-leadspay-theme');
+    };
+  }, [isDarkMode]);
+
+  useEffect(() => {
     const syncTheme = (event: Event) => {
       const theme = (event as CustomEvent<'light' | 'dark'>).detail;
-      if (theme === 'light' || theme === 'dark') setIsDarkMode(theme === 'dark');
+      if (theme === 'light' || theme === 'dark') {
+        setIsDarkMode(theme === 'dark');
+      }
     };
     window.addEventListener('leadspay-theme-change', syncTheme);
     return () => window.removeEventListener('leadspay-theme-change', syncTheme);
@@ -1463,13 +1491,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 ml-auto flex-shrink-0">
             {/* Dark / Light Mode Switcher */}
             <button 
-              onClick={() => {
-                const nextTheme = isDarkMode ? 'light' : 'dark';
-                setIsDarkMode(nextTheme === 'dark');
-                try { window.localStorage.setItem('leadspay-landing-theme', nextTheme); } catch { /* Tema ativo nesta sessão. */ }
-                window.dispatchEvent(new CustomEvent('leadspay-theme-change', { detail: nextTheme }));
-              }}
-              className="flex items-center w-11 h-6 bg-[#1f293d] rounded-full p-0.5 border border-white/10 transition-colors cursor-pointer relative flex-shrink-0"
+              onClick={() => setIsDarkMode((current) => !current)}
+              className={`flex items-center w-11 h-6 rounded-full p-0.5 border transition-all duration-300 cursor-pointer relative flex-shrink-0 ${
+                isDarkMode
+                  ? 'bg-[#1f293d] border-white/10'
+                  : 'bg-[#dbeafe] border-slate-300 shadow-inner'
+              }`}
               title="Alternar Tema"
               aria-label={`Ativar tema ${isDarkMode ? 'claro' : 'escuro'}`}
               aria-pressed={isDarkMode}

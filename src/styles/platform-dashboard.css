@@ -68,3 +68,139 @@
 .lp-glow-lime {
   box-shadow: 0 0 25px -5px rgba(217, 242, 42, 0.2);
 }
+
+
+/* =========================================================
+   LIGHT THEME
+   O painel historicamente usa utilitários Tailwind com cores
+   dark hardcoded. Estes overrides transformam a paleta inteira
+   quando data-theme="light" está ativo, sem alterar a identidade.
+   ========================================================= */
+
+html[data-leadspay-theme="light"],
+body[data-leadspay-theme="light"] {
+  background: #f4f7fb !important;
+  color: #0f172a !important;
+  color-scheme: light;
+}
+
+.leadspay-platform[data-theme="light"] {
+  --lp-light-bg: #f4f7fb;
+  --lp-light-surface: #ffffff;
+  --lp-light-surface-soft: #f8fafc;
+  --lp-light-surface-muted: #eef2f7;
+  --lp-light-text: #0f172a;
+  --lp-light-muted: #64748b;
+  --lp-light-border: rgba(15, 23, 42, 0.12);
+  --lp-light-accent: #617700;
+
+  background: var(--lp-light-bg) !important;
+  color: var(--lp-light-text) !important;
+  color-scheme: light;
+}
+
+/* Superfícies principais */
+.leadspay-platform[data-theme="light"] [class*="bg-[#050811]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#060A15]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#060a15]"] {
+  background-color: var(--lp-light-bg) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-[#080d1a]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#0b1220]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#0f172a]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#0a101d]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#060b13]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#181c24]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#232730]"] {
+  background-color: var(--lp-light-surface) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="bg-[#102419]"] {
+  background-color: #eef7df !important;
+}
+
+/* Utilitários translúcidos usados em cards, botões e menus */
+.leadspay-platform[data-theme="light"] [class*="bg-white/"] {
+  background-color: rgba(15, 23, 42, 0.055) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="hover:bg-white/"]:hover {
+  background-color: rgba(15, 23, 42, 0.09) !important;
+}
+
+/* Tipografia */
+.leadspay-platform[data-theme="light"] .text-white,
+.leadspay-platform[data-theme="light"] [class*="text-white/"] {
+  color: var(--lp-light-text) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="text-[#94a3b8]"] {
+  color: var(--lp-light-muted) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class*="text-[#D9F22A]"] {
+  color: var(--lp-light-accent) !important;
+}
+
+/* Não altera texto escuro propositalmente usado sobre botões lime */
+.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]"][class*="text-[#060A15]"],
+.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]"][class*="text-black"] {
+  color: #081018 !important;
+}
+
+/* Bordas */
+.leadspay-platform[data-theme="light"] [class*="border-white/"] {
+  border-color: var(--lp-light-border) !important;
+}
+
+/* Campos de formulário */
+.leadspay-platform[data-theme="light"] input,
+.leadspay-platform[data-theme="light"] select,
+.leadspay-platform[data-theme="light"] textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+.leadspay-platform[data-theme="light"] input::placeholder,
+.leadspay-platform[data-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Dropdowns, popovers e dialogs que usam as superfícies dark da plataforma */
+.leadspay-platform[data-theme="light"] [role="dialog"],
+.leadspay-platform[data-theme="light"] [role="menu"],
+.leadspay-platform[data-theme="light"] [class*="shadow-2xl"] {
+  --tw-shadow-color: rgba(15, 23, 42, 0.12);
+}
+
+/* Scrollbars do modo claro */
+.leadspay-platform[data-theme="light"] ::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.8);
+}
+
+.leadspay-platform[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.28);
+}
+
+.leadspay-platform[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(97, 119, 0, 0.45);
+}
+
+/* Glass cards */
+.leadspay-platform[data-theme="light"] .lp-glass-card {
+  background: rgba(255, 255, 255, 0.86);
+  border-color: var(--lp-light-border);
+}
+
+/* Mantém animação suave na troca de tema sem aplicar transition em tudo */
+.leadspay-platform,
+.leadspay-platform aside,
+.leadspay-platform header,
+.leadspay-platform main,
+.leadspay-platform [class*="rounded"] {
+  transition-property: background-color, color, border-color, box-shadow;
+  transition-duration: 220ms;
+  transition-timing-function: ease;
+}
