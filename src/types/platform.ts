@@ -60,6 +60,9 @@ export interface CompanyStartup {
   rejectionReason?: string;
   ownerId?: string;
   createdAt?: string;
+  updatedAt?: string;
+  archived?: boolean;
+  isArchived?: boolean;
 }
 
 export interface ProductOrderBump {
@@ -411,6 +414,9 @@ export interface UserSellerProfile {
   bannedAt?: string | null;
   status?: string;
   verificationStatus?: 'unsubmitted' | 'pending' | 'approved' | 'rejected' | 'banned';
+  affiliateVerificationStatus?: 'unsubmitted' | 'pending' | 'submitted' | 'approved' | 'rejected' | 'banned';
+  empresaVerificationStatus?: 'unsubmitted' | 'pending' | 'submitted' | 'approved' | 'rejected' | 'banned';
+  companyVerificationStatus?: 'unsubmitted' | 'pending' | 'submitted' | 'approved' | 'rejected' | 'banned';
   environment?: 'development' | 'production';
   kyc_status?: 'pending' | 'submitted' | 'verified';
   verificationSubmittedAt?: string;
