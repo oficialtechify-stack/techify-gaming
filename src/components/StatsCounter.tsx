@@ -1,33 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { TrendingUp, ShieldCheck, Zap, Layers, Wallet, Users, Building2, CheckCircle2, ArrowUpRight } from 'lucide-react';
-import { subscribeGlobalPlatformMetrics, GlobalPlatformMetrics } from '../services/firestoreService';
+import { EMPTY_PUBLIC_METRICS, fetchPublicPlatformMetrics, PublicPlatformMetrics } from '../services/publicMetricsService';
 
 export const StatsCounter: React.FC = () => {
-  const [metrics, setMetrics] = useState<GlobalPlatformMetrics>({
-    totalRegisteredUsers: 1,
-    totalStartups: 0,
-    totalPlans: 0,
-    totalCommissionsGenerated: 0,
-    totalCommissionsPaid: 0,
-    totalGrossSales: 0,
-    totalSalesCount: 0,
-    companies: [],
-    plans: []
-  });
+  const [metrics, setMetrics] = useState<PublicPlatformMetrics>(EMPTY_PUBLIC_METRICS);
 
   const [displayUsers, setDisplayUsers] = useState(0);
   const [displayStartups, setDisplayStartups] = useState(0);
   const [displayCommissions, setDisplayCommissions] = useState(0);
   const [displayPaid, setDisplayPaid] = useState(0);
 
-  // Subscribe to real Firestore database updates
+  // Public totals come from a privacy-safe aggregate backend endpoint.
   useEffect(() => {
-    const unsubscribe = subscribeGlobalPlatformMetrics((liveMetrics) => {
-      setMetrics(liveMetrics);
-    });
+    let cancelled = false;
 
-    return () => unsubscribe();
+    fetchPublicPlatformMetrics()
+      .then((liveMetrics) => {
+        if (!cancelled) setMetrics(liveMetrics);
+      })
+      .catch((error) => {
+        console.warn('[Public metrics]', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Smooth counter animation when live metrics arrive
@@ -98,7 +96,7 @@ export const StatsCounter: React.FC = () => {
             Métricas Reais do Ecossistema LeadsPay
           </h2>
           <p className="mt-2 text-xs sm:text-sm text-white/60">
-            Números sincronizados diretamente da nossa base de dados ativa.
+            Totais agregados pelo backend sem expor dados de clientes ou vendas individuais.
           </p>
         </motion.div>
 
@@ -152,11 +150,11 @@ export const StatsCounter: React.FC = () => {
             </div>
 
             <div className="text-xs tracking-[0.15em] font-bold text-white/80 uppercase max-w-[200px] leading-snug">
-              STARTUPS & PLANOS NO CATÁLOGO
+              EMPRESAS & PRODUTOS NO CATÁLOGO
             </div>
 
             <span className="mt-2 text-[10px] text-white/60 font-medium">
-              {metrics.totalStartups} Empresas • {metrics.totalPlans} Planos
+              {metrics.totalStartups} Empresas • {metrics.totalPlans} Produtos
             </span>
           </motion.div>
 
@@ -216,14 +214,14 @@ export const StatsCounter: React.FC = () => {
             className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-colors shadow-md"
           >
             <div className="flex items-center justify-between text-xs text-white/50">
-              <span>Startups & Empresas</span>
+              <span>Empresas Aprovadas</span>
               <Building2 className="w-4 h-4 text-[#D9F22A]" />
             </div>
             <div className="text-2xl font-black text-white font-['Syne']">
               {metrics.totalStartups} Cadastradas
             </div>
             <p className="text-[11px] text-white/60">
-              {metrics.totalPlans} ofertas e planos comerciais disponíveis.
+              {metrics.totalPlans} produtos ativos disponíveis.
             </p>
           </motion.div>
 
@@ -256,14 +254,14 @@ export const StatsCounter: React.FC = () => {
             className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 hover:border-[#D9F22A]/30 transition-colors shadow-md"
           >
             <div className="flex items-center justify-between text-xs text-white/50">
-              <span>Comissões Pagas via PIX</span>
+              <span>Saques de Afiliados Enviados</span>
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-2xl font-black text-emerald-400 font-['Syne'] truncate">
               {formatBRL(metrics.totalCommissionsPaid)}
             </div>
             <p className="text-[11px] text-white/60">
-              Saques processados e liquidados com sucesso.
+              Valores enviados à infraestrutura Stripe Connect.
             </p>
           </motion.div>
         </div>
