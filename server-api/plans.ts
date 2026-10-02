@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../lib/firebaseAdminServer.js';
 import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../lib/profileEligibility.js';
+import { getStripeTestClient } from '../lib/stripeServer.js';
 
 type RequestLike = {
   method?: string;
@@ -211,6 +212,68 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return res.status(400).json({ error: 'A comissão nas renovações deve ficar entre 0,01% e 100%.' });
     }
 
+    const requestedStatus = body.status === 'Pausado' ? 'Pausado' : 'Ativo';
+    if (requestedStatus === 'Ativo') {
+      const companyAccountId = String(
+        profile.stripeAccounts?.empresa ||
+        company.stripeAccountId ||
+        ''
+      ).trim();
+
+      if (!companyAccountId) {
+        return res.status(409).json({
+          error: 'Conecte a conta Stripe da empresa antes de publicar um produto ativo.',
+          code: 'COMPANY_CONNECT_NOT_CONFIGURED',
+        });
+      }
+
+      try {
+        const stripe = getStripeTestClient();
+        let account = await stripe.accounts.retrieve(companyAccountId);
+
+        if (
+          account.metadata?.firebase_uid !== identity.uid ||
+          account.metadata?.leadspay_role !== 'empresa' ||
+          (account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
+        ) {
+          return res.status(409).json({
+            error: 'A conta Stripe vinculada não corresponde a esta empresa.',
+            code: 'COMPANY_CONNECT_MISMATCH',
+          });
+        }
+
+        if (!account.metadata?.leadspay_company_id) {
+          account = await stripe.accounts.update(companyAccountId, {
+            metadata: {
+              ...account.metadata,
+              firebase_uid: identity.uid,
+              leadspay_role: 'empresa',
+              leadspay_company_id: companyId,
+            },
+          });
+        }
+
+        const ready =
+          account.details_submitted === true &&
+          account.payouts_enabled === true &&
+          account.capabilities?.transfers === 'active';
+
+        if (!ready) {
+          return res.status(409).json({
+            error: 'Finalize o onboarding da Stripe Connect antes de publicar o produto.',
+            code: 'COMPANY_CONNECT_NOT_READY',
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (/COMPANY_CONNECT/.test(message)) throw error;
+        return res.status(503).json({
+          error: 'Não foi possível confirmar a conta Stripe da empresa agora. Tente novamente.',
+          code: 'COMPANY_CONNECT_CHECK_FAILED',
+        });
+      }
+    }
+
     const description = String(body.description || '').trim().slice(0, 5000);
     if (description.length < 10) {
       return res.status(400).json({ error: 'Descreva o produto com pelo menos 10 caracteres.' });
@@ -254,7 +317,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return res.status(403).json({ error: 'Esta oferta pertence a outra empresa.' });
     }
 
-    const status = body.status === 'Pausado' ? 'Pausado' : 'Ativo';
+    const status = requestedStatus;
     const now = new Date().toISOString();
     const checkoutSlug = String(body.checkoutSlug || existing.data()?.checkoutSlug || slugify(name))
       .replace(/[^A-Za-z0-9_-]/g, '')
