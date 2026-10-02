@@ -78,7 +78,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   onRemoveAffiliate
 }) => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || '');
-  const [activeTab, setActiveTab] = useState<'planos' | 'afiliados' | 'vendas'>('planos');
+  const [activeTab, setActiveTab] = useState<'produtos' | 'afiliados' | 'vendas'>('produtos');
   const [verificationWarningModal, setVerificationWarningModal] = useState<boolean>(false);
   const [removingAffiliateModal, setRemovingAffiliateModal] = useState<UserAffiliation | null>(null);
 
@@ -166,7 +166,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             </h3>
 
             <p className="text-xs text-white/70 leading-relaxed mb-6">
-              A empresa <strong>só pode cadastrar produtos e planos</strong> após ser verificada e aprovada pela Administração. Preencha seus dados corporativos e documentos fiscais no Perfil da Empresa para que a equipe valide sua conta.
+              A empresa <strong>só pode cadastrar produtos</strong> após ser verificada e aprovada pela Administração. Complete a verificação no Perfil da Empresa para liberar a publicação de produtos.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
@@ -199,34 +199,17 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
             <Building2 className="w-3.5 h-3.5" />
-            Área Exclusiva de Produtores, Startups & Empresas
+            Produtos & Ofertas da Empresa
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-            Painel da Empresa & Gestão de Planos
+            Produtos da Empresa
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Cadastre sua startup, defina os planos e soluções comercializados e configure as comissões que sua rede de afiliados receberá a cada venda.
+            Cadastre e gerencie os produtos que sua empresa oferece, configure preços, checkout e comissões para afiliados.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 w-full md:w-auto">
-          {companies.length === 0 ? (
-            <button
-              onClick={handleCreateCompanyRequest}
-              className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 border border-white/10"
-            >
-              <Building2 className="w-4 h-4 text-[#D9F22A]" />
-              Cadastrar Empresa
-            </button>
-          ) : onNavigateToProfile ? (
-            <button
-              onClick={onNavigateToProfile}
-              className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 border border-white/10"
-            >
-              <Building2 className="w-4 h-4 text-[#D9F22A]" />
-              Editar Empresa
-            </button>
-          ) : null}
           <button
             onClick={() => handleCreatePlanRequest(currentCompany?.id)}
             className={`flex-1 md:flex-initial font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
@@ -238,12 +221,12 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             {isVerified ? (
               <>
                 <Plus className="w-4 h-4 stroke-[3]" />
-                Criar Novo Plano
+                Cadastrar Produto
               </>
             ) : (
               <>
                 <Lock className="w-4 h-4" />
-                Criar Novo Plano (Verificar)
+                Cadastrar Produto (Verificar)
               </>
             )}
           </button>
@@ -269,10 +252,10 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
               </div>
               <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
                 {isPending
-                  ? 'Os dados da sua empresa foram enviados e estão sendo analisados pela Administração. O cadastro de planos será liberado assim que o selo for concedido.'
+                  ? 'Os dados da sua empresa estão em análise. O cadastro de produtos será liberado assim que a verificação for aprovada.'
                   : isRejected
                     ? 'O cadastro da sua empresa necessita de correções apontadas pelo Administrador. Clique no botão ao lado para corrigir e reenviar.'
-                    : 'A empresa só pode cadastrar produtos e planos após a homologação e aprovação pela Administração. Complete seu perfil corporativo agora para liberar o cadastro de planos.'}
+                    : 'A empresa só pode publicar produtos após a homologação e aprovação pela Administração. Complete seu perfil corporativo para liberar o cadastro de produtos.'}
               </p>
             </div>
           </div>
@@ -293,7 +276,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
           <div className="flex items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
             <span className="text-xs font-bold">
-              Empresa Verificada & Homologada: Cadastro de planos, checkout e comissões 100% liberados!
+              Empresa verificada: cadastro de produtos, checkout e comissões liberados.
             </span>
           </div>
           <button
@@ -301,30 +284,30 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3.5 py-1.5 rounded-xl text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
           >
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
-            Adicionar Plano
+            Adicionar Produto
           </button>
         </div>
       )}
 
-      {/* If no companies exist yet, prompt to create or verify */}
-      {companies.length === 0 ? (
-        <div className="bg-[#080d1a] border-2 border-dashed border-[#D9F22A]/40 rounded-3xl p-8 sm:p-12 text-center flex flex-col items-center justify-center gap-4">
+      {/* Esta área é somente de produtos. O cadastro da empresa pertence ao perfil/onboarding. */}
+      {companies.length === 0 && plans.length === 0 ? (
+        <div className="bg-[#080d1a] border-2 border-dashed border-[#D9F22A]/35 rounded-3xl p-8 sm:p-12 text-center flex flex-col items-center justify-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
-            <Building2 className="w-8 h-8" />
+            <Layers className="w-8 h-8" />
           </div>
           <div className="max-w-md">
             <h3 className="text-xl font-bold text-white font-['Syne'] mb-2">
-              Nenhuma Empresa ou Startup Cadastrada
+              Nenhum Produto Cadastrado
             </h3>
             <p className="text-xs text-white/60 leading-relaxed mb-6">
-              Comece cadastrando o perfil e dados oficiais da sua empresa para que os afiliados da plataforma possam começar a divulgar seus produtos e serviços.
+              Cadastre o primeiro produto da sua empresa para configurar preço, checkout e comissão dos afiliados.
             </p>
             <button
-              onClick={handleCreateCompanyRequest}
-              className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-6 py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.4)] transition-all cursor-pointer inline-flex items-center gap-2"
+              onClick={() => handleCreatePlanRequest(currentCompany?.id)}
+              className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-6 py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(217,242,42,0.35)] transition-all cursor-pointer inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-              Cadastrar Minha Primeira Startup
+              Cadastrar Primeiro Produto
             </button>
           </div>
         </div>
@@ -406,7 +389,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 {/* Metrics Pill Grid */}
                 <div className="grid grid-cols-3 gap-3 w-full lg:w-auto bg-[#050811] border border-white/10 rounded-2xl p-3.5">
                   <div className="text-center px-3">
-                    <span className="text-[10px] font-bold uppercase text-white/50 block">Planos Ativos</span>
+                    <span className="text-[10px] font-bold uppercase text-white/50 block">Produtos Ativos</span>
                     <span className="text-lg font-black text-white font-['Syne']">{companyPlans.length}</span>
                   </div>
                   <div className="text-center px-3 border-x border-white/10">
@@ -422,19 +405,19 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             </div>
           )}
 
-          {/* Sub Navigation: Planos | Afiliados | Vendas */}
+          {/* Sub Navigation: Produtos | Afiliados | Vendas */}
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setActiveTab('planos')}
+                onClick={() => setActiveTab('produtos')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                  activeTab === 'planos'
+                  activeTab === 'produtos'
                     ? 'bg-[#D9F22A] text-[#060A15]'
                     : 'text-white/60 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                Planos & Produtos ({companyPlans.length})
+                Produtos & Produtos ({companyPlans.length})
               </button>
 
               <button
@@ -464,7 +447,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
           </div>
 
           {/* TAB 1: ÁREA PARA GERENCIAR OS PLANOS (Image 2 & 3) */}
-          {activeTab === 'planos' && (
+          {activeTab === 'produtos' && (
             <div className="space-y-4">
               {/* Header Controls for Managing Plans: Search, Status Filter & View Toggle */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#080d1a] border border-white/10 rounded-2xl p-3 sm:p-4">
@@ -473,7 +456,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                     <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                     <input
                       type="text"
-                      placeholder="Pesquisar planos..."
+                      placeholder="Pesquisar produtos..."
                       value={planSearch}
                       onChange={(e) => setPlanSearch(e.target.value)}
                       className="w-full bg-[#050811] border border-white/10 focus:border-[#D9F22A] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none transition-colors"
@@ -529,7 +512,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                           ? 'bg-white/15 text-white shadow-sm'
                           : 'text-white/50 hover:text-white'
                       }`}
-                      title="Visualização em Tabela (Gerenciar Planos)"
+                      title="Visualização em Tabela (Gerenciar Produtos)"
                     >
                       <List className="w-4 h-4" />
                     </button>
@@ -565,8 +548,8 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                   </h4>
                   <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
                     {isVerified 
-                      ? 'Adicione planos, preços e comissões para que os afiliados possam começar a vender.' 
-                      : 'Complete a verificação da sua empresa no perfil para liberar o cadastro de planos e produtos.'}
+                      ? 'Adicione produtos, preços e comissões para que os afiliados possam começar a vender.' 
+                      : 'Complete a verificação da sua empresa no perfil para liberar o cadastro de produtos e produtos.'}
                   </p>
                   <button
                     onClick={() => handleCreatePlanRequest(currentCompany?.id)}
@@ -802,7 +785,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                             <button
                               onClick={() => onEditPlan(plan)}
                               className="p-1.5 rounded-lg bg-black/70 text-white/70 hover:text-[#D9F22A] hover:bg-black/90 transition-colors cursor-pointer border border-white/10"
-                              title="Editar Plano"
+                              title="Editar Produto"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
@@ -810,7 +793,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                           <button
                             onClick={() => onDeletePlan(plan.id, plan.companyId)}
                             className="p-1.5 rounded-lg bg-black/70 text-white/70 hover:text-red-400 hover:bg-black/90 transition-colors cursor-pointer border border-white/10"
-                            title="Excluir Plano"
+                            title="Excluir Produto"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -850,7 +833,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                         {/* Pricing & Commission Box */}
                         <div className="pt-3 border-t border-white/10 space-y-2">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-white/50 font-bold uppercase text-[10px]">Preço de Setup:</span>
+                            <span className="text-white/50 font-bold uppercase text-[10px]">Preço:</span>
                             <span className="text-white font-black text-sm">
                               R$ {plan.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
@@ -922,7 +905,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                   <Users className="w-10 h-10 text-[#D9F22A]/40 mx-auto mb-3" />
                   <h4 className="text-base font-bold text-white font-['Syne']">Nenhum afiliado conectado ainda</h4>
                   <p className="text-xs text-white/50 max-w-sm mx-auto mt-1">
-                    Assim que afiliados solicitarem afiliação aos seus planos no Marketplace, eles aparecerão aqui com métricas de cliques e conversão.
+                    Assim que afiliados solicitarem afiliação aos seus produtos no Marketplace, eles aparecerão aqui com métricas de cliques e conversão.
                   </p>
                 </div>
               ) : (
@@ -932,7 +915,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                       <tr className="border-b border-white/10 text-[11px] font-bold text-white/40 uppercase">
                         <th className="py-3 px-4">Afiliado</th>
                         <th className="py-3 px-4">Código</th>
-                        <th className="py-3 px-4">Plano Vinculado</th>
+                        <th className="py-3 px-4">Produto Vinculado</th>
                         <th className="py-3 px-4 text-center">Cliques</th>
                         <th className="py-3 px-4 text-center">Vendas</th>
                         <th className="py-3 px-4">Comissão Paga</th>
@@ -944,7 +927,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                       {companyAffiliations.map(aff => {
                         const affName = aff.userName || aff.affiliateName || 'Afiliado';
                         const affCode = aff.affiliateCode || aff.affiliate_code || '---';
-                        const planName = aff.planName || aff.platformName || 'Plano Oficial';
+                        const planName = aff.planName || aff.platformName || 'Produto Oficial';
                         const clicksCount = aff.clicks ?? aff.clicksCount ?? 0;
                         const salesCount = aff.salesCount ?? 0;
                         const totalEarned = aff.totalEarned ?? aff.totalCommissionEarned ?? 0;
