@@ -41,10 +41,15 @@ async function requireReadyConnectAccount(
   accountId: string,
   uid: string,
   role: 'empresa' | 'afiliado',
+  companyId?: string,
 ): Promise<void> {
   if (!accountId) throw new Error('CONNECT_NOT_CONFIGURED');
   const account = await stripe.accounts.retrieve(accountId);
-  if (account.metadata?.firebase_uid !== uid || account.metadata?.leadspay_role !== role) {
+  if (
+    account.metadata?.firebase_uid !== uid ||
+    account.metadata?.leadspay_role !== role ||
+    (role === 'empresa' && companyId && account.metadata?.leadspay_company_id !== companyId)
+  ) {
     throw new Error('CONNECT_OWNERSHIP_MISMATCH');
   }
   if (
@@ -149,7 +154,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const stripe = getStripeTestClient();
     const companyAccountId = String(companyProfile.stripeAccounts?.empresa || company.stripeAccountId || '');
     try {
-      await requireReadyConnectAccount(stripe, companyAccountId, companyOwnerId, 'empresa');
+      await requireReadyConnectAccount(stripe, companyAccountId, companyOwnerId, 'empresa', companyId);
     } catch {
       return fail(
         res,
