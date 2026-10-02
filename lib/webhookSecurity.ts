@@ -66,9 +66,9 @@ export async function assertSafeWebhookUrl(rawValue: unknown): Promise<string> {
   if (isIP(hostname)) {
     if (isPrivateNetworkAddress(hostname)) throw new Error('WEBHOOK_URL_PRIVATE');
   } else {
-    let addresses: Awaited<ReturnType<typeof lookup>>;
+    let addresses: Array<{ address: string; family: number }> = [];
     try {
-      addresses = await lookup(hostname, { all: true, verbatim: true });
+      addresses = await lookup(hostname, { all: true, verbatim: true }) as Array<{ address: string; family: number }>;
     } catch {
       throw new Error('WEBHOOK_URL_UNRESOLVED');
     }
