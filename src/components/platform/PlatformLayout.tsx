@@ -999,24 +999,24 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setTimeout(() => setLiveToast(null), 3000);
     } catch (err: any) {
       console.error('Error duplicating plan:', err);
-      alert(`Erro ao duplicar plano: ${err.message}`);
+      alert(`Erro ao duplicar produto: ${err.message}`);
     }
   };
 
   // Handle delete plan
   const handleDeletePlan = async (planId: string, companyId?: string) => {
-    if (!confirm('Deseja realmente excluir este plano?')) return;
+    if (!confirm('Deseja realmente arquivar este produto?')) return;
     try {
       await deleteCompanyPlanInFirebase(planId, companyId);
       setLiveToast({
-        message: 'Plano removido com sucesso',
+        message: 'Produto arquivado com sucesso',
         sub: 'Catálogo atualizado',
         amount: 'Removido'
       });
       setTimeout(() => setLiveToast(null), 3000);
     } catch (err: any) {
       console.error('Error deleting plan:', err);
-      alert(`Erro ao excluir plano: ${err.message}`);
+      alert(`Erro ao arquivar produto: ${err.message}`);
     }
   };
 
@@ -1036,7 +1036,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setAllAffiliations(prev => prev.filter(a => a.id !== affId));
       setLiveToast({
         message: 'Afiliação encerrada com sucesso',
-        sub: 'Você saiu da afiliação deste plano.',
+        sub: 'Você saiu da afiliação deste produto.',
         amount: 'OK'
       });
       setTimeout(() => setLiveToast(null), 3500);
@@ -1061,7 +1061,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setAffiliations(prev => prev.filter(a => a.id !== affId));
       setLiveToast({
         message: 'Afiliado desvinculado com sucesso',
-        sub: `${affiliateName || 'Afiliado'} foi removido dos planos da empresa.`,
+        sub: `${affiliateName || 'Afiliado'} foi removido dos produtos da empresa.`,
         amount: 'OK'
       });
       setTimeout(() => setLiveToast(null), 3500);
@@ -2031,7 +2031,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               roleMode={roleMode}
               withdrawals={withdrawals}
               onWithdraw={handleWithdraw}
-              onRefresh={() => {}}
             />
           )}
           {activeTab === 'assinaturas' && (
