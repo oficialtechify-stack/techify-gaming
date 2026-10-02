@@ -103,9 +103,12 @@ async function main() {
           );
           const releaseName=existing?.name||`projects/${PROJECT_ID}/releases/cloud.firestore`;
           const deployed=existing
-            ? await request(`https://firebaserules.googleapis.com/v1/${releaseName}?updateMask=rulesetName`,{
+            ? await request(`https://firebaserules.googleapis.com/v1/${releaseName}`,{
                 method:'PATCH',
-                body:JSON.stringify({name:releaseName,rulesetName})
+                body:JSON.stringify({
+                  release:{name:releaseName,rulesetName},
+                  updateMask:'ruleset_name'
+                })
               })
             : await request(`https://firebaserules.googleapis.com/v1/projects/${PROJECT_ID}/releases`,{
                 method:'POST',
