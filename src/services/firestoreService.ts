@@ -25,7 +25,8 @@ import {
   AffiliateLinkItem,
   TeamMember,
   VerificationRequest,
-  PlatformClient
+  PlatformClient,
+  ProductDeliveryType
 } from '../types/platform';
 import { formatAffiliatePlanUrl } from '../utils/affiliateTracking';
 
@@ -588,8 +589,46 @@ export const deletePlatformInFirebase = (planId: string) => deleteCompanyPlanInF
  * Update Plan in Firestore
  */
 export async function updateCompanyPlanInFirebase(planId: string, updates: Partial<CompanyPlan>) {
-  const docRef = doc(db, COLLECTIONS.PLANS, planId);
-  await updateDoc(docRef, sanitizeForFirestore(updates));
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para atualizar a oferta.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/plans', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ id: planId, ...sanitizeForFirestore(updates) }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.plan) throw new Error(data.error || 'Não foi possível atualizar a oferta.');
+  return data.plan as CompanyPlan;
+}
+
+export async function getCompanyPlanDeliverySettings(planId: string): Promise<{
+  deliveryType: ProductDeliveryType;
+  deliveryUrl: string;
+  deliveryInstructions: string;
+}> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para carregar a configuração de entrega.');
+  const token = await user.getIdToken();
+  const response = await fetch(`/api/plans?planId=${encodeURIComponent(planId)}&includeDelivery=1`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.delivery) {
+    throw new Error(data.error || 'Não foi possível carregar a configuração de entrega.');
+  }
+  return {
+    deliveryType: data.delivery.deliveryType || 'redirect',
+    deliveryUrl: data.delivery.deliveryUrl || '',
+    deliveryInstructions: data.delivery.deliveryInstructions || '',
+  };
 }
 
 export const updatePlatformInFirebase = updateCompanyPlanInFirebase;
