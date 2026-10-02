@@ -511,36 +511,21 @@ export const subscribePlatforms = subscribePlans;
  * Get a Plan by ID or Slug directly from Firestore
  */
 export async function getCompanyPlanByIdOrSlug(idOrSlug: string): Promise<CompanyPlan | null> {
+  const cleanId = String(idOrSlug || '').trim();
+  if (!cleanId || !/^[A-Za-z0-9_-]{1,150}$/.test(cleanId)) return null;
+
   try {
-    const cleanId = idOrSlug.trim();
-    if (!cleanId) return null;
-
-    // 1. Direct doc lookup by ID
-    const planRef = doc(db, COLLECTIONS.PLANS, cleanId);
-    const planSnap = await getDoc(planRef);
-    if (planSnap.exists()) {
-      return { id: planSnap.id, ...(planSnap.data() as Omit<CompanyPlan, 'id'>) };
-    }
-
-    // 2. Lookup across plans by slug, checkoutSlug, or partial ID
-    const q = collection(db, COLLECTIONS.PLANS);
-    const allPlans = await getDocs(q);
-    for (const d of allPlans.docs) {
-      const data = d.data() as CompanyPlan;
-      if (
-        d.id === cleanId ||
-        data.slug === cleanId ||
-        data.checkoutSlug === cleanId ||
-        (data.slug && data.slug.toLowerCase() === cleanId.toLowerCase()) ||
-        (data.checkoutSlug && data.checkoutSlug.toLowerCase() === cleanId.toLowerCase())
-      ) {
-        return { id: d.id, ...data };
-      }
-    }
+    const response = await fetch(`/api/plans?lookup=${encodeURIComponent(cleanId)}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.plan) return null;
+    return data.plan as CompanyPlan;
   } catch (err) {
-    console.error('Error fetching plan by ID or Slug:', err);
+    console.error('Error fetching public product:', err);
+    return null;
   }
-  return null;
 }
 
 /**
