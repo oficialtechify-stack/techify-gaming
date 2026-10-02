@@ -11,6 +11,7 @@ import submitVerificationHandler from '../server-api/profile/submit-verification
 import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
 import affiliateJoinHandler from '../server-api/affiliates/join.js';
 import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
+import adminEntityActionHandler from '../server-api/admin/entity-action.js';
 import plansHandler from '../server-api/plans.js';
 import subscriptionCheckoutHandler from '../server-api/stripe/subscription-checkout.js';
 import stripeWithdrawalHandler from '../server-api/stripe/withdrawal.js';
@@ -91,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cleanPath = subpath.replace(/^\/+|\/+$/g, '').toLowerCase();
 
   // Retired Asaas check
-  const retiredAsaas = /^(?:checkout|pix|subaccounts|asaas|subscriptions?|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas|admin\/(?:approve-company|reject-entity|ban-entity|unban-entity|purge-entity))/i.test(cleanPath);
+  const retiredAsaas = /^(?:checkout|pix|subaccounts|asaas|subscriptions?|v3\/(?:accounts|payments|subaccounts)|webhooks\/asaas)/i.test(cleanPath);
   if (retiredAsaas) {
     return res.status(410).json({
       error: true,
@@ -170,6 +171,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return affiliateJoinHandler(req as any, res as any);
     case 'admin/audit-identities':
       return auditIdentitiesHandler(req as any, res as any);
+    case 'admin/entity-action':
+    case 'admin/approve-company':
+    case 'admin/reject-entity':
+    case 'admin/ban-entity':
+    case 'admin/unban-entity':
+    case 'admin/purge-entity':
+      if (cleanPath !== 'admin/entity-action') {
+        req.body = { ...(req.body || {}), action: cleanPath.replace(/^admin\//, '') };
+      }
+      return adminEntityActionHandler(req as any, res as any);
     default:
       return res.status(404).json({ error: `Endpoint /api/${cleanPath} não encontrado.` });
   }
