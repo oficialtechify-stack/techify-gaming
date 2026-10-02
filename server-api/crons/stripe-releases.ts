@@ -14,6 +14,60 @@ function authorized(headerValue: string | string[] | undefined): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+export async function releaseStripeBalanceDocument(
+  db: FirebaseFirestore.Firestore,
+  releaseRef: FirebaseFirestore.DocumentReference,
+): Promise<boolean> {
+  return db.runTransaction(async (tx) => {
+    const latest = await tx.get(releaseRef);
+    if (!latest.exists) return false;
+    const release = latest.data()!;
+    if (release.status !== 'pending') return false;
+
+    const role = release.role as PlatformRole;
+    if (role !== 'empresa' && role !== 'afiliado') throw new Error('Papel de saldo inválido.');
+    const amountCents = Number(release.amountCents);
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new Error('Valor de liberação inválido.');
+
+    const profileRef = db.collection('user_profiles').doc(String(release.userId || ''));
+    const profileSnap = await tx.get(profileRef);
+    if (!profileSnap.exists) throw new Error('Perfil financeiro não encontrado.');
+    const profile = profileSnap.data()!;
+    const pendingKey = rolePendingCentsField(role);
+    const availableKey = roleAvailableCentsField(role);
+    const rolePending = Number(profile[pendingKey] || 0);
+    const roleAvailable = Number(profile[availableKey] || 0);
+    if (!Number.isSafeInteger(rolePending) || rolePending < amountCents) {
+      throw new Error('Saldo pendente inconsistente.');
+    }
+
+    const pendingBalance = Math.max(0, Number(profile.pendingBalance || 0) - amountCents / 100);
+    const availableBalance = Number(profile.availableBalance || 0) + amountCents / 100;
+    const releasedAt = new Date().toISOString();
+
+    tx.set(profileRef, {
+      [pendingKey]: rolePending - amountCents,
+      [availableKey]: roleAvailable + amountCents,
+      pendingBalance: Number(pendingBalance.toFixed(2)),
+      availableBalance: Number(availableBalance.toFixed(2)),
+      updatedAt: releasedAt,
+    }, { merge: true });
+    tx.set(releaseRef, {
+      status: 'available',
+      releasedAt,
+      updatedAt: releasedAt,
+    }, { merge: true });
+
+    if (release.saleId) {
+      tx.set(db.collection('sales').doc(String(release.saleId)), {
+        releaseStatus: 'disponivel',
+        releasedAt,
+      }, { merge: true });
+    }
+    return true;
+  });
+}
+
 export async function releaseDueStripeBalances(
   db = getServerAdminFirestore(),
   now = new Date(),
@@ -29,55 +83,7 @@ export async function releaseDueStripeBalances(
 
   for (const releaseDoc of due.docs) {
     try {
-      const moved = await db.runTransaction(async (tx) => {
-        const latest = await tx.get(releaseDoc.ref);
-        if (!latest.exists) return false;
-        const release = latest.data()!;
-        if (release.status !== 'pending') return false;
-
-        const role = release.role as PlatformRole;
-        if (role !== 'empresa' && role !== 'afiliado') throw new Error('Papel de saldo inválido.');
-        const amountCents = Number(release.amountCents);
-        if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new Error('Valor de liberação inválido.');
-
-        const profileRef = db.collection('user_profiles').doc(String(release.userId || ''));
-        const profileSnap = await tx.get(profileRef);
-        if (!profileSnap.exists) throw new Error('Perfil financeiro não encontrado.');
-        const profile = profileSnap.data()!;
-        const pendingKey = rolePendingCentsField(role);
-        const availableKey = roleAvailableCentsField(role);
-        const rolePending = Number(profile[pendingKey] || 0);
-        const roleAvailable = Number(profile[availableKey] || 0);
-        if (!Number.isSafeInteger(rolePending) || rolePending < amountCents) {
-          throw new Error('Saldo pendente inconsistente.');
-        }
-
-        const pendingBalance = Math.max(0, Number(profile.pendingBalance || 0) - amountCents / 100);
-        const availableBalance = Number(profile.availableBalance || 0) + amountCents / 100;
-        const releasedAt = new Date().toISOString();
-
-        tx.set(profileRef, {
-          [pendingKey]: rolePending - amountCents,
-          [availableKey]: roleAvailable + amountCents,
-          pendingBalance: Number(pendingBalance.toFixed(2)),
-          availableBalance: Number(availableBalance.toFixed(2)),
-          updatedAt: releasedAt,
-        }, { merge: true });
-        tx.set(releaseDoc.ref, {
-          status: 'available',
-          releasedAt,
-          updatedAt: releasedAt,
-        }, { merge: true });
-
-        if (release.saleId) {
-          tx.set(db.collection('sales').doc(String(release.saleId)), {
-            releaseStatus: 'disponivel',
-            releasedAt,
-          }, { merge: true });
-        }
-        return true;
-      });
-      if (moved) released += 1;
+      if (await releaseStripeBalanceDocument(db, releaseDoc.ref)) released += 1;
     } catch (error) {
       failed += 1;
       console.error('[Balance release]', releaseDoc.id, error instanceof Error ? error.message : 'Falha desconhecida');
