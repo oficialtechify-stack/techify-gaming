@@ -1159,12 +1159,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           <div className="h-16 px-4 flex items-center justify-between border-b border-white/10">
             {!sidebarCollapsed ? (
               <div className="flex items-center gap-2">
-                <TechifyLogo size="sm" />
+                <TechifyLogo size="sm" surface={isDarkMode ? "dark" : "light"} />
               </div>
             ) : (
-              <div className="w-8 h-8 rounded-full bg-[#D9F22A] flex items-center justify-center font-black text-[#060A15] text-sm">
-                T
-              </div>
+              <TechifyLogo
+                size="sm"
+                showText={false}
+                symbolOnly
+                surface={isDarkMode ? 'dark' : 'light'}
+                className="drop-shadow-[0_0_10px_rgba(163,230,53,0.25)]"
+              />
             )}
 
             <div className="flex items-center gap-1">

@@ -46,6 +46,7 @@ import {
   getLocalAuthModalSettings
 } from '../../services/firestoreService';
 import '../../styles/auth-screen.css';
+import { TechifyLogo } from '../TechifyLogo';
 
 export type AuthModalType = 'login' | 'register_affiliate' | 'register_company' | 'forgot_password';
 
@@ -56,13 +57,9 @@ interface AuthScreenModalProps {
 }
 
 // Leadspay mark shared with the public landing page
-const LeadsPayBrandLogo: React.FC = () => (
+const LeadsPayBrandLogo: React.FC<{ isDark: boolean }> = ({ isDark }) => (
   <div className="auth-brand">
-    <img className="auth-brand-mark" src="/favicon.svg" alt="" />
-    <span className="auth-brand-copy">
-      <span className="auth-brand-name">LEADSPAY</span>
-      <span className="auth-brand-tagline">PAYMENTS &amp; SPLIT</span>
-    </span>
+    <TechifyLogo size="md" surface={isDark ? 'dark' : 'light'} />
   </div>
 );
 
@@ -481,7 +478,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
 
           {/* Marca e alternância de tema compartilham a preferência da landing. */}
           <div className="auth-card-topbar">
-            <LeadsPayBrandLogo />
+            <LeadsPayBrandLogo isDark={isDark} />
             <button
               type="button"
               className="auth-theme-toggle"

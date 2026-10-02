@@ -60,13 +60,10 @@ export const TechifyEmblem3D: React.FC<TechifyEmblem3DProps> = ({
         {/* Real 3D Rendered Glass/Crystal Neon Emblem (From User Image 1) */}
         <div className="relative w-full h-full flex items-center justify-center p-2">
           <img 
-            src="/logo_3d.jpg" 
-            alt="LeadsPay 3D Glass Star Emblem" 
+            src="/branding/leadspay-symbol.webp" 
+            alt="Símbolo oficial LeadsPay" 
             className="w-full h-full object-contain filter drop-shadow-[0_25px_50px_rgba(217,242,42,0.45)] select-none pointer-events-none rounded-3xl"
-            onError={(e) => {
-              // Fallback to local asset if public path fails
-              (e.target as HTMLImageElement).src = '/leadspay_3d_logo.jpg';
-            }}
+
           />
         </div>
       </div>

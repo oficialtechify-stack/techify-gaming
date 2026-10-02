@@ -36,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) =
               }}
               className="block focus:outline-none hover:opacity-95 transition-opacity"
             >
-              <TechifyLogo size="md" />
+              <TechifyLogo size="md" surface="dark" />
             </a>
           </div>
 
@@ -212,7 +212,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenModal, onOpenPlatform }) =
       {popupActive && (
         <div className="fixed inset-0 z-50 bg-[#060A15] p-6 flex flex-col justify-between animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
-            <TechifyLogo size="sm" />
+            <TechifyLogo size="sm" surface="dark" />
             <button
               onClick={() => setPopupActive(false)}
               className="p-2 text-white/80 hover:text-white focus:outline-none cursor-pointer"
