@@ -60,8 +60,10 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
   }, [initialPlanId, initialTxId, initialAmount, initialName, initialEmail, initialPlan]);
 
   useEffect(() => {
-    const paymentIntentId = new URLSearchParams(window.location.search).get('payment_intent') || '';
-    if (!paymentIntentId) {
+    const params = new URLSearchParams(window.location.search);
+    const paymentIntentId = params.get('payment_intent') || '';
+    const subscriptionSessionId = params.get('subscription_session_id') || '';
+    if (!paymentIntentId && !subscriptionSessionId) {
       setStripeReturnStatus('unverified');
       return;
     }
@@ -69,7 +71,10 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
     let attempts = 0;
     const verify = async () => {
       try {
-        const response = await fetch(`/api/stripe/status?payment_intent=${encodeURIComponent(paymentIntentId)}`, { cache: 'no-store' });
+        const endpoint = subscriptionSessionId
+          ? `/api/stripe/product-subscription-status?session_id=${encodeURIComponent(subscriptionSessionId)}`
+          : `/api/stripe/status?payment_intent=${encodeURIComponent(paymentIntentId)}`;
+        const response = await fetch(endpoint, { cache: 'no-store' });
         const result = await response.json();
         if (cancelled) return;
         if (result.status === 'paid') {
@@ -94,7 +99,7 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
           return;
         }
       } catch (error) {
-        console.warn('[Stripe status] Ainda aguardando confirmação do webhook.', error);
+        console.warn('[Stripe status] Ainda aguardando confirmação do pagamento ou assinatura.', error);
       }
       attempts += 1;
       if (attempts >= 40) {
