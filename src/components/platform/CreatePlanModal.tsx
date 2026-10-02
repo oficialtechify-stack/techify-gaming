@@ -1191,7 +1191,9 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                       <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-white/35">
                         Cliente paga
                       </div>
-                      <div className="mt-2 text-xl font-black text-white">{formatMoney(price)}</div>
+                      <div className="mt-2 text-xl font-black text-white">
+                        {formatMoney(price)}{billingType === 'recorrente' ? `/${billingCycleLabel}` : ''}
+                      </div>
                     </div>
                     <div className="bg-[#0D1422] p-5">
                       <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#D9F22A]/70">
@@ -1201,7 +1203,11 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                         {formatMoney(commissionValue)}
                       </div>
                       <div className="mt-1 text-[10px] text-white/35">
-                        {commissionPercent > 0 ? `${commissionPercent}% por venda` : 'Defina a comissão'}
+                        {billingType === 'recorrente'
+                          ? `${commissionPercent}% na primeira cobrança`
+                          : commissionPercent > 0
+                            ? `${commissionPercent}% por venda`
+                            : 'Defina a comissão'}
                       </div>
                     </div>
                     <div className="bg-[#0D1422] p-5">
@@ -1211,8 +1217,18 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                       <div className="mt-2 text-xl font-black text-white">
                         {formatMoney(companyBeforeFees)}
                       </div>
+                      {billingType === 'recorrente' && (
+                        <div className="mt-1 text-[10px] text-white/35">
+                          Renovação: {formatMoney(recurringCompanyBeforeFees)} antes das taxas
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {billingType === 'recorrente' && recurringCommissionEnabled && (
+                    <div className="border-t border-white/8 bg-[#D9F22A]/[0.035] px-5 py-4 text-xs text-white/60">
+                      O afiliado receberá <strong className="text-[#D9F22A]">{formatMoney(recurrentCommissionValue)}</strong> ({recurrentPercent}%) em cada renovação {billingCycle === 'WEEKLY' ? 'semanal' : billingCycle === 'YEARLY' ? 'anual' : 'mensal'} paga pelo cliente.
+                    </div>
+                  )}
                 </section>
 
                 <section className="rounded-2xl border border-white/10 bg-[#0D1422] p-5">
