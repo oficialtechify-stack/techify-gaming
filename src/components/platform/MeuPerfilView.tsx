@@ -503,7 +503,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </h1>
         <p className="text-xs text-white/60 mt-1 max-w-2xl">
           {roleMode === 'empresa'
-            ? 'Preencha os dados oficiais da sua empresa (Razão Social, Responsável, CNPJ, WhatsApp, Categoria, Slogan e Endereço). Após envio, a Administração analisará seu cadastro. Uma vez aprovada, a empresa poderá cadastrar produtos e planos livremente.'
+            ? 'Preencha os dados oficiais da sua empresa (Razão Social, Responsável, CNPJ, WhatsApp, Categoria, Slogan e Endereço). Após envio, a Administração analisará seu cadastro. Uma vez aprovada, a empresa poderá cadastrar produtos livremente.'
             : 'Mantenha seus dados pessoais e de recebimento atualizados para garantir a homologação de sua conta e saques via PIX instantâneos.'}
         </p>
       </div>
@@ -634,7 +634,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               </div>
               <p className="text-xs text-white/70 mt-1 leading-relaxed">
                 {roleMode === 'empresa'
-                  ? 'A sua empresa só pode cadastrar produtos e planos após a homologação e aprovação da Administração. Preencha todos os campos obrigatórios abaixo e clique em "Enviar Empresa para Validação".'
+                  ? 'A sua empresa só pode cadastrar produtos após a homologação e aprovação da Administração. Preencha todos os campos obrigatórios abaixo e clique em "Enviar Empresa para Validação".'
                   : 'Preencha todos os campos obrigatórios abaixo (Nome, Sobrenome, E-mail, CPF, Celular e Endereço). Assim que tudo estiver preenchido, clique no botão "Enviar para Validação". Após o envio, os campos serão trancados para a verificação do Administrador.'}
               </p>
             </div>
