@@ -142,6 +142,11 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (isAdmin() || resource.data.ownerId == request.auth.uid || isCompanyOwner(resource.data.companyId));
     }
 
+    // Configurações privadas de entrega de produtos são acessadas somente pelo backend.
+    match /plan_delivery/{planId} {
+      allow read, write: if false;
+    }
+
     // Stripe sales are server-created only and readable only by the connected owner/affiliate or admin.
     match /sales/{saleId} {
       allow read: if isAuthenticated() && (
