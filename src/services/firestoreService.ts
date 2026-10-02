@@ -195,130 +195,35 @@ export async function updateUserProfileInFirebase(updates: Partial<UserSellerPro
  * Submit user profile for Admin verification
  */
 export async function submitVerificationRequestInFirebase(
-  profileData: Partial<UserSellerProfile>, 
+  profileData: Partial<UserSellerProfile>,
   userId: string = DEFAULT_USER_ID
 ) {
-  const now = new Date().toISOString();
-  const effectiveUserId = userId || DEFAULT_USER_ID;
-  const isCompany = profileData.verificationRoleType === 'empresa' || profileData.activeRoleMode === 'empresa' || !!profileData.companyName;
-  
-  // 1. Update the User's Profile to 'pending' and locked
-  const profileRef = doc(db, COLLECTIONS.PROFILES, effectiveUserId);
-  await setDoc(profileRef, sanitizeForFirestore({
-    ...profileData,
-    hasCompanyProfile: isCompany ? true : profileData.hasCompanyProfile,
-    verificationStatus: 'pending',
-    kyc_status: 'submitted',
-    verified: false,
-    verificationSubmittedAt: now,
-    updatedAt: now
-  }), { merge: true });
-
-  // 2. Add / Update document in verification_requests collection
-  const requestRef = doc(db, COLLECTIONS.VERIFICATIONS, effectiveUserId);
-  const fullName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || profileData.name || 'Usuário LeadsPay';
-  
-  await setDoc(requestRef, sanitizeForFirestore({
-    id: effectiveUserId,
-    userId: effectiveUserId,
-    name: fullName,
-    firstName: profileData.firstName || '',
-    lastName: profileData.lastName || '',
-    email: profileData.email || '',
-    cpf: profileData.cpf || '',
-    phone: profileData.phone || profileData.whatsapp || '',
-    avatar: profileData.avatar || '',
-    roleType: isCompany ? 'empresa' : 'afiliado',
-    companyName: profileData.companyName || '',
-    companyLegalName: profileData.companyLegalName || '',
-    companyCnpj: profileData.companyCnpj || profileData.cnpj || '',
-    companyCategory: profileData.companyCategory || 'SaaS / B2B',
-    companyTagline: profileData.companyTagline || '',
-    companyWebsite: profileData.companyWebsite || '',
-    companyLogo: profileData.companyLogo || profileData.avatar || '',
-    companyPhone: profileData.companyPhone || profileData.whatsapp || '',
-    companyAddress: profileData.companyAddress || profileData.address || '',
-    companyCep: profileData.companyCep || profileData.cep || '',
-    companyState: profileData.companyState || profileData.state || '',
-    companyCity: profileData.companyCity || profileData.city || '',
-    companyCountry: profileData.companyCountry || profileData.country || 'Brazil',
-    companyDocType: profileData.companyDocType || 'CNPJ',
-    cep: profileData.cep || '',
-    country: profileData.country || 'Brazil',
-    state: profileData.state || '',
-    city: profileData.city || '',
-    address: profileData.address || '',
-    status: 'pending',
-    kyc_status: 'submitted',
-    pixKey: profileData.pixKey || '',
-    pixKeyType: profileData.pixKeyType || 'CPF',
-    submittedAt: now
-  }), { merge: true });
-
-  // 3. If Company profile, create/update company in COMPANIES collection as pending
-  if (isCompany && (profileData.companyName || profileData.name)) {
-    const compName = profileData.companyName || profileData.name || 'Minha Startup';
-    const compId = profileData.companyId || `comp-${effectiveUserId}`;
-    const compRef = doc(db, COLLECTIONS.COMPANIES, compId);
-    const compSnap = await getDoc(compRef);
-
-    const slug = compName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-');
-
-    const companyData: Partial<CompanyStartup> = {
-      name: compName,
-      slug: slug || compId,
-      tagline: profileData.companyTagline || 'Startup homologada na plataforma',
-      logo: profileData.companyLogo || profileData.avatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=200&fit=crop',
-      bannerImage: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=400&fit=crop',
-      category: profileData.companyCategory || 'SaaS / B2B',
-      description: profileData.companyTagline || `Startup e soluções digitais de ${compName}`,
-      website: profileData.companyWebsite || '',
-      email: profileData.email || '',
-      whatsapp: profileData.companyPhone || profileData.whatsapp || '',
-      cnpj: profileData.companyCnpj || profileData.cnpj || '',
-      cleanCnpj: (profileData.companyCnpj || profileData.cnpj || '').replace(/\D/g, ''),
-      docType: profileData.companyDocType || 'CNPJ',
-      status: 'pending',
-      verified: false,
-      submittedBy: effectiveUserId,
-      submittedByName: fullName,
-      submittedByEmail: profileData.email || '',
-      submittedAt: now,
-      ownerId: effectiveUserId
-    };
-
-    if (compSnap.exists()) {
-      await updateDoc(compRef, sanitizeForFirestore(companyData));
-    } else {
-      await setDoc(compRef, sanitizeForFirestore({
-        ...companyData,
-        id: compId,
-        totalPlansCount: 0,
-        totalAffiliatesCount: 0,
-        totalSalesVolume: 0,
-        commissionRange: '10% - 50%',
-        createdAt: now
-      }));
-    }
-
-    // Link companyId back to profile
-    await updateDoc(profileRef, sanitizeForFirestore({
-      companyId: compId,
-      companyName: compName
-    }));
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para enviar seus dados.');
+  if (userId && userId !== DEFAULT_USER_ID && user.uid !== userId) {
+    throw new Error('A sessão atual não corresponde ao perfil enviado.');
   }
-
-  return { success: true, submittedAt: now };
+  const isCompany = profileData.verificationRoleType === 'empresa' || profileData.activeRoleMode === 'empresa' || !!profileData.companyName;
+  const token = await user.getIdToken();
+  const response = await fetch('/api/profile/submit-verification', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      ...profileData,
+      role: isCompany ? 'empresa' : 'afiliado',
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Não foi possível enviar o cadastro para análise.');
+  return data;
 }
 
-/**
- * Realtime Listener for Verification Requests (Admin)
- */
+/** Realtime Listener for Verification Requests (Admin) */
+
+
 export function subscribeVerifications(callback: (requests: VerificationRequest[]) => void) {
   const q = collection(db, COLLECTIONS.VERIFICATIONS);
   return onSnapshot(q, (snap) => {
@@ -387,7 +292,7 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
   if (companyId) {
     const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
     return onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
+      if (docSnap.exists() && docSnap.data()?.archived !== true && docSnap.data()?.isArchived !== true) {
         callback([{ id: docSnap.id, ...(docSnap.data() as Omit<CompanyStartup, 'id'>) }]);
       } else {
         const q = query(collection(db, COLLECTIONS.COMPANIES), where("companyId", "==", companyId));
@@ -406,7 +311,9 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
   return onSnapshot(q, (snap) => {
     const list: CompanyStartup[] = [];
     snap.forEach((d) => {
-      list.push({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) });
+      const data = d.data() as Omit<CompanyStartup, 'id'>;
+      if ((data as any).archived === true || (data as any).isArchived === true) return;
+      list.push({ id: d.id, ...data });
     });
     // Sort by creation date descending
     list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
@@ -449,82 +356,27 @@ export async function findCompanyByOwnerId(userId: string, companyId?: string): 
  * Create a new Company / Startup in Firestore (Sent to Admin for approval)
  */
 export async function createCompanyInFirebase(companyData: Omit<CompanyStartup, 'id' | 'createdAt'>) {
-  const id = `comp-${Date.now()}`;
-  const now = new Date().toISOString();
-  const slug = companyData.name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-');
-
-  const newCompany: CompanyStartup = {
-    ...companyData,
-    id,
-    slug: slug || id,
-    totalPlansCount: 0,
-    totalAffiliatesCount: 0,
-    totalSalesVolume: 0,
-    verified: companyData.verified ?? false,
-    environment: 'production',
-    kyc_status: companyData.kyc_status || (companyData.verified ? 'verified' : 'pending'),
-    status: companyData.status ?? 'pending',
-    submittedAt: companyData.submittedAt || now,
-    submittedBy: companyData.submittedBy || DEFAULT_USER_ID,
-    ownerId: companyData.ownerId || DEFAULT_USER_ID,
-    createdAt: now
-  };
-
-  const docRef = doc(db, COLLECTIONS.COMPANIES, id);
-  await setDoc(docRef, sanitizeForFirestore(newCompany));
-
-  // Sincroniza também com verification_requests para que o admin visualize a solicitação de homologação
-  try {
-    const verifRef = doc(db, COLLECTIONS.VERIFICATIONS, id);
-    await setDoc(verifRef, sanitizeForFirestore({
-      id,
-      userId: newCompany.ownerId || DEFAULT_USER_ID,
-      name: newCompany.submittedByName || newCompany.name,
-      companyName: newCompany.name,
-      companyId: id,
-      companyCnpj: newCompany.cnpj || newCompany.cpf || '',
-      companyCategory: newCompany.category || 'SaaS / B2B',
-      companyTagline: newCompany.tagline || '',
-      companyWebsite: newCompany.website || '',
-      companyLogo: newCompany.logo || '',
-      email: newCompany.email || '',
-      phone: newCompany.whatsapp || newCompany.phone || '',
-      roleType: 'empresa',
-      status: 'pending',
-      kyc_status: 'submitted',
-      submittedAt: now
-    }), { merge: true });
-  } catch (e) {
-    console.warn('Could not sync verification request on company creation:', e);
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para cadastrar a empresa.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/companies', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(companyData),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.company) {
+    throw new Error(data.error || 'Não foi possível cadastrar a empresa.');
   }
-
-  if (newCompany.ownerId && newCompany.ownerId !== DEFAULT_USER_ID) {
-    try {
-      await updateDoc(doc(db, COLLECTIONS.PROFILES, newCompany.ownerId), {
-        companyId: id,
-        companyName: newCompany.name,
-        hasCompanyProfile: true,
-        accountType: 'empresa',
-        activeRoleMode: 'empresa',
-        environment: newCompany.environment,
-        kyc_status: newCompany.kyc_status
-      });
-    } catch (e) {
-      console.warn('Could not update user profile on company creation:', e);
-    }
-  }
-
-  return newCompany;
+  return data.company as CompanyStartup;
 }
 
-/**
- * Update company environment (Sandbox / Dev Mode vs Production)
- */
+/** Update company environment */
+
+
 export async function updateCompanyEnvironmentInFirebase(
   companyId: string, 
   environment: 'development' | 'production',
@@ -590,32 +442,23 @@ export async function updateCompanyInFirebase(companyId: string, updates: Partia
  * Delete a Company and its plans in Firestore
  */
 export async function deleteCompanyInFirebase(companyId: string) {
-  const docRef = doc(db, COLLECTIONS.COMPANIES, companyId);
-  const snap = await getDoc(docRef);
-  const ownerId = snap.exists() ? snap.data()?.ownerId : null;
-  await deleteDoc(docRef);
-
-  // Also delete company plans
-  const plansSnap = await getDocs(collection(db, COLLECTIONS.PLANS));
-  for (const p of plansSnap.docs) {
-    if (p.data().companyId === companyId) {
-      await deleteDoc(p.ref);
-    }
-  }
-
-  // If owner exists, clear company link from user profile
-  if (ownerId) {
-    try {
-      await updateDoc(doc(db, COLLECTIONS.PROFILES, ownerId), {
-        companyId: null,
-        companyName: null,
-        hasCompanyProfile: false
-      });
-    } catch (e) {
-      console.warn('Profile cleanup error:', e);
-    }
-  }
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para remover a empresa.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/companies', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ companyId }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Não foi possível arquivar a empresa.');
+  return data;
 }
+
+
 
 // ==========================================
 // 📦 PLANOS & PRODUTOS (COMPANY PLANS)
