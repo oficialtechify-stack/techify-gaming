@@ -20,6 +20,7 @@ import partnerSettingsHandler from '../server-api/partner/settings.js';
 import partnerPaymentsHandler from '../server-api/partner/payments.js';
 import couponsHandler from '../server-api/coupons.js';
 import internalReadinessHandler from '../server-api/internal/readiness.js';
+import financeE2EHandler from '../server-api/internal/finance-e2e.js';
 import companiesHandler from '../server-api/companies.js';
 import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
 
