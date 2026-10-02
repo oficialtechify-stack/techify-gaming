@@ -19,7 +19,7 @@ export const FinanceiroView:React.FC<FinanceiroViewProps>=({roleMode='afiliado',
   const pendingCents=role==='empresa'?userProfile.empresaPendingBalanceCents:userProfile.afiliadoPendingBalanceCents;
   const available=Number.isFinite(Number(availableCents))?Number(availableCents)/100:Number(userProfile.availableBalance||0);
   const pending=Number.isFinite(Number(pendingCents))?Number(pendingCents)/100:Number(userProfile.pendingBalance||0);
-  const approved=transactions.filter(t=>['aprovado','approved'].includes(String(t.status||'').toLowerCase()));
+  const approved=transactions.filter(t=>['aprovado','approved','liberado','received','confirmed'].includes(String(t.status||'').toLowerCase()));
   const gross=role==='empresa'?Number(company?.grossRevenue ?? approved.reduce((s,t)=>s+Number(t.amount||0),0)):Number(userProfile.totalEarned||0);
   const commissions=role==='empresa'?Number(company?.totalAffiliateCommissions ?? approved.reduce((s,t)=>s+Number(t.commissionEarned||0),0)):Number(userProfile.totalEarned||0);
   const fees=role==='empresa'?Number(company?.totalCheckoutFees ?? approved.reduce((s,t)=>s+Number(t.checkoutFee||0),0)):0;
