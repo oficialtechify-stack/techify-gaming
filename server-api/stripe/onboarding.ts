@@ -49,8 +49,54 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return fail(res, 404, 'Perfil LeadsPay não encontrado.');
     const requestSnap = await db.collection('verification_requests').doc(identity.uid).get();
-    const profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
+    let profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
     if (profile.banned || profile.status === 'banned') return fail(res, 403, 'Esta conta não pode conectar recebimentos.');
+
+    let companyRef: any;
+    let company: Record<string, any> | undefined;
+    let companyId = '';
+    if (role === 'empresa') {
+      companyId = String(profile.companyId || requestSnap.data()?.companyId || '').trim();
+      if (!companyId) return fail(res, 409, 'O perfil da Empresa ainda não possui vínculo com uma empresa válida.');
+
+      companyRef = db.collection('companies').doc(companyId);
+      const companySnap = await companyRef.get();
+      if (!companySnap.exists) return fail(res, 404, 'Cadastro de Empresa não encontrado.');
+      company = companySnap.data() as Record<string, any>;
+
+      if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
+        return fail(res, 403, 'A empresa não pertence à conta autenticada.');
+      }
+
+      const canonicalApproved =
+        company.verified === true &&
+        String(company.status || '').toLowerCase() === 'approved' &&
+        company.archived !== true &&
+        company.isArchived !== true &&
+        company.banned !== true;
+
+      if (!canonicalApproved) {
+        return fail(res, 403, 'A aprovação da Empresa é necessária antes de configurar recebimentos.');
+      }
+
+      if (!profileRoleIsApproved(profile, 'empresa')) {
+        const now = new Date().toISOString();
+        const repaired = {
+          companyId,
+          hasCompanyProfile: true,
+          verified: true,
+          verificationStatus: 'approved',
+          empresaVerificationStatus: 'approved',
+          companyVerificationStatus: 'approved',
+          kyc_status: 'verified',
+          updatedAt: now,
+        };
+        await profileRef.set(repaired, { merge: true });
+        await db.collection('users').doc(identity.uid).set(repaired, { merge: true });
+        profile = { ...profile, ...repaired };
+      }
+    }
+
     if (!profileHasRole(profile, role)) {
       const roleName = role === 'afiliado' ? 'Afiliado' : 'Empresa';
       return fail(res, 403, `O perfil autenticado não possui um cadastro de ${roleName}.`);
@@ -58,23 +104,6 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!profileRoleIsApproved(profile, role)) {
       const roleName = role === 'afiliado' ? 'Afiliado' : 'Empresa';
       return fail(res, 403, `A aprovação do perfil de ${roleName} é necessária antes de configurar recebimentos.`);
-    }
-
-    let companyRef: any;
-    let company: Record<string, unknown> | undefined;
-    let companyId = '';
-    if (role === 'empresa') {
-      companyId = String(profile.companyId || '').trim();
-      if (!companyId) return fail(res, 409, 'O perfil da Empresa ainda não possui vínculo com uma empresa válida.');
-
-      companyRef = db.collection('companies').doc(companyId);
-      const companySnap = await companyRef.get();
-      if (!companySnap.exists) return fail(res, 404, 'Cadastro de Empresa não encontrado.');
-      company = companySnap.data() as Record<string, unknown>;
-      if (company.ownerId !== identity.uid) return fail(res, 403, 'A empresa não pertence à conta autenticada.');
-      if (company.verified !== true || company.status !== 'approved' || company.archived === true || company.isArchived === true) {
-        return fail(res, 403, 'A aprovação da Empresa é necessária antes de configurar recebimentos.');
-      }
     }
 
     const stripe = getStripeTestClient();
