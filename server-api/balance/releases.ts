@@ -1,6 +1,7 @@
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 import { releaseDelayDays, type PlatformRole } from '../../lib/platformBilling.js';
 import { releaseStripeBalanceDocument } from '../crons/stripe-releases.js';
+import { calculateUserLedgerBalances } from '../../lib/balanceLedger.js';
 
 type Req = {
   method?: string;
@@ -71,7 +72,6 @@ export default async function handler(req: Req, res: Res) {
     if (due.length) {
       snapshot = await db.collection('balance_releases')
         .where('userId', '==', identity.uid)
-        .limit(500)
         .get();
     }
 
@@ -80,19 +80,25 @@ export default async function handler(req: Req, res: Res) {
       .filter((item) => item.role === role)
       .sort((a, b) => Date.parse(String(a.availableAt || '')) - Date.parse(String(b.availableAt || '')));
 
-    const pending = releases.filter((item) => item.status === 'pending');
-    const available = releases.filter((item) => item.status === 'available');
+    const visibleReleases = process.env.VERCEL_ENV === 'production'
+      ? releases.filter((item) => item.is_test !== true && String(item.environment || '').toLowerCase() !== 'development')
+      : releases;
 
-    const pendingAmountCents = pending.reduce((sum, item) => sum + Number(item.amountCents || 0), 0);
+    const pending = visibleReleases.filter((item) => item.status === 'pending');
+    const ledger = await calculateUserLedgerBalances(db, identity.uid);
+    const roleLedger = ledger[role];
     const nextRelease = pending.find((item) => Number.isFinite(Date.parse(String(item.availableAt || '')))) || null;
 
     return res.status(200).json({
       success: true,
       role,
       policyDays: releaseDelayDays(profile),
-      pendingAmountCents,
+      pendingAmountCents: roleLedger.pendingCents,
+      availableAmountCents: roleLedger.availableCents,
+      releasedGrossCents: roleLedger.releasedGrossCents,
+      withdrawnCents: roleLedger.withdrawnCents,
       nextReleaseAt: nextRelease?.availableAt || null,
-      releases: releases.slice(0, 200).map((item) => ({
+      releases: visibleReleases.slice(0, 200).map((item) => ({
         id: item.id,
         saleId: item.saleId || null,
         orderId: item.orderId || null,
