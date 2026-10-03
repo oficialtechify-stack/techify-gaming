@@ -44,7 +44,6 @@ export default async function handler(req: Req, res: Res) {
     // Query only by userId to avoid composite-index dependency. Role/status are filtered in memory.
     let snapshot = await db.collection('balance_releases')
       .where('userId', '==', identity.uid)
-      .limit(500)
       .get();
 
     const nowMs = Date.now();
