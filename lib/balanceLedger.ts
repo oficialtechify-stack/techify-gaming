@@ -60,6 +60,9 @@ export async function calculateUserLedgerBalances(
     const role = data.role as PlatformRole;
     if (role !== 'empresa' && role !== 'afiliado') continue;
 
+    // Liberação financeira válida precisa nascer de uma venda criada pelo backend Stripe.
+    if (!String(data.saleId || '').trim()) continue;
+
     const cents = Number(data.amountCents || 0);
     if (!Number.isSafeInteger(cents) || cents <= 0) continue;
 
