@@ -11,6 +11,7 @@ import {
 } from '../../lib/platformBilling.js';
 import { toCents } from '../../lib/stripeSplit.js';
 import { releaseStripeBalanceDocument } from '../crons/stripe-releases.js';
+import { calculateUserLedgerBalances } from '../../lib/balanceLedger.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown };
@@ -82,6 +83,17 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
     }
 
+    const ledgerBalances = await calculateUserLedgerBalances(db, identity.uid);
+    const authoritativeAvailableCents = ledgerBalances[role].availableCents;
+    if (authoritativeAvailableCents < MIN_WITHDRAWAL_CENTS || authoritativeAvailableCents < amountCents) {
+      return fail(
+        res,
+        409,
+        'Saque não liberado. O valor solicitado precisa estar realmente liberado no livro-caixa da LeadsPay e o mínimo é R$ 10,00.',
+        'INSUFFICIENT_LEDGER_BALANCE',
+      );
+    }
+
     const accountId = String(profile.stripeAccounts?.[role] || '');
     if (!accountId) return fail(res, 409, 'Conecte sua conta Stripe para receber saques.', 'CONNECT_NOT_CONFIGURED');
 
@@ -147,7 +159,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       const fresh = await tx.get(profileRef);
       if (!fresh.exists) return false;
       const data = fresh.data()!;
-      const availableCents = readRoleAvailableCents(data, role);
+      const hasRoleBalanceField =
+        Object.prototype.hasOwnProperty.call(data, availableField) &&
+        Number.isSafeInteger(Number(data[availableField])) &&
+        Number(data[availableField]) >= 0;
+      const profileAvailableCents = hasRoleBalanceField
+        ? Number(data[availableField])
+        : authoritativeAvailableCents;
+      const availableCents = Math.min(profileAvailableCents, authoritativeAvailableCents);
       if (availableCents < MIN_WITHDRAWAL_CENTS) return false;
       if (availableCents < amountCents) return false;
       const aggregateAvailable = Number(data.availableBalance || 0);
