@@ -1,5 +1,5 @@
 name: Production code check
-# Production redeploy after Stripe live key configuration.
+# Production redeploy after Stripe live key configuration. Webhook secret added.
 # Release gate: validate main before production deploy.
 
 on:
