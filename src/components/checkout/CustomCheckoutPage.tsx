@@ -4,6 +4,7 @@ import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-
 import { loadStripe } from '@stripe/stripe-js';
 import { CompanyPlan } from '../../types/platform';
 import { handleAffiliateTracking, getActiveAffiliateRef } from '../../utils/affiliateTracking';
+import { TechifyLogo } from '../TechifyLogo';
 
 interface CustomCheckoutPageProps {
   plan: CompanyPlan;
@@ -165,7 +166,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               </button>
             )}
             <div>
-              <div className="text-[13px] font-black tracking-[0.2em] text-[#D9F22A]">LEADSPAY</div>
+              <TechifyLogo size="sm" surface="dark" />
               <div className="mt-0.5 text-[11px] text-white/50">
                 {isRecurring ? 'Assinatura recorrente segura' : 'Checkout Oficial Seguro'}
               </div>
