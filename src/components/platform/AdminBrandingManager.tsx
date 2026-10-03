@@ -270,12 +270,12 @@ export const AdminBrandingManager: React.FC = () => {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <img src="/logo_3d.jpg" alt="Logo 3D" className="w-4 h-4 rounded object-cover" />
-                    Logo 3D Oficial
+                    <img src="/branding/leadspay-symbol.webp" alt="Logo 3D" className="w-4 h-4 rounded object-cover" />
+                    Símbolo Oficial LeadsPay
                   </span>
                   {selectedType === 'preset_3d_star' && <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />}
                 </div>
-                <p className="text-[11px] text-white/50">Emblema 3D cristal & estrela neon</p>
+                <p className="text-[11px] text-white/50">Símbolo oficial da marca LeadsPay</p>
               </button>
             </div>
           </div>
