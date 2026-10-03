@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import type { ActiveModal } from "../types";
+import { TechifyLogo } from "./TechifyLogo";
 import {
   ArrowDown,
   ArrowRight,
@@ -333,8 +334,8 @@ function TechnologySection() {
           </div>
           <div className="dashboard-showcase">
             <img src="/leadspay-dashboard-light.webp" alt="Demonstração visual do painel Leadspay para acompanhar vendas, comissões e pagamentos" loading="lazy" />
-            <div className="dashboard-overlay"><span className="dashboard-brand"><span className="brand-mark small-mark" aria-hidden="true"><span>L</span><span>P</span></span><b>LeadsPay</b></span><span className="live-tag"><i /> VISUAL DE DEMONSTRAÇÃO</span></div>
-            <div className="dashboard-side-note"><span>CLAREZA DO PRIMEIRO CLIQUE</span><b>ao último PIX</b></div>
+            <div className="dashboard-overlay"><span className="dashboard-brand"><TechifyLogo size="sm" surface="light" /></span><span className="live-tag"><i /> VISUAL DE DEMONSTRAÇÃO</span></div>
+            <div className="dashboard-side-note"><span>CLAREZA DO PRIMEIRO CLIQUE</span><b>ao último saque</b></div>
           </div>
         </div>
       </div>
@@ -354,7 +355,7 @@ function PricingSection() {
         </div>
         <div className="pricing-values">
           <article><span>01 / CHECKOUT</span><strong>R$ 0,99</strong><p>taxa fixa divulgada por checkout</p></article>
-          <article><span>02 / SAQUE PIX</span><strong>R$ 2,50</strong><p>taxa divulgada para saque</p></article>
+          <article><span>02 / SAQUE</span><strong>R$ 2,00</strong><p>taxa fixa LeadsPay por solicitação</p></article>
           <article><span>03 / MÍNIMO</span><strong>R$ 10</strong><p>valor mínimo de saque divulgado</p></article>
           <small>Consulte os termos, as taxas e as condições vigentes da plataforma antes de contratar.</small>
         </div>
@@ -397,7 +398,7 @@ function FinalCta() {
           <a className="button button-light button-large" href={affiliateUrl}>Quero divulgar <ArrowUpRight size={16} aria-hidden="true" /></a>
         </div>
       </div>
-      <div className="cta-monogram" aria-hidden="true"><span>L</span><span>P</span><small>LEADSPAY</small></div>
+      <div className="cta-monogram" aria-hidden="true"><TechifyLogo size="xl" surface="dark" /></div>
     </section>
   );
 }
