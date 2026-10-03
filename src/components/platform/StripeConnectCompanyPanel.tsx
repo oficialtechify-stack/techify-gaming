@@ -70,7 +70,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-black text-white">Recebimentos da empresa</h3>
+              <h3 className="text-sm font-black text-white">Conta bancária para receber saques</h3>
               {status === 'connected' && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-400">
                   <CheckCircle2 className="h-3 w-3" />
@@ -79,11 +79,11 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
               )}
             </div>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">
-              Esta conta Stripe Connect pertence exclusivamente a esta empresa. Produtos, vendas, saldo e saques usam o mesmo vínculo corporativo.
+              A Stripe é usada apenas para validar a empresa e encaminhar saques ao banco cadastrado. O dinheiro das vendas permanece na LeadsPay durante o prazo de liberação.
             </p>
             {status === 'connected' && (
               <p className="mt-2 text-[11px] text-emerald-300/80">
-                Conta pronta para receber transferências da LeadsPay e encaminhar saques para o banco cadastrado na Stripe.
+                Conta bancária configurada. O saldo só é enviado à Stripe depois que estiver disponível na LeadsPay e você solicitar o saque aqui.
               </p>
             )}
             {status === 'onboarding_incomplete' && (
@@ -93,7 +93,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
             )}
             {status === 'not_connected' && (
               <p className="mt-2 text-[11px] text-white/40">
-                Conecte a Stripe antes de publicar produtos pagos.
+                Configure seus dados bancários pela Stripe. Isso não libera nem transfere o saldo das vendas antecipadamente.
               </p>
             )}
             {message && <p className="mt-2 text-[11px] text-red-400">{message}</p>}
@@ -119,14 +119,14 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-4 text-xs font-black text-[#07100A] transition hover:bg-[#cde71f] disabled:opacity-40"
             >
               {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-              {status === 'onboarding_incomplete' ? 'Continuar configuração' : 'Conectar Stripe'}
+              {status === 'onboarding_incomplete' ? 'Continuar configuração bancária' : 'Configurar recebimentos'}
             </button>
           )}
 
           {status === 'connected' && (
             <div className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 text-xs font-bold text-emerald-400">
               <ShieldCheck className="h-4 w-4" />
-              Pronta para receber
+              Conta configurada
             </div>
           )}
         </div>
