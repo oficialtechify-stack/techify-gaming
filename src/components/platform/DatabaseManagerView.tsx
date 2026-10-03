@@ -96,6 +96,10 @@ interface AdminFinancialSummary {
   activeProducts: number;
   totalSalesProcessedCounter: number;
   lastUpdated: string;
+  stripeConfig?: {
+    liveSecretConfigured: boolean;
+    webhookConfigured: boolean;
+  };
   truncated?: boolean;
 }
 
@@ -1110,6 +1114,20 @@ export const DatabaseManagerView: React.FC = () => {
             </span>
           )}
         </div>
+
+        {adminSummary && (!adminSummary.stripeConfig?.liveSecretConfigured || !adminSummary.stripeConfig?.webhookConfigured) && (
+          <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3.5 text-xs text-rose-300">
+            <div className="flex items-center gap-2 font-black">
+              <AlertOctagon className="h-4 w-4" />
+              Stripe de produção incompleta
+            </div>
+            <p className="mt-1.5 leading-5 text-rose-200/75">
+              {!adminSummary.stripeConfig?.liveSecretConfigured && 'Falta STRIPE_SECRET_KEY live na Vercel Production. '}
+              {!adminSummary.stripeConfig?.webhookConfigured && 'Falta STRIPE_WEBHOOK_SECRET na Vercel Production. '}
+              Enquanto isso, a LeadsPay bloqueia onboarding e cobranças reais para não usar chaves de teste.
+            </p>
+          </div>
+        )}
 
         {adminSummaryLoading && !adminSummary ? (
           <div className="flex items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] py-8 text-xs text-white/45">
