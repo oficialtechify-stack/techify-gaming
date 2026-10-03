@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { subscribePlatformBranding, type PlatformBranding } from '../services/firestoreService';
 
 interface TechifyLogoProps {
   className?: string;
@@ -52,6 +53,14 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
   symbolOnly = false,
 }) => {
   const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>(() => readTheme());
+  const [branding, setBranding] = useState<PlatformBranding | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = subscribePlatformBranding((nextBranding) => {
+      setBranding(nextBranding);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (surface !== 'auto') return;
@@ -72,13 +81,20 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
   const resolvedSurface = surface === 'auto' ? activeTheme : surface;
   const compact = symbolOnly || !showText;
   const dim = dimensions[size];
+  const configuredLogo =
+    branding?.logoType === 'custom_image' && branding.logoUrl
+      ? branding.logoUrl
+      : '';
+
+  const fallbackSrc = compact
+    ? SYMBOL
+    : resolvedSurface === 'light'
+      ? WORDMARK_LIGHT
+      : WORDMARK_DARK;
+
   const src =
     overrideLogoUrl ||
-    (compact
-      ? SYMBOL
-      : resolvedSurface === 'light'
-        ? WORDMARK_LIGHT
-        : WORDMARK_DARK);
+    (!compact && configuredLogo ? configuredLogo : fallbackSrc);
 
   return (
     <img
@@ -94,7 +110,7 @@ export const TechifyLogo: React.FC<TechifyLogoProps> = ({
       onError={(event) => {
         const image = event.currentTarget;
         if (image.src.endsWith('/branding/leadspay-symbol.webp')) return;
-        image.src = SYMBOL;
+        image.src = fallbackSrc;
       }}
     />
   );
