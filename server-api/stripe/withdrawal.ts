@@ -192,7 +192,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     let payoutId = '';
-    let payoutStatus = 'TRANSFERRED_TO_STRIPE';
+    let payoutStatus = 'PAYOUT_PENDING';
     try {
       const payout = await stripe.payouts.create({
         amount: netAmountCents,
@@ -204,15 +204,83 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       });
       payoutId = payout.id;
       payoutStatus = payout.status === 'paid' ? 'COMPLETED' : 'PAYOUT_PENDING';
-    } catch (error) {
-      console.warn('[Stripe withdrawal payout] Transferência enviada à conta conectada; payout automático não foi criado:', error instanceof Error ? error.message : 'falha');
+    } catch (payoutError) {
+      let reversed = false;
+      try {
+        await stripe.transfers.createReversal(
+          transferId,
+          {
+            amount: netAmountCents,
+            metadata: {
+              leadspay_withdrawal_id: withdrawalId,
+              reason: 'payout_creation_failed',
+            },
+          },
+          { idempotencyKey: `leadspay-withdrawal-reversal-${withdrawalId}` },
+        );
+        reversed = true;
+      } catch (reversalError) {
+        console.error(
+          '[Stripe withdrawal reversal] Falha crítica ao reverter transferência após erro no payout:',
+          reversalError instanceof Error ? reversalError.message : 'falha',
+        );
+      }
+
+      if (reversed) {
+        await db.runTransaction(async (tx) => {
+          const fresh = await tx.get(profileRef);
+          const withdrawal = await tx.get(withdrawalRef);
+          if (!fresh.exists || !withdrawal.exists) return;
+
+          const data = fresh.data()!;
+          const currentRoleAvailable = Number(data[availableField] || 0);
+          tx.set(profileRef, {
+            [availableField]: currentRoleAvailable + amountCents,
+            availableBalance: Number((Number(data.availableBalance || 0) + amountCents / 100).toFixed(2)),
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+          tx.set(withdrawalRef, {
+            status: 'FAILED',
+            stripeTransferId: transferId,
+            transferReversed: true,
+            failureReason: payoutError instanceof Error
+              ? payoutError.message.slice(0, 250)
+              : 'Falha ao criar payout bancário',
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        });
+
+        return fail(
+          res,
+          503,
+          'Não foi possível enviar o saque ao banco. A transferência foi revertida e o saldo voltou para a LeadsPay.',
+          'PAYOUT_FAILED_REVERSED',
+        );
+      }
+
+      await withdrawalRef.set({
+        status: 'MANUAL_REVIEW_REQUIRED',
+        stripeTransferId: transferId,
+        stripePayoutId: null,
+        failureReason: payoutError instanceof Error
+          ? payoutError.message.slice(0, 250)
+          : 'Falha ao criar payout bancário',
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+
+      return fail(
+        res,
+        503,
+        'O saque entrou em revisão de segurança. O saldo não será liberado novamente até a conferência da transferência.',
+        'PAYOUT_REQUIRES_REVIEW',
+      );
     }
 
     const completedAt = payoutStatus === 'COMPLETED' ? new Date().toISOString() : null;
     await withdrawalRef.set({
       status: payoutStatus,
       stripeTransferId: transferId,
-      stripePayoutId: payoutId || null,
+      stripePayoutId: payoutId,
       completedAt,
       updatedAt: new Date().toISOString(),
     }, { merge: true });
@@ -227,9 +295,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const finalDoc = await withdrawalRef.get();
     return res.status(200).json({
       success: true,
-      message: payoutId
-        ? 'Saque enviado à Stripe e encaminhado para o banco cadastrado.'
-        : 'Saque enviado à sua conta Stripe. A liquidação bancária seguirá a configuração da sua conta conectada.',
+      message: 'Saque processado pela LeadsPay e encaminhado pela Stripe ao banco cadastrado.',
       withdrawal: { id: withdrawalId, ...finalDoc.data() },
     });
   } catch (error) {
