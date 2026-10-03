@@ -56,7 +56,12 @@ import {
   AlertOctagon,
   Unlock,
   Eye,
-  Image as ImageIcon
+  Image as ImageIcon,
+  DollarSign,
+  HandCoins,
+  BadgeDollarSign,
+  ShoppingCart,
+  WalletCards
 } from 'lucide-react';
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
@@ -74,6 +79,24 @@ interface SecurityTarget {
   email?: string;
   type: 'user' | 'company';
   document?: string;
+}
+
+interface AdminFinancialSummary {
+  salesCount: number;
+  grossVolume: number;
+  checkoutFees: number;
+  withdrawalFees: number;
+  platformRevenue: number;
+  affiliateCommissions: number;
+  companyNet: number;
+  pendingBalance: number;
+  withdrawalsInFlight: number;
+  approvedCompanies: number;
+  approvedAffiliates: number;
+  activeProducts: number;
+  totalSalesProcessedCounter: number;
+  lastUpdated: string;
+  truncated?: boolean;
 }
 
 export const DatabaseManagerView: React.FC = () => {
@@ -101,6 +124,8 @@ export const DatabaseManagerView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [adminSummary, setAdminSummary] = useState<AdminFinancialSummary | null>(null);
+  const [adminSummaryLoading, setAdminSummaryLoading] = useState<boolean>(false);
 
   // Modais de Segurança (Ban, Exclusão Total e Recusa)
   const [banModal, setBanModal] = useState<{
@@ -170,6 +195,34 @@ export const DatabaseManagerView: React.FC = () => {
       unsubProfiles();
     };
   }, [isSuperAdmin]);
+
+  const loadAdminSummary = async () => {
+    if (!isSuperAdmin || !currentUser) return;
+    setAdminSummaryLoading(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/admin/summary', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.summary) {
+        throw new Error(data.error || 'Não foi possível carregar o resumo financeiro.');
+      }
+      setAdminSummary(data.summary);
+    } catch (err: any) {
+      console.error('[Admin summary]', err);
+      setErrorMessage(err?.message || 'Não foi possível carregar o resumo financeiro.');
+    } finally {
+      setAdminSummaryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSuperAdmin || !currentUser) return;
+    void loadAdminSummary();
+  }, [isSuperAdmin, currentUser?.uid]);
 
   // Carregar dados brutos quando no explorador
   const fetchExplorerDocs = async (collName: string) => {
@@ -1006,12 +1059,13 @@ export const DatabaseManagerView: React.FC = () => {
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => {
+              void loadAdminSummary();
               if (mainTab === 'database_explorer') fetchExplorerDocs(explorerCollection);
             }}
-            disabled={loading}
+            disabled={loading || adminSummaryLoading}
             className="bg-white/10 hover:bg-white/15 text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading || adminSummaryLoading ? 'animate-spin' : ''}`} />
             <span>Atualizar</span>
           </button>
 
@@ -1041,6 +1095,60 @@ export const DatabaseManagerView: React.FC = () => {
           <span>{errorMessage}</span>
         </div>
       )}
+
+      {/* RESUMO FINANCEIRO REAL DA LEADSPAY */}
+      <section className="rounded-2xl border border-white/10 bg-[#070c17] p-4 sm:p-5">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#D9F22A]">Financeiro global da plataforma</div>
+            <h2 className="mt-1 text-lg font-black text-white">Dados reais da LeadsPay</h2>
+            <p className="mt-1 text-[11px] text-white/45">Somente vendas e movimentações reais; registros de teste/sandbox são ignorados.</p>
+          </div>
+          {adminSummary?.lastUpdated && (
+            <span className="text-[10px] text-white/35">
+              Atualizado em {new Date(adminSummary.lastUpdated).toLocaleString('pt-BR')}
+            </span>
+          )}
+        </div>
+
+        {adminSummaryLoading && !adminSummary ? (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] py-8 text-xs text-white/45">
+            <RefreshCw className="h-4 w-4 animate-spin text-[#D9F22A]" />
+            Carregando dados financeiros...
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
+            {[
+              { label: 'Vendas confirmadas', value: String(adminSummary?.salesCount || 0), icon: ShoppingCart },
+              { label: 'Volume bruto', value: `R$ ${Number(adminSummary?.grossVolume || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign },
+              { label: 'Receita LeadsPay', value: `R$ ${Number(adminSummary?.platformRevenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: BadgeDollarSign },
+              { label: 'Taxas checkout', value: `R$ ${Number(adminSummary?.checkoutFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: HandCoins },
+              { label: 'Taxas de saque', value: `R$ ${Number(adminSummary?.withdrawalFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: WalletCards },
+              { label: 'Saldo futuro usuários', value: `R$ ${Number(adminSummary?.pendingBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Clock },
+              { label: 'Comissões afiliados', value: `R$ ${Number(adminSummary?.affiliateCommissions || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Users },
+              { label: 'Líquido empresas', value: `R$ ${Number(adminSummary?.companyNet || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Building2 },
+              { label: 'Empresas aprovadas', value: String(adminSummary?.approvedCompanies || 0), icon: Building2 },
+              { label: 'Afiliados aprovados', value: String(adminSummary?.approvedAffiliates || 0), icon: UserCheck },
+              { label: 'Produtos ativos', value: String(adminSummary?.activeProducts || 0), icon: Layers },
+              { label: 'Saques em andamento', value: String(adminSummary?.withdrawalsInFlight || 0), icon: Send },
+            ].map(({ label, value, icon: Icon }) => (
+              <article key={label} className="rounded-xl border border-white/8 bg-[#050811] p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/35">{label}</span>
+                  <Icon className="h-3.5 w-3.5 text-[#D9F22A]" />
+                </div>
+                <div className="mt-2 text-base font-black text-white sm:text-lg">{value}</div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {adminSummary?.truncated && (
+          <p className="mt-3 text-[10px] text-amber-300/80">
+            Há mais de 5.000 registros em pelo menos uma coleção; o resumo exibido é parcial e o contador persistente continua sendo mantido pelo backend.
+          </p>
+        )}
+      </section>
 
       {/* NAVEGAÇÃO PRINCIPAL (SEPARAÇÃO CLARA ENTRE AFILIADOS, EMPRESAS, LOGO E IMAGENS) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
