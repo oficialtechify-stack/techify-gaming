@@ -17,22 +17,50 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const profileSnap = await db.collection('user_profiles').doc(identity.uid).get();
     if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
     const requestSnap = await db.collection('verification_requests').doc(identity.uid).get();
-    const profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
-    if (!profileHasRole(profile, role)) return res.status(403).json({ error: `O perfil autenticado não possui um cadastro de ${role === 'afiliado' ? 'Afiliado' : 'Empresa'}.` });
-    if (!profileRoleIsApproved(profile, role)) return res.status(403).json({ error: `A aprovação do perfil de ${role === 'afiliado' ? 'Afiliado' : 'Empresa'} é necessária para consultar recebimentos.` });
+    let profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
+
     let companyRef: FirebaseFirestore.DocumentReference | null = null;
     let companyId = '';
     if (role === 'empresa') {
-      companyId = String(profile.companyId || '').trim();
+      companyId = String(profile.companyId || requestSnap.data()?.companyId || '').trim();
       if (!companyId) return res.status(409).json({ error: 'A conta Empresa não possui companyId válido.' });
+
       companyRef = db.collection('companies').doc(companyId);
       const companySnap = await companyRef.get();
       if (!companySnap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
+
       const company = companySnap.data()!;
       if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
         return res.status(403).json({ error: 'Esta empresa não pertence à conta autenticada.' });
       }
+
+      const canonicalApproved =
+        company.verified === true &&
+        String(company.status || '').toLowerCase() === 'approved' &&
+        company.archived !== true &&
+        company.isArchived !== true &&
+        company.banned !== true;
+
+      if (canonicalApproved && !profileRoleIsApproved(profile, 'empresa')) {
+        const now = new Date().toISOString();
+        const repaired = {
+          companyId,
+          hasCompanyProfile: true,
+          verified: true,
+          verificationStatus: 'approved',
+          empresaVerificationStatus: 'approved',
+          companyVerificationStatus: 'approved',
+          kyc_status: 'verified',
+          updatedAt: now,
+        };
+        await db.collection('user_profiles').doc(identity.uid).set(repaired, { merge: true });
+        await db.collection('users').doc(identity.uid).set(repaired, { merge: true });
+        profile = { ...profile, ...repaired };
+      }
     }
+
+    if (!profileHasRole(profile, role)) return res.status(403).json({ error: `O perfil autenticado não possui um cadastro de ${role === 'afiliado' ? 'Afiliado' : 'Empresa'}.` });
+    if (!profileRoleIsApproved(profile, role)) return res.status(403).json({ error: `A aprovação do perfil de ${role === 'afiliado' ? 'Afiliado' : 'Empresa'} é necessária para consultar recebimentos.` });
 
     const accountId = String(profile.stripeAccounts?.[role] || '');
     if (!accountId) {
