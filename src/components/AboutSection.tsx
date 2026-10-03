@@ -41,7 +41,7 @@ export const AboutSection: React.FC = () => {
               Ao mesmo tempo, milhares de afiliados profissionais, gestores de tráfego e consultores de vendas buscam soluções tecnológicas robustas e de alto ticket para monetizar sua base de contatos.
             </p>
             <p className="text-white font-medium">
-              O <strong>LeadsPay</strong> nasceu para unificar essas duas frentes: uma plataforma marketplace onde empresas publicam seus planos e um exército de afiliados capacitados gera vendas contínuas com comissões justas e liquidadas com total transparência em D+9.
+              O <strong>LeadsPay</strong> nasceu para unificar essas duas frentes: uma plataforma marketplace onde empresas publicam seus planos e um exército de afiliados capacitados gera vendas contínuas com comissões com liberação transparente em 8 dias para planos pagos ou 15 dias no plano gratuito.
             </p>
           </motion.div>
         </div>
