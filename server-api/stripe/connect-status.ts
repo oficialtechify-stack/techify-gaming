@@ -136,7 +136,17 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       detailsSubmitted: account.details_submitted,
     });
   } catch (error) {
-    console.error('[Stripe Connect status]', error instanceof Error ? error.message : 'Falha desconhecida');
-    return res.status(503).json({ error: 'Não foi possível verificar a conta Stripe.' });
+    const detail = error instanceof Error ? error.message : 'Falha desconhecida';
+    console.error('[Stripe Connect status]', detail);
+
+    const configMissing =
+      /stripe live indisponível|stripe live bloqueado|stripe.*não configurad|stripe.*indisponível|stripe.*bloqueado/i.test(detail);
+
+    return res.status(503).json({
+      error: configMissing
+        ? 'A Stripe de produção da LeadsPay ainda não está configurada. O administrador precisa cadastrar a chave live na Vercel Production.'
+        : 'Não foi possível verificar a conta Stripe agora.',
+      code: configMissing ? 'STRIPE_PRODUCTION_CONFIGURATION_REQUIRED' : 'STRIPE_STATUS_UNAVAILABLE',
+    });
   }
 }
