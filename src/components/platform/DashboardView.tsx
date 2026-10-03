@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { useAuth } from '../../context/AuthContext';
 import { 
   UserSellerProfile, 
   SaleTransaction, 
@@ -279,6 +280,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   notificationItems = [],
   onOpenNotifications
 }) => {
+  const { currentUser } = useAuth();
+  const [releasePolicyDays, setReleasePolicyDays] = useState<8 | 15>(15);
+  const [nextReleaseAt, setNextReleaseAt] = useState<string | null>(null);
+  const [releasePendingCents, setReleasePendingCents] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!currentUser || (roleMode !== 'empresa' && roleMode !== 'afiliado')) {
+      setNextReleaseAt(null);
+      setReleasePendingCents(null);
+      return;
+    }
+
+    let cancelled = false;
+    currentUser.getIdToken()
+      .then((token) => fetch(`/api/balance/releases?role=${encodeURIComponent(roleMode)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }))
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível carregar as liberações.');
+        if (cancelled) return;
+        setReleasePolicyDays(data.policyDays === 8 ? 8 : 15);
+        setNextReleaseAt(data.nextReleaseAt || null);
+        setReleasePendingCents(Number.isFinite(Number(data.pendingAmountCents)) ? Number(data.pendingAmountCents) : null);
+      })
+      .catch((error) => {
+        if (!cancelled) console.warn('[Balance releases]', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.uid, roleMode]);
+
   // Eye visibility state (masks financial values)
   const [showValues, setShowValues] = useState<boolean>(true);
 
@@ -679,9 +715,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     ? roleAvailableCents / 100
     : Number(userProfile?.availableBalance || 0);
 
-  const pendingBalance = Number.isFinite(rolePendingCents)
+  const pendingBalanceFromProfile = Number.isFinite(rolePendingCents)
     ? rolePendingCents / 100
     : Number(userProfile?.pendingBalance || 0);
+
+  const pendingBalance = releasePendingCents !== null
+    ? releasePendingCents / 100
+    : pendingBalanceFromProfile;
+
+  const nextReleaseLabel = nextReleaseAt
+    ? `Próxima liberação: ${new Date(nextReleaseAt).toLocaleDateString('pt-BR')}`
+    : pendingBalance > 0
+      ? `Prazo de liberação: ${releasePolicyDays} dias`
+      : 'Nenhum saldo aguardando liberação';
 
   return (
     <div className="flex flex-col gap-2.5 sm:gap-6 text-white min-w-0" id="leadspay-dashboard-exact">
@@ -1398,7 +1444,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {showValues ? `R$ ${availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
                     </div>
                     <div className="text-[9px] sm:text-xs text-gray-400 font-medium mt-0.5 sm:mt-1.5 truncate">
-                      <span>Liquidação D+9</span>
+                      <span>{availableBalance >= 10 ? 'Disponível para saque agora' : 'Saque mínimo: R$ 10,00'}</span>
                     </div>
                   </div>
 
@@ -1413,8 +1459,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 className="mt-2.5 sm:mt-6 w-full bg-[#D9F22A] hover:bg-[#cbe31c] text-[#060A15] font-bold py-2 sm:py-3.5 px-2.5 sm:px-4 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(217,242,42,0.3)] transition-all cursor-pointer active:scale-95 whitespace-nowrap"
               >
                 <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] flex-shrink-0" />
-                <span className="truncate">SACAR VIA PIX</span>
+                <span className="truncate">SOLICITAR SAQUE</span>
               </button>
+              <p className="mt-1.5 text-center text-[9px] sm:text-[10px] text-white/35">
+                Mínimo R$ 10,00 • taxa LeadsPay R$ 2,00
+              </p>
             </motion.div>
 
             {/* CARD 2: "Saldo Futuro" (Matching reference layout with Purple Wallet) */}
@@ -1452,7 +1501,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {showValues ? `R$ ${pendingBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '•••••••'}
                     </div>
                     <div className="text-[9px] sm:text-xs text-gray-400 font-medium mt-0.5 sm:mt-1.5 truncate">
-                      <span>A liberar em D+30</span>
+                      <span>{nextReleaseLabel}</span>
                     </div>
                   </div>
 
