@@ -713,11 +713,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const availableBalance = Number.isFinite(roleAvailableCents)
     ? roleAvailableCents / 100
-    : Number(userProfile?.availableBalance || 0);
+    : 0;
 
   const pendingBalanceFromProfile = Number.isFinite(rolePendingCents)
     ? rolePendingCents / 100
-    : Number(userProfile?.pendingBalance || 0);
+    : 0;
 
   const pendingBalance = releasePendingCents !== null
     ? releasePendingCents / 100
