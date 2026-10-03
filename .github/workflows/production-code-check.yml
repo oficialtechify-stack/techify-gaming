@@ -1,4 +1,5 @@
 name: Production code check
+# Production redeploy after Stripe live key configuration.
 # Release gate: validate main before production deploy.
 
 on:
