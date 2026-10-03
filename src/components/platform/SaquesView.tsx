@@ -18,9 +18,10 @@ export const SaquesView: React.FC<SaquesViewProps> = ({ userProfile, roleMode, w
   const role = roleMode === 'empresa' ? 'empresa' : 'afiliado';
   const availableCents = role === 'empresa' ? userProfile.empresaAvailableBalanceCents : userProfile.afiliadoAvailableBalanceCents;
   const pendingCents = role === 'empresa' ? userProfile.empresaPendingBalanceCents : userProfile.afiliadoPendingBalanceCents;
-  const availableBalance = Number.isFinite(Number(availableCents)) ? Number(availableCents) / 100 : 0;
   const profilePendingBalance = Number.isFinite(Number(pendingCents)) ? Number(pendingCents) / 100 : 0;
   const [releasePendingCents, setReleasePendingCents] = useState<number | null>(null);
+  const [releaseAvailableCents, setReleaseAvailableCents] = useState<number | null>(null);
+  const availableBalance = releaseAvailableCents !== null ? releaseAvailableCents / 100 : 0;
   const [nextReleaseAt, setNextReleaseAt] = useState<string | null>(null);
   const [releasePolicyDays, setReleasePolicyDays] = useState<8 | 15>(15);
   const pendingBalance = releasePendingCents !== null ? releasePendingCents / 100 : profilePendingBalance;
@@ -46,11 +47,16 @@ export const SaquesView: React.FC<SaquesViewProps> = ({ userProfile, roleMode, w
         if (!response.ok) throw new Error(data.error || 'Não foi possível carregar as liberações.');
         if (cancelled) return;
         setReleasePendingCents(Number.isFinite(Number(data.pendingAmountCents)) ? Number(data.pendingAmountCents) : 0);
+        setReleaseAvailableCents(Number.isFinite(Number(data.availableAmountCents)) ? Number(data.availableAmountCents) : 0);
         setNextReleaseAt(data.nextReleaseAt || null);
         setReleasePolicyDays(data.policyDays === 8 ? 8 : 15);
       })
       .catch((error) => {
-        if (!cancelled) console.warn('[Withdraw releases]', error);
+        if (!cancelled) {
+          setReleasePendingCents(0);
+          setReleaseAvailableCents(0);
+          console.warn('[Withdraw releases]', error);
+        }
       });
 
     return () => {
