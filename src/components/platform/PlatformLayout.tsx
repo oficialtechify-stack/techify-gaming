@@ -186,6 +186,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [paymentStats, setPaymentStats] = useState<PaymentMethodStat[]>(INITIAL_PAYMENT_STATS);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [dbConnected, setDbConnected] = useState<boolean>(false);
+  const [ledgerSidebarAvailableCents, setLedgerSidebarAvailableCents] = useState<number>(0);
 
   // Filter states
   const [selectedPeriod, setSelectedPeriod] = useState<string>('Hoje');
@@ -578,6 +579,39 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       unsubSales();
     };
   }, [effectiveCompanyId, effectiveUserId, roleMode]);
+
+  useEffect(() => {
+    if (!currentUser || roleMode === 'admin') {
+      setLedgerSidebarAvailableCents(0);
+      return;
+    }
+
+    let cancelled = false;
+    currentUser.getIdToken()
+      .then((token) => fetch(`/api/balance/releases?role=${encodeURIComponent(roleMode)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }))
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Falha ao carregar saldo.');
+        if (!cancelled) {
+          setLedgerSidebarAvailableCents(
+            Number.isFinite(Number(data.availableAmountCents)) ? Number(data.availableAmountCents) : 0
+          );
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLedgerSidebarAvailableCents(0);
+          console.warn('[Sidebar balance]', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.uid, roleMode]);
 
   // 2. User-specific subscriptions (user affiliations, user withdrawals strictly isolated to this account)
   useEffect(() => {
@@ -1181,13 +1215,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
 
-  const sidebarAvailableBalance = roleMode === 'empresa'
-    ? (typeof userProfile?.empresaAvailableBalanceCents === 'number'
-        ? userProfile.empresaAvailableBalanceCents / 100
-        : Number(userProfile?.availableBalance || 0))
-    : (typeof userProfile?.afiliadoAvailableBalanceCents === 'number'
-        ? userProfile.afiliadoAvailableBalanceCents / 100
-        : Number(userProfile?.availableBalance || 0));
+  const sidebarAvailableBalance = roleMode === 'admin'
+    ? 0
+    : ledgerSidebarAvailableCents / 100;
 
   return (
     <div className="leadspay-platform min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]" data-theme={isDarkMode ? 'dark' : 'light'}>
@@ -1269,7 +1299,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 className="w-full mt-2.5 bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 py-2 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
               >
                 <Wallet className="w-3 h-3 text-[#D9F22A]" />
-                SACAR VIA STRIPE
+                SOLICITAR SAQUE
               </button>
             </div>
           )}
