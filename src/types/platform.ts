@@ -315,7 +315,7 @@ export interface WithdrawalRequest {
   amount: number; // Valor total solicitado
   requestedAmount?: number; // Valor solicitado
   fee?: number; // Taxa de saque
-  feeAmount?: number; // R$ 2,50 taxa fixa de saque LeadsPay
+  feeAmount?: number; // R$ 2,00 taxa fixa de saque LeadsPay
   netAmount?: number; // Valor transferido = amount - feeAmount
   pixKey?: string;
   pixKeyType?: string;
