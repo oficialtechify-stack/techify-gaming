@@ -78,14 +78,7 @@ const faqs = [
 function Brand({ footer = false }: { footer?: boolean }) {
   return (
     <a className={`brand ${footer ? "brand-footer" : ""}`} href="#inicio" aria-label="LeadsPay — início">
-      <span className="brand-mark" aria-hidden="true">
-        <span>L</span>
-        <span>P</span>
-      </span>
-      <span className="brand-copy">
-        <strong>LEADSPAY</strong>
-        <small>PAYMENTS &amp; SPLIT</small>
-      </span>
+      <TechifyLogo size={footer ? "lg" : "md"} surface={footer ? "dark" : "light"} />
     </a>
   );
 }
@@ -252,7 +245,7 @@ function ProductSection() {
         </div>
         <div className="bridge-art">
           <img src="/leadspay-network-light.webp" alt="Arte abstrata de uma rede conectando produtos digitais e oportunidades" loading="lazy" />
-          <span className="bridge-label"><span className="brand-mark small-mark" aria-hidden="true"><span>L</span><span>P</span></span> LEADSPAY / NETWORK</span>
+          <span className="bridge-label"><TechifyLogo size="sm" surface="light" /> <span>NETWORK</span></span>
         </div>
         <span className="bridge-index" aria-hidden="true">01 — 03</span>
       </div>
