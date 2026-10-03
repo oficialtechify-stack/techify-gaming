@@ -40,8 +40,8 @@ export async function sendPushNotification(subscription: any, payload: PushNotif
       title: payload.title || 'LeadsPay',
       body: payload.body || 'Nova notificação da LeadsPay',
       url: payload.url || '/',
-      icon: payload.icon || '/leadspay_3d_logo.jpg',
-      badge: payload.badge || '/leadspay_3d_logo.jpg'
+      icon: payload.icon || '/branding/leadspay-symbol.webp',
+      badge: payload.badge || '/branding/leadspay-symbol.webp'
     });
     return await webpush.sendNotification(subscription, stringified);
   } catch (err: any) {
