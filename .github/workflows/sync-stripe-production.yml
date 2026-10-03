@@ -1,0 +1,72 @@
+name: Sync Stripe production to Vercel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-stripe-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_ORG_ID: team_NbEe7FyvVyYANMVHDoJVfaAL
+      VERCEL_PROJECT_ID: prj_1gaBGjVLeja0aMLkzYz7oXMO8qQq
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+
+    steps:
+      - name: Verify required secrets
+        run: |
+          test -n "$VERCEL_TOKEN" || (echo "MISSING_VERCEL_TOKEN" && exit 1)
+          test -n "$STRIPE_SECRET_KEY" || (echo "MISSING_STRIPE_SECRET_KEY" && exit 1)
+          test -n "$STRIPE_WEBHOOK_SECRET" || (echo "MISSING_STRIPE_WEBHOOK_SECRET" && exit 1)
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Pull Vercel project configuration
+        run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Sync Stripe live secret
+        shell: bash
+        run: |
+          npx vercel env rm STRIPE_SECRET_KEY production --yes --token="$VERCEL_TOKEN" >/dev/null 2>&1 || true
+          printf '%s' "$STRIPE_SECRET_KEY" | npx vercel env add STRIPE_SECRET_KEY production --token="$VERCEL_TOKEN"
+
+      - name: Sync Stripe webhook secret
+        shell: bash
+        run: |
+          npx vercel env rm STRIPE_WEBHOOK_SECRET production --yes --token="$VERCEL_TOKEN" >/dev/null 2>&1 || true
+          printf '%s' "$STRIPE_WEBHOOK_SECRET" | npx vercel env add STRIPE_WEBHOOK_SECRET production --token="$VERCEL_TOKEN"
+
+      - name: Sync Stripe publishable key when available
+        if: ${{ env.VITE_STRIPE_PUBLISHABLE_KEY != '' }}
+        shell: bash
+        run: |
+          npx vercel env rm VITE_STRIPE_PUBLISHABLE_KEY production --yes --token="$VERCEL_TOKEN" >/dev/null 2>&1 || true
+          printf '%s' "$VITE_STRIPE_PUBLISHABLE_KEY" | npx vercel env add VITE_STRIPE_PUBLISHABLE_KEY production --token="$VERCEL_TOKEN"
+
+      - name: Pull final production environment
+        run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build with production environment
+        run: npx vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt to production
+        run: npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
