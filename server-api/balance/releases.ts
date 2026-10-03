@@ -87,6 +87,35 @@ export default async function handler(req: Req, res: Res) {
     const pending = visibleReleases.filter((item) => item.status === 'pending');
     const ledger = await calculateUserLedgerBalances(db, identity.uid);
     const roleLedger = ledger[role];
+
+    // Reconciliamos os campos salvos do perfil com o livro-caixa real.
+    // Isso remove automaticamente saldos legados/demonstrativos sem lastro.
+    const reconciled = {
+      empresaPendingBalanceCents: ledger.empresa.pendingCents,
+      empresaAvailableBalanceCents: ledger.empresa.availableCents,
+      afiliadoPendingBalanceCents: ledger.afiliado.pendingCents,
+      afiliadoAvailableBalanceCents: ledger.afiliado.availableCents,
+      pendingBalance: Number(((ledger.empresa.pendingCents + ledger.afiliado.pendingCents) / 100).toFixed(2)),
+      availableBalance: Number(((ledger.empresa.availableCents + ledger.afiliado.availableCents) / 100).toFixed(2)),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const currentProfile = profileSnap.data() as Record<string, any>;
+    const needsReconcile =
+      Number(currentProfile.empresaPendingBalanceCents || 0) !== reconciled.empresaPendingBalanceCents ||
+      Number(currentProfile.empresaAvailableBalanceCents || 0) !== reconciled.empresaAvailableBalanceCents ||
+      Number(currentProfile.afiliadoPendingBalanceCents || 0) !== reconciled.afiliadoPendingBalanceCents ||
+      Number(currentProfile.afiliadoAvailableBalanceCents || 0) !== reconciled.afiliadoAvailableBalanceCents ||
+      Number(currentProfile.pendingBalance || 0) !== reconciled.pendingBalance ||
+      Number(currentProfile.availableBalance || 0) !== reconciled.availableBalance;
+
+    if (needsReconcile) {
+      await Promise.all([
+        profileRef.set(reconciled, { merge: true }),
+        db.collection('users').doc(identity.uid).set(reconciled, { merge: true }),
+      ]);
+    }
+
     const nextRelease = pending.find((item) => Number.isFinite(Date.parse(String(item.availableAt || '')))) || null;
 
     return res.status(200).json({
