@@ -183,12 +183,16 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const detail = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('[Stripe Connect onboarding]', detail);
     const unauthorized = /token ausente|token inválido|token expir|invalid.*token|permission denied/i.test(detail);
-    const configMissing = /não configurad|precisa conter JSON válido|credencial.*incompleta|de outro projeto|STRIPE indisponível|LEADSPAY_BASE_URL/i.test(detail);
+    const configMissing = /não configurad|precisa conter JSON válido|credencial.*incompleta|de outro projeto|stripe.*indisponível|stripe.*bloqueado|leadspay_base_url/i.test(detail);
     return res.status(unauthorized ? 401 : 503).json({
       error: configMissing
-        ? 'A conexão de recebimentos ainda não está configurada neste ambiente. Revise as variáveis privadas do servidor e tente novamente.'
-        : 'Não foi possível iniciar a conexão de recebimentos. Tente novamente; se o erro continuar, contate o suporte da plataforma.',
-      code: unauthorized ? 'AUTHENTICATION_REQUIRED' : configMissing ? 'PAYMENTS_CONFIGURATION_REQUIRED' : 'PAYMENTS_ONBOARDING_UNAVAILABLE',
+        ? 'A Stripe de produção da LeadsPay ainda não foi ativada pelo administrador. Nenhum dado bancário ou saldo foi alterado.'
+        : 'Não foi possível iniciar a configuração bancária agora. Tente novamente; se o erro continuar, contate o suporte da plataforma.',
+      code: unauthorized
+        ? 'AUTHENTICATION_REQUIRED'
+        : configMissing
+          ? 'STRIPE_PRODUCTION_CONFIGURATION_REQUIRED'
+          : 'PAYMENTS_ONBOARDING_UNAVAILABLE',
     });
   }
 }
