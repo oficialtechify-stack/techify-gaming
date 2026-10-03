@@ -15,7 +15,7 @@ export const PLATFORM_SUBSCRIPTION_PLANS: Record<string, SubscriptionPlanDefinit
   scale: { id: 'scale', role: 'empresa', name: 'Scale', priceCents: 14990 },
 };
 
-export const WITHDRAWAL_FEE_CENTS = 250;
+export const WITHDRAWAL_FEE_CENTS = 200;
 export const MIN_WITHDRAWAL_CENTS = 1000;
 
 const paidTiers = new Set(
