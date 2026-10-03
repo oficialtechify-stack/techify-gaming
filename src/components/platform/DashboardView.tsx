@@ -284,11 +284,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [releasePolicyDays, setReleasePolicyDays] = useState<8 | 15>(15);
   const [nextReleaseAt, setNextReleaseAt] = useState<string | null>(null);
   const [releasePendingCents, setReleasePendingCents] = useState<number | null>(null);
+  const [releaseAvailableCents, setReleaseAvailableCents] = useState<number | null>(null);
 
   useEffect(() => {
     if (!currentUser || (roleMode !== 'empresa' && roleMode !== 'afiliado')) {
       setNextReleaseAt(null);
-      setReleasePendingCents(null);
+      setReleasePendingCents(0);
+      setReleaseAvailableCents(0);
       return;
     }
 
@@ -304,10 +306,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         if (cancelled) return;
         setReleasePolicyDays(data.policyDays === 8 ? 8 : 15);
         setNextReleaseAt(data.nextReleaseAt || null);
-        setReleasePendingCents(Number.isFinite(Number(data.pendingAmountCents)) ? Number(data.pendingAmountCents) : null);
+        setReleasePendingCents(Number.isFinite(Number(data.pendingAmountCents)) ? Number(data.pendingAmountCents) : 0);
+        setReleaseAvailableCents(Number.isFinite(Number(data.availableAmountCents)) ? Number(data.availableAmountCents) : 0);
       })
       .catch((error) => {
-        if (!cancelled) console.warn('[Balance releases]', error);
+        if (!cancelled) {
+          setReleasePendingCents(0);
+          setReleaseAvailableCents(0);
+          console.warn('[Balance releases]', error);
+        }
       });
 
     return () => {
@@ -711,8 +718,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     ? Number(userProfile?.empresaPendingBalanceCents)
     : Number(userProfile?.afiliadoPendingBalanceCents);
 
-  const availableBalance = Number.isFinite(roleAvailableCents)
-    ? roleAvailableCents / 100
+  const availableBalance = releaseAvailableCents !== null
+    ? releaseAvailableCents / 100
     : 0;
 
   const pendingBalanceFromProfile = Number.isFinite(rolePendingCents)
