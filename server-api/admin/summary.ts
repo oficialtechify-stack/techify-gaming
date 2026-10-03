@@ -94,6 +94,12 @@ export default async function handler(req: Req, res: Res) {
 
     const finance = financeSnap.exists ? financeSnap.data() as Record<string, any> : {};
     const platformRevenue = checkoutFees + withdrawalFees;
+    const stripeSecret = String(process.env.STRIPE_SECRET_KEY || '').trim();
+    const stripeWebhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+    const stripeConfig = {
+      liveSecretConfigured: /^(sk|rk)_live_/.test(stripeSecret),
+      webhookConfigured: /^whsec_/.test(stripeWebhookSecret),
+    };
 
     return res.status(200).json({
       success: true,
@@ -112,6 +118,7 @@ export default async function handler(req: Req, res: Res) {
         activeProducts: Number(plansCount.data().count || 0),
         totalSalesProcessedCounter: Number(finance.totalSalesProcessed || 0),
         lastUpdated: String(finance.lastUpdated || new Date().toISOString()),
+        stripeConfig,
         truncated:
           salesSnap.size >= 5000 ||
           withdrawalsSnap.size >= 5000 ||
