@@ -10,6 +10,7 @@ import {
   type PlatformRole,
 } from '../../lib/platformBilling.js';
 import { toCents } from '../../lib/stripeSplit.js';
+import { releaseStripeBalanceDocument } from '../crons/stripe-releases.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown };
@@ -21,13 +22,10 @@ function fail(res: ResponseLike, status: number, error: string, code?: string) {
 function readRoleAvailableCents(profile: Record<string, any>, role: PlatformRole): number {
   const field = roleAvailableCentsField(role);
   const roleValue = Number(profile[field]);
-  if (Number.isSafeInteger(roleValue) && roleValue >= 0) return roleValue;
 
-  const accountType = String(profile.accountType || '').toLowerCase();
-  const isSingleRole = accountType === role || (role === 'empresa' ? profile.hasAffiliateProfile !== true : profile.hasCompanyProfile !== true);
-  if (!isSingleRole) return 0;
-  const legacy = Math.round(Number(profile.availableBalance || 0) * 100);
-  return Number.isSafeInteger(legacy) && legacy > 0 ? legacy : 0;
+  // Saques usam exclusivamente o saldo por papel mantido pelo backend.
+  // Nunca usamos availableBalance legado como fonte autoritativa.
+  return Number.isSafeInteger(roleValue) && roleValue >= 0 ? roleValue : 0;
 }
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
@@ -54,6 +52,35 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
     if (!profileHasRole(profile, role) || !profileRoleIsApproved(profile, role)) {
       return fail(res, 403, 'Seu perfil precisa estar aprovado antes de solicitar saques.', 'PROFILE_NOT_APPROVED');
+    }
+
+    // Se alguma venda já completou o prazo de 8/15 dias, libera antes de validar o saque.
+    // A rotina transacional nunca libera antes do availableAt.
+    const dueSnapshot = await db.collection('balance_releases')
+      .where('userId', '==', identity.uid)
+      .limit(500)
+      .get();
+
+    const nowMs = Date.now();
+    for (const releaseDoc of dueSnapshot.docs) {
+      const release = releaseDoc.data();
+      const availableAtMs = Date.parse(String(release.availableAt || ''));
+      if (
+        release.role === role &&
+        release.status === 'pending' &&
+        Number.isFinite(availableAtMs) &&
+        availableAtMs <= nowMs
+      ) {
+        try {
+          await releaseStripeBalanceDocument(db, releaseDoc.ref);
+        } catch (releaseError) {
+          console.error(
+            '[Withdrawal balance release]',
+            releaseDoc.id,
+            releaseError instanceof Error ? releaseError.message : 'Falha',
+          );
+        }
+      }
     }
 
     const accountId = String(profile.stripeAccounts?.[role] || '');
@@ -122,6 +149,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       if (!fresh.exists) return false;
       const data = fresh.data()!;
       const availableCents = readRoleAvailableCents(data, role);
+      if (availableCents < MIN_WITHDRAWAL_CENTS) return false;
       if (availableCents < amountCents) return false;
       const aggregateAvailable = Number(data.availableBalance || 0);
       tx.set(profileRef, {
@@ -153,7 +181,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return true;
     });
 
-    if (!reserved) return fail(res, 409, 'Saldo disponível insuficiente para este saque.', 'INSUFFICIENT_BALANCE');
+    if (!reserved) {
+      return fail(
+        res,
+        409,
+        'Saque não liberado. É necessário ter pelo menos R$ 10,00 de saldo já liberado na LeadsPay, e o valor solicitado não pode ultrapassar esse saldo.',
+        'INSUFFICIENT_RELEASED_BALANCE',
+      );
+    }
 
     const netAmountCents = amountCents - WITHDRAWAL_FEE_CENTS;
     let transferId = '';
