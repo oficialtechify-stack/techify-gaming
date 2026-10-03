@@ -58,7 +58,6 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     // A rotina transacional nunca libera antes do availableAt.
     const dueSnapshot = await db.collection('balance_releases')
       .where('userId', '==', identity.uid)
-      .limit(500)
       .get();
 
     const nowMs = Date.now();
