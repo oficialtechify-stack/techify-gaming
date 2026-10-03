@@ -280,8 +280,8 @@ export interface SaleTransaction {
   commissionEarned: number;
   checkoutFee?: number; // R$ 0.99 taxa da plataforma LeadsPay
   netCompanyAmount?: number; // amount - commissionEarned - checkoutFee
-  releaseStatus?: 'pendente' | 'disponivel'; // Regra de liberação de 9 dias
-  availableAt?: string; // Data prevista para liberação (data + 9 dias)
+  releaseStatus?: 'pendente' | 'disponivel'; // Regra de liberação LeadsPay: 8/15 dias
+  availableAt?: string; // Data exata prevista para liberação calculada pelo backend
   releasedAt?: string;
   affiliateId?: string;
   affiliateName?: string;
@@ -315,7 +315,7 @@ export interface WithdrawalRequest {
   amount: number; // Valor total solicitado
   requestedAmount?: number; // Valor solicitado
   fee?: number; // Taxa de saque
-  feeAmount?: number; // R$ 2.50 taxa fixa de saque Pix
+  feeAmount?: number; // R$ 2,50 taxa fixa de saque LeadsPay
   netAmount?: number; // Valor transferido = amount - feeAmount
   pixKey?: string;
   pixKeyType?: string;
@@ -327,8 +327,8 @@ export interface WithdrawalRequest {
   requestedAt: string;
   completedAt?: string;
   createdAt?: string;
-  endToEndId?: string; // ID E2E do PIX Asaas / Bacen
-  asaasTransferId?: string; // ID da transferência Asaas
+  endToEndId?: string; // Campo legado de integrações anteriores
+  asaasTransferId?: string; // Campo legado; novos saques usam Stripe Connect
   failureReason?: string;
   is_test?: boolean;
   environment?: 'development' | 'production';
