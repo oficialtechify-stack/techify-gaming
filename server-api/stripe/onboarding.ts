@@ -182,17 +182,30 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('[Stripe Connect onboarding]', detail);
+
     const unauthorized = /token ausente|token inválido|token expir|invalid.*token|permission denied/i.test(detail);
-    const configMissing = /não configurad|precisa conter JSON válido|credencial.*incompleta|de outro projeto|stripe.*indisponível|stripe.*bloqueado|leadspay_base_url/i.test(detail);
-    return res.status(unauthorized ? 401 : 503).json({
-      error: configMissing
-        ? 'A Stripe de produção da LeadsPay ainda não foi ativada pelo administrador. Nenhum dado bancário ou saldo foi alterado.'
-        : 'Não foi possível iniciar a configuração bancária agora. Tente novamente; se o erro continuar, contate o suporte da plataforma.',
-      code: unauthorized
-        ? 'AUTHENTICATION_REQUIRED'
+    const connectProfileRequired =
+      /complete your platform profile|platform profile|use Connect and create live connected accounts/i.test(detail);
+    const configMissing =
+      /não configurad|precisa conter JSON válido|credencial.*incompleta|de outro projeto|stripe.*indisponível|stripe.*bloqueado|leadspay_base_url/i.test(detail);
+
+    const status = unauthorized ? 401 : connectProfileRequired ? 409 : 503;
+    const code = unauthorized
+      ? 'AUTHENTICATION_REQUIRED'
+      : connectProfileRequired
+        ? 'STRIPE_CONNECT_PLATFORM_PROFILE_REQUIRED'
         : configMissing
           ? 'STRIPE_PRODUCTION_CONFIGURATION_REQUIRED'
-          : 'PAYMENTS_ONBOARDING_UNAVAILABLE',
-    });
+          : 'PAYMENTS_ONBOARDING_UNAVAILABLE';
+
+    const message = unauthorized
+      ? 'Sua sessão expirou. Entre novamente.'
+      : connectProfileRequired
+        ? 'A LeadsPay precisa concluir o perfil da plataforma Stripe Connect antes de criar contas conectadas em produção.'
+        : configMissing
+          ? 'A Stripe de produção da LeadsPay ainda não foi ativada corretamente pelo administrador. Nenhum dado bancário ou saldo foi alterado.'
+          : 'Não foi possível iniciar a configuração bancária agora. Tente novamente em instantes.';
+
+    return res.status(status).json({ error: message, code });
   }
 }
