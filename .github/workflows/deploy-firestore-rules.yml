@@ -1,0 +1,81 @@
+name: Deploy Firestore rules
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - '.github/workflows/deploy-firestore-rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_ORG_ID: team_NbEe7FyvVyYANMVHDoJVfaAL
+      VERCEL_PROJECT_ID: prj_1gaBGjVLeja0aMLkzYz7oXMO8qQq
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      FIREBASE_PROJECT_ID: techify-gaming-106fe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify Vercel token
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN_NOT_CONFIGURED"
+            exit 1
+          fi
+
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Pull production environment securely from Vercel
+        run: npx vercel env pull .env.production.local --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Prepare Firebase Admin credential
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import dotenv from 'dotenv';
+
+          dotenv.config({ path: '.env.production.local' });
+          const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+          if (!raw) {
+            throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_NOT_AVAILABLE');
+          }
+
+          const parsed = JSON.parse(raw);
+          if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+            throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_INCOMPLETE');
+          }
+
+          if (parsed.project_id !== process.env.FIREBASE_PROJECT_ID) {
+            throw new Error('FIREBASE_PROJECT_ID_MISMATCH');
+          }
+
+          fs.writeFileSync(
+            '/tmp/firebase-service-account.json',
+            JSON.stringify(parsed),
+            { mode: 0o600 }
+          );
+          NODE
+
+      - name: Validate Firestore rules
+        run: npx firebase-tools firestore:rules --help >/dev/null
+
+      - name: Deploy Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-service-account.json
+        run: npx firebase-tools deploy --only firestore:rules --project="$FIREBASE_PROJECT_ID" --non-interactive
