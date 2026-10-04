@@ -8,6 +8,7 @@ import stripeWebhookHandler from '../server-api/stripe/webhook.js';
 import stripeReleasesCronHandler from '../server-api/crons/stripe-releases.js';
 import checkDocumentHandler from '../server-api/profile/check-document.js';
 import submitVerificationHandler from '../server-api/profile/submit-verification.js';
+import profileEditRequestHandler from '../server-api/profile/edit-request.js';
 import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
 import affiliateJoinHandler from '../server-api/affiliates/join.js';
 import affiliateClickHandler from '../server-api/affiliates/click.js';
@@ -204,6 +205,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return checkDocumentHandler(req as any, res as any);
     case 'profile/submit-verification':
       return submitVerificationHandler(req as any, res as any);
+    case 'profile/edit-request':
+      return profileEditRequestHandler(req as any, res as any);
     case 'profile/legacy-lookup':
       return legacyLookupHandler(req as any, res as any);
     case 'affiliates/join':
