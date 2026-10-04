@@ -1,3 +1,4 @@
+// Production checkout entrypoint. Environment-backed Stripe.js key is injected at build time.
 import React, { Suspense } from 'react';
 import type { CompanyPlan } from '../../types/platform';
 
