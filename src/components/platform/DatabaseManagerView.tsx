@@ -12,6 +12,8 @@ import {
   rejectVerificationInFirebase,
   approveCompanyInFirebase,
   rejectCompanyInFirebase,
+  approveCompanyProfileEditRequestInFirebase,
+  rejectCompanyProfileEditRequestInFirebase,
   deleteCompanyInFirebase,
   banEntityInFirebase,
   unbanEntityInFirebase,
@@ -61,7 +63,8 @@ import {
   HandCoins,
   BadgeDollarSign,
   ShoppingCart,
-  WalletCards
+  WalletCards,
+  Edit3
 } from 'lucide-react';
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
@@ -162,12 +165,14 @@ export const DatabaseManagerView: React.FC = () => {
     reason: string;
     isProcessing: boolean;
     modalError?: string | null;
+    mode?: 'verification' | 'profile_edit';
   }>({
     isOpen: false,
     target: null,
     reason: 'Dados cadastrais necessitam de ajuste ou confirmação.',
     isProcessing: false,
-    modalError: null
+    modalError: null,
+    mode: 'verification'
   });
 
   // Rastreamento em memória de IDs excluídos e recém-aprovados para garantir sincronização perfeita
@@ -349,7 +354,19 @@ export const DatabaseManagerView: React.FC = () => {
         ? 'Dados cadastrais ou documentação da empresa necessitam de ajuste.'
         : 'Dados cadastrais necessitam de ajuste ou confirmação.',
       isProcessing: false,
-      modalError: null
+      modalError: null,
+      mode: 'verification'
+    });
+  };
+
+  const openProfileEditRejectModal = (target: { id: string; name: string; email?: string; type: 'company' }) => {
+    setRejectModal({
+      isOpen: true,
+      target,
+      reason: 'Solicitação de ajuste recusada. Explique o motivo para a empresa.',
+      isProcessing: false,
+      modalError: null,
+      mode: 'profile_edit'
     });
   };
 
@@ -362,7 +379,20 @@ export const DatabaseManagerView: React.FC = () => {
     setRejectModal(prev => ({ ...prev, isProcessing: true, modalError: null }));
     setProcessingId(id);
     try {
-      if (type === 'user') {
+      if (rejectModal.mode === 'profile_edit') {
+        await rejectCompanyProfileEditRequestInFirebase(id, reason);
+        setCompanies(prev => prev.map(company =>
+          company.id === id
+            ? { ...company, profileEditRequestStatus: 'rejected', profileEditUnlocked: false, profileEditRejectionReason: reason }
+            : company
+        ));
+        setVerifications(prev => prev.map(v =>
+          v.companyId === id
+            ? { ...v, companyEditRequestStatus: 'rejected', companyProfileEditUnlocked: false, companyEditRejectionReason: reason }
+            : v
+        ));
+        setStatusMessage(`Solicitação de ajuste de "${name}" recusada com motivo registrado.`);
+      } else if (type === 'user') {
         await rejectVerificationInFirebase(id, reason);
         setVerifications(prev => prev.map(v => (v.userId === id || v.id === id) ? { ...v, status: 'rejected', rejectionReason: reason, verified: false } : v));
         setRegisteredProfiles(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, verified: false, verificationStatus: 'rejected', rejectionReason: reason } : p));
@@ -379,7 +409,7 @@ export const DatabaseManagerView: React.FC = () => {
       }
 
       setTimeout(() => setStatusMessage(''), 7000);
-      setRejectModal({ isOpen: false, target: null, reason: '', isProcessing: false, modalError: null });
+      setRejectModal({ isOpen: false, target: null, reason: '', isProcessing: false, modalError: null, mode: 'verification' });
     } catch (err: any) {
       console.error('Erro ao recusar:', err);
       const msg = err.message || 'Erro ao processar recusa.';
