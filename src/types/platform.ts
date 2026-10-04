@@ -63,6 +63,13 @@ export interface CompanyStartup {
   updatedAt?: string;
   archived?: boolean;
   isArchived?: boolean;
+  profileEditRequestStatus?: 'pending' | 'approved' | 'rejected' | null;
+  profileEditRequestReason?: string | null;
+  profileEditRequestedAt?: string | null;
+  profileEditReviewedAt?: string | null;
+  profileEditReviewedBy?: string | null;
+  profileEditRejectionReason?: string | null;
+  profileEditUnlocked?: boolean;
 }
 
 export interface ProductOrderBump {
@@ -422,6 +429,13 @@ export interface UserSellerProfile {
   verificationSubmittedAt?: string;
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
+  companyProfileEditUnlocked?: boolean;
+  companyEditRequestStatus?: 'pending' | 'approved' | 'rejected' | null;
+  companyEditRequestReason?: string | null;
+  companyEditRequestedAt?: string | null;
+  companyEditReviewedAt?: string | null;
+  companyEditReviewedBy?: string | null;
+  companyEditRejectionReason?: string | null;
   communicationPreferences?: {
     inApp?: { enabled: boolean; updatedAt?: string; consentVersion?: string; source?: string };
   };
@@ -479,6 +493,13 @@ export interface VerificationRequest {
   rejectionReason?: string;
   submittedAt: string;
   reviewedAt?: string;
+  companyEditRequestStatus?: 'pending' | 'approved' | 'rejected' | null;
+  companyEditRequestReason?: string | null;
+  companyEditRequestedAt?: string | null;
+  companyEditReviewedAt?: string | null;
+  companyEditReviewedBy?: string | null;
+  companyEditRejectionReason?: string | null;
+  companyProfileEditUnlocked?: boolean;
 }
 
 export interface AffiliateLinkItem {
