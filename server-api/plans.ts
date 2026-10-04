@@ -361,10 +361,6 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     const profile = { ...requestedProfile, ...approvalRepair } as Record<string, any>;
 
-    if (!profileHasRole(profile, 'empresa') || !profileRoleIsApproved(profile, 'empresa')) {
-      return res.status(403).json({ error: 'Não foi possível sincronizar a aprovação da Empresa. Atualize a página e tente novamente.' });
-    }
-
     if (
       rawProfile.companyId !== companyId ||
       rawProfile.empresaVerificationStatus !== 'approved' ||
