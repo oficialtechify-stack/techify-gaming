@@ -24,11 +24,14 @@ import {
   Plus,
   Layers,
   Phone,
-  Briefcase
+  Briefcase,
+  Edit3,
+  ArrowRight
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
-import { StripeConnectCompanyPanel } from './StripeConnectCompanyPanel';
+import { StripeConnectCompanyPanel, type ConnectStatus } from './StripeConnectCompanyPanel';
+import { requestCompanyProfileEditInFirebase } from '../../services/firestoreService';
 
 interface MeuPerfilViewProps {
   userProfile: UserSellerProfile;
@@ -110,18 +113,40 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSavingDraft, setIsSavingDraft] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [stripeStatus, setStripeStatus] = useState<ConnectStatus>('loading');
+  const [showEditRequest, setShowEditRequest] = useState(false);
+  const [editRequestReason, setEditRequestReason] = useState('');
+  const [isRequestingEdit, setIsRequestingEdit] = useState(false);
 
   // Allow editing if rejected and user clicks to fix
   const [isEditingRejected, setIsEditingRejected] = useState<boolean>(false);
 
-  // Determine verification status
-  const verificationStatus = userProfile.verificationStatus || (userProfile.verified ? 'approved' : 'unsubmitted');
-  const isPending = verificationStatus === 'pending';
-  const isApproved = verificationStatus === 'approved' || userProfile.verified;
-  const isRejected = verificationStatus === 'rejected';
+  // Determine verification status by role. Company approval is independent from affiliate approval.
+  const verificationStatus = roleMode === 'empresa'
+    ? (
+        userProfile.empresaVerificationStatus ||
+        userProfile.companyVerificationStatus ||
+        userProfile.verificationStatus ||
+        (userProfile.verified ? 'approved' : 'unsubmitted')
+      )
+    : (
+        userProfile.affiliateVerificationStatus ||
+        userProfile.verificationStatus ||
+        (userProfile.verified ? 'approved' : 'unsubmitted')
+      );
 
-  // Fields are locked when submitted/pending or approved (unless user explicitly clicks to fix a rejected submission)
-  const isLocked = (isPending || isApproved || (isRejected && !isEditingRejected));
+  const isPending = verificationStatus === 'pending' || verificationStatus === 'submitted';
+  const isApproved = verificationStatus === 'approved' || (roleMode !== 'empresa' && userProfile.verified === true);
+  const isRejected = verificationStatus === 'rejected';
+  const stripeReady = roleMode !== 'empresa' || stripeStatus === 'connected';
+  const companyEditUnlocked = roleMode === 'empresa' && userProfile.companyProfileEditUnlocked === true;
+  const companyEditRequestStatus = roleMode === 'empresa' ? userProfile.companyEditRequestStatus : null;
+
+  // Company fields unlock only after Stripe verification. Approved profiles stay locked
+  // until administration explicitly approves an edit request.
+  const isLocked = roleMode === 'empresa'
+    ? (!stripeReady || isPending || (isApproved && !companyEditUnlocked) || (isRejected && !isEditingRejected))
+    : (isPending || isApproved || (isRejected && !isEditingRejected));
 
   // Synchronize when userProfile or company changes
   useEffect(() => {
@@ -461,6 +486,34 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     }
   };
 
+  const handleRequestCompanyEdit = async () => {
+    const reason = editRequestReason.trim();
+    if (reason.length < 10) {
+      setToastMessage({ type: 'error', text: 'Explique em pelo menos 10 caracteres o que você deseja alterar.' });
+      return;
+    }
+
+    setIsRequestingEdit(true);
+    try {
+      await requestCompanyProfileEditInFirebase(reason);
+      setShowEditRequest(false);
+      setEditRequestReason('');
+      setToastMessage({
+        type: 'success',
+        text: 'Solicitação enviada. Seu perfil continuará bloqueado até a administração liberar a edição.'
+      });
+      setTimeout(() => setToastMessage(null), 6000);
+    } catch (error) {
+      setToastMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Não foi possível solicitar o ajuste.'
+      });
+      setTimeout(() => setToastMessage(null), 5000);
+    } finally {
+      setIsRequestingEdit(false);
+    }
+  };
+
   return (
     <div className="relative animate-in fade-in duration-200 pb-16" id="leadspay-meu-perfil-view">
       {/* Toast feedback */}
@@ -503,7 +556,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </h1>
         <p className="text-xs text-white/60 mt-1 max-w-2xl">
           {roleMode === 'empresa'
-            ? 'Preencha os dados oficiais da sua empresa (Razão Social, Responsável, CNPJ, WhatsApp, Categoria, Slogan e Endereço). Após envio, a Administração analisará seu cadastro. Uma vez aprovada, a empresa poderá cadastrar produtos livremente.'
+            ? 'Ative sua empresa em um fluxo seguro: primeiro valide a Stripe, depois complete o perfil LeadsPay e envie para aprovação administrativa.'
             : 'Mantenha seus dados pessoais e de recebimento atualizados para garantir a homologação de sua conta e saques via PIX instantâneos.'}
         </p>
       </div>
@@ -642,8 +695,14 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         )}
       </div>
 
-      {roleMode === 'empresa' && isApproved && (
-        <StripeConnectCompanyPanel companyId={company?.id || userProfile.companyId} />
+      {roleMode === 'empresa' && (
+        <div className="mb-6">
+          <StripeConnectCompanyPanel
+            companyId={company?.id || userProfile.companyId}
+            onboardingMode={!isApproved}
+            onStatusChange={setStripeStatus}
+          />
+        </div>
       )}
 
       <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
