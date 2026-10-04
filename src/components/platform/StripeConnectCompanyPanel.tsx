@@ -2,12 +2,20 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-type ConnectStatus = 'loading' | 'not_connected' | 'onboarding_incomplete' | 'connected' | 'error';
+type ConnectStatus =
+  | 'loading'
+  | 'not_connected'
+  | 'onboarding_incomplete'
+  | 'action_required'
+  | 'pending_verification'
+  | 'connected'
+  | 'error';
 
 export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ companyId }) => {
   const { currentUser } = useAuth();
   const [status, setStatus] = useState<ConnectStatus>('loading');
   const [message, setMessage] = useState('');
+  const [requirementMessage, setRequirementMessage] = useState('');
   const [starting, setStarting] = useState(false);
 
   const loadStatus = useCallback(async () => {
@@ -18,6 +26,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
 
     setStatus('loading');
     setMessage('');
+    setRequirementMessage('');
     try {
       const token = await currentUser.getIdToken();
       const response = await fetch('/api/stripe/connect-status?role=empresa', {
@@ -27,6 +36,32 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Não foi possível consultar a Stripe.');
       setStatus(data.status || 'not_connected');
+
+      const errors = Array.isArray(data.requirements?.errors) ? data.requirements.errors : [];
+      const due = Array.isArray(data.requirements?.currentlyDue) ? data.requirements.currentlyDue : [];
+      const pastDue = Array.isArray(data.requirements?.pastDue) ? data.requirements.pastDue : [];
+
+      const addressVerificationFailed = errors.some((item: any) =>
+        /address|reside|residential|endereço|resid/i.test(
+          `${item?.reason || ''} ${item?.requirement || ''}`
+        )
+      );
+
+      if (addressVerificationFailed) {
+        setRequirementMessage(
+          'A Stripe não conseguiu verificar o endereço informado. Corrija o endereço residencial ou envie o comprovante solicitado pela Stripe.'
+        );
+      } else if (errors[0]?.reason) {
+        setRequirementMessage(String(errors[0].reason));
+      } else if (due.length > 0 || pastDue.length > 0) {
+        setRequirementMessage(
+          'A Stripe ainda precisa de informações adicionais para liberar recebimentos e saques.'
+        );
+      } else if (data.status === 'pending_verification') {
+        setRequirementMessage(
+          'Os dados foram enviados e estão em análise pela Stripe. Nenhuma ação é necessária agora.'
+        );
+      }
     } catch (error) {
       setStatus('error');
       setMessage(error instanceof Error ? error.message : 'Não foi possível consultar a Stripe.');
@@ -71,7 +106,14 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-black text-white">Conta bancária para receber saques</h3>
-              {status === 'connected' && (
+              {status === 'pending_verification' && (
+            <div className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 text-xs font-bold text-sky-300">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Em análise pela Stripe
+            </div>
+          )}
+
+          {status === 'connected' && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-400">
                   <CheckCircle2 className="h-3 w-3" />
                   Stripe conectada
@@ -86,9 +128,14 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
                 Conta bancária configurada. O saldo só é enviado à Stripe depois que estiver disponível na LeadsPay e você solicitar o saque aqui.
               </p>
             )}
-            {status === 'onboarding_incomplete' && (
-              <p className="mt-2 text-[11px] text-amber-300/80">
-                A conta Stripe foi criada, mas ainda faltam dados obrigatórios no onboarding.
+            {(status === 'onboarding_incomplete' || status === 'action_required') && (
+              <p className="mt-2 text-[11px] text-amber-300/90">
+                {requirementMessage || 'A conta Stripe foi criada, mas ainda faltam dados obrigatórios para liberar recebimentos.'}
+              </p>
+            )}
+            {status === 'pending_verification' && (
+              <p className="mt-2 text-[11px] text-sky-300/90">
+                {requirementMessage || 'Os dados foram enviados e estão em análise pela Stripe.'}
               </p>
             )}
             {status === 'not_connected' && (
@@ -111,7 +158,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
             Atualizar
           </button>
 
-          {status !== 'connected' && (
+          {status !== 'connected' && status !== 'pending_verification' && (
             <button
               type="button"
               onClick={startOnboarding}
@@ -119,7 +166,11 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-4 text-xs font-black text-[#07100A] transition hover:bg-[#cde71f] disabled:opacity-40"
             >
               {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-              {status === 'onboarding_incomplete' ? 'Continuar configuração bancária' : 'Configurar recebimentos'}
+              {status === 'action_required'
+                ? 'Corrigir dados na Stripe'
+                : status === 'onboarding_incomplete'
+                  ? 'Continuar configuração bancária'
+                  : 'Configurar recebimentos'}
             </button>
           )}
 
