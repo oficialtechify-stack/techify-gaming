@@ -169,7 +169,6 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     profileFields.verificationRejectionReason = null;
     profileFields.updatedAt = now;
     const batch = db.batch();
-    batch.set(profileRef, profileFields, { merge: true });
 
     const requestRef = db.collection('verification_requests').doc(identity.uid);
     const requestData: Record<string, unknown> = {
@@ -273,7 +272,19 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         console.warn('[Profile submission] Stripe account metadata sync failed:', stripeLinkError instanceof Error ? stripeLinkError.message : 'falha');
       }
     }
-    batch.set(requestRef, requestData, { merge: true });
+
+    // Só grava o perfil depois que os campos específicos do papel foram
+    // resolvidos; assim companyId/accountType e o lock de edição não se perdem.
+    batch.set(profileRef, profileFields, { merge: true });
+    batch.set(requestRef, {
+      ...requestData,
+      ...(role === 'empresa' ? {
+        companyEditRequestStatus: null,
+        companyEditRequestReason: null,
+        companyEditRequestedAt: null,
+        companyProfileEditUnlocked: false,
+      } : {}),
+    }, { merge: true });
     await batch.commit();
     return res.status(200).json({ success: true, status: 'pending', submittedAt: now });
   } catch (error) {
