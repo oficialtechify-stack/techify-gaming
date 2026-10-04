@@ -138,7 +138,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         country: 'BR',
         email: identity.email || undefined,
         business_type: businessType,
-        capabilities: { transfers: { requested: true } },
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
         controller: {
           // New Connect configuration equivalent to an Express-style experience,
           // without relying on the legacy type='express' account model.
@@ -152,7 +155,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           leadspay_role: role,
           ...(role === 'empresa' ? { leadspay_company_id: companyId } : {}),
         },
-      } as any, { idempotencyKey: `leadspay-connect-modern-v1-${role}-${identity.uid}` });
+      } as any, { idempotencyKey: `leadspay-connect-modern-v2-${role}-${identity.uid}` });
       accountId = account.id;
       const updatedAccounts = { ...roleAccounts, [role]: accountId };
       await profileRef.set({
