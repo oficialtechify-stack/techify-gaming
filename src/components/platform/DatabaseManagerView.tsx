@@ -484,6 +484,43 @@ export const DatabaseManagerView: React.FC = () => {
     }
   };
 
+  const handleApproveProfileEdit = async (companyId: string, companyName: string) => {
+    setProcessingId(companyId);
+    try {
+      await approveCompanyProfileEditRequestInFirebase(companyId);
+
+      setCompanies(prev => prev.map(company =>
+        company.id === companyId
+          ? {
+              ...company,
+              profileEditRequestStatus: 'approved',
+              profileEditUnlocked: true,
+              profileEditRejectionReason: null
+            }
+          : company
+      ));
+
+      setVerifications(prev => prev.map(v =>
+        v.companyId === companyId
+          ? {
+              ...v,
+              companyEditRequestStatus: 'approved',
+              companyProfileEditUnlocked: true,
+              companyEditRejectionReason: null
+            }
+          : v
+      ));
+
+      setStatusMessage(`Edição do perfil de "${companyName}" liberada. A empresa poderá alterar os dados e reenviar para análise.`);
+      setTimeout(() => setStatusMessage(''), 7000);
+    } catch (err: any) {
+      setErrorMessage(`Erro ao liberar edição: ${err.message}`);
+      setTimeout(() => setErrorMessage(''), 7000);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   // ================= AÇÕES DE BANIMENTO (BAN & UNBAN) =================
 
   const openBanModal = (target: SecurityTarget) => {
