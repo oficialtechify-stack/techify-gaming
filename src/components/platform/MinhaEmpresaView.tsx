@@ -301,20 +301,20 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
           )}
         </div>
       ) : (
-        <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between gap-4 text-emerald-300">
+        <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/30 px-4 py-3.5 text-emerald-300">
           <div className="flex items-center gap-3">
-            <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            <span className="text-xs font-bold">
-              Empresa verificada: cadastro de produtos, checkout e comissões liberados.
-            </span>
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-500/10">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <span className="block text-xs font-bold text-emerald-300">
+                Empresa verificada
+              </span>
+              <span className="block text-[11px] leading-relaxed text-emerald-200/65">
+                Produtos, checkout e comissões estão liberados para esta empresa.
+              </span>
+            </div>
           </div>
-          <button
-            onClick={() => onOpenCreatePlan(currentCompany?.id)}
-            className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3.5 py-1.5 rounded-xl text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[3]" />
-            Adicionar Produto
-          </button>
         </div>
       )}
 
@@ -480,7 +480,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
             <div className="space-y-4">
               {/* Header Controls for Managing Plans: Search, Status Filter & View Toggle */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#080d1a] border border-white/10 rounded-2xl p-3 sm:p-4">
-                <div className="flex items-center gap-2 flex-1 max-w-md">
+                <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
                   <div className="relative flex-1">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                     <input
@@ -493,7 +493,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                   </div>
 
                   {/* Status Filter Tabs (Image 2) */}
-                  <div className="flex items-center bg-[#050811] border border-white/10 rounded-xl p-0.5">
+                  <div className="flex shrink-0 items-center bg-[#050811] border border-white/10 rounded-xl p-0.5">
                     <button
                       type="button"
                       onClick={() => setPlanStatusFilter('all')}
@@ -578,7 +578,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                   <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
                     {isVerified 
                       ? 'Adicione produtos, preços e comissões para que os afiliados possam começar a vender.' 
-                      : 'Complete a verificação da sua empresa no perfil para liberar o cadastro de produtos e produtos.'}
+                      : 'Complete a verificação da sua empresa no perfil para liberar o cadastro de produtos.'}
                   </p>
                   <button
                     onClick={() => handleCreatePlanRequest(currentCompany?.id)}
