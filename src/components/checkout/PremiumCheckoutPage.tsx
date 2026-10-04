@@ -317,10 +317,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     const completed = currentStep > step;
 
     return (
-      <div className="flex min-w-[82px] flex-col items-center gap-1.5">
+      <div className="flex min-w-[58px] flex-col items-center gap-1 sm:min-w-[82px] sm:gap-1.5">
         <div
           className={cx(
-            'flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold transition-all sm:h-11 sm:w-11',
+            'flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-all sm:h-11 sm:w-11 sm:text-sm',
             active && 'border-[#B8F128] bg-[#B8F128] text-black shadow-[0_0_24px_rgba(184,241,40,0.18)]',
             completed && 'border-emerald-500 bg-emerald-500 text-white',
             !active && !completed && (isDark
@@ -330,7 +330,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         >
           {completed ? <CheckCircle2 className="h-5 w-5" /> : step}
         </div>
-        <span className={cx('text-[11px] font-medium sm:text-xs', active ? (isDark ? 'text-white' : 'text-[#111827]') : mutedClass)}>
+        <span className={cx('text-[9px] font-medium leading-none sm:text-xs sm:leading-normal', active ? (isDark ? 'text-white' : 'text-[#111827]') : mutedClass)}>
           {label}
         </span>
       </div>
@@ -345,7 +345,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     if (!allowedMethods.includes(key as any)) return null;
 
     return (
-      <div key={key} className={cx('inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium', badgeClass)}>
+      <div key={key} className={cx('inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium sm:justify-start sm:gap-2 sm:rounded-xl sm:px-4 sm:text-sm', badgeClass)}>
         {icon}
         <span>{label}</span>
       </div>
@@ -353,7 +353,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   };
 
   return (
-    <main className={cx('relative min-h-screen overflow-hidden px-4 py-5 font-sans selection:bg-[#B8F128] selection:text-black sm:px-6 sm:py-7', pageClass)}>
+    <main className={cx('relative min-h-screen overflow-hidden px-3 py-3 font-sans selection:bg-[#B8F128] selection:text-black sm:px-6 sm:py-7', pageClass)}>
       <div
         className={cx(
           'pointer-events-none absolute inset-0',
@@ -363,10 +363,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         )}
       />
 
-      <div className="pointer-events-none absolute -left-56 top-12 h-[470px] w-[470px] rounded-full border border-[#9bd71d]/45 sm:-left-44" />
-      <div className="pointer-events-none absolute -left-64 top-[240px] h-[540px] w-[540px] rounded-full border border-[#9bd71d]/35 sm:-left-52" />
-      <div className="pointer-events-none absolute -right-72 top-[-120px] h-[520px] w-[520px] rounded-full border border-[#9bd71d]/45 sm:-right-52" />
-      <div className="pointer-events-none absolute -right-72 bottom-[-200px] h-[560px] w-[560px] rounded-full border border-[#9bd71d]/35 sm:-right-48" />
+      <div className="pointer-events-none absolute -left-56 top-12 hidden h-[470px] w-[470px] rounded-full border border-[#9bd71d]/45 sm:block sm:-left-44" />
+      <div className="pointer-events-none absolute -left-64 top-[240px] hidden h-[540px] w-[540px] rounded-full border border-[#9bd71d]/35 sm:block sm:-left-52" />
+      <div className="pointer-events-none absolute -right-72 top-[-120px] hidden h-[520px] w-[520px] rounded-full border border-[#9bd71d]/45 sm:block sm:-right-52" />
+      <div className="pointer-events-none absolute -right-72 bottom-[-200px] hidden h-[560px] w-[560px] rounded-full border border-[#9bd71d]/35 sm:block sm:-right-48" />
 
       {productImage && (
         <>
@@ -374,85 +374,85 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             src={productImage}
             alt=""
             aria-hidden="true"
-            className="pointer-events-none absolute -bottom-20 -left-20 h-48 w-48 rounded-full object-cover opacity-25 blur-[18px] sm:h-64 sm:w-64"
+            className="pointer-events-none absolute -bottom-20 -left-20 hidden h-48 w-48 rounded-full object-cover opacity-25 blur-[18px] sm:block sm:h-64 sm:w-64"
           />
           <img
             src={productImage}
             alt=""
             aria-hidden="true"
-            className="pointer-events-none absolute -right-20 top-12 h-44 w-44 rounded-full object-cover opacity-20 blur-[14px] sm:h-60 sm:w-60"
+            className="pointer-events-none absolute -right-20 top-12 hidden h-44 w-44 rounded-full object-cover opacity-20 blur-[14px] sm:block sm:h-60 sm:w-60"
           />
         </>
       )}
 
       <div className="relative z-10 mx-auto max-w-[1180px]">
-        <header className="grid grid-cols-[1fr_auto] items-start gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-          <div className="flex items-center gap-3">
+        <header className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-4 sm:gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {onBack ? (
               <button
                 type="button"
                 onClick={onBack}
                 aria-label="Voltar"
                 className={cx(
-                  'inline-flex h-10 w-10 items-center justify-center rounded-full transition',
+                  'inline-flex h-8 w-8 items-center justify-center rounded-full transition sm:h-10 sm:w-10',
                   isDark ? 'text-white hover:bg-white/5' : 'text-[#182033] hover:bg-black/5'
                 )}
               >
-                <ArrowLeft className="h-6 w-6" />
+                <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
               </button>
             ) : (
-              <span className="h-10 w-10" />
+              <span className="h-8 w-8 sm:h-10 sm:w-10" />
             )}
 
-            <div className="text-[28px] font-black tracking-[-0.045em] sm:text-[34px]">
+            <div className="truncate text-[24px] font-black tracking-[-0.045em] sm:text-[34px]">
               <span className={isDark ? 'text-white' : 'text-[#0b0f16]'}>Leads</span>
               <span className="text-[#9FDF19]">Pay</span>
             </div>
           </div>
 
-          <div className="col-span-2 row-start-2 flex items-start justify-center gap-2 sm:gap-4 lg:col-span-1 lg:row-start-auto">
+          <div className="col-span-2 row-start-2 flex items-start justify-center gap-1 sm:gap-4 lg:col-span-1 lg:row-start-auto">
             {renderStep(1, 'Seus dados')}
-            <div className={cx('mt-5 h-px w-12 sm:w-24', isDark ? 'bg-[#33495d]' : 'bg-[#dce1e7]')} />
+            <div className={cx('mt-4 h-px w-7 sm:mt-5 sm:w-24', isDark ? 'bg-[#33495d]' : 'bg-[#dce1e7]')} />
             {renderStep(2, 'Pagamento')}
             <div className={cx('mt-5 h-px w-12 sm:w-24', isDark ? 'bg-[#33495d]' : 'bg-[#dce1e7]')} />
             {renderStep(3, 'Confirmação')}
           </div>
 
-          <div className={cx('flex items-center justify-end gap-2 text-sm font-medium', mutedClass)}>
-            <LockKeyhole className="h-5 w-5" />
+          <div className={cx('flex items-center justify-end gap-1.5 text-xs font-medium sm:gap-2 sm:text-sm', mutedClass)}>
+            <LockKeyhole className="h-4 w-4 sm:h-5 sm:w-5" />
             <span className="hidden sm:inline">Checkout seguro</span>
           </div>
         </header>
 
-        <div className="mb-8 mt-8 text-center sm:mb-9 sm:mt-10">
-          <h1 className="text-[32px] font-black tracking-[-0.04em] sm:text-[42px] lg:text-[48px]">
+        <div className="mb-5 mt-5 text-center sm:mb-9 sm:mt-10">
+          <h1 className="mx-auto max-w-[360px] text-[26px] font-black leading-[1.08] tracking-[-0.04em] sm:max-w-none sm:text-[42px] sm:leading-normal lg:text-[48px]">
             {currentStep === 1 ? 'Falta pouco para concluir sua compra' : 'Escolha como deseja pagar'}
           </h1>
-          <p className={cx('mx-auto mt-2 max-w-3xl text-base sm:text-[20px]', mutedClass)}>
+          <p className={cx('mx-auto mt-2 max-w-[340px] text-[13px] leading-relaxed sm:max-w-3xl sm:text-[20px]', mutedClass)}>
             {currentStep === 1
               ? 'Confira seu pedido e preencha seus dados para continuar.'
               : 'Selecione uma forma de pagamento segura para finalizar sua compra.'}
           </p>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.78fr)_minmax(330px,1fr)] lg:items-start">
-          <section className={cx('rounded-[22px] border p-5 backdrop-blur-xl sm:p-7', cardClass)}>
-            <div className="mb-5">
+        <div className="grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1.78fr)_minmax(330px,1fr)] lg:items-start">
+          <section className={cx('rounded-2xl border p-4 backdrop-blur-xl sm:rounded-[22px] sm:p-7', cardClass)}>
+            <div className="mb-4 sm:mb-5">
               <span className={cx('text-[11px] font-bold uppercase tracking-[0.06em]', mutedClass)}>
                 Sua compra
               </span>
 
-              <div className="mt-4 flex items-center gap-4">
+              <div className="mt-3 flex items-center gap-3 sm:mt-4 sm:gap-4">
                 <img
                   src={productImage}
                   alt={plan.name}
-                  className="h-[78px] w-[98px] rounded-xl border border-white/5 object-cover sm:h-[82px] sm:w-[102px]"
+                  className="h-[58px] w-[66px] shrink-0 rounded-lg border border-white/5 object-cover sm:h-[82px] sm:w-[102px] sm:rounded-xl"
                 />
                 <div className="min-w-0">
-                  <h2 className="truncate text-xl font-black tracking-[-0.02em] sm:text-[27px]">
+                  <h2 className="truncate text-[17px] font-black tracking-[-0.02em] sm:text-[27px]">
                     {plan.name}
                   </h2>
-                  <p className={cx('mt-1 truncate text-sm sm:text-base', mutedClass)}>
+                  <p className={cx('mt-0.5 truncate text-xs sm:mt-1 sm:text-base', mutedClass)}>
                     Vendido por {sellerName}
                   </p>
                 </div>
@@ -462,15 +462,15 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             <div className={cx('border-t', dividerClass)} />
 
             {!clientSecret ? (
-              <form onSubmit={handleProcessPayment} className="pt-5">
-                <h3 className="text-[24px] font-black tracking-[-0.025em] sm:text-[28px]">
+              <form onSubmit={handleProcessPayment} className="pt-4 sm:pt-5">
+                <h3 className="text-[21px] font-black tracking-[-0.025em] sm:text-[28px]">
                   Seus dados
                 </h3>
-                <p className={cx('mt-1 text-sm sm:text-base', mutedClass)}>
+                <p className={cx('mt-1 text-[13px] leading-relaxed sm:text-base', mutedClass)}>
                   Enviaremos a confirmação da compra para este e-mail.
                 </p>
 
-                <div className="mt-5 space-y-4">
+                <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
                   <div>
                     <label htmlFor="checkout-full-name" className="mb-2 block text-sm font-medium">
                       Nome completo
@@ -484,7 +484,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                       placeholder="Digite seu nome completo"
                       value={fullName}
                       onChange={(event) => setFullName(event.target.value)}
-                      className={cx('min-h-[52px] w-full rounded-xl border px-4 text-base outline-none transition focus:ring-2', inputClass)}
+                      className={cx('min-h-[48px] w-full rounded-xl border px-3.5 text-sm outline-none transition focus:ring-2 sm:min-h-[52px] sm:px-4 sm:text-base', inputClass)}
                     />
                   </div>
 
@@ -517,7 +517,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 <button
                   type="submit"
                   disabled={isProcessing}
-                  className="group relative mt-5 inline-flex min-h-[58px] w-full items-center justify-center gap-3 rounded-xl bg-[#B8F128] px-5 text-base font-black text-black shadow-[0_10px_30px_rgba(184,241,40,0.13)] transition hover:bg-[#aee725] active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 sm:text-[17px]"
+                  className="group relative mt-4 inline-flex min-h-[52px] w-full items-center justify-center gap-3 rounded-xl bg-[#B8F128] px-10 text-sm font-black text-black shadow-[0_10px_30px_rgba(184,241,40,0.13)] transition hover:bg-[#aee725] active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 sm:mt-5 sm:min-h-[58px] sm:px-5 sm:text-[17px]"
                 >
                   {isProcessing ? (
                     <>
@@ -527,20 +527,20 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                   ) : (
                     <>
                       <span>{isRecurring ? 'Continuar para assinatura' : 'Continuar para pagamento'}</span>
-                      <ArrowRight className="absolute right-8 h-6 w-6 transition-transform group-hover:translate-x-1" />
+                      <ArrowRight className="absolute right-5 h-5 w-5 transition-transform group-hover:translate-x-1 sm:right-8 sm:h-6 sm:w-6" />
                     </>
                   )}
                 </button>
 
-                <div className={cx('mt-3 flex items-center justify-center gap-2 text-[11px] sm:text-xs', subtleClass)}>
+                <div className={cx('mt-2.5 flex items-center justify-center gap-1.5 text-center text-[10px] sm:mt-3 sm:gap-2 sm:text-xs', subtleClass)}>
                   <LockKeyhole className="h-4 w-4" />
                   <span>Seus dados são utilizados para concluir sua compra.</span>
                 </div>
 
-                <div className={cx('mt-5 border-t pt-4', dividerClass)}>
-                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <span className="text-sm font-medium">Formas de pagamento na próxima etapa</span>
-                    <div className="flex flex-wrap gap-2">
+                <div className={cx('mt-4 border-t pt-3 sm:mt-5 sm:pt-4', dividerClass)}>
+                  <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <span className="text-center text-xs font-medium sm:text-left sm:text-sm">Formas de pagamento na próxima etapa</span>
+                    <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
                       {renderPaymentBadge('Pix', <QrCode className="h-4 w-4" />, 'PIX')}
                       {renderPaymentBadge('Cartão', <CreditCard className="h-4 w-4" />, 'CARD')}
                       {renderPaymentBadge('Boleto', <Barcode className="h-4 w-4" />, 'BOLETO')}
@@ -549,8 +549,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 </div>
               </form>
             ) : stripePromise ? (
-              <div className="pt-5">
-                <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="pt-4 sm:pt-5">
+                <div className="mb-4 flex items-start justify-between gap-3 sm:mb-5 sm:gap-4">
                   <div>
                     <h3 className="text-[24px] font-black tracking-[-0.025em] sm:text-[28px]">Pagamento</h3>
                     <p className={cx('mt-1 text-sm sm:text-base', mutedClass)}>
@@ -566,14 +566,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                       stripeAttemptId.current = createAttemptId();
                       setFormError(null);
                     }}
-                    className="shrink-0 text-xs font-bold text-[#90cb16] hover:underline"
+                    className="shrink-0 pt-1 text-[10px] font-bold text-[#90cb16] hover:underline sm:pt-0 sm:text-xs"
                   >
                     Alterar dados
                   </button>
                 </div>
 
                 <div className={cx(
-                  'rounded-2xl border p-4 sm:p-5',
+                  'rounded-xl border p-3 sm:rounded-2xl sm:p-5',
                   isDark ? 'border-[#34495f] bg-[#091626]/70' : 'border-[#e0e4e9] bg-white'
                 )}>
                   <Elements
@@ -599,32 +599,32 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             ) : null}
           </section>
 
-          <aside className={cx('rounded-[22px] border p-5 backdrop-blur-xl sm:p-7 lg:sticky lg:top-5', cardClass)} aria-labelledby="order-summary-title">
-            <h2 id="order-summary-title" className="text-[21px] font-black tracking-[-0.02em] sm:text-[24px]">
+          <aside className={cx('rounded-2xl border p-4 backdrop-blur-xl sm:rounded-[22px] sm:p-7 lg:sticky lg:top-5', cardClass)} aria-labelledby="order-summary-title">
+            <h2 id="order-summary-title" className="text-[19px] font-black tracking-[-0.02em] sm:text-[24px]">
               Resumo do pedido
             </h2>
 
-            <div className="mt-5 flex items-center gap-4">
-              <img src={productImage} alt={plan.name} className="h-[82px] w-[94px] rounded-xl object-cover" />
+            <div className="mt-4 flex items-center gap-3 sm:mt-5 sm:gap-4">
+              <img src={productImage} alt={plan.name} className="h-[58px] w-[66px] shrink-0 rounded-lg object-cover sm:h-[82px] sm:w-[94px] sm:rounded-xl" />
 
               <div className="min-w-0">
-                <h3 className="truncate text-lg font-black sm:text-[21px]">{plan.name}</h3>
-                <p className={cx('mt-1 text-sm', mutedClass)}>
+                <h3 className="truncate text-[16px] font-black sm:text-[21px]">{plan.name}</h3>
+                <p className={cx('mt-0.5 text-xs sm:mt-1 sm:text-sm', mutedClass)}>
                   {isRecurring ? 'Assinatura • a cada ' + billingCycleLabel : 'Cobrança única'}
                 </p>
               </div>
             </div>
 
-            <div className="mt-5">
-              <p className={cx('line-clamp-2 text-sm sm:text-[15px]', isDark ? 'text-[#d7dfeb]' : 'text-[#4d586c]')}>
+            <div className="mt-4 sm:mt-5">
+              <p className={cx('line-clamp-2 text-xs leading-relaxed sm:text-[15px]', isDark ? 'text-[#d7dfeb]' : 'text-[#4d586c]')}>
                 {description}
               </p>
-              <p className={cx('mt-1 line-clamp-1 text-sm', subtleClass)}>{featureLine}</p>
+              <p className={cx('mt-1 line-clamp-1 text-[11px] sm:text-sm', subtleClass)}>{featureLine}</p>
             </div>
 
-            <div className={cx('my-6 border-t', dividerClass)} />
+            <div className={cx('my-4 border-t sm:my-6', dividerClass)} />
 
-            <div className="space-y-4 text-sm sm:text-base">
+            <div className="space-y-3 text-[13px] sm:space-y-4 sm:text-base">
               <div className="flex items-center justify-between gap-4">
                 <span className={mutedClass}>Produto</span>
                 <span className="font-medium">{formatBRL(basePrice)}</span>
@@ -639,8 +639,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             <div className={cx('my-6 border-t', dividerClass)} />
 
             <div className="flex items-end justify-between gap-4">
-              <span className="text-lg font-black sm:text-[21px]">Total a pagar</span>
-              <span className="whitespace-nowrap text-[27px] font-black tracking-[-0.04em] sm:text-[30px]">
+              <span className="text-[17px] font-black sm:text-[21px]">Total a pagar</span>
+              <span className="whitespace-nowrap text-[24px] font-black tracking-[-0.04em] sm:text-[30px]">
                 {formatBRL(finalTotal)}
               </span>
             </div>
@@ -651,14 +651,14 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               </p>
             )}
 
-            <div className={cx('mt-6 flex items-center gap-3 rounded-xl border px-4 py-4', infoClass)}>
-              <FileText className="h-6 w-6 shrink-0 text-[#9ddc18]" />
-              <span className="text-sm font-medium">Revise os valores antes de continuar.</span>
+            <div className={cx('mt-4 flex items-center gap-2.5 rounded-xl border px-3 py-3 sm:mt-6 sm:gap-3 sm:px-4 sm:py-4', infoClass)}>
+              <FileText className="h-5 w-5 shrink-0 text-[#9ddc18] sm:h-6 sm:w-6" />
+              <span className="text-xs font-medium sm:text-sm">Revise os valores antes de continuar.</span>
             </div>
           </aside>
         </div>
 
-        <footer className={cx('pb-3 pt-7 text-center text-[11px] sm:text-xs', footerClass)}>
+        <footer className={cx('pb-2 pt-4 text-center text-[10px] sm:pb-3 sm:pt-7 sm:text-xs', footerClass)}>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <span>Termos de Uso</span>
             <span>|</span>
@@ -732,13 +732,13 @@ const EmbeddedPaymentForm: React.FC<EmbeddedPaymentFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
       <PaymentElement options={stripePaymentElementOptions} />
 
       <button
         type="submit"
         disabled={!stripe || isProcessing}
-        className="group inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl bg-[#B8F128] px-5 text-sm font-black text-black shadow-[0_10px_30px_rgba(184,241,40,0.13)] transition hover:bg-[#aee725] active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
+        className="group inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#B8F128] px-4 text-sm font-black text-black shadow-[0_10px_30px_rgba(184,241,40,0.13)] transition hover:bg-[#aee725] active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[56px] sm:px-5"
       >
         {isProcessing ? (
           <>
