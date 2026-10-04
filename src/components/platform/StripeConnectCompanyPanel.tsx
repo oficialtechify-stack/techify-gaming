@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-type ConnectStatus =
+export type ConnectStatus =
   | 'loading'
   | 'not_connected'
   | 'onboarding_incomplete'
@@ -11,7 +11,11 @@ type ConnectStatus =
   | 'connected'
   | 'error';
 
-export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ companyId }) => {
+export const StripeConnectCompanyPanel: React.FC<{
+  companyId?: string;
+  onStatusChange?: (status: ConnectStatus) => void;
+  onboardingMode?: boolean;
+}> = ({ companyId, onStatusChange, onboardingMode = false }) => {
   const { currentUser } = useAuth();
   const [status, setStatus] = useState<ConnectStatus>('loading');
   const [message, setMessage] = useState('');
@@ -19,8 +23,9 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
   const [starting, setStarting] = useState(false);
 
   const loadStatus = useCallback(async () => {
-    if (!currentUser || !companyId) {
+    if (!currentUser) {
       setStatus('not_connected');
+      onStatusChange?.('not_connected');
       return;
     }
 
@@ -35,7 +40,9 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Não foi possível consultar a Stripe.');
-      setStatus(data.status || 'not_connected');
+      const nextStatus = (data.status || 'not_connected') as ConnectStatus;
+      setStatus(nextStatus);
+      onStatusChange?.(nextStatus);
 
       const errors = Array.isArray(data.requirements?.errors) ? data.requirements.errors : [];
       const due = Array.isArray(data.requirements?.currentlyDue) ? data.requirements.currentlyDue : [];
@@ -64,16 +71,17 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
       }
     } catch (error) {
       setStatus('error');
+      onStatusChange?.('error');
       setMessage(error instanceof Error ? error.message : 'Não foi possível consultar a Stripe.');
     }
-  }, [currentUser, companyId]);
+  }, [currentUser, companyId, onStatusChange]);
 
   useEffect(() => {
     loadStatus();
   }, [loadStatus]);
 
   const startOnboarding = async () => {
-    if (!currentUser || !companyId || starting) return;
+    if (!currentUser || starting || status === 'connected') return;
     setStarting(true);
     setMessage('');
 
@@ -88,6 +96,12 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
         body: JSON.stringify({ role: 'empresa' }),
       });
       const data = await response.json().catch(() => ({}));
+      if (data.locked && data.status === 'connected') {
+        setStatus('connected');
+        onStatusChange?.('connected');
+        setStarting(false);
+        return;
+      }
       if (!response.ok || !data.url) throw new Error(data.error || 'Não foi possível iniciar a configuração Stripe.');
       window.location.assign(String(data.url));
     } catch (error) {
@@ -105,7 +119,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-black text-white">Conta bancária para receber saques</h3>
+              <h3 className="text-sm font-black text-white">{onboardingMode ? 'Etapa 1 · Validar conta na Stripe' : 'Conta bancária para receber saques'}</h3>
               {status === 'pending_verification' && (
             <div className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 text-xs font-bold text-sky-300">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -125,7 +139,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
             </p>
             {status === 'connected' && (
               <p className="mt-2 text-[11px] text-emerald-300/80">
-                Conta bancária configurada. O saldo só é enviado à Stripe depois que estiver disponível na LeadsPay e você solicitar o saque aqui.
+                Conta Stripe verificada e bloqueada para alterações pela LeadsPay. O saldo só é enviado depois que estiver disponível e você solicitar o saque.
               </p>
             )}
             {(status === 'onboarding_incomplete' || status === 'action_required') && (
@@ -162,7 +176,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
             <button
               type="button"
               onClick={startOnboarding}
-              disabled={starting || status === 'loading' || !companyId}
+              disabled={starting || status === 'loading'}
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-4 text-xs font-black text-[#07100A] transition hover:bg-[#cde71f] disabled:opacity-40"
             >
               {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
@@ -177,7 +191,7 @@ export const StripeConnectCompanyPanel: React.FC<{ companyId?: string }> = ({ co
           {status === 'connected' && (
             <div className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 text-xs font-bold text-emerald-400">
               <ShieldCheck className="h-4 w-4" />
-              Conta configurada
+              Conta verificada e bloqueada
             </div>
           )}
         </div>
