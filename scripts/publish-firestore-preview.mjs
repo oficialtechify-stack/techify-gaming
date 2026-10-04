@@ -4,6 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 const TARGET_PROJECT = 'techify-gaming-106fe';
 const TARGET_BRANCH = 'fix/production-payment-safety';
+const PRODUCTION_BRANCH = 'main';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -44,10 +45,18 @@ async function main() {
     process.env.VERCEL_ENV === 'preview' &&
     process.env.VERCEL_GIT_COMMIT_REF === TARGET_BRANCH;
 
-  if (!isTargetPreview) {
-    console.log('[Firestore publish] ignorado fora do Preview de segurança.');
+  const isTargetProduction =
+    process.env.VERCEL_ENV === 'production' &&
+    process.env.VERCEL_GIT_COMMIT_REF === PRODUCTION_BRANCH;
+
+  if (!isTargetPreview && !isTargetProduction) {
+    console.log('[Firestore publish] ignorado fora do Preview de segurança e da produção main.');
     return;
   }
+
+  console.log(
+    `[Firestore publish] destino: ${isTargetProduction ? 'produção/main' : 'preview de segurança'}.`
+  );
 
   const rawCredential = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
   if (!rawCredential) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON não está configurado no Preview da Vercel.');
@@ -230,4 +239,10 @@ try {
     error: message.slice(0, 2000),
     at: new Date().toISOString(),
   }, null, 2) + '\n', 'utf8');
+
+  // Em produção, falha de publicação das regras deve impedir um deploy
+  // que deixaria o frontend/backend novos apontando para regras antigas.
+  if (process.env.VERCEL_ENV === 'production') {
+    throw error;
+  }
 }
