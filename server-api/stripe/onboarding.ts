@@ -135,17 +135,24 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       const docType = String(profile.companyDocType || profile.documentType || profile.docType || '').toUpperCase();
       const businessType = role === 'empresa' && ['CNPJ', 'MEI'].includes(docType) ? 'company' : 'individual';
       const account = await stripe.accounts.create({
-        type: 'express',
         country: 'BR',
         email: identity.email || undefined,
         business_type: businessType,
         capabilities: { transfers: { requested: true } },
+        controller: {
+          // New Connect configuration equivalent to an Express-style experience,
+          // without relying on the legacy type='express' account model.
+          fees: { payer: 'application' },
+          losses: { payments: 'application' },
+          requirement_collection: 'stripe',
+          stripe_dashboard: { type: 'express' },
+        },
         metadata: {
           firebase_uid: identity.uid,
           leadspay_role: role,
           ...(role === 'empresa' ? { leadspay_company_id: companyId } : {}),
         },
-      }, { idempotencyKey: `leadspay-connect-${role}-${identity.uid}` });
+      } as any, { idempotencyKey: `leadspay-connect-${role}-${identity.uid}` });
       accountId = account.id;
       const updatedAccounts = { ...roleAccounts, [role]: accountId };
       await profileRef.set({
