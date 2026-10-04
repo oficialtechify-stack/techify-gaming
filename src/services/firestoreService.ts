@@ -448,6 +448,31 @@ export async function rejectCompanyInFirebase(companyId: string, reason: string 
   return callAdminAction('reject-entity', { id: companyId, type: 'company', reason });
 }
 
+export async function approveCompanyProfileEditRequestInFirebase(companyId: string) {
+  return callAdminAction('approve-profile-edit', { id: companyId, type: 'company' });
+}
+
+export async function rejectCompanyProfileEditRequestInFirebase(companyId: string, reason: string) {
+  return callAdminAction('reject-profile-edit', { id: companyId, type: 'company', reason });
+}
+
+export async function requestCompanyProfileEditInFirebase(reason: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para solicitar um ajuste.');
+  const token = await user.getIdToken();
+  const response = await fetch('/api/profile/edit-request', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Não foi possível solicitar o ajuste.');
+  return data;
+}
+
 /** Update a Company in Firestore */
 
 
