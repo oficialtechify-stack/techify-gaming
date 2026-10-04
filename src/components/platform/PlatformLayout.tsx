@@ -959,30 +959,39 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   // Handle create plan
   const handleCreatePlan = async (planData: Omit<CompanyPlan, 'id' | 'createdAt'>) => {
-    const isCompanyVerified = userProfile.verified || userProfile.verificationStatus === 'approved';
-    if (!isCompanyVerified) {
+    const targetCompany = companies.find(c => c.id === planData.companyId) || myCompanies[0];
+    const canonicalApproved = Boolean(
+      targetCompany &&
+      targetCompany.verified === true &&
+      String(targetCompany.status || '').toLowerCase() === 'approved' &&
+      targetCompany.archived !== true &&
+      targetCompany.isArchived !== true &&
+      targetCompany.banned !== true
+    );
+
+    if (!targetCompany || !canonicalApproved) {
+      const error = new Error('A empresa vinculada precisa estar aprovada pela administração antes de cadastrar produtos.');
       setLiveToast({
-        message: 'Criação Bloqueada',
-        sub: 'Sua empresa precisa estar verificada pela administração antes de cadastrar planos.',
-        amount: 'Requer Verificação'
+        message: 'Criação bloqueada',
+        sub: error.message,
+        amount: 'Requer aprovação'
       });
-      setActiveTab('meu_perfil');
-      return;
+      setTimeout(() => setLiveToast(null), 5000);
+      throw error;
     }
 
     try {
-      const targetCompany = companies.find(c => c.id === planData.companyId) || myCompanies[0];
       const sanitizedPlan = {
         ...planData,
-        companyId: targetCompany?.id || planData.companyId,
-        companyName: targetCompany?.companyName || targetCompany?.name || planData.companyName,
-        companyLogo: targetCompany?.logo || planData.companyLogo,
-        ownerId: targetCompany?.ownerId || targetCompany?.submittedBy || effectiveUserId
+        companyId: targetCompany.id,
+        companyName: targetCompany.companyName || targetCompany.name || planData.companyName,
+        companyLogo: targetCompany.logo || planData.companyLogo,
+        ownerId: targetCompany.ownerId || targetCompany.submittedBy || effectiveUserId
       };
 
       const created = await createCompanyPlanInFirebase(sanitizedPlan);
       setLiveToast({
-        message: 'Novo plano criado com sucesso!',
+        message: 'Produto criado com sucesso!',
         sub: `${created.name} (${sanitizedPlan.companyName})`,
         amount: `R$ ${created.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       });
@@ -991,15 +1000,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     } catch (err: any) {
       console.error('Error creating plan:', err);
       setLiveToast({
-        message: 'Erro ao cadastrar plano',
-        sub: err.message || 'Verifique o status da empresa',
+        message: 'Erro ao cadastrar produto',
+        sub: err.message || 'Não foi possível salvar o produto',
         amount: 'Erro'
       });
       setTimeout(() => setLiveToast(null), 5000);
       throw err;
     }
   };
-
   // Handle update plan
   const handleUpdatePlan = async (planId: string, updates: Partial<CompanyPlan>) => {
     try {
@@ -1931,7 +1939,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setLiveCheckoutPlan(plan);
               }}
               onOpenCreateCompany={() => {
-                if (!isCompanyProfileVerified) {
+                if (!isUserVerified) {
                   setLiveToast({
                     message: 'Verificação Obrigatória',
                     sub: 'A empresa precisa ser verificada pela administração antes de cadastrar startups.',
@@ -1945,7 +1953,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setIsCreateCompanyModalOpen(true);
               }}
               onOpenCreatePlan={roleMode === 'empresa' ? () => {
-                if (!isCompanyProfileVerified) {
+                if (!isUserVerified) {
                   setLiveToast({
                     message: 'Verificação Obrigatória',
                     sub: 'A empresa só pode cadastrar produtos após a verificação da administração.',
