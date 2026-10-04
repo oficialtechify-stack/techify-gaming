@@ -611,6 +611,58 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </p>
       </div>
 
+      {roleMode === 'empresa' && (
+        <div className="mb-6 rounded-[28px] border border-white/10 bg-gradient-to-br from-[#0d1626] via-[#09111d] to-[#070c14] p-4 sm:p-5 shadow-2xl">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D9F22A]">Ativação da empresa</div>
+              <h2 className="mt-1 text-lg font-black text-white">Tudo em uma ordem simples e segura</h2>
+            </div>
+            <p className="max-w-md text-[11px] leading-5 text-white/40">
+              Cada etapa libera a próxima. Depois da aprovação, dados financeiros e cadastrais ficam protegidos.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              { n: 1, title: 'Validar Stripe', done: stripeReady, active: !stripeReady },
+              { n: 2, title: 'Completar perfil', done: isPending || isApproved, active: stripeReady && !isPending && !isApproved },
+              { n: 3, title: 'Análise admin', done: isApproved, active: isPending },
+              { n: 4, title: 'Empresa ativa', done: isApproved && stripeReady, active: false },
+            ].map((step) => (
+              <div
+                key={step.n}
+                className={'flex items-center gap-3 rounded-2xl border px-3.5 py-3.5 transition ' + (
+                  step.done
+                    ? 'border-emerald-500/25 bg-emerald-500/[0.07]'
+                    : step.active
+                      ? 'border-[#D9F22A]/35 bg-[#D9F22A]/[0.07]'
+                      : 'border-white/10 bg-white/[0.025]'
+                )}
+              >
+                <div className={'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-black ' + (
+                  step.done
+                    ? 'bg-emerald-500 text-[#04110b]'
+                    : step.active
+                      ? 'bg-[#D9F22A] text-[#07100A]'
+                      : 'bg-white/10 text-white/35'
+                )}>
+                  {step.done ? <Check className="h-4 w-4 stroke-[3]" /> : step.n}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[9px] font-black uppercase tracking-[0.15em] text-white/35">Etapa {step.n}</div>
+                  <div className={'truncate text-xs font-black ' + (
+                    step.done ? 'text-emerald-300' : step.active ? 'text-white' : 'text-white/45'
+                  )}>
+                    {step.title}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ================= STATUS BANNER ================= */}
       <div className="mb-6">
         {isApproved ? (
@@ -747,7 +799,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-black text-white font-['Syne']">
                   {roleMode === 'empresa'
-                    ? 'Preencha os Dados da Empresa para Validação Cadastral'
+                    ? (stripeReady ? 'Complete o Perfil da Empresa na LeadsPay' : 'Primeiro, conclua sua validação na Stripe')
                     : 'Preencha seus Dados para Validação da Conta'}
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#D9F22A]/20 text-[#D9F22A] border border-[#D9F22A]/30">
@@ -756,7 +808,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               </div>
               <p className="text-xs text-white/70 mt-1 leading-relaxed">
                 {roleMode === 'empresa'
-                  ? 'A sua empresa só pode cadastrar produtos após a homologação e aprovação da Administração. Preencha todos os campos obrigatórios abaixo e clique em "Enviar Empresa para Validação".'
+                  ? (stripeReady
+                    ? 'Sua Stripe já está pronta. Agora complete os dados da empresa e envie para análise da administração.'
+                    : 'O formulário da LeadsPay ficará bloqueado até a Stripe confirmar sua conta. Conclua a etapa financeira primeiro.')
                   : 'Preencha todos os campos obrigatórios abaixo (Nome, Sobrenome, E-mail, CPF, Celular e Endereço). Assim que tudo estiver preenchido, clique no botão "Enviar para Validação". Após o envio, os campos serão trancados para a verificação do Administrador.'}
               </p>
             </div>
