@@ -43,6 +43,31 @@ function authoritativePrice(plan: Record<string, any>): number {
   return 0;
 }
 
+function resolveStripePaymentMethodTypes(plan: Record<string, any>): Array<'card' | 'pix' | 'boleto'> {
+  const configured = Array.isArray(plan.paymentMethods)
+    ? plan.paymentMethods.map((value: unknown) => String(value || '').trim().toUpperCase())
+    : [];
+
+  // Legacy products created before paymentMethods existed should expose the
+  // standard Brazilian one-time methods configured in the LeadsPay Stripe account.
+  if (configured.length === 0) return ['card', 'pix', 'boleto'];
+
+  const methods: Array<'card' | 'pix' | 'boleto'> = [];
+
+  // Apple Pay and Google Pay ride on top of Stripe card payments in Payment Element.
+  if (
+    configured.includes('CARD') ||
+    configured.includes('APPLE_PAY') ||
+    configured.includes('GOOGLE_PAY')
+  ) {
+    methods.push('card');
+  }
+  if (configured.includes('PIX')) methods.push('pix');
+  if (configured.includes('BOLETO')) methods.push('boleto');
+
+  return methods.length ? methods : ['card'];
+}
+
 async function requireReadyConnectAccount(
   stripe: ReturnType<typeof getStripeTestClient>,
   accountId: string,
@@ -209,6 +234,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const baseAmount = authoritativePrice(plan);
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) return fail(res, 409, 'A oferta não possui preço válido.', 'INVALID_SERVER_PRICE');
 
+    const paymentMethodTypes = resolveStripePaymentMethodTypes(plan);
+
     const originalProductAmountCents = toCents(baseAmount);
     let productAmountCents = originalProductAmountCents;
     let discountCents = 0;
@@ -275,8 +302,31 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           if (existingIntent.status === 'succeeded') {
             return res.status(200).json({ paid: saved.status === 'paid', orderId });
           }
-          if (existingIntent.client_secret && existingIntent.status !== 'canceled') {
-            return res.status(200).json({ clientSecret: existingIntent.client_secret, orderId });
+
+          const existingTypes = Array.isArray(existingIntent.payment_method_types)
+            ? existingIntent.payment_method_types
+            : [];
+          const hasCurrentMethods = paymentMethodTypes.every((method) => existingTypes.includes(method));
+
+          if (existingIntent.client_secret && existingIntent.status !== 'canceled' && hasCurrentMethods) {
+            return res.status(200).json({
+              clientSecret: existingIntent.client_secret,
+              orderId,
+              paymentMethods: paymentMethodTypes,
+            });
+          }
+
+          // Payment methods are fixed on an existing PaymentIntent. If the seller
+          // enabled PIX/Boleto after this attempt was created, rotate the intent so
+          // the buyer immediately receives the current payment configuration.
+          if (
+            existingIntent.status !== 'canceled' &&
+            existingIntent.status !== 'succeeded' &&
+            existingIntent.status !== 'processing'
+          ) {
+            try {
+              await stripe.paymentIntents.cancel(existingIntent.id);
+            } catch {}
           }
         } catch {}
       }
@@ -332,7 +382,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: split.grossAmountCents,
       currency: 'brl',
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: paymentMethodTypes,
       receipt_email: buyerEmail,
       description: planName,
       transfer_group: transferGroup,
@@ -346,6 +396,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         utmSource,
         utmMedium,
         utmCampaign,
+        paymentMethods: paymentMethodTypes.join(','),
         checkoutSource: 'leadspay-elements',
       },
     }, { idempotencyKey: `leadspay-pi-${orderId}` });
@@ -364,6 +415,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     return res.status(200).json({
       clientSecret: paymentIntent.client_secret,
       orderId,
+      paymentMethods: paymentMethodTypes,
       pricing: {
         originalProductAmountCents,
         discountCents,
