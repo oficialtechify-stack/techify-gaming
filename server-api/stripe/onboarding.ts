@@ -52,58 +52,33 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     let profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
     if (profile.banned || profile.status === 'banned') return fail(res, 403, 'Esta conta não pode conectar recebimentos.');
 
-    let companyRef: any;
+    let companyRef: FirebaseFirestore.DocumentReference | undefined;
     let company: Record<string, any> | undefined;
     let companyId = '';
+
     if (role === 'empresa') {
+      // Stripe vem antes do perfil LeadsPay. companyId pode ainda não existir.
       companyId = String(profile.companyId || requestSnap.data()?.companyId || '').trim();
-      if (!companyId) return fail(res, 409, 'O perfil da Empresa ainda não possui vínculo com uma empresa válida.');
-
-      companyRef = db.collection('companies').doc(companyId);
-      const companySnap = await companyRef.get();
-      if (!companySnap.exists) return fail(res, 404, 'Cadastro de Empresa não encontrado.');
-      company = companySnap.data() as Record<string, any>;
-
-      if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
-        return fail(res, 403, 'A empresa não pertence à conta autenticada.');
+      if (companyId) {
+        companyRef = db.collection('companies').doc(companyId);
+        const companySnap = await companyRef.get();
+        if (companySnap.exists) {
+          company = companySnap.data() as Record<string, any>;
+          if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
+            return fail(res, 403, 'A empresa vinculada não pertence à conta autenticada.');
+          }
+        } else {
+          companyRef = undefined;
+          companyId = '';
+        }
       }
-
-      const canonicalApproved =
-        company.verified === true &&
-        String(company.status || '').toLowerCase() === 'approved' &&
-        company.archived !== true &&
-        company.isArchived !== true &&
-        company.banned !== true;
-
-      if (!canonicalApproved) {
-        return fail(res, 403, 'A aprovação da Empresa é necessária antes de configurar recebimentos.');
+    } else {
+      if (!profileHasRole(profile, role)) {
+        return fail(res, 403, 'O perfil autenticado não possui cadastro de Afiliado.');
       }
-
-      if (!profileRoleIsApproved(profile, 'empresa')) {
-        const now = new Date().toISOString();
-        const repaired = {
-          companyId,
-          hasCompanyProfile: true,
-          verified: true,
-          verificationStatus: 'approved',
-          empresaVerificationStatus: 'approved',
-          companyVerificationStatus: 'approved',
-          kyc_status: 'verified',
-          updatedAt: now,
-        };
-        await profileRef.set(repaired, { merge: true });
-        await db.collection('users').doc(identity.uid).set(repaired, { merge: true });
-        profile = { ...profile, ...repaired };
+      if (!profileRoleIsApproved(profile, role)) {
+        return fail(res, 403, 'A aprovação do perfil de Afiliado é necessária antes de configurar recebimentos.');
       }
-    }
-
-    if (!profileHasRole(profile, role)) {
-      const roleName = role === 'afiliado' ? 'Afiliado' : 'Empresa';
-      return fail(res, 403, `O perfil autenticado não possui um cadastro de ${roleName}.`);
-    }
-    if (!profileRoleIsApproved(profile, role)) {
-      const roleName = role === 'afiliado' ? 'Afiliado' : 'Empresa';
-      return fail(res, 403, `A aprovação do perfil de ${roleName} é necessária antes de configurar recebimentos.`);
     }
 
     const stripe = getStripeTestClient();
@@ -112,17 +87,22 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     let accountId = priorId;
 
     if (accountId) {
-      const account = await stripe.accounts.retrieve(accountId);
+      let account = await stripe.accounts.retrieve(accountId);
       if (
         account.metadata?.firebase_uid !== identity.uid ||
         account.metadata?.leadspay_role !== role ||
-        (role === 'empresa' && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
+        (
+          role === 'empresa' &&
+          companyId &&
+          account.metadata?.leadspay_company_id &&
+          account.metadata.leadspay_company_id !== companyId
+        )
       ) {
-        return fail(res, 409, 'A conta Stripe vinculada não corresponde a esta empresa.');
+        return fail(res, 409, 'A conta Stripe vinculada não corresponde a esta conta LeadsPay.');
       }
 
-      if (role === 'empresa' && !account.metadata?.leadspay_company_id) {
-        await stripe.accounts.update(accountId, {
+      if (role === 'empresa' && companyId && !account.metadata?.leadspay_company_id) {
+        account = await stripe.accounts.update(accountId, {
           metadata: {
             ...account.metadata,
             firebase_uid: identity.uid,
@@ -131,13 +111,37 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           },
         });
       }
+
+      const alreadyVerified =
+        account.details_submitted === true &&
+        account.payouts_enabled === true &&
+        account.capabilities?.transfers === 'active';
+
+      // Depois de verificada, a configuração Stripe fica bloqueada.
+      if (role === 'empresa' && alreadyVerified) {
+        return res.status(200).json({
+          role,
+          accountId,
+          locked: true,
+          status: 'connected',
+          message: 'Conta Stripe já verificada e bloqueada para alterações pela LeadsPay.',
+        });
+      }
     } else {
       const docType = String(profile.companyDocType || profile.documentType || profile.docType || '').toUpperCase();
-      const businessType = role === 'empresa' && ['CNPJ', 'MEI'].includes(docType) ? 'company' : 'individual';
+      const knownCompanyType =
+        role === 'empresa' && ['CNPJ', 'MEI'].includes(docType)
+          ? 'company'
+          : role === 'empresa' && docType === 'CPF'
+            ? 'individual'
+            : role === 'afiliado'
+              ? 'individual'
+              : undefined;
+
       const account = await stripe.accounts.create({
         country: 'BR',
         email: identity.email || undefined,
-        business_type: businessType,
+        ...(knownCompanyType ? { business_type: knownCompanyType } : {}),
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
@@ -153,7 +157,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         metadata: {
           firebase_uid: identity.uid,
           leadspay_role: role,
-          ...(role === 'empresa' ? { leadspay_company_id: companyId } : {}),
+          ...(role === 'empresa' && companyId ? { leadspay_company_id: companyId } : {}),
         },
       } as any, { idempotencyKey: `leadspay-connect-modern-v2-${role}-${identity.uid}` });
       accountId = account.id;
