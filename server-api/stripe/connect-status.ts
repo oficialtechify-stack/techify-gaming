@@ -21,46 +21,31 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     let companyRef: FirebaseFirestore.DocumentReference | null = null;
     let companyId = '';
+
     if (role === 'empresa') {
+      // A empresa pode ainda não existir: Stripe é a primeira etapa do onboarding.
       companyId = String(profile.companyId || requestSnap.data()?.companyId || '').trim();
-      if (!companyId) return res.status(409).json({ error: 'A conta Empresa não possui companyId válido.' });
-
-      companyRef = db.collection('companies').doc(companyId);
-      const companySnap = await companyRef.get();
-      if (!companySnap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
-
-      const company = companySnap.data()!;
-      if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
-        return res.status(403).json({ error: 'Esta empresa não pertence à conta autenticada.' });
+      if (companyId) {
+        const candidateRef = db.collection('companies').doc(companyId);
+        const companySnap = await candidateRef.get();
+        if (companySnap.exists) {
+          const company = companySnap.data()!;
+          if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
+            return res.status(403).json({ error: 'Esta empresa não pertence à conta autenticada.' });
+          }
+          companyRef = candidateRef;
+        } else {
+          companyId = '';
+        }
       }
-
-      const canonicalApproved =
-        company.verified === true &&
-        String(company.status || '').toLowerCase() === 'approved' &&
-        company.archived !== true &&
-        company.isArchived !== true &&
-        company.banned !== true;
-
-      if (canonicalApproved && !profileRoleIsApproved(profile, 'empresa')) {
-        const now = new Date().toISOString();
-        const repaired = {
-          companyId,
-          hasCompanyProfile: true,
-          verified: true,
-          verificationStatus: 'approved',
-          empresaVerificationStatus: 'approved',
-          companyVerificationStatus: 'approved',
-          kyc_status: 'verified',
-          updatedAt: now,
-        };
-        await db.collection('user_profiles').doc(identity.uid).set(repaired, { merge: true });
-        await db.collection('users').doc(identity.uid).set(repaired, { merge: true });
-        profile = { ...profile, ...repaired };
+    } else {
+      if (!profileHasRole(profile, role)) {
+        return res.status(403).json({ error: 'O perfil autenticado não possui cadastro de Afiliado.' });
+      }
+      if (!profileRoleIsApproved(profile, role)) {
+        return res.status(403).json({ error: 'A aprovação do perfil de Afiliado é necessária para consultar recebimentos.' });
       }
     }
-
-    if (!profileHasRole(profile, role)) return res.status(403).json({ error: `O perfil autenticado não possui um cadastro de ${role === 'afiliado' ? 'Afiliado' : 'Empresa'}.` });
-    if (!profileRoleIsApproved(profile, role)) return res.status(403).json({ error: `A aprovação do perfil de ${role === 'afiliado' ? 'Afiliado' : 'Empresa'} é necessária para consultar recebimentos.` });
 
     const accountId = String(profile.stripeAccounts?.[role] || '');
     if (!accountId) {
@@ -75,12 +60,17 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (
       account.metadata?.firebase_uid !== identity.uid ||
       account.metadata?.leadspay_role !== role ||
-      (role === 'empresa' && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
+      (
+        role === 'empresa' &&
+        companyId &&
+        account.metadata?.leadspay_company_id &&
+        account.metadata.leadspay_company_id !== companyId
+      )
     ) {
       return res.status(409).json({ error: 'A conta Stripe precisa ser reconectada à empresa correta.' });
     }
 
-    if (role === 'empresa' && !account.metadata?.leadspay_company_id) {
+    if (role === 'empresa' && companyId && !account.metadata?.leadspay_company_id) {
       account = await stripe.accounts.update(accountId, {
         metadata: {
           ...account.metadata,
