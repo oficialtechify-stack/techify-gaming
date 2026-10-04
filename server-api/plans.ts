@@ -311,28 +311,70 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return res.status(404).json({ error: 'Perfil ou empresa não encontrados.' });
     }
 
-    const profile = applyVerificationRequest(
-      profileSnap.data()!,
+    const rawProfile = profileSnap.data()! as Record<string, any>;
+    const requestedProfile = applyVerificationRequest(
+      rawProfile,
       requestSnap.exists ? requestSnap.data()! : null,
     ) as Record<string, any>;
 
-    if (!profileHasRole(profile, 'empresa') || !profileRoleIsApproved(profile, 'empresa')) {
-      return res.status(403).json({ error: 'A conta Empresa precisa estar aprovada para publicar ofertas.' });
+    const company = companySnap.data()!;
+    const companyApproved =
+      String(company.ownerId || company.submittedBy || '') === identity.uid &&
+      company.verified === true &&
+      String(company.status || '').toLowerCase() === 'approved' &&
+      company.archived !== true &&
+      company.isArchived !== true &&
+      company.banned !== true;
+
+    if (!companyApproved) {
+      return res.status(403).json({ error: 'Esta empresa não está habilitada para publicar ofertas.' });
     }
 
-    const company = companySnap.data()!;
-    const profileCompanyId = String(profile.companyId || '').trim();
+    const profileCompanyId = String(rawProfile.companyId || requestedProfile.companyId || '').trim();
     if (profileCompanyId && profileCompanyId !== companyId) {
       return res.status(403).json({ error: 'Este produto só pode pertencer à empresa vinculada a esta conta.' });
     }
+
+    // A empresa canônica aprovada é a fonte de verdade. Pedidos antigos de
+    // verificação não podem rebaixar o perfil e bloquear produtos já homologados.
+    const currentType = String(rawProfile.accountType || '').toLowerCase();
+    const repairedAccountType =
+      currentType === 'admin'
+        ? 'admin'
+        : currentType === 'afiliado' || rawProfile.hasAffiliateProfile === true
+          ? 'ambos'
+          : currentType === 'ambos'
+            ? 'ambos'
+            : 'empresa';
+    const approvalRepair = {
+      companyId,
+      companyName: company.name || company.companyName || rawProfile.companyName || null,
+      hasCompanyProfile: true,
+      accountType: repairedAccountType,
+      verified: true,
+      verificationStatus: 'approved',
+      empresaVerificationStatus: 'approved',
+      companyVerificationStatus: 'approved',
+      kyc_status: 'verified',
+      updatedAt: new Date().toISOString(),
+    };
+
+    const profile = { ...requestedProfile, ...approvalRepair } as Record<string, any>;
+
+    if (!profileHasRole(profile, 'empresa') || !profileRoleIsApproved(profile, 'empresa')) {
+      return res.status(403).json({ error: 'Não foi possível sincronizar a aprovação da Empresa. Atualize a página e tente novamente.' });
+    }
+
     if (
-      String(company.ownerId || company.submittedBy || '') !== identity.uid ||
-      company.verified !== true ||
-      company.status !== 'approved' ||
-      company.archived === true ||
-      company.isArchived === true
+      rawProfile.companyId !== companyId ||
+      rawProfile.empresaVerificationStatus !== 'approved' ||
+      rawProfile.companyVerificationStatus !== 'approved' ||
+      rawProfile.verified !== true
     ) {
-      return res.status(403).json({ error: 'Esta empresa não está habilitada para publicar ofertas.' });
+      await Promise.all([
+        db.collection('user_profiles').doc(identity.uid).set(approvalRepair, { merge: true }),
+        db.collection('users').doc(identity.uid).set(approvalRepair, { merge: true }),
+      ]);
     }
 
     const requestedBillingType = String(body.billingType || 'unico').toLowerCase();
