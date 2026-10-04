@@ -96,7 +96,33 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       account.payouts_enabled === true &&
       account.capabilities?.transfers === 'active';
 
-    const status = ready ? 'connected' : 'onboarding_incomplete';
+    const currentDue = Array.isArray(account.requirements?.currently_due)
+      ? account.requirements.currently_due
+      : [];
+    const pastDue = Array.isArray(account.requirements?.past_due)
+      ? account.requirements.past_due
+      : [];
+    const pendingVerification = Array.isArray(account.requirements?.pending_verification)
+      ? account.requirements.pending_verification
+      : [];
+    const requirementErrors = Array.isArray(account.requirements?.errors)
+      ? account.requirements.errors.map((item: any) => ({
+          code: String(item?.code || ''),
+          reason: String(item?.reason || ''),
+          requirement: String(item?.requirement || ''),
+        }))
+      : [];
+
+    const needsAction = currentDue.length > 0 || pastDue.length > 0 || requirementErrors.length > 0;
+    const awaitingVerification = !needsAction && pendingVerification.length > 0;
+
+    const status = ready
+      ? 'connected'
+      : needsAction
+        ? 'action_required'
+        : awaitingVerification
+          ? 'pending_verification'
+          : 'onboarding_incomplete';
     const now = new Date().toISOString();
 
     await db.collection('user_profiles').doc(identity.uid).set({
@@ -134,6 +160,17 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       chargesEnabled: account.charges_enabled,
       payoutsEnabled: account.payouts_enabled,
       detailsSubmitted: account.details_submitted,
+      capabilities: {
+        cardPayments: account.capabilities?.card_payments || null,
+        transfers: account.capabilities?.transfers || null,
+      },
+      requirements: {
+        currentlyDue: currentDue,
+        pastDue,
+        pendingVerification,
+        errors: requirementErrors,
+        disabledReason: account.requirements?.disabled_reason || null,
+      },
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Falha desconhecida';
