@@ -24,7 +24,22 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!accountId) return res.status(409).json({ error: 'Conecte sua conta Stripe antes de abrir o painel.' });
     const stripe = getStripeTestClient();
     const account = await stripe.accounts.retrieve(accountId);
-    if (account.metadata?.firebase_uid !== identity.uid || account.metadata?.leadspay_role !== role) return res.status(403).json({ error: 'A conta Stripe não pertence a este perfil.' });
+    if (account.metadata?.firebase_uid !== identity.uid || account.metadata?.leadspay_role !== role) {
+      return res.status(403).json({ error: 'A conta Stripe não pertence a este perfil.' });
+    }
+
+    if (
+      role === 'empresa' &&
+      account.details_submitted === true &&
+      account.payouts_enabled === true &&
+      account.capabilities?.transfers === 'active'
+    ) {
+      return res.status(423).json({
+        code: 'STRIPE_ACCOUNT_LOCKED',
+        error: 'A conta Stripe da empresa já foi verificada e está protegida pela LeadsPay. Alterações financeiras não ficam disponíveis após a ativação.',
+      });
+    }
+
     const loginLink = await stripe.accounts.createLoginLink(accountId);
     return res.status(200).json({ url: loginLink.url });
   } catch (error) {
