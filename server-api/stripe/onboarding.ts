@@ -159,7 +159,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           leadspay_role: role,
           ...(role === 'empresa' && companyId ? { leadspay_company_id: companyId } : {}),
         },
-      } as any, { idempotencyKey: `leadspay-connect-modern-v2-${role}-${identity.uid}` });
+      } as any, { idempotencyKey: `leadspay-connect-stripe-first-v1-${role}-${identity.uid}` });
       accountId = account.id;
       const updatedAccounts = { ...roleAccounts, [role]: accountId };
       await profileRef.set({
