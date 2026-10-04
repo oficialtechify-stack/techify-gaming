@@ -1733,32 +1733,6 @@ export const DatabaseManagerView: React.FC = () => {
                               </>
                             )}
 
-                            {/* Se aprovado: opção de solicitar ajuste */}
-                            {isApproved && !isBanned && comp.profileEditRequestStatus === 'pending' && (
-                              <>
-                                <button
-                                  onClick={() => openProfileEditRejectModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company' })}
-                                  disabled={processingId === comp.id}
-                                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer"
-                                >
-                                  Recusar ajuste
-                                </button>
-
-                                <button
-                                  onClick={() => handleApproveProfileEdit(comp.id, comp.name)}
-                                  disabled={processingId === comp.id}
-                                  className="px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cde71f] text-[#07100A] text-xs font-black transition-all cursor-pointer flex items-center gap-2"
-                                >
-                                  {processingId === comp.id ? (
-                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Unlock className="w-4 h-4" />
-                                  )}
-                                  Liberar edição
-                                </button>
-                              </>
-                            )}
-
                             {isApproved && !isBanned && (
                               <button
                                 onClick={() => openRejectModal({ id: targetId, name: req.name || 'Afiliado', email: req.email, type: 'user' })}
@@ -2051,14 +2025,31 @@ export const DatabaseManagerView: React.FC = () => {
                               </>
                             )}
 
-                            {isApproved && !isBanned && (
-                              <button
-                                onClick={() => openRejectModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company' })}
-                                disabled={processingId === comp.id}
-                                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                              >
-                                <span>Suspender / Solicitar Ajuste</span>
-                              </button>
+                            {isApproved && !isBanned && comp.profileEditRequestStatus === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => openProfileEditRejectModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company' })}
+                                  disabled={processingId === comp.id}
+                                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                                >
+                                  Recusar ajuste
+                                </button>
+                                <button
+                                  onClick={() => handleApproveProfileEdit(comp.id, comp.name)}
+                                  disabled={processingId === comp.id}
+                                  className="px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cde71f] text-[#07100A] text-xs font-black transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                                >
+                                  {processingId === comp.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Unlock className="w-4 h-4" />}
+                                  Liberar edição
+                                </button>
+                              </>
+                            )}
+
+                            {isApproved && !isBanned && comp.profileEditRequestStatus !== 'pending' && (
+                              <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[11px] font-bold text-white/45">
+                                <Lock className="h-3.5 w-3.5" />
+                                Perfil protegido
+                              </div>
                             )}
                           </div>
                         </div>
