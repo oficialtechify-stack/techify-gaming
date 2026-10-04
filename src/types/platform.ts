@@ -214,6 +214,32 @@ export interface CompanyPlan {
   totalSalesCount?: number;
   totalRevenue?: number;
   allowAffiliates?: boolean;
+  affiliateApprovalMode?: 'automatic' | 'manual';
+  affiliateSupportEmail?: string;
+  affiliateDescription?: string;
+  affiliateCookieDays?: number;
+  affiliateAttribution?: 'last_click' | 'first_click';
+  affiliateMarketplaceVisible?: boolean;
+  affiliateCommissionOnOrderBump?: boolean;
+  affiliateCommissionOnUpsell?: boolean;
+  paymentMethods?: Array<'PIX' | 'CARD' | 'BOLETO' | 'APPLE_PAY' | 'GOOGLE_PAY'>;
+  defaultPaymentMethod?: 'PIX' | 'CARD' | 'BOLETO' | 'APPLE_PAY' | 'GOOGLE_PAY';
+  maxInstallments?: number;
+  pixelProvider?: 'none' | 'meta' | 'google' | 'tiktok' | 'custom';
+  pixelId?: string;
+  pixelPurchaseEventEnabled?: boolean;
+  thankYouUpsellEnabled?: boolean;
+  upsellIgnoreOrderBumpFailure?: boolean;
+  confirmationEmailEnabled?: boolean;
+  confirmationEmailTiming?: 'immediate' | 'after_upsell';
+  coproducers?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    commissionPercentage: number;
+    status: 'pending' | 'active';
+    createdAt?: string;
+  }>;
   updatedAt?: string;
   createdAt?: string;
 }
