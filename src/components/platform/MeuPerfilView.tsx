@@ -1451,15 +1451,17 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
             {!isLocked ? (
               <>
-                <button
-                  type="button"
-                  onClick={handleSaveDraft}
-                  disabled={isSavingDraft || isSubmitting}
-                  className="w-full sm:w-auto px-5 py-3 rounded-xl border border-white/15 hover:bg-white/5 text-white/70 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {isSavingDraft ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Salvar Rascunho
-                </button>
+                {!(roleMode === 'empresa' && isApproved && companyEditUnlocked) && (
+                  <button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    disabled={isSavingDraft || isSubmitting}
+                    className="w-full sm:w-auto px-5 py-3 rounded-xl border border-white/15 hover:bg-white/5 text-white/70 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {isSavingDraft ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Salvar Rascunho
+                  </button>
+                )}
 
                 {/* PROMINENT SUBMIT FOR VALIDATION BUTTON */}
                 {isFormComplete ? (
@@ -1478,8 +1480,10 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         <Send className="w-4 h-4 fill-current" />
                         <span>
                           {roleMode === 'empresa'
-                            ? 'Enviar Empresa para Validação (Trancar e Submeter)'
-                            : 'Enviar para Validação (Trancar e Submeter)'}
+                            ? (isApproved && companyEditUnlocked
+                                ? 'Reenviar Alterações para Análise'
+                                : 'Enviar Empresa para Validação')
+                            : 'Enviar para Validação'}
                         </span>
                       </>
                     )}
