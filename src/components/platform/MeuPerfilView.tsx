@@ -516,6 +516,56 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
   return (
     <div className="relative animate-in fade-in duration-200 pb-16" id="leadspay-meu-perfil-view">
+      {showEditRequest && roleMode === 'empresa' && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[26px] border border-white/10 bg-[#0A1220] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.6)]">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#D9F22A]/25 bg-[#D9F22A]/10 text-[#D9F22A]">
+                <Edit3 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Solicitar ajuste do perfil</h3>
+                <p className="mt-1 text-xs leading-5 text-white/50">
+                  Depois de aprovado, seu perfil fica protegido. Explique o que precisa alterar e aguarde a administração liberar a edição.
+                </p>
+              </div>
+            </div>
+
+            <textarea
+              value={editRequestReason}
+              onChange={(event) => setEditRequestReason(event.target.value)}
+              maxLength={800}
+              rows={5}
+              placeholder="Ex.: preciso atualizar o endereço comercial e o WhatsApp da empresa."
+              className="mt-5 w-full resize-none rounded-2xl border border-white/10 bg-[#060b14] px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#D9F22A]/50"
+            />
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditRequest(false);
+                  setEditRequestReason('');
+                }}
+                disabled={isRequestingEdit}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold text-white/70"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleRequestCompanyEdit}
+                disabled={isRequestingEdit || editRequestReason.trim().length < 10}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2.5 text-xs font-black text-[#07100A] disabled:opacity-40"
+              >
+                {isRequestingEdit ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Enviar solicitação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast feedback */}
       {toastMessage && (
         <div 
@@ -590,25 +640,44 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               </div>
             </div>
 
-            {onNavigateToTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateToTab(roleMode === 'empresa' ? 'minha_empresa' : 'vitrine')}
-                className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap flex-shrink-0"
-              >
-                {roleMode === 'empresa' ? (
-                  <>
-                    <Plus className="w-4 h-4 stroke-[3]" />
-                    Cadastrar Produto
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 fill-current" />
-                    Explorar Marketplace
-                  </>
-                )}
-              </button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {roleMode === 'empresa' && !companyEditUnlocked && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditRequest(true)}
+                  disabled={companyEditRequestStatus === 'pending'}
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-black text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Edit3 className="h-4 w-4" />
+                  {companyEditRequestStatus === 'pending' ? 'Ajuste solicitado' : 'Solicitar ajuste'}
+                </button>
+              )}
+              {roleMode === 'empresa' && companyEditUnlocked && (
+                <span className="inline-flex items-center gap-2 rounded-xl border border-[#D9F22A]/30 bg-[#D9F22A]/10 px-4 py-2.5 text-xs font-black text-[#D9F22A]">
+                  <Edit3 className="h-4 w-4" />
+                  Edição liberada pelo admin
+                </span>
+              )}
+              {onNavigateToTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab(roleMode === 'empresa' ? 'minha_empresa' : 'vitrine')}
+                  className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap flex-shrink-0"
+                >
+                  {roleMode === 'empresa' ? (
+                    <>
+                      <Plus className="w-4 h-4 stroke-[3]" />
+                      Cadastrar Produto
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 fill-current" />
+                      Explorar Marketplace
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         ) : isPending ? (
           /* PENDING VALIDATION BANNER (LOCKED) */
@@ -705,6 +774,22 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      {roleMode === 'empresa' && !stripeReady ? (
+        <div className="rounded-[28px] border border-white/10 bg-[#09111e] p-8 sm:p-10 text-center shadow-xl">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/35">
+            <Lock className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-lg font-black text-white">Perfil LeadsPay bloqueado por enquanto</h3>
+          <p className="mx-auto mt-2 max-w-xl text-xs leading-6 text-white/50">
+            Conclua a verificação da Stripe acima. Assim que a conta estiver pronta, os dados da empresa serão liberados automaticamente.
+          </p>
+          <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#D9F22A]/20 bg-[#D9F22A]/5 px-4 py-2 text-[11px] font-bold text-[#D9F22A]">
+            Stripe primeiro
+            <ArrowRight className="h-3.5 w-3.5" />
+            Perfil LeadsPay depois
+          </div>
+        </div>
+      ) : (
       <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
         <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl backdrop-blur-md relative">
@@ -1387,6 +1472,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         </div>
       </form>
+      )}
 
       <NotificationPreferencesPanel userProfile={userProfile} onSaveProfile={onSaveProfile} />
 
