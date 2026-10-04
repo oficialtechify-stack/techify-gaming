@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../lib/firebaseAdminServer.js';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../lib/profileEligibility.js';
+import { applyVerificationRequest } from '../lib/profileEligibility.js';
 import { getStripeTestClient } from '../lib/stripeServer.js';
 
 type RequestLike = {
