@@ -66,7 +66,7 @@ import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
 import { WithdrawModal } from './WithdrawModal';
 import { ProductDetailModal } from './ProductDetailModal';
-import { ProductEditorView } from './ProductEditorView';
+import { CompanyProductStudio } from './CompanyProductStudio';
 import { CustomCheckoutPage } from '../checkout/CustomCheckoutPage';
 import { Modals } from '../Modals';
 import { ActiveModal } from '../../types';
@@ -1792,7 +1792,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             : 'max-w-7xl p-2.5 sm:p-5 md:p-6 lg:p-8'
         }`}>
           {detailedEditingPlan ? (
-            <ProductEditorView
+            <CompanyProductStudio
               plan={detailedEditingPlan}
               onBack={() => setDetailedEditingPlan(null)}
               onSave={async (updatedPlan) => {
