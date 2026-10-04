@@ -1,5 +1,6 @@
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 import { profileHasRole, profileRoleStatus } from '../../lib/profileEligibility.js';
+import { getStripeTestClient } from '../../lib/stripeServer.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown };
@@ -55,11 +56,65 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil LeadsPay não encontrado. Atualize a página e tente novamente.' });
     const current = profileSnap.data()!;
     const accountType = String(current.accountType || '').toLowerCase();
-    if (!profileHasRole(current, role)) return res.status(403).json({ error: 'O tipo do perfil não corresponde à conta autenticada.' });
-    if (current.banned === true || current.status === 'banned') return res.status(403).json({ error: 'Esta conta não pode enviar cadastros.' });
+    if (role === 'afiliado' && !profileHasRole(current, role)) {
+      return res.status(403).json({ error: 'O tipo do perfil não corresponde à conta autenticada.' });
+    }
+    if (current.banned === true || current.status === 'banned') {
+      return res.status(403).json({ error: 'Esta conta não pode enviar cadastros.' });
+    }
+
     const currentRoleStatus = profileRoleStatus(current, role);
-    if (currentRoleStatus === 'approved' || currentRoleStatus === 'verified') return res.status(409).json({ error: 'Este perfil já foi aprovado.' });
-    if (currentRoleStatus === 'pending' || currentRoleStatus === 'submitted') return res.status(409).json({ error: 'Seu perfil já está em análise.' });
+    const editUnlocked = role === 'empresa' && current.companyProfileEditUnlocked === true;
+    if ((currentRoleStatus === 'approved' || currentRoleStatus === 'verified') && !editUnlocked) {
+      return res.status(409).json({ error: 'Este perfil já foi aprovado e está bloqueado. Solicite um ajuste à administração.' });
+    }
+    if ((currentRoleStatus === 'pending' || currentRoleStatus === 'submitted') && !editUnlocked) {
+      return res.status(409).json({ error: 'Seu perfil já está em análise.' });
+    }
+
+    let stripeAccountId = '';
+    if (role === 'empresa') {
+      stripeAccountId = String(current.stripeAccounts?.empresa || '').trim();
+      if (!stripeAccountId) {
+        return res.status(409).json({
+          error: 'Conecte e conclua a verificação da Stripe antes de preencher o perfil da empresa.',
+          code: 'STRIPE_REQUIRED_FIRST',
+        });
+      }
+
+      const stripe = getStripeTestClient();
+      let account;
+      try {
+        account = await stripe.accounts.retrieve(stripeAccountId);
+      } catch {
+        return res.status(409).json({
+          error: 'Não foi possível confirmar sua conta Stripe. Atualize a página e tente novamente.',
+          code: 'STRIPE_ACCOUNT_UNAVAILABLE',
+        });
+      }
+
+      if (
+        account.metadata?.firebase_uid !== identity.uid ||
+        account.metadata?.leadspay_role !== 'empresa'
+      ) {
+        return res.status(409).json({
+          error: 'A conta Stripe conectada não pertence a este perfil LeadsPay.',
+          code: 'STRIPE_ACCOUNT_MISMATCH',
+        });
+      }
+
+      const stripeReady =
+        account.details_submitted === true &&
+        account.payouts_enabled === true &&
+        account.capabilities?.transfers === 'active';
+
+      if (!stripeReady) {
+        return res.status(409).json({
+          error: 'Finalize todas as etapas da Stripe antes de preencher o perfil da empresa.',
+          code: 'STRIPE_NOT_READY',
+        });
+      }
+    }
 
     const email = role === 'afiliado' ? String(identity.email || '').trim().toLowerCase() : String(body.email || identity.email || '').trim().toLowerCase();
     const phone = String(body.phone || body.whatsapp || body.companyPhone || '').trim();
@@ -153,6 +208,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       const slug = companyName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
       batch.set(companyRef, {
         ...(companySnap.exists ? {} : { id: companyId, createdAt: now, totalPlansCount: 0, totalAffiliatesCount: 0, totalSalesVolume: 0, commissionRange: '10% - 50%' }),
+        stripeAccountId,
+        stripeOnboardingStatus: 'connected',
+        stripeDetailsSubmitted: true,
+        stripePayoutsEnabled: true,
+        stripeConnectOwnerId: identity.uid,
         name: companyName,
         slug: slug || companyId,
         tagline: String(body.companyTagline || 'Startup parceira LeadsPay'),
@@ -186,8 +246,32 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         companyName,
         hasCompanyProfile: true,
         activeRoleMode: 'empresa',
+        companyProfileEditUnlocked: false,
+        companyEditRequestStatus: null,
         updatedAt: now,
       }, { merge: true });
+
+      profileFields.companyProfileEditUnlocked = false;
+      profileFields.companyEditRequestStatus = null;
+      profileFields.companyEditRequestReason = null;
+      profileFields.companyEditRequestedAt = null;
+
+      try {
+        const stripe = getStripeTestClient();
+        const account = await stripe.accounts.retrieve(stripeAccountId);
+        if (!account.metadata?.leadspay_company_id) {
+          await stripe.accounts.update(stripeAccountId, {
+            metadata: {
+              ...account.metadata,
+              firebase_uid: identity.uid,
+              leadspay_role: 'empresa',
+              leadspay_company_id: companyId,
+            },
+          });
+        }
+      } catch (stripeLinkError) {
+        console.warn('[Profile submission] Stripe account metadata sync failed:', stripeLinkError instanceof Error ? stripeLinkError.message : 'falha');
+      }
     }
     batch.set(requestRef, requestData, { merge: true });
     await batch.commit();
