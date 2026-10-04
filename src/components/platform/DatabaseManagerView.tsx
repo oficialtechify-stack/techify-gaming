@@ -915,6 +915,11 @@ export const DatabaseManagerView: React.FC = () => {
             : (resolvedVerificationStatus as any),
           verified: keepApprovedCompany || resolvedVerificationStatus === 'approved',
           submittedAt: (existing as any).submittedAt || v.submittedAt,
+          profileEditRequestStatus: existing.profileEditRequestStatus || v.companyEditRequestStatus || null,
+          profileEditRequestReason: existing.profileEditRequestReason || v.companyEditRequestReason || null,
+          profileEditRequestedAt: existing.profileEditRequestedAt || v.companyEditRequestedAt || null,
+          profileEditUnlocked: existing.profileEditUnlocked || v.companyProfileEditUnlocked || false,
+          profileEditRejectionReason: existing.profileEditRejectionReason || v.companyEditRejectionReason || null,
         });
         return;
       }
@@ -942,6 +947,11 @@ export const DatabaseManagerView: React.FC = () => {
         totalSalesVolume: 0,
         createdAt: v.submittedAt || new Date().toISOString(),
         submittedAt: v.submittedAt,
+        profileEditRequestStatus: v.companyEditRequestStatus || null,
+        profileEditRequestReason: v.companyEditRequestReason || null,
+        profileEditRequestedAt: v.companyEditRequestedAt || null,
+        profileEditUnlocked: v.companyProfileEditUnlocked || false,
+        profileEditRejectionReason: v.companyEditRejectionReason || null,
       } as CompanyStartup);
     });
 
@@ -1724,6 +1734,31 @@ export const DatabaseManagerView: React.FC = () => {
                             )}
 
                             {/* Se aprovado: opção de solicitar ajuste */}
+                            {isApproved && !isBanned && comp.profileEditRequestStatus === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => openProfileEditRejectModal({ id: comp.id, name: comp.name, email: comp.email, type: 'company' })}
+                                  disabled={processingId === comp.id}
+                                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer"
+                                >
+                                  Recusar ajuste
+                                </button>
+
+                                <button
+                                  onClick={() => handleApproveProfileEdit(comp.id, comp.name)}
+                                  disabled={processingId === comp.id}
+                                  className="px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cde71f] text-[#07100A] text-xs font-black transition-all cursor-pointer flex items-center gap-2"
+                                >
+                                  {processingId === comp.id ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Unlock className="w-4 h-4" />
+                                  )}
+                                  Liberar edição
+                                </button>
+                              </>
+                            )}
+
                             {isApproved && !isBanned && (
                               <button
                                 onClick={() => openRejectModal({ id: targetId, name: req.name || 'Afiliado', email: req.email, type: 'user' })}
@@ -1932,6 +1967,29 @@ export const DatabaseManagerView: React.FC = () => {
                             )}
                           </div>
                         </div>
+
+                        {isApproved && comp.profileEditRequestStatus === 'pending' && (
+                          <div className="mt-5 rounded-2xl border border-[#D9F22A]/25 bg-[#D9F22A]/[0.06] p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#D9F22A]/10 text-[#D9F22A]">
+                                <Edit3 className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-black uppercase tracking-wide text-[#D9F22A]">
+                                  Solicitação de ajuste pendente
+                                </div>
+                                <p className="mt-1 text-xs leading-5 text-white/70">
+                                  {comp.profileEditRequestReason || 'A empresa solicitou permissão para editar os dados do perfil.'}
+                                </p>
+                                {comp.profileEditRequestedAt && (
+                                  <p className="mt-1 text-[10px] text-white/35">
+                                    Solicitado em {new Date(comp.profileEditRequestedAt).toLocaleString('pt-BR')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Ações da Empresa */}
                         <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
