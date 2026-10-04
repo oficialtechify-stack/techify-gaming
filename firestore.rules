@@ -48,7 +48,23 @@ service cloud.firestore {
           (resource.data.ownerId == request.auth.uid || resource.data.userId == request.auth.uid) &&
           (
             (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived', 'archivedAt']) && request.resource.data.archived == true) ||
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus', 'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt', 'ownerId', 'userId', 'submittedBy', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents'])
+            (
+              resource.data.verified != true &&
+              resource.data.status != 'approved' &&
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                'verified', 'banned', 'banReason', 'stripeAccountId', 'stripeOnboardingStatus',
+                'accountType', 'status', 'kyc_status', 'submittedAt', 'verificationSubmittedAt',
+                'ownerId', 'userId', 'submittedBy', 'archived', 'isArchived', 'statusBeforeBan',
+                'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName',
+                'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId',
+                'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance',
+                'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents',
+                'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents',
+                'profileEditRequestStatus', 'profileEditRequestReason', 'profileEditRequestedAt',
+                'profileEditReviewedAt', 'profileEditReviewedBy', 'profileEditRejectionReason',
+                'profileEditUnlocked'
+              ])
+            )
           )
         )
       );
@@ -84,7 +100,7 @@ service cloud.firestore {
       ));
       allow update: if isAuthenticated() && (isAdmin() || (
         request.auth.uid == userId &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'roleType', 'status', 'verificationReviewedAt', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'banned', 'banReason', 'companyId', 'isAdmin', 'activeRoleMode', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents'])
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'accountType', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'roleType', 'status', 'verificationReviewedAt', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'banned', 'banReason', 'companyId', 'isAdmin', 'activeRoleMode', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents', 'companyProfileEditUnlocked', 'companyEditRequestStatus', 'companyEditRequestReason', 'companyEditRequestedAt', 'companyEditReviewedAt', 'companyEditReviewedBy', 'companyEditRejectionReason'])
       ));
       allow delete: if isAdmin();
     }
@@ -116,7 +132,7 @@ service cloud.firestore {
       ));
       allow update: if isAuthenticated() && (isAdmin() || (
         request.auth.uid == userId &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'role', 'roleType', 'partnerLevel', 'hasAffiliateProfile', 'hasCompanyProfile', 'activeRoleMode', 'banned', 'banReason', 'verificationReviewedAt', 'isAdmin', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'status', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountType', 'role', 'roleType', 'partnerLevel', 'hasAffiliateProfile', 'hasCompanyProfile', 'activeRoleMode', 'banned', 'banReason', 'verificationReviewedAt', 'isAdmin', 'verified', 'verificationStatus', 'affiliateVerificationStatus', 'empresaVerificationStatus', 'companyVerificationStatus', 'verificationRoleType', 'status', 'verificationSubmittedAt', 'submittedAt', 'approvedAt', 'reviewedBy', 'kyc_status', 'stripeAccounts', 'stripeAccountId', 'stripeOnboardingStatus', 'archived', 'isArchived', 'statusBeforeBan', 'verifiedBeforeBan', 'plan', 'planStatus', 'subscriptionTier', 'subscriptionName', 'subscriptionPrice', 'subscriptionActiveAt', 'stripeCustomerId', 'stripeSubscriptionId', 'stripeSubscriptionStatus', 'availableBalance', 'pendingBalance', 'empresaAvailableBalanceCents', 'empresaPendingBalanceCents', 'afiliadoAvailableBalanceCents', 'afiliadoPendingBalanceCents', 'companyProfileEditUnlocked', 'companyEditRequestStatus', 'companyEditRequestReason', 'companyEditRequestedAt', 'companyEditReviewedAt', 'companyEditReviewedBy', 'companyEditRejectionReason']) &&
         (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
         (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['draft', 'unsubmitted', 'pending']) &&
         (!('kyc_status' in request.resource.data) || request.resource.data.kyc_status == 'pending')
