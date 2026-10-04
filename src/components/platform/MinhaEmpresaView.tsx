@@ -87,6 +87,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   const [planSearch, setPlanSearch] = useState<string>('');
   const [planStatusFilter, setPlanStatusFilter] = useState<'all' | 'Ativo' | 'Pausado'>('all');
   const [activePlanDropdownId, setActivePlanDropdownId] = useState<string | null>(null);
+  const [planDropdownPosition, setPlanDropdownPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   // Modals for Links and Reviews
   const [selectedPlanForLinks, setSelectedPlanForLinks] = useState<CompanyPlan | null>(null);
@@ -144,6 +145,34 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
     setCopiedToast(id);
     setTimeout(() => setCopiedToast(null), 3000);
   };
+
+  const togglePlanActions = (planId: string, target: HTMLButtonElement) => {
+    if (activePlanDropdownId === planId) {
+      setActivePlanDropdownId(null);
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const menuWidth = 208;
+    const menuHeight = 250;
+    const viewportPadding = 12;
+
+    const left = Math.min(
+      window.innerWidth - menuWidth - viewportPadding,
+      Math.max(viewportPadding, rect.right - menuWidth)
+    );
+
+    const preferredTop = rect.bottom + 8;
+    const top = preferredTop + menuHeight > window.innerHeight
+      ? Math.max(viewportPadding, rect.top - menuHeight - 8)
+      : preferredTop;
+
+    setPlanDropdownPosition({ top, left });
+    setActivePlanDropdownId(planId);
+  };
+
+  const activePlanForDropdown =
+    companyPlans.find((plan) => plan.id === activePlanDropdownId) || null;
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
 
@@ -406,8 +435,8 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
           )}
 
           {/* Sub Navigation: Produtos | Afiliados | Vendas */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-2">
-            <div className="flex items-center gap-2">
+          <div className="border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
               <button
                 onClick={() => setActiveTab('produtos')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
@@ -417,7 +446,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                Produtos & Produtos ({companyPlans.length})
+                Produtos ({companyPlans.length})
               </button>
 
               <button
@@ -650,7 +679,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                                   {/* 3-Dots Button */}
                                   <button
                                     type="button"
-                                    onClick={() => setActivePlanDropdownId(isDropdownOpen ? null : plan.id)}
+                                    onClick={(event) => togglePlanActions(plan.id, event.currentTarget)}
                                     className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                                       isDropdownOpen
                                         ? 'bg-white/20 text-white'
@@ -661,87 +690,7 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                                   </button>
                                 </div>
 
-                                {/* 3-DOTS ACTION POPUP (Exact Match for Image 3) */}
-                                {isDropdownOpen && (
-                                  <>
-                                    <div
-                                      className="fixed inset-0 z-20"
-                                      onClick={() => setActivePlanDropdownId(null)}
-                                    />
-                                    <div className="absolute right-4 top-12 z-30 w-48 bg-[#0a1222] border border-white/15 rounded-2xl shadow-2xl py-2 text-left animate-in fade-in duration-150">
-                                      {/* 1. Ver links */}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActivePlanDropdownId(null);
-                                          setSelectedPlanForLinks(plan);
-                                        }}
-                                        className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
-                                      >
-                                        <Link2 className="w-4 h-4 text-[#D9F22A]" />
-                                        <span>Ver links</span>
-                                      </button>
 
-                                      {/* 2. Editar */}
-                                      {onEditPlan && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setActivePlanDropdownId(null);
-                                            onEditPlan(plan);
-                                          }}
-                                          className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
-                                        >
-                                          <Edit3 className="w-4 h-4 text-white/60" />
-                                          <span>Editar</span>
-                                        </button>
-                                      )}
-
-                                      {/* 3. Ver avaliações */}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActivePlanDropdownId(null);
-                                          setSelectedPlanForReviews(plan);
-                                        }}
-                                        className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
-                                      >
-                                        <MessageSquare className="w-4 h-4 text-amber-400" />
-                                        <span>Ver avaliações</span>
-                                      </button>
-
-                                      {/* 4. Duplicar */}
-                                      {onDuplicatePlan && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setActivePlanDropdownId(null);
-                                            onDuplicatePlan(plan);
-                                          }}
-                                          className="w-full px-4 py-2.5 text-xs text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-2.5 cursor-pointer transition-colors"
-                                        >
-                                          <Copy className="w-4 h-4 text-emerald-400" />
-                                          <span>Duplicar</span>
-                                        </button>
-                                      )}
-
-                                      {/* 5. Excluir */}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setActivePlanDropdownId(null);
-                                          if (confirm(`Tem certeza que deseja excluir o produto "${plan.name}"?`)) {
-                                            onDeletePlan(plan.id, plan.companyId);
-                                          }
-                                        }}
-                                        className="w-full px-4 py-2.5 text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 cursor-pointer transition-colors border-t border-white/5 mt-1"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                        <span>Excluir</span>
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
                               </td>
                             </tr>
                           );
@@ -874,6 +823,88 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                 </div>
               )}
             </div>
+          )}
+
+          {activePlanForDropdown && (
+            <>
+              <button
+                type="button"
+                aria-label="Fechar menu de ações"
+                className="fixed inset-0 z-[70] cursor-default bg-transparent"
+                onClick={() => setActivePlanDropdownId(null)}
+              />
+              <div
+                className="fixed z-[80] w-52 overflow-hidden rounded-2xl border border-white/15 bg-[#0a1222] py-2 text-left shadow-[0_22px_60px_rgba(0,0,0,0.55)] animate-in fade-in zoom-in-95 duration-150"
+                style={{ top: planDropdownPosition.top, left: planDropdownPosition.left }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePlanDropdownId(null);
+                    setSelectedPlanForLinks(activePlanForDropdown);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  <Link2 className="h-4 w-4 text-[#D9F22A]" />
+                  <span>Ver links</span>
+                </button>
+
+                {onEditPlan && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePlanDropdownId(null);
+                      onEditPlan(activePlanForDropdown);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    <Edit3 className="h-4 w-4 text-white/60" />
+                    <span>Editar</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePlanDropdownId(null);
+                    setSelectedPlanForReviews(activePlanForDropdown);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  <MessageSquare className="h-4 w-4 text-amber-400" />
+                  <span>Ver avaliações</span>
+                </button>
+
+                {onDuplicatePlan && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePlanDropdownId(null);
+                      onDuplicatePlan(activePlanForDropdown);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    <Copy className="h-4 w-4 text-emerald-400" />
+                    <span>Duplicar</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const plan = activePlanForDropdown;
+                    setActivePlanDropdownId(null);
+                    if (confirm(`Tem certeza que deseja excluir o produto "${plan.name}"?`)) {
+                      onDeletePlan(plan.id, plan.companyId);
+                    }
+                  }}
+                  className="mt-1 flex w-full items-center gap-2.5 border-t border-white/5 px-4 py-2.5 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Excluir</span>
+                </button>
+              </div>
+            </>
           )}
 
           {/* Plan Links Modal (Image 3) */}
