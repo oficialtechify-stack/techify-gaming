@@ -31,6 +31,7 @@ import {
   deleteCompanyPlanInFirebase,
   createAffiliationInFirebase,
   deleteAffiliationInFirebase,
+  manageAffiliateRequestInFirebase,
   requestWithdrawalViaBackend,
   updateUserProfileInFirebase,
   submitVerificationRequestInFirebase,
@@ -1125,6 +1126,37 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   };
 
+  const handleCompanyAffiliateDecision = async (
+    affiliationId: string,
+    action: 'approve' | 'reject',
+  ) => {
+    try {
+      const updated = await manageAffiliateRequestInFirebase(affiliationId, action);
+      setAllAffiliations((current) =>
+        current.map((aff) => aff.id === affiliationId ? { ...aff, ...updated } : aff)
+      );
+      setAffiliations((current) =>
+        current.map((aff) => aff.id === affiliationId ? { ...aff, ...updated } : aff)
+      );
+      setLiveToast({
+        message: action === 'approve' ? 'Afiliado aprovado' : 'Solicitação recusada',
+        sub: updated.userName || updated.affiliateName || 'Solicitação atualizada',
+        amount: action === 'approve' ? 'Ativo' : 'Recusada'
+      });
+      setTimeout(() => setLiveToast(null), 3500);
+      return updated;
+    } catch (err: any) {
+      console.error('Error managing affiliate request:', err);
+      setLiveToast({
+        message: 'Erro ao atualizar afiliação',
+        sub: err.message || 'Não foi possível concluir a ação',
+        amount: 'Erro'
+      });
+      setTimeout(() => setLiveToast(null), 4500);
+      throw err;
+    }
+  };
+
   // Handle withdrawal through authenticated Stripe Connect backend
   const handleWithdraw = async (amount: number) => {
     try {
@@ -1922,6 +1954,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onDeleteCompany={handleDeleteCompany}
               onDeletePlan={handleDeletePlan}
               onRemoveAffiliate={handleCompanyRemoveAffiliate}
+              onAffiliateDecision={handleCompanyAffiliateDecision}
             />
           )}
 
