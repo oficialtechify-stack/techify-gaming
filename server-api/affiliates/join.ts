@@ -68,6 +68,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (plan.status !== 'Ativo' || plan.active === false) {
         return { kind: 'error' as const, status: 409, code: 'PLAN_UNAVAILABLE', error: 'Esta oferta não está disponível para novas afiliações.' };
       }
+      if (plan.allowAffiliates === false || Number(plan.commissionPercentage || 0) <= 0) {
+        return { kind: 'error' as const, status: 409, code: 'AFFILIATES_DISABLED', error: 'Esta oferta não está aceitando novas afiliações.' };
+      }
+      const manualApproval = String(plan.affiliateApprovalMode || 'automatic').toLowerCase() === 'manual';
 
       const companyId = String(plan.companyId || '').trim();
       const ownerId = String(plan.ownerId || '').trim();
@@ -99,12 +103,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (affiliationSnapshot.exists) {
         const existing = affiliationSnapshot.data()!;
         const state = String(existing.status || '').toLowerCase();
-        if (state === 'ativo' || state === 'active') {
+        if (state === 'ativo' || state === 'active' || state === 'approved') {
           const existingCode = String(existing.affiliateCode || existing.affiliate_code || '');
           if (!existingCode) return { kind: 'error' as const, status: 409, code: 'AFFILIATE_CODE_MISSING', error: 'A afiliação existente não possui um código válido. Solicite a correção ao suporte.' };
           return {
             kind: 'ok' as const,
             alreadyAffiliated: true,
+            pendingApproval: false,
             affiliation: {
               id: affiliationSnapshot.id,
               ...existing,
@@ -114,7 +119,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             },
           };
         }
-        if (state !== 'encerrada' && state !== 'ended' && state !== 'cancelled') {
+        if (state === 'pendente' || state === 'pending' || state === 'requested' || state === 'solicitado') {
+          return {
+            kind: 'ok' as const,
+            alreadyAffiliated: false,
+            pendingApproval: true,
+            affiliation: { id: affiliationSnapshot.id, ...existing },
+          };
+        }
+        if (state !== 'encerrada' && state !== 'ended' && state !== 'cancelled' && state !== 'recusada' && state !== 'rejected') {
           return { kind: 'error' as const, status: 409, code: 'AFFILIATION_NOT_REACTIVATABLE', error: 'Esta afiliação foi revogada ou arquivada. Peça a revisão à empresa ou ao suporte antes de tentar novamente.' };
         }
       }
@@ -148,7 +161,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         clicks: Number(affiliationSnapshot.exists ? affiliationSnapshot.data()!.clicks || 0 : 0),
         salesCount: Number(affiliationSnapshot.exists ? affiliationSnapshot.data()!.salesCount || 0 : 0),
         totalEarned: Number(affiliationSnapshot.exists ? affiliationSnapshot.data()!.totalEarned || 0 : 0),
-        status: 'Ativo',
+        status: manualApproval ? 'Pendente' : 'Ativo',
+        countedActive: !manualApproval,
+        requestedAt: now,
         createdAt: affiliationSnapshot.exists ? affiliationSnapshot.data()!.createdAt || now : now,
         updatedAt: now,
         archivedAt: null,
@@ -156,11 +171,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       };
 
       transaction.set(affiliationRef, affiliation);
-      if (!affiliationSnapshot.exists) {
+      if (!manualApproval && (!affiliationSnapshot.exists || affiliationSnapshot.data()!.countedActive !== true)) {
         transaction.update(planRef, { affiliatesCount: FieldValue.increment(1) });
         transaction.update(companyRef, { totalAffiliatesCount: FieldValue.increment(1) });
       }
-      return { kind: 'ok' as const, alreadyAffiliated: false, affiliation };
+      return {
+        kind: 'ok' as const,
+        alreadyAffiliated: false,
+        pendingApproval: manualApproval,
+        affiliation,
+      };
     });
 
     if (result.kind === 'error') return sendError(res, result.status, result.code, result.error);
@@ -168,10 +188,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(200).json({
       success: true,
       alreadyAffiliated: result.alreadyAffiliated,
+      pendingApproval: result.pendingApproval === true,
       affiliation: result.affiliation,
-      affiliateCode: affiliation.affiliateCode || affiliation.affiliate_code,
-      affiliateLink: affiliation.affiliateLink,
-      message: result.alreadyAffiliated ? 'Você já está afiliado a esta oferta.' : 'Afiliação confirmada com sucesso.',
+      affiliateCode: result.pendingApproval === true ? null : (affiliation.affiliateCode || affiliation.affiliate_code),
+      affiliateLink: result.pendingApproval === true ? null : affiliation.affiliateLink,
+      message: result.pendingApproval === true
+        ? 'Solicitação enviada. A empresa precisa aprovar sua afiliação antes da divulgação.'
+        : result.alreadyAffiliated
+          ? 'Você já está afiliado a esta oferta.'
+          : 'Afiliação confirmada com sucesso.',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
