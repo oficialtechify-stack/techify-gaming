@@ -7,6 +7,7 @@ import {
   ProductOrderBump,
   ProductUpsell
 } from '../../types/platform';
+import { getCompanyPlanDeliverySettings } from '../../services/firestoreService';
 import {
   ArrowLeft,
   BadgePercent,
@@ -151,6 +152,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [savedAt, setSavedAt] = useState('');
+  const [deliveryLoading, setDeliveryLoading] = useState(true);
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
   const checkoutUrl = `${origin}?checkout=${plan.checkoutSlug || plan.id}`;
   const inviteUrl = `${origin}?plan=${plan.id}&affiliate=invite`;
@@ -158,6 +160,29 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
     checkout.isDefault
       ? checkoutUrl
       : `${origin}?checkout=${plan.checkoutSlug || plan.id}&variant=${encodeURIComponent(checkout.checkoutSlug)}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    setDeliveryLoading(true);
+
+    getCompanyPlanDeliverySettings(plan.id)
+      .then((delivery) => {
+        if (cancelled) return;
+        setDeliveryType(delivery.deliveryType || 'redirect');
+        setThankYouPageUrl(delivery.deliveryUrl || '');
+        setDeliveryInstructions(delivery.deliveryInstructions || '');
+      })
+      .catch((error) => {
+        console.warn('[CompanyProductStudio] Não foi possível carregar a entrega privada.', error);
+      })
+      .finally(() => {
+        if (!cancelled) setDeliveryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [plan.id]);
 
   useEffect(() => {
     if (paymentType === 'Único') return;
@@ -208,6 +233,10 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
       setSaveError('Informe um valor recorrente válido.');
       return;
     }
+    if (deliveryLoading) {
+      setSaveError('Aguarde o carregamento das configurações privadas de entrega.');
+      return;
+    }
     if (!thankYouPageUrl.trim() || !/^https:\/\//i.test(thankYouPageUrl.trim())) {
       setSaveError('Configure uma URL HTTPS válida para entrega/página pós-compra.');
       return;
@@ -234,10 +263,21 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
 
     try {
       await onSave({
+        companyId: plan.companyId,
         name: name.trim(),
+        tagline: plan.tagline || name.trim(),
         description: description.trim(),
         category,
+        features: Array.isArray(plan.features) ? plan.features : [],
+        badge: plan.badge || '',
         bannerImage,
+        checkoutSlug: plan.checkoutSlug,
+        slug: plan.slug,
+        recurringCommissionEnabled: plan.recurringCommissionEnabled,
+        recurrentCommissionPercent: plan.recurrentCommissionPercent,
+        recurrentCommissionValue: plan.recurrentCommissionValue,
+        recurrentCommission: plan.recurrentCommission,
+
         status,
         active: status === 'Ativo',
         paymentType,
@@ -500,7 +540,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                   </div>
                   <div>
                     <label className={labelClass}>URL de entrega / página pós-compra</label>
-                    <input className={inputClass} value={thankYouPageUrl} onChange={(e) => setThankYouPageUrl(e.target.value)} placeholder="https://suaempresa.com/acesso" />
+                    <input disabled={deliveryLoading} className={`${inputClass} disabled:cursor-wait disabled:opacity-60`} value={thankYouPageUrl} onChange={(e) => setThankYouPageUrl(e.target.value)} placeholder={deliveryLoading ? 'Carregando configuração privada...' : 'https://suaempresa.com/acesso'} />
                   </div>
                   <div className="sm:col-span-2">
                     <label className={labelClass}>Instruções para o comprador</label>
