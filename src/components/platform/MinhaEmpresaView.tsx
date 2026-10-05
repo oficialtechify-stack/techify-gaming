@@ -57,6 +57,7 @@ interface MinhaEmpresaViewProps {
   onDuplicatePlan?: (plan: CompanyPlan) => void;
   onAddReview?: (planId: string, review: ProductReview) => void;
   onRemoveAffiliate?: (affiliationId: string, planId?: string, companyId?: string, affiliateName?: string) => void;
+  onAffiliateDecision?: (affiliationId: string, action: 'approve' | 'reject') => Promise<UserAffiliation | void> | UserAffiliation | void;
 }
 
 export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
@@ -75,12 +76,14 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
   onOpenCheckout,
   onDuplicatePlan,
   onAddReview,
-  onRemoveAffiliate
+  onRemoveAffiliate,
+  onAffiliateDecision
 }) => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(companies[0]?.id || '');
   const [activeTab, setActiveTab] = useState<'produtos' | 'afiliados' | 'vendas'>('produtos');
   const [verificationWarningModal, setVerificationWarningModal] = useState<boolean>(false);
   const [removingAffiliateModal, setRemovingAffiliateModal] = useState<UserAffiliation | null>(null);
+  const [affiliateDecisionId, setAffiliateDecisionId] = useState<string | null>(null);
 
   // Plan Management table/search/actions state
   const [planViewMode, setPlanViewMode] = useState<'table' | 'cards'>('table');
@@ -950,8 +953,9 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                         <th className="py-3 px-4 text-center">Cliques</th>
                         <th className="py-3 px-4 text-center">Vendas</th>
                         <th className="py-3 px-4">Comissão Paga</th>
+                        <th className="py-3 px-4 text-center">Status</th>
                         <th className="py-3 px-4 text-center">Data</th>
-                        <th className="py-3 px-4 text-right">Ação Exclusiva</th>
+                        <th className="py-3 px-4 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-xs">
@@ -965,6 +969,9 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                         const dateFormatted = aff.createdAt || aff.affiliatedAt 
                           ? new Date(aff.createdAt || aff.affiliatedAt).toLocaleDateString('pt-BR') 
                           : 'Recente';
+                        const statusKey = String(aff.status || '').trim().toLowerCase();
+                        const isPendingAffiliate = ['pendente', 'pending', 'requested', 'solicitado'].includes(statusKey);
+                        const isActiveAffiliate = ['ativo', 'active', 'approved'].includes(statusKey);
 
                         return (
                           <tr key={aff.id} className="hover:bg-white/5 transition-colors">
@@ -989,18 +996,68 @@ export const MinhaEmpresaView: React.FC<MinhaEmpresaViewProps> = ({
                             <td className="py-3.5 px-4 font-black text-emerald-400">
                               R$ {totalEarned.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${
+                                isActiveAffiliate
+                                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                                  : isPendingAffiliate
+                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                                    : 'border-white/10 bg-white/5 text-white/50'
+                              }`}>
+                                {isActiveAffiliate ? 'Ativo' : isPendingAffiliate ? 'Pendente' : aff.status || 'Inativo'}
+                              </span>
+                            </td>
                             <td className="py-3.5 px-4 text-center text-white/40">
                               {dateFormatted}
                             </td>
                             <td className="py-3.5 px-4 text-right">
-                              <button
-                                onClick={() => setRemovingAffiliateModal(aff)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/40 text-[11px] font-bold transition-all cursor-pointer"
-                                title="Remover este afiliado (Ação da Empresa)"
-                              >
-                                <UserX className="w-3.5 h-3.5" />
-                                <span>Remover</span>
-                              </button>
+                              {isPendingAffiliate && onAffiliateDecision ? (
+                                <div className="inline-flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={affiliateDecisionId === aff.id}
+                                    onClick={async () => {
+                                      setAffiliateDecisionId(aff.id);
+                                      try {
+                                        await onAffiliateDecision(aff.id, 'approve');
+                                      } finally {
+                                        setAffiliateDecisionId(null);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-bold text-emerald-400 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                    Aprovar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={affiliateDecisionId === aff.id}
+                                    onClick={async () => {
+                                      setAffiliateDecisionId(aff.id);
+                                      try {
+                                        await onAffiliateDecision(aff.id, 'reject');
+                                      } finally {
+                                        setAffiliateDecisionId(null);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-1.5 text-[11px] font-bold text-rose-400 transition hover:bg-rose-500/20 disabled:opacity-50"
+                                  >
+                                    <XCircle className="h-3.5 w-3.5" />
+                                    Recusar
+                                  </button>
+                                </div>
+                              ) : isActiveAffiliate ? (
+                                <button
+                                  onClick={() => setRemovingAffiliateModal(aff)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/40 text-[11px] font-bold transition-all cursor-pointer"
+                                  title="Remover este afiliado (Ação da Empresa)"
+                                >
+                                  <UserX className="w-3.5 h-3.5" />
+                                  <span>Remover</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-white/30">Sem ações</span>
+                              )}
                             </td>
                           </tr>
                         );
