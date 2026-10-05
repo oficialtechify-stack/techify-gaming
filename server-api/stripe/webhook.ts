@@ -104,10 +104,32 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       profileSnapshots.set(uid, snap);
     }
 
+    const planRefForOrder = order.planId ? db.collection('plans').doc(String(order.planId)) : null;
+    const planSnapForOrder = planRefForOrder ? await tx.get(planRefForOrder) : null;
+    const currentCustomCheckouts = planSnapForOrder?.exists && Array.isArray(planSnapForOrder.data()?.customCheckouts)
+      ? planSnapForOrder.data()!.customCheckouts as Array<Record<string, any>>
+      : [];
+    const nextCustomCheckouts = order.checkoutVariant
+      ? currentCustomCheckouts.map((checkout) =>
+          String(checkout.checkoutSlug || '') === String(order.checkoutVariant || '')
+            ? { ...checkout, salesCount: Number(checkout.salesCount || 0) + 1 }
+            : checkout
+        )
+      : currentCustomCheckouts;
+
     const maxAvailableAt = [companyAvailableAt, affiliateAvailableAt].filter(Boolean).sort().at(-1) || companyAvailableAt;
     const sale = {
       id: saleRef.id,
       source: 'stripe',
+      saleKind: String(order.saleKind || 'one_time'),
+      parentOrderId: order.parentOrderId || null,
+      upsellId: order.upsellId || null,
+      upsellName: order.upsellName || null,
+      orderBumpId: order.orderBumpId || null,
+      orderBumpName: order.orderBumpName || null,
+      orderBumpAmount: Number(order.orderBumpAmountCents || 0) / 100,
+      checkoutVariant: order.checkoutVariant || null,
+      checkoutName: order.checkoutName || null,
       stripeOrderId: orderId,
       stripePaymentIntentId: paymentIntent.id,
       stripeChargeId: chargeId,
@@ -210,6 +232,7 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
         totalSales: FieldValue.increment(1),
         totalSalesCount: FieldValue.increment(1),
         totalRevenue: FieldValue.increment(Number(order.productAmountCents || 0) / 100),
+        ...(order.checkoutVariant && nextCustomCheckouts.length ? { customCheckouts: nextCustomCheckouts } : {}),
         updatedAt: now.toISOString(),
       }, { merge: true });
     }
