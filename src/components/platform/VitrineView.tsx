@@ -119,7 +119,9 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
       String(p.status || '').toLowerCase() !== 'ativo' ||
       (p as any).archived === true ||
       (p as any).isArchived === true ||
-      !approvedCompanyIds.has(p.companyId)
+      !approvedCompanyIds.has(p.companyId) ||
+      (roleMode === 'afiliado' && p.affiliateMarketplaceVisible === false) ||
+      (roleMode === 'afiliado' && p.allowAffiliates === false)
     ) return false;
     if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
     if (minCommission > 0 && p.commissionPercentage < minCommission) return false;
@@ -178,19 +180,28 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     }
   }, [effectiveUserId, isVerified]);
 
+  const isActiveAffiliation = (aff?: UserAffiliation | null) => {
+    const status = String(aff?.status || '').trim().toLowerCase();
+    return status === 'ativo' || status === 'active' || status === 'approved';
+  };
+
+  const isPendingAffiliation = (aff?: UserAffiliation | null) => {
+    const status = String(aff?.status || '').trim().toLowerCase();
+    return status === 'pendente' || status === 'pending' || status === 'requested' || status === 'solicitado';
+  };
+
   const isAffiliated = (planId: string) => {
-    // Usuários não verificados NUNCA estão afiliados
     if (!isVerified) return false;
 
-    // 1. Checa estado reativo
-    const inState = localAffiliations.some(a => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId));
-    if (inState) return true;
+    const inState = localAffiliations.find(
+      (a) => (a.planId || a.plan_id) === planId && (a.userId === effectiveUserId || a.user_id === effectiveUserId)
+    );
+    if (inState) return isActiveAffiliation(inState);
 
-    // 2. Checa persistência permanente local exclusiva do usuário
     try {
       if (typeof window !== 'undefined' && effectiveUserId) {
         const stored = localStorage.getItem(`leadspay_aff_${planId}_${effectiveUserId}`);
-        if (stored) return true;
+        if (stored) return isActiveAffiliation(JSON.parse(stored) as UserAffiliation);
       }
     } catch (e) {}
     return false;
@@ -246,7 +257,11 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
       } catch {}
       setLocalAffiliations(prev => [...prev.filter(a => (a.planId || a.plan_id) !== product.id), newAff]);
       onJoinAffiliate?.(product);
-      setSelectedAffModal({ plan: product, aff: newAff });
+      if (data.pendingApproval || isPendingAffiliation(newAff)) {
+        window.alert(data.message || 'Solicitação enviada. Aguarde a aprovação da empresa.');
+      } else {
+        setSelectedAffModal({ plan: product, aff: newAff });
+      }
     } catch (err:any) {
       console.error('Erro na requisição /api/affiliates/join:', err);
       window.alert(err?.message || 'Não foi possível concluir a afiliação.');
@@ -410,7 +425,10 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           {filteredPlatforms.map((product) => {
             const affiliated = isAffiliated(product.id);
             const userAff = getAffiliation(product.id);
-            const checkoutUrl = userAff ? formatAffiliatePlanUrl(product.id, userAff.affiliateCode) : formatAffiliatePlanUrl(product.id, 'LEADS');
+            const pendingAffiliation = isPendingAffiliation(userAff);
+            const checkoutUrl = affiliated && userAff
+              ? formatAffiliatePlanUrl(product.id, userAff.affiliateCode)
+              : formatAffiliatePlanUrl(product.id, 'LEADS');
 
             return (
               <div
@@ -533,7 +551,15 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                   {/* Affiliate Status & Dedicated Box */}
                   {roleMode === 'afiliado' && (
                     <div className="pt-2 flex flex-col gap-2.5">
-                      {affiliated && userAff ? (
+                      {pendingAffiliation && userAff ? (
+                        <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 text-center">
+                          <Clock className="mx-auto h-5 w-5 text-amber-400" />
+                          <p className="mt-2 text-xs font-black uppercase tracking-wider text-amber-300">Aguardando aprovação da empresa</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-white/60">
+                            Seu link de afiliado será liberado automaticamente depois que a empresa aprovar a solicitação.
+                          </p>
+                        </div>
+                      ) : affiliated && userAff ? (
                         <div className="bg-[#050811] border border-emerald-500/40 rounded-2xl p-3.5 space-y-2.5">
                           <div className="flex items-center justify-between">
                             <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-400">
