@@ -96,6 +96,8 @@ export interface ProductCoupon {
   discountValue: number;
   active: boolean;
   usedCount?: number;
+  maxUses?: number;
+  expiresAt?: string;
   applicablePlans?: string[];
   applicableAffiliates?: string[];
 }
