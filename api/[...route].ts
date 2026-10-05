@@ -22,6 +22,7 @@ import plansHandler from '../server-api/plans.js';
 import subscriptionCheckoutHandler from '../server-api/stripe/subscription-checkout.js';
 import productSubscriptionCheckoutHandler from '../server-api/stripe/product-subscription-checkout.js';
 import productSubscriptionStatusHandler from '../server-api/stripe/product-subscription-status.js';
+import upsellCheckoutHandler from '../server-api/stripe/upsell-checkout.js';
 import stripeWithdrawalHandler from '../server-api/stripe/withdrawal.js';
 import partnerApiKeyHandler from '../server-api/partner/api-key.js';
 import partnerSettingsHandler from '../server-api/partner/settings.js';
@@ -162,6 +163,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return productSubscriptionCheckoutHandler(req as any, res as any);
     case 'stripe/product-subscription-status':
       return productSubscriptionStatusHandler(req as any, res as any);
+    case 'stripe/upsell-checkout':
+      return upsellCheckoutHandler(req as any, res as any);
     case 'stripe/withdrawal':
     case 'withdrawals/request':
       return stripeWithdrawalHandler(req as any, res as any);
