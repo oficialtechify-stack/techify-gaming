@@ -239,7 +239,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       : customCheckouts.find((item) => item.isDefault === true);
 
     const variantAmount = Number(selectedCheckout?.price || 0);
-    const baseAmount = selectedCheckout && Number.isFinite(variantAmount) && variantAmount > 0
+    const baseAmount = selectedCheckout && selectedCheckout.isDefault !== true && Number.isFinite(variantAmount) && variantAmount > 0
       ? variantAmount
       : authoritativePrice(plan);
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) return fail(res, 409, 'A oferta não possui preço válido.', 'INVALID_SERVER_PRICE');
