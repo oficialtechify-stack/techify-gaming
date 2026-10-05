@@ -123,6 +123,126 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
     }
   }, [plan, stripeReturnStatus, deliveryUrl]);
 
+  useEffect(() => {
+    if (
+      stripeReturnStatus !== 'paid' ||
+      !plan ||
+      plan.pixelPurchaseEventEnabled === false ||
+      !plan.pixelId ||
+      !txId
+    ) return;
+
+    let consent = false;
+    try {
+      consent = localStorage.getItem('cookie_consent') === 'true';
+    } catch {}
+    if (!consent) return;
+
+    const provider = String(plan.pixelProvider || 'none').toLowerCase();
+    const pixelId = String(plan.pixelId || '').trim();
+    if (!pixelId || provider === 'none' || provider === 'custom') return;
+
+    const eventKey = `leadspay_purchase_pixel_${provider}_${pixelId}_${txId}`;
+    try {
+      if (localStorage.getItem(eventKey) === '1') return;
+      localStorage.setItem(eventKey, '1');
+    } catch {}
+
+    const win = window as any;
+    const purchasePayload = {
+      value: Number(amount || 0),
+      currency: 'BRL',
+      content_ids: [plan.id],
+      content_name: plan.name,
+      transaction_id: txId,
+    };
+
+    try {
+      if (provider === 'meta') {
+        if (!win.fbq) {
+          const fbq: any = function (...args: any[]) {
+            if (fbq.callMethod) fbq.callMethod(...args);
+            else fbq.queue.push(args);
+          };
+          fbq.queue = [];
+          fbq.loaded = true;
+          fbq.version = '2.0';
+          win._fbq = win.fbq = fbq;
+          if (!document.querySelector('script[data-leadspay-meta-pixel]')) {
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+            script.dataset.leadspayMetaPixel = '1';
+            document.head.appendChild(script);
+          }
+        }
+        win.fbq('init', pixelId);
+        win.fbq('track', 'Purchase', purchasePayload);
+        return;
+      }
+
+      if (provider === 'google') {
+        win.dataLayer = win.dataLayer || [];
+        win.gtag = win.gtag || function (...args: any[]) { win.dataLayer.push(args); };
+        if (!document.querySelector(`script[data-leadspay-google-pixel="${pixelId}"]`)) {
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(pixelId)}`;
+          script.dataset.leadspayGooglePixel = pixelId;
+          document.head.appendChild(script);
+        }
+        win.gtag('js', new Date());
+        win.gtag('config', pixelId);
+        win.gtag('event', 'purchase', {
+          transaction_id: txId,
+          value: Number(amount || 0),
+          currency: 'BRL',
+          items: [{ item_id: plan.id, item_name: plan.name, price: Number(amount || 0), quantity: 1 }],
+        });
+        return;
+      }
+
+      if (provider === 'tiktok') {
+        if (!win.ttq) {
+          const ttq: any = [];
+          ttq.methods = ['page', 'track', 'identify', 'instances', 'debug', 'on', 'off', 'once', 'ready', 'alias', 'group', 'enableCookie', 'disableCookie'];
+          ttq.setAndDefer = (target: any, method: string) => {
+            target[method] = (...args: any[]) => target.push([method, ...args]);
+          };
+          for (const method of ttq.methods) ttq.setAndDefer(ttq, method);
+          ttq.instance = (id: string) => {
+            const instance: any = [];
+            for (const method of ttq.methods) ttq.setAndDefer(instance, method);
+            instance._i = id;
+            return instance;
+          };
+          ttq.load = (id: string) => {
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = 'https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=' + encodeURIComponent(id) + '&lib=ttq';
+            script.dataset.leadspayTiktokPixel = id;
+            document.head.appendChild(script);
+          };
+          win.TiktokAnalyticsObject = 'ttq';
+          win.ttq = ttq;
+        }
+        if (!document.querySelector(`script[data-leadspay-tiktok-pixel="${pixelId}"]`)) {
+          win.ttq.load(pixelId);
+        }
+        win.ttq.page();
+        win.ttq.track('CompletePayment', {
+          content_id: plan.id,
+          content_name: plan.name,
+          value: Number(amount || 0),
+          currency: 'BRL',
+        });
+      }
+    } catch (error) {
+      console.warn('[LeadsPay Pixel] Não foi possível registrar a conversão.', error);
+      try { localStorage.removeItem(eventKey); } catch {}
+    }
+  }, [stripeReturnStatus, plan, txId, amount]);
+
   // Auto-redirect countdown if redirect type with URL
   useEffect(() => {
     if (stripeReturnStatus !== 'paid') return;
