@@ -1011,13 +1011,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Handle update plan
   const handleUpdatePlan = async (planId: string, updates: Partial<CompanyPlan>) => {
     try {
-      await updateCompanyPlanInFirebase(planId, updates);
+      const savedPlan = await updateCompanyPlanInFirebase(planId, updates);
+      setDetailedEditingPlan((current) => current?.id === planId ? savedPlan : current);
+      setLiveCheckoutPlan((current) => current?.id === planId ? savedPlan : current);
       setLiveToast({
-        message: 'Plano atualizado com sucesso!',
-        sub: updates.name || 'Alterações salvas',
-        amount: 'Atualizado'
+        message: 'Produto atualizado com sucesso!',
+        sub: savedPlan.name || updates.name || 'Alterações salvas',
+        amount: 'Salvo'
       });
       setTimeout(() => setLiveToast(null), 4000);
+      return savedPlan;
     } catch (err: any) {
       console.error('Error updating plan:', err);
       setLiveToast({
@@ -1796,8 +1799,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               plan={detailedEditingPlan}
               onBack={() => setDetailedEditingPlan(null)}
               onSave={async (updatedPlan) => {
-                await handleUpdatePlan(detailedEditingPlan.id, updatedPlan);
-                setDetailedEditingPlan(null);
+                return await handleUpdatePlan(detailedEditingPlan.id, updatedPlan);
               }}
               onDelete={async (planId, compId) => {
                 await handleDeletePlan(planId, compId);
