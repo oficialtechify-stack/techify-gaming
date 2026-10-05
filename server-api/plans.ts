@@ -17,7 +17,15 @@ type ResponseLike = {
 };
 
 const SUPPORTED_DELIVERY_TYPES = new Set(['redirect', 'whatsapp', 'membership', 'download']);
-const SUPPORTED_BILLING_CYCLES = new Set(['WEEKLY', 'MONTHLY', 'YEARLY']);
+const SUPPORTED_BILLING_CYCLES = new Set([
+  'WEEKLY',
+  'BIWEEKLY',
+  'MONTHLY',
+  'BIMONTHLY',
+  'QUARTERLY',
+  'SEMIANNUALLY',
+  'YEARLY',
+]);
 
 function slugify(input: string): string {
   const clean = input
@@ -64,6 +72,140 @@ function sanitizeFeatures(value: unknown): string[] {
     .map((item) => String(item || '').trim().slice(0, 180))
     .filter(Boolean)
     .slice(0, 30);
+}
+
+const PAYMENT_METHODS = new Set(['PIX', 'CARD', 'BOLETO', 'APPLE_PAY', 'GOOGLE_PAY']);
+const PIXEL_PROVIDERS = new Set(['none', 'meta', 'google', 'tiktok', 'custom']);
+const AFFILIATE_APPROVAL_MODES = new Set(['automatic', 'manual']);
+const AFFILIATE_ATTRIBUTIONS = new Set(['last_click', 'first_click']);
+const CONFIRMATION_EMAIL_TIMINGS = new Set(['immediate', 'after_upsell']);
+
+function clampNumber(value: unknown, min: number, max: number, fallback = 0): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function sanitizePaymentMethods(value: unknown, billingType: string): string[] {
+  if (!Array.isArray(value)) return billingType === 'recorrente' ? ['CARD'] : ['PIX', 'CARD', 'BOLETO'];
+  const methods = [...new Set(
+    value
+      .map((item) => String(item || '').trim().toUpperCase())
+      .filter((item) => PAYMENT_METHODS.has(item))
+  )].slice(0, 5);
+
+  // Stripe recurring subscriptions currently use card rails in this flow.
+  if (billingType === 'recorrente') {
+    return methods.some((method) => method === 'CARD' || method === 'APPLE_PAY' || method === 'GOOGLE_PAY')
+      ? methods.filter((method) => method === 'CARD' || method === 'APPLE_PAY' || method === 'GOOGLE_PAY')
+      : ['CARD'];
+  }
+
+  return methods.length ? methods : ['PIX', 'CARD', 'BOLETO'];
+}
+
+function sanitizeOrderBumps(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).map((item, index) => {
+    const raw = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    const id = String(raw.id || `bump_${index + 1}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
+    return {
+      id: id || `bump_${index + 1}`,
+      name: String(raw.name || 'Order Bump').trim().slice(0, 120),
+      description: String(raw.description || '').trim().slice(0, 600),
+      price: Number(clampNumber(raw.price, 0.5, 100000, 0).toFixed(2)),
+      active: raw.active !== false,
+      image: normalizeBannerImage(raw.image),
+    };
+  }).filter((item) => Number(item.price || 0) >= 0.5);
+}
+
+function sanitizeUpsells(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 8).map((item, index) => {
+    const raw = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    const id = String(raw.id || `upsell_${index + 1}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
+    return {
+      id: id || `upsell_${index + 1}`,
+      name: String(raw.name || 'Upsell').trim().slice(0, 120),
+      description: String(raw.description || '').trim().slice(0, 600),
+      price: Number(clampNumber(raw.price, 0.5, 100000, 0).toFixed(2)),
+      active: raw.active !== false,
+    };
+  }).filter((item) => Number(item.price || 0) >= 0.5);
+}
+
+function sanitizeCoupons(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const result: Array<Record<string, unknown>> = [];
+
+  for (const item of value.slice(0, 30)) {
+    const raw = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    const code = String(raw.code || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, '')
+      .slice(0, 40);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+
+    const discountType = raw.discountType === 'fixed' ? 'fixed' : 'percentage';
+    const maxDiscount = discountType === 'percentage' ? 100 : 100000;
+    result.push({
+      id: String(raw.id || code).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || code,
+      code,
+      discountType,
+      discountValue: Number(clampNumber(raw.discountValue, 0.01, maxDiscount, 0).toFixed(2)),
+      active: raw.active !== false,
+      usedCount: Math.max(0, Math.floor(clampNumber(raw.usedCount, 0, 100000000, 0))),
+      maxUses: Math.max(0, Math.floor(clampNumber(raw.maxUses, 0, 100000000, 0))),
+      expiresAt: String(raw.expiresAt || '').trim().slice(0, 80),
+    });
+  }
+
+  return result.filter((coupon) => Number(coupon.discountValue || 0) > 0);
+}
+
+function sanitizeCustomCheckouts(value: unknown, planId: string, defaultPrice: number, planName: string): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  const seenSlugs = new Set<string>();
+  return value.slice(0, 12).map((item, index) => {
+    const raw = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    let checkoutSlug = String(raw.checkoutSlug || `${planId}-${index + 1}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '')
+      .slice(0, 100);
+    if (!checkoutSlug || seenSlugs.has(checkoutSlug)) checkoutSlug = `${planId}-${index + 1}`;
+    seenSlugs.add(checkoutSlug);
+    return {
+      id: String(raw.id || `checkout_${index + 1}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || `checkout_${index + 1}`,
+      name: String(raw.name || (index === 0 ? 'Checkout Principal' : `Checkout ${index + 1}`)).trim().slice(0, 120),
+      isDefault: index === 0 ? true : raw.isDefault === true,
+      price: Number(clampNumber(raw.price, 0.5, 1000000, defaultPrice).toFixed(2)),
+      offerName: String(raw.offerName || planName).trim().slice(0, 160),
+      visitsCount: Math.max(0, Math.floor(clampNumber(raw.visitsCount, 0, 100000000, 0))),
+      salesCount: Math.max(0, Math.floor(clampNumber(raw.salesCount, 0, 100000000, 0))),
+      checkoutSlug,
+      bannerImage: normalizeBannerImage(raw.bannerImage),
+      timerMinutes: Math.max(0, Math.floor(clampNumber(raw.timerMinutes, 0, 1440, 0))),
+      buttonText: String(raw.buttonText || 'Continuar para pagamento').trim().slice(0, 80),
+    };
+  });
+}
+
+function sanitizeCoproducers(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 10).map((item, index) => {
+    const raw = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    return {
+      id: String(raw.id || `cop_${index + 1}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || `cop_${index + 1}`,
+      name: String(raw.name || 'Coprodutor').trim().slice(0, 160),
+      email: String(raw.email || '').trim().toLowerCase().slice(0, 200),
+      commissionPercentage: Number(clampNumber(raw.commissionPercentage, 0, 100, 0).toFixed(2)),
+      status: raw.status === 'active' ? 'active' : 'pending',
+      createdAt: String(raw.createdAt || new Date().toISOString()).slice(0, 80),
+    };
+  }).filter((item) => item.email && Number(item.commissionPercentage || 0) > 0);
 }
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
@@ -492,11 +634,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       });
     }
 
-    const deliveryUrl = safeHttpsUrl(body.deliveryUrl || body.thankYouPageUrl);
-    if (!isPaymentLink && !deliveryUrl) {
-      return res.status(400).json({ error: 'Informe uma URL HTTPS pública válida para a entrega do produto.' });
-    }
-
+    const requestedDeliveryUrl = safeHttpsUrl(body.deliveryUrl || body.thankYouPageUrl);
     const deliveryInstructions = String(body.deliveryInstructions || '').trim().slice(0, 3000);
     const bannerImage = normalizeBannerImage(body.bannerImage);
     if (body.bannerImage && !bannerImage) {
@@ -514,6 +652,15 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const planRef = db.collection('plans').doc(planId);
     const deliveryRef = db.collection('plan_delivery').doc(planId);
     const existing = await planRef.get();
+    const existingDelivery = existing.exists ? await deliveryRef.get() : null;
+    const deliveryUrl = requestedDeliveryUrl || String(existingDelivery?.data()?.deliveryUrl || '');
+    const resolvedDeliveryInstructions = body.deliveryInstructions !== undefined
+      ? deliveryInstructions
+      : String(existingDelivery?.data()?.deliveryInstructions || '').slice(0, 3000);
+
+    if (!isPaymentLink && !deliveryUrl) {
+      return res.status(400).json({ error: 'Informe uma URL HTTPS pública válida para a entrega do produto.' });
+    }
 
     if (
       existing.exists &&
@@ -530,6 +677,29 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       .slice(0, 100);
 
     const features = sanitizeFeatures(body.features);
+    const paymentMethods = sanitizePaymentMethods(body.paymentMethods, billingType);
+    const requestedDefaultPaymentMethod = String(body.defaultPaymentMethod || '').toUpperCase();
+    const defaultPaymentMethod = paymentMethods.includes(requestedDefaultPaymentMethod)
+      ? requestedDefaultPaymentMethod
+      : paymentMethods[0];
+    const orderBumps = sanitizeOrderBumps(body.orderBumps);
+    const upsells = sanitizeUpsells(body.upsells);
+    const coupons = sanitizeCoupons(body.coupons);
+    const customCheckouts = sanitizeCustomCheckouts(body.customCheckouts, planId, priceSetup, name);
+    const coproducers = sanitizeCoproducers(body.coproducers);
+    const pixelProvider = PIXEL_PROVIDERS.has(String(body.pixelProvider || 'none'))
+      ? String(body.pixelProvider || 'none')
+      : 'none';
+    const affiliateApprovalMode = AFFILIATE_APPROVAL_MODES.has(String(body.affiliateApprovalMode || 'automatic'))
+      ? String(body.affiliateApprovalMode || 'automatic')
+      : 'automatic';
+    const affiliateAttribution = AFFILIATE_ATTRIBUTIONS.has(String(body.affiliateAttribution || 'last_click'))
+      ? String(body.affiliateAttribution || 'last_click')
+      : 'last_click';
+    const confirmationEmailTiming = CONFIRMATION_EMAIL_TIMINGS.has(String(body.confirmationEmailTiming || 'immediate'))
+      ? String(body.confirmationEmailTiming || 'immediate')
+      : 'immediate';
+
     const payload: Record<string, any> = {
       companyId,
       companyName: String(company.name || company.companyName || '').slice(0, 160),
@@ -541,7 +711,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       category: String(body.category || company.category || 'Digital').trim().slice(0, 120),
       price: Number(priceSetup.toFixed(2)),
       priceSetup: Number(priceSetup.toFixed(2)),
-      priceMonthly: billingType === 'recorrente' ? Number(priceSetup.toFixed(2)) : 0,
+      priceMonthly: billingType === 'recorrente'
+        ? Number(clampNumber(body.priceMonthly ?? priceSetup, 0.5, 1000000, priceSetup).toFixed(2))
+        : 0,
       commissionPercentage: Number(commissionPercentage.toFixed(2)),
       commissionValue: Number(((priceSetup * commissionPercentage) / 100).toFixed(2)),
       recurrentCommissionPercent: billingType === 'recorrente' ? Number(recurrentCommissionPercent.toFixed(2)) : 0,
@@ -564,6 +736,31 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       deliveryType: isPaymentLink ? 'redirect' : deliveryType,
       deliveryConfigured: !isPaymentLink,
       allowAffiliates,
+      supportEmail: String(body.supportEmail || '').trim().toLowerCase().slice(0, 200),
+      warrantyDays: Math.floor(clampNumber(body.warrantyDays, 0, 365, 7)),
+      paymentMethods,
+      defaultPaymentMethod,
+      maxInstallments: Math.floor(clampNumber(body.maxInstallments, 1, 12, 12)),
+      affiliateApprovalMode,
+      affiliateSupportEmail: String(body.affiliateSupportEmail || '').trim().toLowerCase().slice(0, 200),
+      affiliateDescription: String(body.affiliateDescription || '').trim().slice(0, 3000),
+      affiliateCookieDays: Math.floor(clampNumber(body.affiliateCookieDays, 1, 365, 30)),
+      affiliateAttribution,
+      affiliateMarketplaceVisible: body.affiliateMarketplaceVisible !== false,
+      affiliateCommissionOnOrderBump: body.affiliateCommissionOnOrderBump !== false,
+      affiliateCommissionOnUpsell: body.affiliateCommissionOnUpsell === true,
+      pixelProvider,
+      pixelId: String(body.pixelId || '').trim().slice(0, 180),
+      pixelPurchaseEventEnabled: body.pixelPurchaseEventEnabled !== false,
+      thankYouUpsellEnabled: body.thankYouUpsellEnabled === true,
+      upsellIgnoreOrderBumpFailure: body.upsellIgnoreOrderBumpFailure === true,
+      confirmationEmailEnabled: body.confirmationEmailEnabled !== false,
+      confirmationEmailTiming,
+      orderBumps,
+      upsells,
+      coupons,
+      customCheckouts,
+      coproducers,
       status,
       active: status === 'Ativo',
       updatedAt: now,
@@ -593,7 +790,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       ownerId: identity.uid,
       deliveryType: isPaymentLink ? 'redirect' : deliveryType,
       deliveryUrl: isPaymentLink ? '' : deliveryUrl,
-      deliveryInstructions: isPaymentLink ? '' : deliveryInstructions,
+      deliveryInstructions: isPaymentLink ? '' : resolvedDeliveryInstructions,
       updatedAt: now,
       ...(existing.exists ? {} : { createdAt: now }),
     };
@@ -601,6 +798,39 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const batch = db.batch();
     batch.set(planRef, payload, { merge: true });
     batch.set(deliveryRef, privateDelivery, { merge: true });
+
+    const previousCoupons = Array.isArray(existing.data()?.coupons) ? existing.data()!.coupons as Array<Record<string, any>> : [];
+    const nextCouponCodes = new Set(coupons.map((coupon) => String(coupon.code || '')));
+    for (const previousCoupon of previousCoupons) {
+      const previousCode = String(previousCoupon.code || '').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
+      if (previousCode && !nextCouponCodes.has(previousCode)) {
+        batch.delete(db.collection('coupons').doc(`${companyId}_${previousCode}`));
+      }
+    }
+    for (const coupon of coupons) {
+      const code = String(coupon.code || '');
+      if (!code) continue;
+      const couponRef = db.collection('coupons').doc(`${companyId}_${code}`);
+      const existingCoupon = previousCoupons.find((item) => String(item.code || '').toUpperCase() === code);
+      batch.set(couponRef, {
+        id: `${companyId}_${code}`,
+        companyId,
+        code,
+        discountType: coupon.discountType,
+        value: coupon.discountValue,
+        maxUses: coupon.maxUses || 0,
+        usedCount: Number(existingCoupon?.usedCount || coupon.usedCount || 0),
+        expiresAt: coupon.expiresAt || '',
+        status: coupon.active === false ? 'paused' : 'active',
+        applicablePlans: [planId],
+        applicablePlansNames: [name],
+        applicableAffiliates: ['all'],
+        applicableAffiliatesNames: ['Todos os afiliados'],
+        updatedAt: now,
+        ...(existingCoupon ? {} : { createdAt: now }),
+      }, { merge: true });
+    }
+
     if (!existing.exists) {
       batch.set(companySnap.ref, {
         totalPlansCount: FieldValue.increment(1),
