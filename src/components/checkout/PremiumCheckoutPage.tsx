@@ -85,17 +85,29 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [theme, setTheme] = useState<'light' | 'dark'>(() => readTheme());
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [couponCode] = useState(() => {
+  const [couponCode, setCouponCode] = useState(() => {
     try {
-      return new URLSearchParams(window.location.search).get('coupon') || '';
+      return (new URLSearchParams(window.location.search).get('coupon') || '').toUpperCase();
     } catch {
       return '';
     }
   });
+  const [selectedOrderBumpId, setSelectedOrderBumpId] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
   const [orderId, setOrderId] = useState('');
+  const [serverPricing, setServerPricing] = useState<{
+    originalProductAmountCents?: number;
+    discountCents?: number;
+    productAmountCents?: number;
+    orderBumpAmountCents?: number;
+    orderBumpName?: string | null;
+    checkoutFeeCents?: number;
+    totalCents?: number;
+    couponCode?: string | null;
+    checkoutVariant?: string | null;
+  } | null>(null);
   const stripeAttemptId = useRef('');
 
   const isDark = theme === 'dark';
@@ -110,29 +122,78 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const billingCycleLabel =
     billingCycle === 'WEEKLY'
       ? 'semana'
-      : billingCycle === 'YEARLY'
-        ? 'ano'
-        : billingCycle === 'QUARTERLY'
-          ? 'trimestre'
-          : billingCycle === 'SEMIANNUALLY'
-            ? 'semestre'
-            : 'mês';
+      : billingCycle === 'BIWEEKLY'
+        ? '2 semanas'
+        : billingCycle === 'BIMONTHLY'
+          ? '2 meses'
+          : billingCycle === 'QUARTERLY'
+            ? '3 meses'
+            : billingCycle === 'SEMIANNUALLY'
+              ? '6 meses'
+              : billingCycle === 'YEARLY'
+                ? 'ano'
+                : 'mês';
 
-  const basePrice = Number(
+  const checkoutVariant = useMemo(() => {
+    try {
+      return (new URLSearchParams(window.location.search).get('variant') || '').trim().toLowerCase();
+    } catch {
+      return '';
+    }
+  }, []);
+
+  const selectedCheckout = useMemo(() => {
+    const checkouts = Array.isArray(plan.customCheckouts) ? plan.customCheckouts : [];
+    if (isRecurring) return checkouts.find((item) => item.isDefault) || null;
+    return (
+      (checkoutVariant
+        ? checkouts.find((item) => String(item.checkoutSlug || '').toLowerCase() === checkoutVariant)
+        : null) ||
+      checkouts.find((item) => item.isDefault) ||
+      null
+    );
+  }, [plan.customCheckouts, checkoutVariant, isRecurring]);
+
+  const configuredBasePrice = Number(
     (isRecurring ? plan.priceMonthly : plan.priceSetup) ??
       plan.priceSetup ??
       plan.price ??
       plan.priceMonthly ??
       0
   );
+  const variantPrice = Number(selectedCheckout?.price || 0);
+  const basePrice = !isRecurring && selectedCheckout && Number.isFinite(variantPrice) && variantPrice > 0
+    ? variantPrice
+    : configuredBasePrice;
 
-  const finalTotal = Number((basePrice + PLATFORM_CHECKOUT_FEE).toFixed(2));
+  const activeOrderBumps = useMemo(
+    () => isRecurring
+      ? []
+      : (Array.isArray(plan.orderBumps) ? plan.orderBumps.filter((item) => item.active !== false && Number(item.price || 0) > 0) : []),
+    [isRecurring, plan.orderBumps]
+  );
+  const selectedOrderBump = activeOrderBumps.find((item) => item.id === selectedOrderBumpId) || null;
+  const selectedOrderBumpAmount = Number(selectedOrderBump?.price || 0);
+
+  const estimatedTotal = Number((basePrice + selectedOrderBumpAmount + PLATFORM_CHECKOUT_FEE).toFixed(2));
+  const resolvedProductAmount = serverPricing?.productAmountCents !== undefined
+    ? serverPricing.productAmountCents / 100
+    : basePrice;
+  const resolvedDiscount = Number(serverPricing?.discountCents || 0) / 100;
+  const resolvedOrderBumpAmount = serverPricing?.orderBumpAmountCents !== undefined
+    ? Number(serverPricing.orderBumpAmountCents || 0) / 100
+    : selectedOrderBumpAmount;
+  const finalTotal = serverPricing?.totalCents !== undefined
+    ? Number(serverPricing.totalCents || 0) / 100
+    : estimatedTotal;
 
   const productImage =
+    selectedCheckout?.bannerImage ||
     plan.bannerImage ||
     plan.companyLogo ||
     'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80';
 
+  const productName = selectedCheckout?.offerName || plan.name;
   const sellerName = plan.companyName || 'LeadsPay Pagamentos';
   const description = (plan.tagline || plan.description || 'Clareza para dar o próximo passo.').trim();
   const featureLine =
@@ -255,7 +316,9 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             buyerName: fullName.trim(),
             buyerEmail: email.trim(),
             affiliateCode: getActiveAffiliateCode() || affiliateRef || '',
-            couponCode: couponCode.trim(),
+            couponCode: isRecurring ? '' : couponCode.trim().toUpperCase(),
+            checkoutVariant: isRecurring ? '' : checkoutVariant,
+            orderBumpId: isRecurring ? '' : selectedOrderBumpId,
             utmSource: new URLSearchParams(window.location.search).get('utm_source') || '',
             utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || '',
             utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || '',
@@ -295,6 +358,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         return;
       }
 
+      setServerPricing(result.pricing || null);
       setClientSecret(String(result.clientSecret));
       setOrderId(String(result.orderId));
     } catch (error) {
@@ -445,12 +509,12 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               <div className="mt-3 flex items-center gap-3 sm:mt-4 sm:gap-4">
                 <img
                   src={productImage}
-                  alt={plan.name}
+                  alt={productName}
                   className="h-[58px] w-[66px] shrink-0 rounded-lg border border-white/5 object-cover sm:h-[82px] sm:w-[102px] sm:rounded-xl"
                 />
                 <div className="min-w-0">
                   <h2 className="truncate text-[17px] font-black tracking-[-0.02em] sm:text-[27px]">
-                    {plan.name}
+                    {productName}
                   </h2>
                   <p className={cx('mt-0.5 truncate text-xs sm:mt-1 sm:text-base', mutedClass)}>
                     Vendido por {sellerName}
@@ -502,10 +566,72 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                       placeholder="voce@exemplo.com"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      className={cx('min-h-[52px] w-full rounded-xl border px-4 text-base outline-none transition focus:ring-2', inputClass)}
+                      className={cx('min-h-[48px] w-full rounded-xl border px-3.5 text-sm outline-none transition focus:ring-2 sm:min-h-[52px] sm:px-4 sm:text-base', inputClass)}
                     />
                   </div>
+
+                  {!isRecurring && (
+                    <div>
+                      <label htmlFor="checkout-coupon" className="mb-2 block text-sm font-medium">
+                        Cupom <span className={cx('font-normal', subtleClass)}>(opcional)</span>
+                      </label>
+                      <input
+                        id="checkout-coupon"
+                        type="text"
+                        autoCapitalize="characters"
+                        maxLength={40}
+                        placeholder="Digite seu cupom"
+                        value={couponCode}
+                        onChange={(event) => {
+                          setCouponCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''));
+                          setServerPricing(null);
+                          stripeAttemptId.current = '';
+                        }}
+                        className={cx('min-h-[48px] w-full rounded-xl border px-3.5 text-sm font-semibold uppercase outline-none transition focus:ring-2 sm:min-h-[52px] sm:px-4 sm:text-base', inputClass)}
+                      />
+                    </div>
+                  )}
                 </div>
+
+                {!isRecurring && activeOrderBumps.length > 0 && (
+                  <div className="mt-4 space-y-2.5">
+                    <p className="text-xs font-black uppercase tracking-[0.08em] text-[#B8F128]">Complete seu pedido</p>
+                    {activeOrderBumps.map((bump) => {
+                      const selected = selectedOrderBumpId === bump.id;
+                      return (
+                        <button
+                          key={bump.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedOrderBumpId(selected ? '' : bump.id);
+                            setServerPricing(null);
+                            stripeAttemptId.current = '';
+                          }}
+                          className={cx(
+                            'flex w-full items-center gap-3 rounded-xl border p-3 text-left transition sm:p-4',
+                            selected
+                              ? 'border-[#B8F128]/55 bg-[#B8F128]/10'
+                              : isDark
+                                ? 'border-white/10 bg-white/[0.025] hover:border-white/20'
+                                : 'border-black/10 bg-black/[0.015] hover:border-black/20'
+                          )}
+                        >
+                          <span className={cx(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border',
+                            selected ? 'border-[#B8F128] bg-[#B8F128] text-black' : isDark ? 'border-white/25' : 'border-black/20'
+                          )}>
+                            {selected && <CheckCircle2 className="h-3.5 w-3.5" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-black">{bump.name}</span>
+                            {bump.description && <span className={cx('mt-0.5 block line-clamp-2 text-[11px]', mutedClass)}>{bump.description}</span>}
+                          </span>
+                          <span className="shrink-0 text-sm font-black text-[#B8F128]">+ {formatBRL(Number(bump.price || 0))}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {formError && (
                   <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert">
@@ -563,6 +689,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                     onClick={() => {
                       setClientSecret('');
                       setOrderId('');
+                      setServerPricing(null);
                       stripeAttemptId.current = createAttemptId();
                       setFormError(null);
                     }}
@@ -608,7 +735,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               <img src={productImage} alt={plan.name} className="h-[58px] w-[66px] shrink-0 rounded-lg object-cover sm:h-[82px] sm:w-[94px] sm:rounded-xl" />
 
               <div className="min-w-0">
-                <h3 className="truncate text-[16px] font-black sm:text-[21px]">{plan.name}</h3>
+                <h3 className="truncate text-[16px] font-black sm:text-[21px]">{productName}</h3>
                 <p className={cx('mt-0.5 text-xs sm:mt-1 sm:text-sm', mutedClass)}>
                   {isRecurring ? 'Assinatura • a cada ' + billingCycleLabel : 'Cobrança única'}
                 </p>
@@ -627,8 +754,22 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             <div className="space-y-3 text-[13px] sm:space-y-4 sm:text-base">
               <div className="flex items-center justify-between gap-4">
                 <span className={mutedClass}>Produto</span>
-                <span className="font-medium">{formatBRL(basePrice)}</span>
+                <span className="font-medium">{formatBRL(resolvedProductAmount)}</span>
               </div>
+
+              {resolvedDiscount > 0 && (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-emerald-400">Desconto {serverPricing?.couponCode ? `(${serverPricing.couponCode})` : ''}</span>
+                  <span className="font-semibold text-emerald-400">- {formatBRL(resolvedDiscount)}</span>
+                </div>
+              )}
+
+              {resolvedOrderBumpAmount > 0 && (
+                <div className="flex items-center justify-between gap-4">
+                  <span className={mutedClass}>{serverPricing?.orderBumpName || selectedOrderBump?.name || 'Order Bump'}</span>
+                  <span className="font-medium">+ {formatBRL(resolvedOrderBumpAmount)}</span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-4">
                 <span className={mutedClass}>Taxa da plataforma</span>
@@ -636,7 +777,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               </div>
             </div>
 
-            <div className={cx('my-6 border-t', dividerClass)} />
+            <div className={cx('my-4 border-t sm:my-6', dividerClass)} />
 
             <div className="flex items-end justify-between gap-4">
               <span className="text-[17px] font-black sm:text-[21px]">Total a pagar</span>
