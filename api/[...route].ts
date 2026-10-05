@@ -13,6 +13,7 @@ import legacyLookupHandler from '../server-api/profile/legacy-lookup.js';
 import affiliateJoinHandler from '../server-api/affiliates/join.js';
 import affiliateClickHandler from '../server-api/affiliates/click.js';
 import affiliateLeaveHandler from '../server-api/affiliates/leave.js';
+import affiliateManageHandler from '../server-api/affiliates/manage.js';
 import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
 import adminEntityActionHandler from '../server-api/admin/entity-action.js';
 import adminExplorerHandler from '../server-api/admin/explorer.js';
@@ -215,6 +216,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return affiliateClickHandler(req as any, res as any);
     case 'affiliates/leave':
       return affiliateLeaveHandler(req as any, res as any);
+    case 'affiliates/manage':
+      return affiliateManageHandler(req as any, res as any);
     case 'mcp':
       return mcpProtocolHandler(req as any, res as any);
     case 'mcp/v1':
