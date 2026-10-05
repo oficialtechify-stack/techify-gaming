@@ -30,10 +30,14 @@ function activeAffiliation(affiliation: Record<string, any>): boolean {
   return status === 'ativo' || status === 'active';
 }
 
-function cycleToStripe(cycle: string): 'week' | 'month' | 'year' {
-  if (cycle === 'WEEKLY') return 'week';
-  if (cycle === 'YEARLY') return 'year';
-  return 'month';
+function cycleToStripe(cycle: string): { interval: 'week' | 'month' | 'year'; interval_count: number } {
+  if (cycle === 'WEEKLY') return { interval: 'week', interval_count: 1 };
+  if (cycle === 'BIWEEKLY') return { interval: 'week', interval_count: 2 };
+  if (cycle === 'BIMONTHLY') return { interval: 'month', interval_count: 2 };
+  if (cycle === 'QUARTERLY') return { interval: 'month', interval_count: 3 };
+  if (cycle === 'SEMIANNUALLY') return { interval: 'month', interval_count: 6 };
+  if (cycle === 'YEARLY') return { interval: 'year', interval_count: 1 };
+  return { interval: 'month', interval_count: 1 };
 }
 
 async function requireReadyConnectAccount(
@@ -326,7 +330,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const checkoutSlug = String(plan.checkoutSlug || plan.slug || planId);
     const planName = String(plan.name || 'Assinatura LeadsPay').slice(0, 160);
     const companyName = String(company.name || plan.companyName || 'Empresa LeadsPay').slice(0, 160);
-    const stripeInterval = cycleToStripe(cycle);
+    const stripeRecurring = cycleToStripe(cycle);
 
     const metadata: Record<string, string> = {
       leadspay_product_subscription: '1',
@@ -355,6 +359,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer_email: buyerEmail,
+      payment_method_types: ['card'],
       client_reference_id: attemptId,
       line_items: [
         {
@@ -362,7 +367,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           price_data: {
             currency: 'brl',
             unit_amount: productAmountCents,
-            recurring: { interval: stripeInterval },
+            recurring: stripeRecurring,
             product_data: {
               name: planName,
               description: String(plan.description || '').slice(0, 500) || undefined,
@@ -374,7 +379,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           price_data: {
             currency: 'brl',
             unit_amount: checkoutFeeCents,
-            recurring: { interval: stripeInterval },
+            recurring: stripeRecurring,
             product_data: { name: 'Taxa de checkout LeadsPay' },
           },
         },
