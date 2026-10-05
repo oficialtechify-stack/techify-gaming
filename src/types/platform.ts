@@ -278,7 +278,7 @@ export interface UserAffiliation {
   salesCount: number;
   totalEarned: number;
   totalCommissionEarned?: number;
-  status: 'Ativo' | 'Pendente';
+  status: 'Ativo' | 'Pendente' | 'Recusada' | 'Encerrada' | string;
   createdAt: string;
   affiliatedAt?: string;
 }
