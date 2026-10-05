@@ -38,6 +38,7 @@ import enableAffiliateHandler from '../server-api/profile/enable-affiliate.js';
 import mcpRestHandler from '../server-api/mcp/rest.js';
 import mcpProtocolHandler from '../server-api/mcp/protocol.js';
 import publicMetricsHandler from '../server-api/public/metrics.js';
+import checkoutViewHandler from '../server-api/public/checkout-view.js';
 import balanceReleasesHandler from '../server-api/balance/releases.js';
 
 export const config = {
@@ -186,6 +187,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return enableAffiliateHandler(req as any, res as any);
     case 'public/metrics':
       return publicMetricsHandler(req as any, res as any);
+    case 'public/checkout-view':
+      return checkoutViewHandler(req as any, res as any);
     case 'balance/releases':
       return balanceReleasesHandler(req as any, res as any);
     case 'partner/api-key':
