@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   CheckCircle2, 
   ArrowRight, 
@@ -10,8 +10,24 @@ import {
   ShieldCheck,
   Sparkles
 } from 'lucide-react';
-import { CompanyPlan, ProductDeliveryType } from '../../types/platform';
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { CompanyPlan, ProductDeliveryType, ProductUpsell } from '../../types/platform';
 import { getCompanyPlanByIdOrSlug } from '../../services/firestoreService';
+
+const upsellStripeKey = (
+  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ||
+  (import.meta.env as any).NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+  ''
+).trim();
+const upsellStripePromise = upsellStripeKey ? loadStripe(upsellStripeKey) : null;
+
+const createUpsellAttemptId = () => {
+  const nativeId = typeof window !== 'undefined' && window.crypto?.randomUUID
+    ? window.crypto.randomUUID()
+    : '';
+  return (nativeId || `${Date.now()}_${Math.random().toString(36).slice(2)}`).replace(/-/g, '');
+};
 
 interface ThankYouPageProps {
   planId?: string;
@@ -44,6 +60,13 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
   const [amount, setAmount] = useState<number>(initialAmount || 0);
   const [customerName, setCustomerName] = useState<string>(initialName || '');
   const [customerEmail, setCustomerEmail] = useState<string>(initialEmail || '');
+  const [upsellClientSecret, setUpsellClientSecret] = useState('');
+  const [selectedUpsell, setSelectedUpsell] = useState<ProductUpsell | null>(null);
+  const [upsellOrderId, setUpsellOrderId] = useState('');
+  const [upsellError, setUpsellError] = useState('');
+  const [upsellLoadingId, setUpsellLoadingId] = useState('');
+  const [purchasedUpsellIds, setPurchasedUpsellIds] = useState<string[]>([]);
+  const upsellAttemptId = useRef('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -122,6 +145,36 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
       setDeliveryInstructions(plan.deliveryInstructions || '');
     }
   }, [plan, stripeReturnStatus, deliveryUrl]);
+
+  const startUpsellCheckout = async (upsell: ProductUpsell) => {
+    if (!txId || !upsellStripePromise || upsellLoadingId) return;
+    setUpsellError('');
+    setUpsellLoadingId(upsell.id);
+
+    try {
+      upsellAttemptId.current = createUpsellAttemptId();
+      const response = await fetch('/api/stripe/upsell-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalOrderId: txId,
+          upsellId: upsell.id,
+          attemptId: upsellAttemptId.current,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.clientSecret || !data.orderId) {
+        throw new Error(data.error || 'Não foi possível preparar a oferta adicional.');
+      }
+      setSelectedUpsell(upsell);
+      setUpsellClientSecret(String(data.clientSecret));
+      setUpsellOrderId(String(data.orderId));
+    } catch (error) {
+      setUpsellError(error instanceof Error ? error.message : 'Não foi possível preparar a oferta adicional.');
+    } finally {
+      setUpsellLoadingId('');
+    }
+  };
 
   useEffect(() => {
     if (
@@ -324,6 +377,99 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
           )}
         </div>
 
+        {plan?.thankYouUpsellEnabled && Array.isArray(plan.upsells) && plan.upsells.some((item) => item.active !== false) && (
+          <div className="mb-6 space-y-3 rounded-2xl border border-[#84CC16]/30 bg-[#84CC16]/[0.06] p-4 sm:p-5">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#84CC16]">Oferta exclusiva pós-compra</span>
+              <h2 className="mt-1 text-lg font-black text-white">Quer adicionar algo ao seu pedido?</h2>
+              <p className="mt-1 text-xs leading-relaxed text-white/60">
+                A compra principal já está aprovada. Qualquer oferta abaixo é uma nova cobrança opcional.
+              </p>
+            </div>
+
+            {plan.upsells.filter((item) => item.active !== false).map((upsell) => {
+              const purchased = purchasedUpsellIds.includes(upsell.id);
+              return (
+                <div key={upsell.id} className="rounded-xl border border-white/10 bg-[#050811] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-black text-white">{upsell.name}</h3>
+                      {upsell.description && <p className="mt-1 text-xs leading-relaxed text-white/60">{upsell.description}</p>}
+                    </div>
+                    <span className="shrink-0 text-base font-black text-[#84CC16]">
+                      R$ {Number(upsell.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={purchased || upsellLoadingId === upsell.id}
+                    onClick={() => void startUpsellCheckout(upsell)}
+                    className="mt-3 w-full rounded-xl bg-[#84CC16] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-black transition hover:bg-[#74b816] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {purchased ? 'Adicionado ao pedido' : upsellLoadingId === upsell.id ? 'Preparando...' : 'Adicionar oferta'}
+                  </button>
+                </div>
+              );
+            })}
+
+            {upsellError && (
+              <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                {upsellError}
+              </div>
+            )}
+
+            {selectedUpsell && upsellClientSecret && upsellStripePromise && (
+              <div className="rounded-xl border border-white/10 bg-[#07101d] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black text-white">Pagamento de {selectedUpsell.name}</p>
+                    <p className="mt-0.5 text-[10px] text-white/50">Cobrança adicional separada da compra principal.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUpsellClientSecret('');
+                      setSelectedUpsell(null);
+                      setUpsellOrderId('');
+                      setUpsellError('');
+                    }}
+                    className="text-[10px] font-bold text-white/50 hover:text-white"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                <Elements
+                  stripe={upsellStripePromise}
+                  options={{
+                    clientSecret: upsellClientSecret,
+                    appearance: {
+                      theme: 'night',
+                      variables: {
+                        colorPrimary: '#84CC16',
+                        colorBackground: '#07101d',
+                        colorText: '#ffffff',
+                        borderRadius: '12px',
+                      },
+                    },
+                  }}
+                >
+                  <UpsellPaymentForm
+                    orderId={upsellOrderId}
+                    onError={setUpsellError}
+                    onSuccess={() => {
+                      setPurchasedUpsellIds((current) => selectedUpsell ? [...new Set([...current, selectedUpsell.id])] : current);
+                      setUpsellClientSecret('');
+                      setUpsellOrderId('');
+                      setSelectedUpsell(null);
+                      setUpsellError('');
+                    }}
+                  />
+                </Elements>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* DYNAMIC DELIVERY CARD BASED ON DELIVERY METHOD */}
         <div className="space-y-4 mb-6">
           
@@ -484,5 +630,76 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
         )}
       </div>
     </div>
+  );
+};
+
+
+interface UpsellPaymentFormProps {
+  orderId: string;
+  onError: (message: string) => void;
+  onSuccess: () => void;
+}
+
+const UpsellPaymentForm: React.FC<UpsellPaymentFormProps> = ({ orderId, onError, onSuccess }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!stripe || !elements || processing) return;
+
+    setProcessing(true);
+    onError('');
+
+    try {
+      const submitted = await elements.submit();
+      if (submitted.error) {
+        onError(submitted.error.message || 'Confira os dados de pagamento.');
+        return;
+      }
+
+      const result = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/?thank-you=true&upsell_order_id=${encodeURIComponent(orderId)}`,
+        },
+        redirect: 'if_required',
+      });
+
+      if (result.error) {
+        onError(result.error.message || 'Não foi possível confirmar a oferta adicional.');
+        return;
+      }
+
+      if (result.paymentIntent?.status === 'succeeded') {
+        onSuccess();
+        return;
+      }
+
+      if (result.paymentIntent?.status === 'processing' || result.paymentIntent?.status === 'requires_action') {
+        onError('Pagamento iniciado. Siga as instruções da Stripe e aguarde a confirmação.');
+        return;
+      }
+
+      onError('A cobrança foi iniciada, mas ainda não foi confirmada.');
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Falha ao confirmar a oferta adicional.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <PaymentElement options={{ layout: { type: 'accordion', defaultCollapsed: false } }} />
+      <button
+        type="submit"
+        disabled={!stripe || processing}
+        className="w-full rounded-xl bg-[#84CC16] px-4 py-3 text-xs font-black uppercase tracking-wider text-black transition hover:bg-[#74b816] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {processing ? 'Confirmando...' : 'Confirmar cobrança adicional'}
+      </button>
+    </form>
   );
 };
