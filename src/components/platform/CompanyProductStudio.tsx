@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   CompanyPlan,
   ProductCoupon,
+  ProductDeliveryType,
   ProductCustomCheckout,
   ProductOrderBump,
   ProductUpsell
@@ -38,7 +39,7 @@ import {
 
 interface CompanyProductStudioProps {
   plan: CompanyPlan;
-  onSave: (updatedPlan: Partial<CompanyPlan>) => void;
+  onSave: (updatedPlan: Partial<CompanyPlan>) => Promise<CompanyPlan | void> | CompanyPlan | void;
   onDelete: (planId: string, companyId?: string) => void;
   onBack: () => void;
   onOpenCheckout: (plan: CompanyPlan, checkoutSlug?: string) => void;
@@ -96,7 +97,9 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
 
   const [supportEmail, setSupportEmail] = useState(plan.supportEmail || '');
   const [warrantyDays, setWarrantyDays] = useState(plan.warrantyDays || 7);
-  const [thankYouPageUrl, setThankYouPageUrl] = useState(plan.thankYouPageUrl || '');
+  const [thankYouPageUrl, setThankYouPageUrl] = useState(plan.deliveryUrl || plan.thankYouPageUrl || '');
+  const [deliveryType, setDeliveryType] = useState<ProductDeliveryType>(plan.deliveryType || 'redirect');
+  const [deliveryInstructions, setDeliveryInstructions] = useState(plan.deliveryInstructions || '');
 
   const [commissionPercentage, setCommissionPercentage] = useState(plan.commissionPercentage || 30);
   const [allowAffiliates, setAllowAffiliates] = useState(plan.allowAffiliates ?? true);
@@ -145,9 +148,29 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
 
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [savedAt, setSavedAt] = useState('');
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
   const checkoutUrl = `${origin}?checkout=${plan.checkoutSlug || plan.id}`;
   const inviteUrl = `${origin}?plan=${plan.id}&affiliate=invite`;
+  const customCheckoutUrl = (checkout: ProductCustomCheckout) =>
+    checkout.isDefault
+      ? checkoutUrl
+      : `${origin}?checkout=${plan.checkoutSlug || plan.id}&variant=${encodeURIComponent(checkout.checkoutSlug)}`;
+
+  useEffect(() => {
+    if (paymentType === 'Único') return;
+    setPaymentMethods((current) => {
+      const recurringMethods = current.filter((method) =>
+        method === 'CARD' || method === 'APPLE_PAY' || method === 'GOOGLE_PAY'
+      );
+      return recurringMethods.length ? recurringMethods : ['CARD'];
+    });
+    if (defaultPaymentMethod === 'PIX' || defaultPaymentMethod === 'BOLETO') {
+      setDefaultPaymentMethod('CARD');
+    }
+  }, [paymentType]);
 
   const copy = (value: string, key: string) => {
     navigator.clipboard.writeText(value);
@@ -166,51 +189,112 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
     });
   };
 
-  const saveAll = () => {
+  const saveAll = async () => {
+    setSaveError('');
+
+    if (!name.trim()) {
+      setSaveError('Informe o nome do produto.');
+      return;
+    }
+    if (description.trim().length < 10) {
+      setSaveError('A descrição precisa ter pelo menos 10 caracteres.');
+      return;
+    }
+    if (!Number.isFinite(priceSetup) || priceSetup < 0.5) {
+      setSaveError('Informe um valor principal válido a partir de R$ 0,50.');
+      return;
+    }
+    if (paymentType !== 'Único' && (!Number.isFinite(priceMonthly) || priceMonthly < 0.5)) {
+      setSaveError('Informe um valor recorrente válido.');
+      return;
+    }
+    if (!thankYouPageUrl.trim() || !/^https:\/\//i.test(thankYouPageUrl.trim())) {
+      setSaveError('Configure uma URL HTTPS válida para entrega/página pós-compra.');
+      return;
+    }
+
+    const totalCoproduction = coproducers.reduce(
+      (sum, item) => sum + Number(item.commissionPercentage || 0),
+      0
+    );
+    if (totalCoproduction > 100) {
+      setSaveError('A soma das porcentagens dos coprodutores não pode ultrapassar 100%.');
+      return;
+    }
+
+    const normalizedCoupons = coupons
+      .map((coupon) => ({
+        ...coupon,
+        code: coupon.code.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40),
+      }))
+      .filter((coupon) => coupon.code && coupon.discountValue > 0);
+
     const commissionValue = Number(((priceSetup * commissionPercentage) / 100).toFixed(2));
-    onSave({
-      name,
-      description,
-      category,
-      bannerImage,
-      status,
-      active: status === 'Ativo',
-      paymentType,
-      billingType: paymentType === 'Único' ? 'unico' : 'recorrente',
-      billingCycle,
-      billingInterval: billingCycle === 'YEARLY' ? 'yearly' : billingCycle === 'WEEKLY' ? 'weekly' : 'monthly',
-      priceSetup,
-      priceMonthly,
-      commissionPercentage,
-      commissionValue,
-      supportEmail,
-      warrantyDays,
-      thankYouPageUrl,
-      paymentMethods,
-      defaultPaymentMethod,
-      maxInstallments,
-      allowAffiliates,
-      affiliateApprovalMode,
-      affiliateSupportEmail,
-      affiliateDescription,
-      affiliateCookieDays,
-      affiliateAttribution,
-      affiliateMarketplaceVisible,
-      affiliateCommissionOnOrderBump,
-      affiliateCommissionOnUpsell,
-      pixelProvider,
-      pixelId,
-      pixelPurchaseEventEnabled,
-      thankYouUpsellEnabled,
-      upsellIgnoreOrderBumpFailure,
-      confirmationEmailEnabled,
-      confirmationEmailTiming,
-      orderBumps,
-      upsells,
-      coupons,
-      customCheckouts: checkouts,
-      coproducers
-    });
+    setIsSaving(true);
+
+    try {
+      await onSave({
+        name: name.trim(),
+        description: description.trim(),
+        category,
+        bannerImage,
+        status,
+        active: status === 'Ativo',
+        paymentType,
+        billingType: paymentType === 'Único' ? 'unico' : 'recorrente',
+        billingCycle,
+        billingInterval:
+          billingCycle === 'YEARLY'
+            ? 'yearly'
+            : billingCycle === 'WEEKLY' || billingCycle === 'BIWEEKLY'
+              ? 'weekly'
+              : billingCycle === 'QUARTERLY'
+                ? 'quarterly'
+                : billingCycle === 'SEMIANNUALLY'
+                  ? 'semiannually'
+                  : 'monthly',
+        priceSetup,
+        priceMonthly: paymentType === 'Único' ? 0 : priceMonthly,
+        commissionPercentage,
+        commissionValue,
+        supportEmail: supportEmail.trim(),
+        warrantyDays,
+        thankYouPageUrl: thankYouPageUrl.trim(),
+        deliveryType,
+        deliveryUrl: thankYouPageUrl.trim(),
+        deliveryInstructions: deliveryInstructions.trim(),
+        paymentMethods,
+        defaultPaymentMethod,
+        maxInstallments,
+        allowAffiliates,
+        affiliateApprovalMode,
+        affiliateSupportEmail: affiliateSupportEmail.trim(),
+        affiliateDescription: affiliateDescription.trim(),
+        affiliateCookieDays,
+        affiliateAttribution,
+        affiliateMarketplaceVisible,
+        affiliateCommissionOnOrderBump,
+        affiliateCommissionOnUpsell,
+        pixelProvider,
+        pixelId: pixelId.trim(),
+        pixelPurchaseEventEnabled,
+        thankYouUpsellEnabled,
+        upsellIgnoreOrderBumpFailure,
+        confirmationEmailEnabled,
+        confirmationEmailTiming,
+        orderBumps,
+        upsells,
+        coupons: normalizedCoupons,
+        customCheckouts: checkouts,
+        coproducers
+      });
+      setCoupons(normalizedCoupons);
+      setSavedAt(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Não foi possível salvar as alterações.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const navGroups = [
@@ -287,8 +371,8 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
             <button onClick={() => onOpenCheckout(plan)} className="hidden items-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-xs font-bold hover:bg-white/5 sm:flex">
               <ExternalLink className="h-3.5 w-3.5" /> Ver Checkout
             </button>
-            <button onClick={saveAll} className="flex items-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2.5 text-xs font-black uppercase text-[#060A15] hover:bg-[#c8e217]">
-              <Save className="h-4 w-4" /> Salvar
+            <button type="button" disabled={isSaving} onClick={saveAll} className="flex items-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2.5 text-xs font-black uppercase text-[#060A15] hover:bg-[#c8e217] disabled:cursor-not-allowed disabled:opacity-60">
+              <Save className="h-4 w-4" /> {isSaving ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
         </div>
@@ -335,7 +419,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
           <div className="mx-auto max-w-5xl">
             <div className="mb-5 flex items-center justify-between gap-3">
               <h1 className="text-2xl font-black sm:text-3xl">{titleMap[activeTab]}</h1>
-              <button onClick={saveAll} className="hidden rounded-xl bg-[#D9F22A] px-4 py-2 text-xs font-black text-[#060A15] sm:block">Salvar Produto</button>
+              <button type="button" disabled={isSaving} onClick={saveAll} className="hidden rounded-xl bg-[#D9F22A] px-4 py-2 text-xs font-black text-[#060A15] disabled:opacity-60 sm:block">{isSaving ? 'Salvando...' : 'Salvar Produto'}</button>
             </div>
 
             {activeTab === 'info' && (
@@ -370,17 +454,27 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                     <div><label className={labelClass}>Modelo</label><select className={inputClass} value={paymentType} onChange={(e) => setPaymentType(e.target.value as any)}><option value="Único">Pagamento Único</option><option value="Recorrente">Recorrente</option><option value="Assinatura">Assinatura</option></select></div>
                     <div><label className={labelClass}>Valor principal</label><input type="number" step="0.01" className={inputClass} value={priceSetup} onChange={(e) => setPriceSetup(Number(e.target.value))} /></div>
                     {paymentType !== 'Único' && <div><label className={labelClass}>Valor recorrente</label><input type="number" step="0.01" className={inputClass} value={priceMonthly} onChange={(e) => setPriceMonthly(Number(e.target.value))} /></div>}
-                    {paymentType !== 'Único' && <div><label className={labelClass}>Período</label><select className={inputClass} value={billingCycle} onChange={(e) => setBillingCycle(e.target.value as any)}><option value="WEEKLY">Semanal</option><option value="MONTHLY">Mensal</option><option value="QUARTERLY">Trimestral</option><option value="SEMIANNUALLY">Semestral</option><option value="YEARLY">Anual</option></select></div>}
+                    {paymentType !== 'Único' && <div><label className={labelClass}>Período</label><select className={inputClass} value={billingCycle} onChange={(e) => setBillingCycle(e.target.value as any)}><option value="WEEKLY">Semanal</option><option value="BIWEEKLY">Quinzenal</option><option value="MONTHLY">Mensal</option><option value="BIMONTHLY">Bimestral</option><option value="QUARTERLY">Trimestral</option><option value="SEMIANNUALLY">Semestral</option><option value="YEARLY">Anual</option></select></div>}
                   </div>
                 </Section>
                 <Section>
                   <h3 className="text-lg font-black">Métodos de pagamento</h3>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    {([['PIX','PIX'],['CARD','Cartão'],['BOLETO','Boleto'],['APPLE_PAY','Apple Pay'],['GOOGLE_PAY','Google Pay']] as const).map(([value,label]) => (
-                      <button key={value} onClick={() => togglePaymentMethod(value)} className={`rounded-xl border p-4 text-left text-xs font-bold ${paymentMethods.includes(value) ? 'border-[#D9F22A]/50 bg-[#D9F22A]/10 text-[#D9F22A]' : 'border-white/10 bg-[#070b12] text-white/60'}`}>
-                        <CreditCard className="mb-3 h-5 w-5" />{label}
-                      </button>
-                    ))}
+                    {([['PIX','PIX'],['CARD','Cartão'],['BOLETO','Boleto'],['APPLE_PAY','Apple Pay'],['GOOGLE_PAY','Google Pay']] as const).map(([value,label]) => {
+                      const recurringBlocked = paymentType !== 'Único' && (value === 'PIX' || value === 'BOLETO');
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={recurringBlocked}
+                          onClick={() => togglePaymentMethod(value)}
+                          className={`rounded-xl border p-4 text-left text-xs font-bold transition ${recurringBlocked ? 'cursor-not-allowed border-white/5 bg-[#070b12] text-white/20' : paymentMethods.includes(value) ? 'border-[#D9F22A]/50 bg-[#D9F22A]/10 text-[#D9F22A]' : 'border-white/10 bg-[#070b12] text-white/60'}`}
+                          title={recurringBlocked ? 'PIX e boleto não são usados neste fluxo de assinatura recorrente.' : undefined}
+                        >
+                          <CreditCard className="mb-3 h-5 w-5" />{label}
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <div><label className={labelClass}>Método padrão</label><select className={inputClass} value={defaultPaymentMethod} onChange={(e) => setDefaultPaymentMethod(e.target.value as any)}>{paymentMethods.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
@@ -394,8 +488,24 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
               <Section>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><label className={labelClass}>E-mail de suporte</label><input type="email" className={inputClass} value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} /></div>
-                  <div><label className={labelClass}>Garantia</label><select className={inputClass} value={warrantyDays} onChange={(e) => setWarrantyDays(Number(e.target.value))}><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option></select></div>
-                  <div className="sm:col-span-2"><label className={labelClass}>Página de obrigado / entrega</label><input className={inputClass} value={thankYouPageUrl} onChange={(e) => setThankYouPageUrl(e.target.value)} placeholder="https://suaempresa.com/obrigado" /></div>
+                  <div><label className={labelClass}>Garantia</label><select className={inputClass} value={warrantyDays} onChange={(e) => setWarrantyDays(Number(e.target.value))}><option value={0}>Sem garantia configurada</option><option value={7}>7 dias</option><option value={15}>15 dias</option><option value={30}>30 dias</option></select></div>
+                  <div>
+                    <label className={labelClass}>Tipo de entrega</label>
+                    <select className={inputClass} value={deliveryType} onChange={(e) => setDeliveryType(e.target.value as ProductDeliveryType)}>
+                      <option value="redirect">Redirecionamento</option>
+                      <option value="whatsapp">WhatsApp / Grupo VIP</option>
+                      <option value="membership">Área de membros</option>
+                      <option value="download">Download / material digital</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>URL de entrega / página pós-compra</label>
+                    <input className={inputClass} value={thankYouPageUrl} onChange={(e) => setThankYouPageUrl(e.target.value)} placeholder="https://suaempresa.com/acesso" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Instruções para o comprador</label>
+                    <textarea className={`${inputClass} min-h-28 resize-y`} value={deliveryInstructions} onChange={(e) => setDeliveryInstructions(e.target.value)} placeholder="Ex.: use o mesmo e-mail da compra para acessar..." />
+                  </div>
                 </div>
               </Section>
             )}
@@ -415,14 +525,14 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                 <Section>
                   <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Order Bump</h3><p className="text-xs text-white/50">Oferta complementar antes da conclusão da compra.</p></div><button onClick={() => setOrderBumps([...orderBumps,{id:`bump-${Date.now()}`,name:'Novo Order Bump',description:'Oferta complementar',price:19.9,active:true}])} className="rounded-xl bg-[#D9F22A] px-3 py-2 text-xs font-black text-black"><Plus className="mr-1 inline h-3.5 w-3.5"/>Adicionar</button></div>
                 </Section>
-                {orderBumps.map((item, index) => <Section key={item.id}><div className="grid gap-3 sm:grid-cols-[1fr_150px_auto]"><input className={inputClass} value={item.name} onChange={(e)=>setOrderBumps(orderBumps.map((b,i)=>i===index?{...b,name:e.target.value}:b))}/><input type="number" step="0.01" className={inputClass} value={item.price} onChange={(e)=>setOrderBumps(orderBumps.map((b,i)=>i===index?{...b,price:Number(e.target.value)}:b))}/><button onClick={()=>setOrderBumps(orderBumps.filter((_,i)=>i!==index))} className="rounded-xl border border-rose-500/20 p-2 text-rose-400"><Trash2 className="h-4 w-4"/></button></div></Section>)}
+                {orderBumps.map((item, index) => <Section key={item.id}><div className="grid gap-3 sm:grid-cols-[1fr_160px_auto]"><div className="space-y-2"><input className={inputClass} value={item.name} onChange={(e)=>setOrderBumps(orderBumps.map((b,i)=>i===index?{...b,name:e.target.value}:b))}/><input className={inputClass} value={item.description} onChange={(e)=>setOrderBumps(orderBumps.map((b,i)=>i===index?{...b,description:e.target.value}:b))} placeholder="Descrição curta da oferta complementar" /></div><div className="space-y-2"><input type="number" min="0.5" step="0.01" className={inputClass} value={item.price} onChange={(e)=>setOrderBumps(orderBumps.map((b,i)=>i===index?{...b,price:Number(e.target.value)}:b))}/><div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#070b12] px-3 py-2 text-xs"><span>Ativo no checkout</span><Toggle value={item.active} onChange={(value)=>setOrderBumps(orderBumps.map((b,i)=>i===index?{...b,active:value}:b))}/></div></div><button type="button" onClick={()=>setOrderBumps(orderBumps.filter((_,i)=>i!==index))} className="self-start rounded-xl border border-rose-500/20 p-2 text-rose-400"><Trash2 className="h-4 w-4"/></button></div></Section>)}
               </div>
             )}
 
             {activeTab === 'coupons' && (
               <div className="space-y-4">
                 <Section><div className="flex items-center justify-between"><div><h3 className="text-lg font-black">Cupons</h3><p className="text-xs text-white/50">Descontos para campanhas e afiliados.</p></div><button onClick={()=>setCoupons([...coupons,{id:`coupon-${Date.now()}`,code:'NOVO10',discountType:'percentage',discountValue:10,active:true,usedCount:0}])} className="rounded-xl bg-[#D9F22A] px-3 py-2 text-xs font-black text-black">Adicionar Cupom</button></div></Section>
-                {coupons.length === 0 ? <Section><div className="py-10 text-center text-sm text-white/45">Nenhum cupom cadastrado.</div></Section> : coupons.map((coupon,index)=><Section key={coupon.id}><div className="grid gap-3 sm:grid-cols-[1fr_170px_130px_auto]"><input className={inputClass} value={coupon.code} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,code:e.target.value.toUpperCase()}:c))}/><select className={inputClass} value={coupon.discountType} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,discountType:e.target.value as any}:c))}><option value="percentage">Porcentagem</option><option value="fixed">Valor fixo</option></select><input type="number" className={inputClass} value={coupon.discountValue} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,discountValue:Number(e.target.value)}:c))}/><button onClick={()=>setCoupons(coupons.filter((_,i)=>i!==index))} className="rounded-xl border border-rose-500/20 p-2 text-rose-400"><Trash2 className="h-4 w-4"/></button></div></Section>)}
+                {coupons.length === 0 ? <Section><div className="py-10 text-center text-sm text-white/45">Nenhum cupom cadastrado.</div></Section> : coupons.map((coupon,index)=><Section key={coupon.id}><div className="grid gap-3 lg:grid-cols-[1fr_160px_120px_120px_160px_auto]"><div><label className={labelClass}>Código</label><input className={inputClass} value={coupon.code} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,code:e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'')}:c))}/></div><div><label className={labelClass}>Tipo</label><select className={inputClass} value={coupon.discountType} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,discountType:e.target.value as any}:c))}><option value="percentage">Porcentagem</option><option value="fixed">Valor fixo</option></select></div><div><label className={labelClass}>Desconto</label><input type="number" min="0.01" className={inputClass} value={coupon.discountValue} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,discountValue:Number(e.target.value)}:c))}/></div><div><label className={labelClass}>Limite</label><input type="number" min="0" className={inputClass} value={coupon.maxUses || 0} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,maxUses:Number(e.target.value)}:c))} title="0 = ilimitado" /></div><div><label className={labelClass}>Validade</label><input type="date" className={inputClass} value={(coupon.expiresAt || '').slice(0,10)} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,expiresAt:e.target.value}:c))}/></div><div className="flex items-end gap-2"><Toggle value={coupon.active} onChange={(value)=>setCoupons(coupons.map((c,i)=>i===index?{...c,active:value}:c))}/><button type="button" onClick={()=>setCoupons(coupons.filter((_,i)=>i!==index))} className="rounded-xl border border-rose-500/20 p-2 text-rose-400"><Trash2 className="h-4 w-4"/></button></div></div></Section>)}
               </div>
             )}
 
@@ -486,7 +596,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
             {activeTab === 'checkout' && (
               <div className="space-y-4">
                 <Section><div className="flex flex-wrap items-center justify-between gap-3"><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-3 h-4 w-4 text-white/35"/><input value={search} onChange={(e)=>setSearch(e.target.value)} className={`${inputClass} pl-9`} placeholder="Pesquisar checkout..." /></div><button onClick={()=>setCheckouts([...checkouts,{id:`checkout-${Date.now()}`,name:'Novo Checkout',isDefault:false,price:priceSetup,offerName:name,visitsCount:0,salesCount:0,checkoutSlug:`${plan.id}-${Date.now().toString().slice(-4)}`}])} className="rounded-xl bg-[#D9F22A] px-3 py-2 text-xs font-black text-black"><Plus className="mr-1 inline h-3.5 w-3.5"/>Adicionar Checkout</button></div></Section>
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d121c]"><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-xs"><thead className="bg-white/5 text-white/40"><tr><th className="px-4 py-3">Nome</th><th className="px-4 py-3">Preço</th><th className="px-4 py-3">Oferta</th><th className="px-4 py-3">Visitas</th><th className="px-4 py-3 text-right">Ações</th></tr></thead><tbody>{filteredCheckouts.map((c,index)=><tr key={c.id} className="border-t border-white/5"><td className="px-4 py-4 font-bold">{c.name}{c.isDefault&&<span className="ml-2 rounded bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-400">Padrão</span>}</td><td className="px-4 py-4 text-emerald-400">R$ {c.price.toFixed(2).replace('.',',')}</td><td className="px-4 py-4 text-white/60">{c.offerName}</td><td className="px-4 py-4 text-white/60">{c.visitsCount}</td><td className="px-4 py-4"><div className="flex justify-end gap-2"><button onClick={()=>onOpenCheckout(plan,c.checkoutSlug)} className="rounded-lg border border-white/10 p-2"><Eye className="h-4 w-4"/></button>{!c.isDefault&&<button onClick={()=>setCheckouts(checkouts.filter((_,i)=>i!==index))} className="rounded-lg border border-rose-500/20 p-2 text-rose-400"><Trash2 className="h-4 w-4"/></button>}</div></td></tr>)}</tbody></table></div></div>
+                <div className="space-y-3">{filteredCheckouts.map((checkout) => { const index = checkouts.findIndex((item)=>item.id===checkout.id); return <Section key={checkout.id}><div className="grid gap-3 lg:grid-cols-[1.1fr_150px_1fr_auto]"><div><label className={labelClass}>Nome do checkout</label><input className={inputClass} value={checkout.name} onChange={(e)=>setCheckouts(checkouts.map((item,i)=>i===index?{...item,name:e.target.value}:item))}/></div><div><label className={labelClass}>Preço</label><input type="number" min="0.5" step="0.01" disabled={checkout.isDefault} className={inputClass} value={checkout.isDefault ? priceSetup : checkout.price} onChange={(e)=>setCheckouts(checkouts.map((item,i)=>i===index?{...item,price:Number(e.target.value)}:item))}/></div><div><label className={labelClass}>Título da oferta</label><input className={inputClass} value={checkout.offerName} onChange={(e)=>setCheckouts(checkouts.map((item,i)=>i===index?{...item,offerName:e.target.value}:item))}/></div><div className="flex items-end gap-2"><button type="button" onClick={()=>window.open(customCheckoutUrl(checkout),'_blank','noopener,noreferrer')} className="rounded-lg border border-white/10 p-2" title="Abrir checkout"><Eye className="h-4 w-4"/></button><button type="button" onClick={()=>copy(customCheckoutUrl(checkout),checkout.id)} className="rounded-lg border border-white/10 p-2" title="Copiar link">{copied===checkout.id?<Check className="h-4 w-4"/>:<Copy className="h-4 w-4"/>}</button>{!checkout.isDefault&&<button type="button" onClick={()=>setCheckouts(checkouts.filter((item)=>item.id!==checkout.id))} className="rounded-lg border border-rose-500/20 p-2 text-rose-400"><Trash2 className="h-4 w-4"/></button>}</div></div><div className="mt-3 break-all rounded-xl border border-white/5 bg-[#070b12] px-3 py-2 text-[10px] text-white/45">{customCheckoutUrl(checkout)}</div></Section>})}</div>
               </div>
             )}
 
@@ -494,13 +604,13 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
               <div className="space-y-4">
                 <Section><h3 className="text-lg font-black">Links de checkout</h3><p className="mt-1 text-xs text-white/50">Use estes links em páginas externas, anúncios e campanhas.</p></Section>
                 <Section><label className={labelClass}>Checkout principal</label><div className="flex gap-2"><input readOnly className={inputClass} value={checkoutUrl}/><button onClick={()=>copy(checkoutUrl,'checkout')} className="rounded-xl bg-[#D9F22A] px-4 text-xs font-black text-black">{copied==='checkout'?<Check className="h-4 w-4"/>:<Copy className="h-4 w-4"/>}</button></div></Section>
-                {checkouts.map((c)=><Section key={c.id}><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-black">{c.name}</p><p className="mt-1 break-all text-[11px] text-white/40">{origin}?checkout={c.checkoutSlug}</p></div><button onClick={()=>copy(`${origin}?checkout=${c.checkoutSlug}`,c.id)} className="rounded-xl border border-white/10 p-2 text-white/60 hover:text-white">{copied===c.id?<Check className="h-4 w-4"/>:<Copy className="h-4 w-4"/>}</button></div></Section>)}
+                {checkouts.map((c)=><Section key={c.id}><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-black">{c.name}</p><p className="mt-1 break-all text-[11px] text-white/40">{customCheckoutUrl(c)}</p></div><button type="button" onClick={()=>copy(customCheckoutUrl(c),c.id)} className="rounded-xl border border-white/10 p-2 text-white/60 hover:text-white">{copied===c.id?<Check className="h-4 w-4"/>:<Copy className="h-4 w-4"/>}</button></div></Section>)}
               </div>
             )}
 
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
               <button onClick={()=>onDelete(plan.id,plan.companyId)} className="flex items-center gap-2 rounded-xl border border-rose-500/25 px-4 py-2.5 text-xs font-bold text-rose-400 hover:bg-rose-500/10"><Trash2 className="h-4 w-4"/>Excluir Produto</button>
-              <button onClick={saveAll} className="flex items-center gap-2 rounded-xl bg-[#D9F22A] px-5 py-2.5 text-xs font-black uppercase text-[#060A15]"><Save className="h-4 w-4"/>Salvar Produto</button>
+              <div className="ml-auto flex items-center gap-3">{saveError && <span className="max-w-sm text-right text-[11px] font-semibold text-rose-400">{saveError}</span>}{!saveError && savedAt && <span className="text-[11px] text-emerald-400">Salvo às {savedAt}</span>}<button type="button" disabled={isSaving} onClick={saveAll} className="flex items-center gap-2 rounded-xl bg-[#D9F22A] px-5 py-2.5 text-xs font-black uppercase text-[#060A15] disabled:cursor-not-allowed disabled:opacity-60"><Save className="h-4 w-4"/>{isSaving ? 'Salvando...' : 'Salvar Produto'}</button></div>
             </div>
           </div>
         </main>
