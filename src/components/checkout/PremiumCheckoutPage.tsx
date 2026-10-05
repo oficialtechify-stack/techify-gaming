@@ -269,6 +269,30 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     : 'border-[#dfeebd] bg-[#effbd9] text-[#17200e]';
   const footerClass = isDark ? 'text-[#b2bdcd]' : 'text-[#768095]';
 
+  const paymentElementOptions = useMemo(() => {
+    const mappedDefault =
+      plan.defaultPaymentMethod === 'PIX'
+        ? 'pix'
+        : plan.defaultPaymentMethod === 'BOLETO'
+          ? 'boleto'
+          : 'card';
+    const order = [mappedDefault, 'pix', 'card', 'boleto'].filter(
+      (value, index, values) => values.indexOf(value) === index
+    );
+
+    return {
+      ...stripePaymentElementOptions,
+      paymentMethodOrder: order,
+      paymentMethodOptions: {
+        card: {
+          installments: {
+            enabled: Number(plan.maxInstallments || 1) > 1,
+          },
+        },
+      },
+    } as any;
+  }, [plan.defaultPaymentMethod, plan.maxInstallments]);
+
   const getActiveAffiliateCode = (): string | null => {
     if (affiliateRef && affiliateRef.trim()) return affiliateRef.trim();
     return getActiveAffiliateRef();
@@ -712,6 +736,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                       onError={setFormError}
                       isProcessing={isProcessing}
                       setIsProcessing={setIsProcessing}
+                      paymentElementOptions={paymentElementOptions}
                     />
                   </Elements>
                 </div>
@@ -817,6 +842,7 @@ interface EmbeddedPaymentFormProps {
   onError: (message: string | null) => void;
   isProcessing: boolean;
   setIsProcessing: (processing: boolean) => void;
+  paymentElementOptions: any;
 }
 
 const EmbeddedPaymentForm: React.FC<EmbeddedPaymentFormProps> = ({
@@ -824,6 +850,7 @@ const EmbeddedPaymentForm: React.FC<EmbeddedPaymentFormProps> = ({
   onError,
   isProcessing,
   setIsProcessing,
+  paymentElementOptions,
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -874,7 +901,7 @@ const EmbeddedPaymentForm: React.FC<EmbeddedPaymentFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-      <PaymentElement options={stripePaymentElementOptions} />
+      <PaymentElement options={paymentElementOptions} />
 
       <button
         type="submit"
