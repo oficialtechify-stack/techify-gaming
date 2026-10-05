@@ -180,8 +180,8 @@ function sanitizeCustomCheckouts(value: unknown, planId: string, defaultPrice: n
     return {
       id: String(raw.id || `checkout_${index + 1}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80) || `checkout_${index + 1}`,
       name: String(raw.name || (index === 0 ? 'Checkout Principal' : `Checkout ${index + 1}`)).trim().slice(0, 120),
-      isDefault: index === 0 ? true : raw.isDefault === true,
-      price: Number(clampNumber(raw.price, 0.5, 1000000, defaultPrice).toFixed(2)),
+      isDefault: index === 0,
+      price: Number((index === 0 ? defaultPrice : clampNumber(raw.price, 0.5, 1000000, defaultPrice)).toFixed(2)),
       offerName: String(raw.offerName || planName).trim().slice(0, 160),
       visitsCount: Math.max(0, Math.floor(clampNumber(raw.visitsCount, 0, 100000000, 0))),
       salesCount: Math.max(0, Math.floor(clampNumber(raw.salesCount, 0, 100000000, 0))),
