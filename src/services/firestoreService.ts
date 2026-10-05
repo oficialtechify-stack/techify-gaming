@@ -736,6 +736,32 @@ export async function deleteAffiliationInFirebase(affiliationId: string, _planId
 }
 
 /**
+ * Company decision for a pending affiliate request.
+ */
+export async function manageAffiliateRequestInFirebase(
+  affiliationId: string,
+  action: 'approve' | 'reject',
+): Promise<UserAffiliation> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para gerenciar a afiliação.');
+
+  const token = await user.getIdToken();
+  const response = await fetch('/api/affiliates/manage', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ affiliationId, action }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success || !data.affiliation) {
+    throw new Error(data.error || 'Não foi possível atualizar a solicitação de afiliação.');
+  }
+  return data.affiliation as UserAffiliation;
+}
+
+/**
  * Find an affiliation by affiliate code
  */
 export async function findAffiliationByCode(code: string): Promise<UserAffiliation | null> {
