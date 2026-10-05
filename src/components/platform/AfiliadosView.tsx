@@ -131,7 +131,7 @@ const isActiveAffiliation = (aff?: UserAffiliation | null) => {
 const isPromotablePlan = (plan: CompanyPlan) => {
   const status = String(plan.status || '').trim().toLowerCase();
   const active = plan.active !== false && (status === 'ativo' || status === 'active' || status === 'approved');
-  return active && plan.allowAffiliates !== false && Number(plan.commissionPercentage || 0) > 0;
+  return active && plan.allowAffiliates !== false && plan.affiliateMarketplaceVisible !== false && Number(plan.commissionPercentage || 0) > 0;
 };
 
 export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
