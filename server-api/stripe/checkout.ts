@@ -114,6 +114,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const buyerEmail = String(body.buyerEmail || '').trim().toLowerCase().slice(0, 200);
     const affiliateCode = String(body.affiliateCode || '').trim().slice(0, 64);
     const couponCode = String(body.couponCode || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
+    const checkoutVariant = String(body.checkoutVariant || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 100);
+    const orderBumpId = String(body.orderBumpId || '').trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
     const utmSource = String(body.utmSource || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 100);
     const utmMedium = String(body.utmMedium || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 100);
     const utmCampaign = String(body.utmCampaign || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 140);
@@ -231,8 +233,31 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
     }
 
-    const baseAmount = authoritativePrice(plan);
+    const customCheckouts = Array.isArray(plan.customCheckouts) ? plan.customCheckouts as Array<Record<string, any>> : [];
+    const selectedCheckout = checkoutVariant
+      ? customCheckouts.find((item) => String(item.checkoutSlug || '').toLowerCase() === checkoutVariant)
+      : customCheckouts.find((item) => item.isDefault === true);
+
+    const variantAmount = Number(selectedCheckout?.price || 0);
+    const baseAmount = selectedCheckout && Number.isFinite(variantAmount) && variantAmount > 0
+      ? variantAmount
+      : authoritativePrice(plan);
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) return fail(res, 409, 'A oferta não possui preço válido.', 'INVALID_SERVER_PRICE');
+
+    const activeOrderBumps = Array.isArray(plan.orderBumps)
+      ? plan.orderBumps.filter((item: any) => item && item.active !== false)
+      : [];
+    const selectedOrderBump = orderBumpId
+      ? activeOrderBumps.find((item: any) => String(item.id || '') === orderBumpId)
+      : null;
+    if (orderBumpId && !selectedOrderBump) {
+      return fail(res, 400, 'O Order Bump selecionado não está mais disponível.', 'ORDER_BUMP_UNAVAILABLE');
+    }
+
+    const orderBumpAmount = selectedOrderBump ? Number(selectedOrderBump.price || 0) : 0;
+    if (selectedOrderBump && (!Number.isFinite(orderBumpAmount) || orderBumpAmount < 0.5)) {
+      return fail(res, 400, 'O Order Bump selecionado possui um valor inválido.', 'INVALID_ORDER_BUMP');
+    }
 
     const paymentMethodTypes = resolveStripePaymentMethodTypes(plan);
 
@@ -273,12 +298,16 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       validCouponCode = couponCode;
     }
 
-    const grossAmountCents = productAmountCents + 99;
+    const orderBumpAmountCents = selectedOrderBump ? toCents(orderBumpAmount) : 0;
+    const grossAmountCents = productAmountCents + orderBumpAmountCents + 99;
+    const commissionableAmountCents =
+      productAmountCents +
+      (plan.affiliateCommissionOnOrderBump === false ? 0 : orderBumpAmountCents);
     const split = calculateSplit({
       grossAmountCents,
       affiliatePercent,
       platformFeeCents: 99,
-      commissionableAmountCents: productAmountCents,
+      commissionableAmountCents,
     });
     if (split.companyAmountCents <= 0) {
       return fail(res, 422, 'O preço não cobre a taxa da plataforma e a comissão configurada.', 'INVALID_SPLIT');
@@ -359,6 +388,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         discountCents,
         couponId: couponId || null,
         couponCode: validCouponCode || null,
+        checkoutVariant: selectedCheckout ? String(selectedCheckout.checkoutSlug || '') : null,
+        checkoutName: selectedCheckout ? String(selectedCheckout.name || '') : null,
+        orderBumpId: selectedOrderBump ? String(selectedOrderBump.id || '') : null,
+        orderBumpName: selectedOrderBump ? String(selectedOrderBump.name || '') : null,
+        orderBumpAmountCents,
         platformFeeCents: split.platformFeeCents,
         affiliateAmountCents: split.affiliateAmountCents,
         companyAmountCents: split.companyAmountCents,
@@ -384,7 +418,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       currency: 'brl',
       payment_method_types: paymentMethodTypes,
       receipt_email: buyerEmail,
-      description: planName,
+      description: selectedCheckout?.offerName ? String(selectedCheckout.offerName).slice(0, 160) : planName,
       transfer_group: transferGroup,
       metadata: {
         orderId,
@@ -393,6 +427,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         companyOwnerId,
         affiliateId: affiliateId || '',
         couponCode: validCouponCode || '',
+        checkoutVariant: selectedCheckout ? String(selectedCheckout.checkoutSlug || '') : '',
+        orderBumpId: selectedOrderBump ? String(selectedOrderBump.id || '') : '',
+        orderBumpAmountCents: String(orderBumpAmountCents),
         utmSource,
         utmMedium,
         utmCampaign,
@@ -420,6 +457,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         originalProductAmountCents,
         discountCents,
         productAmountCents,
+        orderBumpAmountCents,
+        orderBumpName: selectedOrderBump ? String(selectedOrderBump.name || '') : null,
+        checkoutVariant: selectedCheckout ? String(selectedCheckout.checkoutSlug || '') : null,
         checkoutFeeCents: 99,
         totalCents: split.grossAmountCents,
         couponCode: validCouponCode || null,
