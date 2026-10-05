@@ -97,6 +97,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
   const [orderId, setOrderId] = useState('');
+  const [offerCountdownSeconds, setOfferCountdownSeconds] = useState(0);
   const [serverPricing, setServerPricing] = useState<{
     originalProductAmountCents?: number;
     discountCents?: number;
@@ -153,6 +154,53 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
       null
     );
   }, [plan.customCheckouts, checkoutVariant, isRecurring]);
+
+  useEffect(() => {
+    if (!selectedCheckout) return;
+    const variantKey = selectedCheckout.checkoutSlug || 'default';
+    const storageKey = `leadspay_checkout_view_${plan.id}_${variantKey}`;
+    try {
+      if (sessionStorage.getItem(storageKey) === '1') return;
+      sessionStorage.setItem(storageKey, '1');
+    } catch {}
+
+    void fetch('/api/public/checkout-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        planId: plan.id,
+        variant: selectedCheckout.isDefault ? '' : selectedCheckout.checkoutSlug,
+      }),
+      keepalive: true,
+    }).catch(() => undefined);
+  }, [plan.id, selectedCheckout?.id, selectedCheckout?.checkoutSlug, selectedCheckout?.isDefault]);
+
+  useEffect(() => {
+    const minutes = Math.max(0, Number(selectedCheckout?.timerMinutes || 0));
+    if (!selectedCheckout || minutes <= 0) {
+      setOfferCountdownSeconds(0);
+      return;
+    }
+
+    const key = `leadspay_checkout_deadline_${plan.id}_${selectedCheckout.checkoutSlug || 'default'}`;
+    let deadline = 0;
+    try {
+      deadline = Number(sessionStorage.getItem(key) || 0);
+      if (!deadline || deadline <= Date.now()) {
+        deadline = Date.now() + Math.floor(minutes * 60 * 1000);
+        sessionStorage.setItem(key, String(deadline));
+      }
+    } catch {
+      deadline = Date.now() + Math.floor(minutes * 60 * 1000);
+    }
+
+    const refresh = () => {
+      setOfferCountdownSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 1000);
+    return () => window.clearInterval(timer);
+  }, [plan.id, selectedCheckout?.id, selectedCheckout?.checkoutSlug, selectedCheckout?.timerMinutes]);
 
   const configuredBasePrice = Number(
     (isRecurring ? plan.priceMonthly : plan.priceSetup) ??
@@ -523,6 +571,15 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           </p>
         </div>
 
+        {offerCountdownSeconds > 0 && (
+          <div className="mx-auto mb-3 flex w-fit items-center gap-2 rounded-full border border-[#B8F128]/30 bg-[#B8F128]/10 px-3 py-1.5 text-[11px] font-bold text-[#B8F128] sm:mb-5 sm:px-4 sm:py-2 sm:text-xs">
+            <span>Condição deste checkout reservada por</span>
+            <span className="font-black tabular-nums">
+              {String(Math.floor(offerCountdownSeconds / 60)).padStart(2, '0')}:{String(offerCountdownSeconds % 60).padStart(2, '0')}
+            </span>
+          </div>
+        )}
+
         <div className="grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1.78fr)_minmax(330px,1fr)] lg:items-start">
           <section className={cx('rounded-2xl border p-4 backdrop-blur-xl sm:rounded-[22px] sm:p-7', cardClass)}>
             <div className="mb-4 sm:mb-5">
@@ -676,7 +733,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                     </>
                   ) : (
                     <>
-                      <span>{isRecurring ? 'Continuar para assinatura' : 'Continuar para pagamento'}</span>
+                      <span>{isRecurring ? 'Continuar para assinatura' : (selectedCheckout?.buttonText || 'Continuar para pagamento')}</span>
                       <ArrowRight className="absolute right-5 h-5 w-5 transition-transform group-hover:translate-x-1 sm:right-8 sm:h-6 sm:w-6" />
                     </>
                   )}
