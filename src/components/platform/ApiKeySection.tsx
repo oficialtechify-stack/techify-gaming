@@ -56,6 +56,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = ({
   const isAffiliate = roleMode === 'afiliado';
   const [keyMeta, setKeyMeta] = useState<KeyMeta | null>(null);
   const [currentKey, setCurrentKey] = useState('');
+  const [showFullKey, setShowFullKey] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [loadingKey, setLoadingKey] = useState(true);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -163,6 +164,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = ({
       if (!res.ok || !data.apiKey) throw new Error(data.error || 'Não foi possível gerar a chave.');
 
       setCurrentKey(data.apiKey);
+      setShowFullKey(false);
       setKeyMeta(data.key || null);
       if (sessionKeyName) sessionStorage.setItem(sessionKeyName, data.apiKey);
     } catch (error: any) {
@@ -184,6 +186,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = ({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Não foi possível revogar a chave.');
       setCurrentKey('');
+      setShowFullKey(false);
       setKeyMeta(null);
       if (sessionKeyName) sessionStorage.removeItem(sessionKeyName);
     } catch (error: any) {
@@ -418,12 +421,25 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = ({
                   <Key className="h-4 w-4 text-[#D9F22A]" />
                   <span className="text-xs font-black uppercase tracking-wider text-white">Chave LeadsPay</span>
                 </div>
-                <div className="mt-2 flex min-h-11 items-center rounded-xl border border-white/10 bg-[#080f1c] px-3.5 font-mono text-xs text-emerald-300">
-                  {loadingKey
-                    ? 'Carregando...'
-                    : currentKey
-                      ? currentKey
-                      : hasActiveKey ? keyMeta?.prefix || 'Chave ativa' : 'Nenhuma chave ativa para este perfil'}
+                <div className="mt-2 flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-[#080f1c] px-3.5">
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-300">
+                    {loadingKey
+                      ? 'Carregando...'
+                      : currentKey
+                        ? showFullKey
+                          ? currentKey
+                          : currentKey.slice(0, 10) + '••••••••••••••••••••••'
+                        : hasActiveKey ? keyMeta?.prefix || 'Chave ativa' : 'Nenhuma chave ativa para este perfil'}
+                  </span>
+                  {currentKey && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFullKey((value) => !value)}
+                      className="shrink-0 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-bold text-white/55 hover:text-white"
+                    >
+                      {showFullKey ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  )}
                 </div>
                 <p className="mt-2 text-[10px] leading-4 text-white/35">
                   {currentKey
