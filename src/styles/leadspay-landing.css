@@ -27,6 +27,52 @@
   --lime: #b5ec76;
   --deep: #0b1511;
 }
+
+/* Explicit light theme palette: stronger contrast and clearer surface hierarchy. */
+.leadspay-site[data-theme="light"] {
+  --ink: #17261f;
+  --muted-ink: #5f6f66;
+  --line: #dfe6df;
+  --paper: #f7f9f6;
+  --surface: #ffffff;
+  --soft: #eef3ed;
+  --soft-green: #e8f2df;
+  --green: #4f8f36;
+  --lime: #a5df62;
+  --deep: #163b2e;
+  color-scheme: light;
+}
+
+.leadspay-site[data-theme="light"] .site-header {
+  background: rgba(255, 255, 255, .92);
+  border-bottom-color: #dfe6df;
+  box-shadow: 0 8px 28px rgba(28, 46, 35, .045);
+}
+
+.leadspay-site[data-theme="light"] .benefit-card,
+.leadspay-site[data-theme="light"] .audience-card,
+.leadspay-site[data-theme="light"] .pricing-values article,
+.leadspay-site[data-theme="light"] .dashboard-showcase,
+.leadspay-site[data-theme="light"] .theme-toggle,
+.leadspay-site[data-theme="light"] .menu-toggle {
+  box-shadow: 0 10px 28px rgba(28, 46, 35, .055);
+}
+
+.leadspay-site[data-theme="light"] .announcement {
+  color: #526158;
+}
+
+.leadspay-site[data-theme="light"] .float-card,
+.leadspay-site[data-theme="light"] .dashboard-side-note,
+.leadspay-site[data-theme="light"] .live-tag {
+  border-color: #dce4dd;
+  background: rgba(255,255,255,.94);
+}
+
+.leadspay-site[data-theme="light"] .site-footer {
+  background: #eef3ed;
+}
+
 .leadspay-site h1, .leadspay-site h2, .leadspay-site h3 { font-family: var(--leadspay-brand-font, 'Manrope', sans-serif); }
 .leadspay-site *, .leadspay-site *::before, .leadspay-site *::after { box-sizing: border-box; }
 .leadspay-site .container { width: min(100% - 56px, 1280px); margin-inline: auto; }

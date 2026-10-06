@@ -29,6 +29,19 @@ const createUpsellAttemptId = () => {
   return (nativeId || `${Date.now()}_${Math.random().toString(36).slice(2)}`).replace(/-/g, '');
 };
 
+const readThankYouTheme = (): 'light' | 'dark' => {
+  if (typeof window === 'undefined') return 'dark';
+  try {
+    const platform = window.localStorage.getItem('leadspay-platform-theme');
+    if (platform === 'light' || platform === 'dark') return platform;
+    const landing = window.localStorage.getItem('leadspay-landing-theme');
+    if (landing === 'light' || landing === 'dark') return landing;
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+};
+
 interface ThankYouPageProps {
   planId?: string;
   transactionId?: string;
@@ -66,7 +79,28 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
   const [upsellError, setUpsellError] = useState('');
   const [upsellLoadingId, setUpsellLoadingId] = useState('');
   const [purchasedUpsellIds, setPurchasedUpsellIds] = useState<string[]>([]);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => readThankYouTheme());
   const upsellAttemptId = useRef('');
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    const syncTheme = (event: Event) => {
+      const detail = (event as CustomEvent<'light' | 'dark'>).detail;
+      if (detail === 'light' || detail === 'dark') setTheme(detail);
+    };
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key === 'leadspay-platform-theme' || event.key === 'leadspay-landing-theme') {
+        setTheme(readThankYouTheme());
+      }
+    };
+
+    window.addEventListener('leadspay-theme-change', syncTheme);
+    window.addEventListener('storage', syncStorage);
+    return () => {
+      window.removeEventListener('leadspay-theme-change', syncTheme);
+      window.removeEventListener('storage', syncStorage);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -311,8 +345,12 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
     const waiting = stripeReturnStatus === 'checking';
     const failed = stripeReturnStatus === 'failed';
     return (
-      <main className="min-h-screen bg-[#070b14] text-white flex items-center justify-center p-5" aria-live="polite">
-        <section className="max-w-lg rounded-2xl border border-white/10 bg-[#0b1322] p-8 text-center shadow-2xl">
+      <main
+        className={`leadspay-thankyou min-h-screen flex items-center justify-center p-5 ${isDark ? 'bg-[#070b14] text-white' : 'bg-[#f7f9f6] text-[#17211b]'}`}
+        data-theme={theme}
+        aria-live="polite"
+      >
+        <section className={`max-w-lg rounded-2xl border p-8 text-center shadow-2xl ${isDark ? 'border-white/10 bg-[#0b1322]' : 'border-[#dfe6df] bg-white'}`}>
           <div className="mx-auto mb-4 h-10 w-10 rounded-full border-2 border-white/20 border-t-lime-400 animate-spin" aria-hidden="true" />
           <h1 className="text-xl font-bold">{waiting ? 'Confirmando seu pagamento' : failed ? 'Pagamento não concluído' : 'Não foi possível confirmar o pagamento'}</h1>
           <p className="mt-3 text-sm leading-6 text-white/70">
@@ -329,11 +367,14 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
+    <div
+      className={`leadspay-thankyou min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden ${isDark ? 'bg-[#070b14] text-white' : 'bg-[#f7f9f6] text-[#17211b]'}`}
+      data-theme={theme}
+    >
       {/* Glow effect */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#84CC16]/10 blur-[120px] pointer-events-none rounded-full" />
 
-      <div className="w-full max-w-xl bg-[#0b1322] border border-white/10 rounded-3xl p-6 sm:p-10 shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-300">
+      <div className={`w-full max-w-xl border rounded-3xl p-6 sm:p-10 shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-300 ${isDark ? 'bg-[#0b1322] border-white/10' : 'bg-white border-[#dfe6df]'}`}>
         
         {/* Top Success Badge */}
         <div className="flex flex-col items-center text-center mb-6">
@@ -443,11 +484,12 @@ export const ThankYouPage: React.FC<ThankYouPageProps> = ({
                   options={{
                     clientSecret: upsellClientSecret,
                     appearance: {
-                      theme: 'night',
+                      theme: isDark ? 'night' : 'stripe',
                       variables: {
                         colorPrimary: '#84CC16',
-                        colorBackground: '#07101d',
-                        colorText: '#ffffff',
+                        colorBackground: isDark ? '#07101d' : '#ffffff',
+                        colorText: isDark ? '#ffffff' : '#17211b',
+                        colorTextSecondary: isDark ? '#aab6c9' : '#5f6f66',
                         borderRadius: '12px',
                       },
                     },

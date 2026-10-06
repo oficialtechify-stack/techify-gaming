@@ -430,11 +430,24 @@ export default function LeadspayLanding({
   });
 
   useEffect(() => {
+    const theme: "light" | "dark" = isDark ? "dark" : "light";
+
+    document.documentElement.setAttribute("data-leadspay-theme", theme);
+    document.body.setAttribute("data-leadspay-theme", theme);
+
     try {
-      window.localStorage.setItem("leadspay-landing-theme", isDark ? "dark" : "light");
+      window.localStorage.setItem("leadspay-landing-theme", theme);
+      window.localStorage.setItem("leadspay-platform-theme", theme);
     } catch {
       // O tema continua funcionando durante a sessão mesmo se o storage estiver indisponível.
     }
+
+    window.dispatchEvent(new CustomEvent("leadspay-theme-change", { detail: theme }));
+
+    return () => {
+      document.documentElement.removeAttribute("data-leadspay-theme");
+      document.body.removeAttribute("data-leadspay-theme");
+    };
   }, [isDark]);
 
   useEffect(() => {

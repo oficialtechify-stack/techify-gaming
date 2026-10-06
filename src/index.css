@@ -252,3 +252,102 @@ nav,
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
+
+
+/* =========================================================
+   GLOBAL LIGHT THEME FALLBACK
+   Landing, platform and public checkout share the same page shell.
+   ========================================================= */
+html[data-leadspay-theme="light"],
+body[data-leadspay-theme="light"],
+body[data-leadspay-theme="light"] #root {
+  background: #f7f9f6;
+  color: #17211b;
+  color-scheme: light;
+}
+
+html[data-leadspay-theme="light"] ::selection,
+body[data-leadspay-theme="light"] ::selection {
+  background: #d9f22a;
+  color: #17211b;
+}
+
+html[data-leadspay-theme="light"] ::-webkit-scrollbar-track,
+body[data-leadspay-theme="light"] ::-webkit-scrollbar-track {
+  background: #f3f6f2;
+}
+
+html[data-leadspay-theme="light"] ::-webkit-scrollbar-thumb,
+body[data-leadspay-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #c6d0c8;
+  border-radius: 9999px;
+}
+
+html[data-leadspay-theme="light"] ::-webkit-scrollbar-thumb:hover,
+body[data-leadspay-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #9ead9f;
+}
+
+html[data-leadspay-theme="light"] *,
+body[data-leadspay-theme="light"] * {
+  scrollbar-color: #c6d0c8 #f3f6f2;
+}
+
+/* Public post-checkout light mode */
+.leadspay-thankyou[data-theme="light"] {
+  background: #f7f9f6 !important;
+  color: #17211b !important;
+  color-scheme: light;
+}
+
+.leadspay-thankyou[data-theme="light"] [class^="bg-[#050"],
+.leadspay-thankyou[data-theme="light"] [class*=" bg-[#050"],
+.leadspay-thankyou[data-theme="light"] [class^="bg-[#070"],
+.leadspay-thankyou[data-theme="light"] [class*=" bg-[#070"],
+.leadspay-thankyou[data-theme="light"] [class^="bg-[#0b1"],
+.leadspay-thankyou[data-theme="light"] [class*=" bg-[#0b1"] {
+  background-color: #f7f9f6 !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class~="text-white"] {
+  color: #17211b !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class~="text-white/90"],
+.leadspay-thankyou[data-theme="light"] [class~="text-white/80"],
+.leadspay-thankyou[data-theme="light"] [class~="text-white/70"] {
+  color: #425249 !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class~="text-white/60"],
+.leadspay-thankyou[data-theme="light"] [class~="text-white/50"] {
+  color: #607067 !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class~="text-white/40"] {
+  color: #7d8981 !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class^="border-white/"],
+.leadspay-thankyou[data-theme="light"] [class*=" border-white/"] {
+  border-color: #dfe6df !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class^="bg-white/"],
+.leadspay-thankyou[data-theme="light"] [class*=" bg-white/"] {
+  background-color: #eef2ed !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class~="text-[#84CC16]"] {
+  color: #5f7800 !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class~="bg-white"][class~="text-slate-950"] {
+  background-color: #173d31 !important;
+  color: #ffffff !important;
+}
+
+.leadspay-thankyou[data-theme="light"] [class~="text-emerald-300"],
+.leadspay-thankyou[data-theme="light"] [class~="text-emerald-400"] {
+  color: #067647 !important;
+}

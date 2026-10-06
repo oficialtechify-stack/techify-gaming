@@ -109,217 +109,476 @@
 }
 
 /* =========================================================
-   LIGHT THEME — visual branco completo e legível
-   Tipografia da landing: Manrope em claro e escuro.
+   LIGHT THEME — professional, readable and intentionally light
+   IMPORTANT: selectors target base Tailwind tokens only, so a
+   hover:* class does not accidentally become active all the time.
    ========================================================= */
 
 html[data-leadspay-theme="light"],
 body[data-leadspay-theme="light"] {
-  background: #ffffff !important;
-  color: #0f172a !important;
+  background: #f3f6f2 !important;
+  color: #17211b !important;
   color-scheme: light;
 }
 
 .leadspay-platform[data-theme="light"] {
-  --lp-bg: #ffffff;
+  --lp-canvas: #f3f6f2;
+  --lp-sidebar: #fbfcfa;
   --lp-surface: #ffffff;
-  --lp-soft: #f8fafc;
-  --lp-muted-surface: #f1f5f9;
-  --lp-text: #0f172a;
-  --lp-text-soft: #334155;
-  --lp-muted: #64748b;
-  --lp-border: #e2e8f0;
-  --lp-border-strong: #cbd5e1;
-  --lp-accent: #6b7f00;
-  --lp-accent-soft: #f2f9cf;
+  --lp-surface-soft: #f7f9f6;
+  --lp-surface-muted: #eef2ed;
+  --lp-ink: #17211b;
+  --lp-ink-soft: #33433a;
+  --lp-muted-strong: #526158;
+  --lp-muted: #6b786f;
+  --lp-muted-light: #87938b;
+  --lp-line: #dfe6df;
+  --lp-line-strong: #cad5cc;
+  --lp-accent: #657d00;
+  --lp-accent-strong: #506500;
+  --lp-accent-soft: #eef6d7;
+  --lp-shadow: 0 10px 28px rgba(28, 46, 35, 0.07);
+  --lp-shadow-raised: 0 18px 44px rgba(28, 46, 35, 0.11);
 
-  background: #ffffff !important;
-  color: var(--lp-text) !important;
+  background: var(--lp-canvas) !important;
+  color: var(--lp-ink) !important;
   color-scheme: light;
 }
 
-/* Área principal, sidebar e topbar */
-.leadspay-platform[data-theme="light"] > div,
-.leadspay-platform[data-theme="light"] aside,
+/* App shell */
+.leadspay-platform[data-theme="light"] aside {
+  background: var(--lp-sidebar) !important;
+  color: var(--lp-ink) !important;
+  border-color: var(--lp-line) !important;
+  box-shadow: 8px 0 28px rgba(28, 46, 35, 0.035);
+}
+
 .leadspay-platform[data-theme="light"] header,
-.leadspay-platform[data-theme="light"] main,
-.leadspay-platform[data-theme="light"] nav {
-  border-color: var(--lp-border) !important;
+.leadspay-platform[data-theme="light"] nav[class*="fixed"] {
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: var(--lp-ink) !important;
+  border-color: var(--lp-line) !important;
+  box-shadow: 0 8px 28px rgba(28, 46, 35, 0.045);
+  backdrop-filter: blur(18px);
 }
 
-.leadspay-platform[data-theme="light"] aside,
-.leadspay-platform[data-theme="light"] header {
-  background-color: #ffffff !important;
-  color: var(--lp-text) !important;
+.leadspay-platform[data-theme="light"] main {
+  color: var(--lp-ink) !important;
 }
 
-/* Elimina superfícies escuras hardcoded de TODOS os módulos do painel */
-.leadspay-platform[data-theme="light"] [class*="bg-[#0"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#1"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#2"] {
-  background-color: #ffffff !important;
+/* Base hardcoded dark surfaces. The selector deliberately ignores hover:bg-* tokens. */
+.leadspay-platform[data-theme="light"] [class^="bg-[#0"],
+.leadspay-platform[data-theme="light"] [class*=" bg-[#0"],
+.leadspay-platform[data-theme="light"] [class^="bg-[#1"],
+.leadspay-platform[data-theme="light"] [class*=" bg-[#1"],
+.leadspay-platform[data-theme="light"] [class^="bg-[#2"],
+.leadspay-platform[data-theme="light"] [class*=" bg-[#2"] {
+  background-color: var(--lp-surface) !important;
 }
 
-/* Cartões translúcidos viram superfícies claras */
-.leadspay-platform[data-theme="light"] [class*="bg-white/"],
-.leadspay-platform[data-theme="light"] [class*="bg-black/"] {
-  background-color: var(--lp-soft) !important;
+/* Inset surfaces keep hierarchy instead of every block becoming identical white. */
+.leadspay-platform[data-theme="light"] [class~="bg-[#050811]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#050a12]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#060b13]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#060A15]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#060A15]/95"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#0a101d]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#0a1222]"] {
+  background-color: var(--lp-surface-soft) !important;
 }
 
-.leadspay-platform[data-theme="light"] [class*="hover:bg-white/"]:hover,
-.leadspay-platform[data-theme="light"] [class*="hover:bg-black/"]:hover {
-  background-color: var(--lp-muted-surface) !important;
+.leadspay-platform[data-theme="light"] [class~="bg-[#070d18]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#07101d]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#080d1a]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#0b1220]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#0f172a]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#0f172a]/95"] {
+  background-color: var(--lp-surface) !important;
 }
 
-/* Estados selecionados continuam claros, sem blocos pretos */
-.leadspay-platform[data-theme="light"] [class*="bg-[#102419]"] {
+.leadspay-platform[data-theme="light"] [class~="bg-[#07120f]"] {
+  background-color: #eef9f1 !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="bg-[#102419]"] {
   background-color: var(--lp-accent-soft) !important;
 }
 
-.leadspay-platform[data-theme="light"] [class*="bg-[#070d18]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#0a1222]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#0c1626]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#080d1a]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#060b13]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#0a101d]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#0b1220]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#0f172a]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#181c24]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#232730]"] {
-  background-color: #ffffff !important;
+.leadspay-platform[data-theme="light"] [class~="bg-[#181c24]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#232730]"] {
+  background-color: var(--lp-surface-muted) !important;
 }
 
-/* Gradientes escuros do dashboard e cards */
-.leadspay-platform[data-theme="light"] [class*="from-[#0"],
-.leadspay-platform[data-theme="light"] [class*="from-[#1"],
-.leadspay-platform[data-theme="light"] [class*="via-[#0"],
-.leadspay-platform[data-theme="light"] [class*="via-[#1"],
-.leadspay-platform[data-theme="light"] [class*="to-[#0"],
-.leadspay-platform[data-theme="light"] [class*="to-[#1"] {
+/* Named dark utilities occasionally used by modals. */
+.leadspay-platform[data-theme="light"] [class^="bg-slate-9"],
+.leadspay-platform[data-theme="light"] [class*=" bg-slate-9"],
+.leadspay-platform[data-theme="light"] [class^="bg-gray-9"],
+.leadspay-platform[data-theme="light"] [class*=" bg-gray-9"],
+.leadspay-platform[data-theme="light"] [class^="bg-zinc-9"],
+.leadspay-platform[data-theme="light"] [class*=" bg-zinc-9"],
+.leadspay-platform[data-theme="light"] [class^="bg-neutral-9"],
+.leadspay-platform[data-theme="light"] [class*=" bg-neutral-9"] {
+  background-color: var(--lp-surface) !important;
+}
+
+/* Translucent neutral cards */
+.leadspay-platform[data-theme="light"] [class^="bg-white/"],
+.leadspay-platform[data-theme="light"] [class*=" bg-white/"] {
+  background-color: var(--lp-surface-soft) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="bg-white/10"],
+.leadspay-platform[data-theme="light"] [class~="bg-white/15"],
+.leadspay-platform[data-theme="light"] [class~="bg-white/20"] {
+  background-color: var(--lp-surface-muted) !important;
+}
+
+/* Light gradients with visible depth. Hover/focus variants remain untouched. */
+.leadspay-platform[data-theme="light"] [class^="from-[#0"],
+.leadspay-platform[data-theme="light"] [class*=" from-[#0"],
+.leadspay-platform[data-theme="light"] [class^="from-[#1"],
+.leadspay-platform[data-theme="light"] [class*=" from-[#1"],
+.leadspay-platform[data-theme="light"] [class^="from-slate-9"],
+.leadspay-platform[data-theme="light"] [class*=" from-slate-9"],
+.leadspay-platform[data-theme="light"] [class^="from-gray-9"],
+.leadspay-platform[data-theme="light"] [class*=" from-gray-9"],
+.leadspay-platform[data-theme="light"] [class^="from-emerald-950"],
+.leadspay-platform[data-theme="light"] [class*=" from-emerald-950"] {
   --tw-gradient-from: #ffffff var(--tw-gradient-from-position) !important;
-  --tw-gradient-to: rgba(255,255,255,0) var(--tw-gradient-to-position) !important;
 }
 
-/* Texto: tudo que era branco no dark vira texto escuro no light */
-.leadspay-platform[data-theme="light"] .text-white,
-.leadspay-platform[data-theme="light"] [class*="text-white/"] {
-  color: var(--lp-text) !important;
+.leadspay-platform[data-theme="light"] [class^="via-[#0"],
+.leadspay-platform[data-theme="light"] [class*=" via-[#0"],
+.leadspay-platform[data-theme="light"] [class^="via-[#1"],
+.leadspay-platform[data-theme="light"] [class*=" via-[#1"],
+.leadspay-platform[data-theme="light"] [class^="via-slate-9"],
+.leadspay-platform[data-theme="light"] [class*=" via-slate-9"] {
+  --tw-gradient-via: #f8faf8 var(--tw-gradient-via-position) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class^="to-[#0"],
+.leadspay-platform[data-theme="light"] [class*=" to-[#0"],
+.leadspay-platform[data-theme="light"] [class^="to-[#1"],
+.leadspay-platform[data-theme="light"] [class*=" to-[#1"],
+.leadspay-platform[data-theme="light"] [class^="to-slate-9"],
+.leadspay-platform[data-theme="light"] [class*=" to-slate-9"],
+.leadspay-platform[data-theme="light"] [class^="to-emerald-950"],
+.leadspay-platform[data-theme="light"] [class*=" to-emerald-950"] {
+  --tw-gradient-to: #eef4ec var(--tw-gradient-to-position) !important;
+}
+
+/* Text hierarchy — no washed-out white text on white cards. */
+.leadspay-platform[data-theme="light"] [class~="text-white"] {
+  color: var(--lp-ink) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/95"],
+.leadspay-platform[data-theme="light"] [class~="text-white/90"] {
+  color: #25332b !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/80"] {
+  color: #37473e !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/75"],
+.leadspay-platform[data-theme="light"] [class~="text-white/70"] {
+  color: #46574d !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/65"],
+.leadspay-platform[data-theme="light"] [class~="text-white/60"] {
+  color: #56675d !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/55"],
+.leadspay-platform[data-theme="light"] [class~="text-white/50"] {
+  color: #66766d !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/45"],
+.leadspay-platform[data-theme="light"] [class~="text-white/40"] {
+  color: #748279 !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-white/35"],
+.leadspay-platform[data-theme="light"] [class~="text-white/30"],
+.leadspay-platform[data-theme="light"] [class~="text-white/25"],
+.leadspay-platform[data-theme="light"] [class~="text-white/20"] {
+  color: #87938b !important;
+}
+
+.leadspay-platform[data-theme="light"] .text-gray-100,
+.leadspay-platform[data-theme="light"] .text-slate-100,
+.leadspay-platform[data-theme="light"] .text-gray-200,
+.leadspay-platform[data-theme="light"] .text-slate-200 {
+  color: #34443a !important;
 }
 
 .leadspay-platform[data-theme="light"] .text-gray-300,
-.leadspay-platform[data-theme="light"] .text-gray-400,
-.leadspay-platform[data-theme="light"] .text-slate-300,
-.leadspay-platform[data-theme="light"] .text-slate-400,
-.leadspay-platform[data-theme="light"] [class*="text-[#94a3b8]"] {
-  color: var(--lp-muted) !important;
+.leadspay-platform[data-theme="light"] .text-slate-300 {
+  color: #526158 !important;
 }
 
-.leadspay-platform[data-theme="light"] [class*="text-[#D9F22A]"],
-.leadspay-platform[data-theme="light"] [class*="text-[#a3e635]"] {
+.leadspay-platform[data-theme="light"] .text-gray-400,
+.leadspay-platform[data-theme="light"] .text-slate-400,
+.leadspay-platform[data-theme="light"] .text-gray-500,
+.leadspay-platform[data-theme="light"] .text-slate-500 {
+  color: #6b786f !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-[#94a3b8]"] {
+  color: #66766d !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="text-[#D9F22A]"],
+.leadspay-platform[data-theme="light"] [class~="text-[#a3e635]"],
+.leadspay-platform[data-theme="light"] [class~="text-[#B8F128]"] {
   color: var(--lp-accent) !important;
 }
 
-/* Botões lime mantêm texto escuro e alto contraste */
-.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]"][class*="text-[#060A15]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#D9F22A]"][class*="text-black"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#a3e635]"][class*="text-[#060A15]"],
-.leadspay-platform[data-theme="light"] [class*="bg-[#a3e635]"][class*="text-black"] {
-  color: #081018 !important;
+/* Semantic colors are darkened in light mode for accessibility. */
+.leadspay-platform[data-theme="light"] .text-emerald-300,
+.leadspay-platform[data-theme="light"] .text-emerald-400,
+.leadspay-platform[data-theme="light"] .text-green-300,
+.leadspay-platform[data-theme="light"] .text-green-400 {
+  color: #067647 !important;
 }
 
-/* Bordas claras reais */
-.leadspay-platform[data-theme="light"] [class*="border-white/"],
-.leadspay-platform[data-theme="light"] [class*="divide-white/"] {
-  border-color: var(--lp-border) !important;
+.leadspay-platform[data-theme="light"] .text-amber-200,
+.leadspay-platform[data-theme="light"] .text-amber-300,
+.leadspay-platform[data-theme="light"] .text-amber-400,
+.leadspay-platform[data-theme="light"] .text-yellow-300,
+.leadspay-platform[data-theme="light"] .text-yellow-400 {
+  color: #946200 !important;
 }
 
-.leadspay-platform[data-theme="light"] [class*="border-[#D9F22A]"] {
-  border-color: rgba(107, 127, 0, 0.35) !important;
+.leadspay-platform[data-theme="light"] .text-red-200,
+.leadspay-platform[data-theme="light"] .text-red-300,
+.leadspay-platform[data-theme="light"] .text-red-400 {
+  color: #b42318 !important;
 }
 
-/* Inputs, selects, buscas e textareas */
+.leadspay-platform[data-theme="light"] .text-blue-300,
+.leadspay-platform[data-theme="light"] .text-blue-400,
+.leadspay-platform[data-theme="light"] .text-sky-300,
+.leadspay-platform[data-theme="light"] .text-sky-400 {
+  color: #175cd3 !important;
+}
+
+.leadspay-platform[data-theme="light"] .text-cyan-300,
+.leadspay-platform[data-theme="light"] .text-cyan-400 {
+  color: #0e7490 !important;
+}
+
+.leadspay-platform[data-theme="light"] .text-purple-300,
+.leadspay-platform[data-theme="light"] .text-purple-400,
+.leadspay-platform[data-theme="light"] .text-violet-300,
+.leadspay-platform[data-theme="light"] .text-violet-400 {
+  color: #7e22ce !important;
+}
+
+/* Solid semantic buttons keep white text; lime buttons keep dark text. */
+.leadspay-platform[data-theme="light"] [class~="bg-red-500"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-red-600"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-emerald-500"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-emerald-600"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-blue-500"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-blue-600"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-indigo-500"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-indigo-600"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-purple-500"][class~="text-white"],
+.leadspay-platform[data-theme="light"] [class~="bg-purple-600"][class~="text-white"] {
+  color: #ffffff !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="bg-[#D9F22A]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#a3e635]"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#B8F128]"] {
+  color: #17211b !important;
+}
+
+/* Borders/dividers */
+.leadspay-platform[data-theme="light"] [class^="border-white/"],
+.leadspay-platform[data-theme="light"] [class*=" border-white/"],
+.leadspay-platform[data-theme="light"] [class^="divide-white/"],
+.leadspay-platform[data-theme="light"] [class*=" divide-white/"] {
+  border-color: var(--lp-line) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class^="border-slate-"],
+.leadspay-platform[data-theme="light"] [class*=" border-slate-"],
+.leadspay-platform[data-theme="light"] [class^="border-gray-"],
+.leadspay-platform[data-theme="light"] [class*=" border-gray-"] {
+  border-color: var(--lp-line-strong) !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="border-[#D9F22A]/30"],
+.leadspay-platform[data-theme="light"] [class~="border-[#D9F22A]/20"],
+.leadspay-platform[data-theme="light"] [class~="border-[#a3e635]/30"] {
+  border-color: rgba(101, 125, 0, 0.34) !important;
+}
+
+/* Inputs/selects */
 .leadspay-platform[data-theme="light"] input,
 .leadspay-platform[data-theme="light"] select,
 .leadspay-platform[data-theme="light"] textarea {
-  background-color: #ffffff !important;
-  color: var(--lp-text) !important;
-  border-color: var(--lp-border-strong) !important;
-  box-shadow: none !important;
+  background: #ffffff !important;
+  color: var(--lp-ink) !important;
+  border-color: var(--lp-line-strong) !important;
+  caret-color: var(--lp-accent-strong);
+  box-shadow: none;
+}
+
+.leadspay-platform[data-theme="light"] input:hover,
+.leadspay-platform[data-theme="light"] select:hover,
+.leadspay-platform[data-theme="light"] textarea:hover {
+  border-color: #aebcaf !important;
+}
+
+.leadspay-platform[data-theme="light"] input:focus,
+.leadspay-platform[data-theme="light"] select:focus,
+.leadspay-platform[data-theme="light"] textarea:focus {
+  border-color: #8ea63d !important;
+  box-shadow: 0 0 0 3px rgba(142, 166, 61, 0.12) !important;
+}
+
+.leadspay-platform[data-theme="light"] input:disabled,
+.leadspay-platform[data-theme="light"] select:disabled,
+.leadspay-platform[data-theme="light"] textarea:disabled {
+  background: #eef2ed !important;
+  color: #7a877f !important;
+  border-color: #d8e0da !important;
 }
 
 .leadspay-platform[data-theme="light"] input::placeholder,
 .leadspay-platform[data-theme="light"] textarea::placeholder {
-  color: #94a3b8 !important;
+  color: #8b9790 !important;
+  opacity: 1;
 }
 
-/* Dropdowns, menus, popovers e dialogs */
-.leadspay-platform[data-theme="light"] [role="dialog"],
-.leadspay-platform[data-theme="light"] [role="menu"],
-.leadspay-platform[data-theme="light"] [class*="shadow-2xl"],
-.leadspay-platform[data-theme="light"] [class*="shadow-lg"] {
-  background-color: #ffffff;
-  border-color: var(--lp-border) !important;
-  --tw-shadow-color: rgba(15, 23, 42, 0.10);
-}
-
-/* Dashboard especificamente: nenhum painel preto no modo claro */
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact > div,
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact section,
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact article {
-  color: var(--lp-text);
-}
-
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact [class*="rounded-2xl"],
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact [class*="rounded-3xl"] {
-  border-color: var(--lp-border) !important;
-}
-
-/* SVGs de gráficos e labels que herdam currentColor */
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact svg text {
-  fill: #64748b !important;
-}
-
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact svg [stroke="#1f2937"],
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact svg [stroke="#ffffff"],
-.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact svg [stroke="rgba(255,255,255,0.08)"] {
-  stroke: #e2e8f0 !important;
-}
-
-/* Cards glass e sombras */
+/* Cards, menus and modals */
 .leadspay-platform[data-theme="light"] .lp-glass-card {
   background: #ffffff !important;
-  border-color: var(--lp-border) !important;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  border-color: var(--lp-line) !important;
+  box-shadow: var(--lp-shadow);
 }
 
-.leadspay-platform[data-theme="light"] [class*="shadow-[0_"] {
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06) !important;
+.leadspay-platform[data-theme="light"] [role="dialog"],
+.leadspay-platform[data-theme="light"] [role="menu"] {
+  background: #ffffff !important;
+  color: var(--lp-ink) !important;
+  border-color: var(--lp-line) !important;
+  box-shadow: var(--lp-shadow-raised) !important;
 }
 
-/* Backdrops continuam semitransparentes para modais */
-.leadspay-platform[data-theme="light"] [class*="fixed"][class*="inset-0"][class*="bg-black/"] {
-  background-color: rgba(15, 23, 42, 0.42) !important;
+.leadspay-platform[data-theme="light"] [class^="shadow-2xl"],
+.leadspay-platform[data-theme="light"] [class*=" shadow-2xl"],
+.leadspay-platform[data-theme="light"] [class^="shadow-xl"],
+.leadspay-platform[data-theme="light"] [class*=" shadow-xl"],
+.leadspay-platform[data-theme="light"] [class^="shadow-lg"],
+.leadspay-platform[data-theme="light"] [class*=" shadow-lg"] {
+  --tw-shadow-color: rgba(28, 46, 35, 0.10) !important;
 }
 
-/* Avatar/status ring não deve virar branco */
-.leadspay-platform[data-theme="light"] [class*="ring-[#060A15]"] {
-  --tw-ring-color: #ffffff !important;
+/* True modal backdrops must remain dark. */
+.leadspay-platform[data-theme="light"] [class*="fixed"][class*="inset-0"][class*="bg-black/"],
+.leadspay-platform[data-theme="light"] [class*="fixed"][class*="inset-0"][class*="bg-slate-950/"] {
+  background-color: rgba(24, 33, 28, 0.50) !important;
 }
 
-/* Scrollbar claro */
+/* Tables */
+.leadspay-platform[data-theme="light"] table {
+  color: var(--lp-ink);
+}
+
+.leadspay-platform[data-theme="light"] thead {
+  background: #f4f7f3 !important;
+  color: var(--lp-muted-strong) !important;
+}
+
+.leadspay-platform[data-theme="light"] tbody tr {
+  border-color: #e6ebe6 !important;
+}
+
+.leadspay-platform[data-theme="light"] tbody tr:hover {
+  background-color: #f8faf7 !important;
+}
+
+/* Dashboard/chart labels */
+.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact,
+.leadspay-platform[data-theme="light"] #leadspay-assistentes-ia-view,
+.leadspay-platform[data-theme="light"] #leadspay-relatorios-view,
+.leadspay-platform[data-theme="light"] #leadspay-vendas-view,
+.leadspay-platform[data-theme="light"] #leadspay-minhas-afiliacoes-view,
+.leadspay-platform[data-theme="light"] #leadspay-afiliados-view {
+  color: var(--lp-ink) !important;
+}
+
+.leadspay-platform[data-theme="light"] #leadspay-dashboard-exact svg text,
+.leadspay-platform[data-theme="light"] .recharts-cartesian-axis-tick-value,
+.leadspay-platform[data-theme="light"] .recharts-legend-item-text {
+  fill: #68766e !important;
+  color: #68766e !important;
+}
+
+.leadspay-platform[data-theme="light"] .recharts-cartesian-grid line {
+  stroke: #dfe6df !important;
+}
+
+.leadspay-platform[data-theme="light"] .recharts-default-tooltip {
+  background: #ffffff !important;
+  border: 1px solid #dfe6df !important;
+  color: #17211b !important;
+  box-shadow: var(--lp-shadow) !important;
+}
+
+.leadspay-platform[data-theme="light"] .recharts-tooltip-label,
+.leadspay-platform[data-theme="light"] .recharts-tooltip-item {
+  color: #33433a !important;
+}
+
+/* Sidebar/selected states */
+.leadspay-platform[data-theme="light"] aside button:hover,
+.leadspay-platform[data-theme="light"] aside a:hover {
+  background-color: #f0f4ef;
+}
+
+.leadspay-platform[data-theme="light"] [class~="bg-[#D9F22A]/10"],
+.leadspay-platform[data-theme="light"] [class~="bg-[#a3e635]/10"] {
+  background-color: var(--lp-accent-soft) !important;
+}
+
+/* Theme toggle: use brand colors instead of the unrelated bright blue. */
+.leadspay-platform[data-theme="light"] [class~="bg-[#dbeafe]"] {
+  background-color: #eef4e5 !important;
+  border-color: #c8d5ba !important;
+}
+
+.leadspay-platform[data-theme="light"] [class~="bg-[#38bdf8]"] {
+  background-color: #ffffff !important;
+  color: var(--lp-accent-strong) !important;
+  border: 1px solid #d5dfcc;
+}
+
+/* Scrollbars */
 .leadspay-platform[data-theme="light"] ::-webkit-scrollbar-track {
-  background: #f8fafc;
+  background: #f3f6f2;
 }
 
 .leadspay-platform[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #c6d0c8;
 }
 
 .leadspay-platform[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9ead9f;
 }
 
-/* Transição suave sem mexer em transformações/posicionamento */
+.leadspay-platform[data-theme="light"] * {
+  scrollbar-color: #c6d0c8 #f3f6f2;
+}
+
+/* Smooth theme switch without animating layout/position. */
 .leadspay-platform,
 .leadspay-platform aside,
 .leadspay-platform header,

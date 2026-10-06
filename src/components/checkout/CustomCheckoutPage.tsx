@@ -4,6 +4,19 @@ import type { CompanyPlan } from '../../types/platform';
 
 export const PLATFORM_CHECKOUT_FEE = 0.99;
 
+const readCheckoutTheme = (): 'light' | 'dark' => {
+  if (typeof window === 'undefined') return 'dark';
+  try {
+    const platform = window.localStorage.getItem('leadspay-platform-theme');
+    if (platform === 'light' || platform === 'dark') return platform;
+    const landing = window.localStorage.getItem('leadspay-landing-theme');
+    if (landing === 'light' || landing === 'dark') return landing;
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+};
+
 interface CustomCheckoutPageProps {
   plan: CompanyPlan;
   checkoutSlug?: string;
@@ -37,14 +50,16 @@ class CheckoutBoundary extends React.Component<
   render() {
     if (!this.state.hasError) return this.props.children;
 
+    const isLight = readCheckoutTheme() === 'light';
+
     return (
-      <main className="min-h-screen bg-[#06101b] px-4 py-12 text-white">
-        <div className="mx-auto max-w-lg rounded-3xl border border-white/10 bg-[#0d1828] p-7 text-center shadow-2xl">
+      <main className={`min-h-screen px-4 py-12 ${isLight ? 'bg-[#f7f9f6] text-[#17211b]' : 'bg-[#06101b] text-white'}`}>
+        <div className={`mx-auto max-w-lg rounded-3xl border p-7 text-center shadow-2xl ${isLight ? 'border-[#dfe6df] bg-white' : 'border-white/10 bg-[#0d1828]'}`}>
           <div className="text-3xl font-black tracking-tight">
             <span>Leads</span><span className="text-[#B8F128]">Pay</span>
           </div>
           <h1 className="mt-6 text-xl font-black">Checkout temporariamente indisponível</h1>
-          <p className="mt-2 text-sm leading-relaxed text-white/60">
+          <p className={`mt-2 text-sm leading-relaxed ${isLight ? 'text-[#5f6f66]' : 'text-white/60'}`}>
             O checkout encontrou um erro de interface. A página principal e o painel continuam funcionando normalmente.
           </p>
           {this.props.onBack && (
@@ -66,10 +81,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = (props) => 
   <CheckoutBoundary onBack={props.onBack}>
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-[#06101b] text-white">
+        <main className={`flex min-h-screen items-center justify-center ${readCheckoutTheme() === 'light' ? 'bg-[#f7f9f6] text-[#17211b]' : 'bg-[#06101b] text-white'}`}>
           <div className="text-center">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#B8F128]/30 border-t-[#B8F128]" />
-            <p className="mt-4 text-sm font-semibold text-white/70">Carregando checkout seguro…</p>
+            <p className={`mt-4 text-sm font-semibold ${readCheckoutTheme() === 'light' ? 'text-[#5f6f66]' : 'text-white/70'}`}>Carregando checkout seguro…</p>
           </div>
         </main>
       }
