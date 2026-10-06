@@ -72,48 +72,51 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return res.status(409).json({ error: 'Seu perfil já está em análise.' });
     }
 
-    let stripeAccountId = '';
-    if (role === 'empresa') {
-      stripeAccountId = String(current.stripeAccounts?.empresa || '').trim();
-      if (!stripeAccountId) {
-        return res.status(409).json({
-          error: 'Conecte e conclua a verificação da Stripe antes de preencher o perfil da empresa.',
-          code: 'STRIPE_REQUIRED_FIRST',
-        });
-      }
+    // Empresa e Afiliado seguem o mesmo fluxo: Stripe primeiro,
+    // perfil LeadsPay depois.
+    const stripeAccountId = String(current.stripeAccounts?.[role] || '').trim();
+    if (!stripeAccountId) {
+      return res.status(409).json({
+        error: role === 'empresa'
+          ? 'Conecte e conclua a verificação da Stripe antes de preencher o perfil da empresa.'
+          : 'Conecte e conclua a verificação da Stripe antes de preencher o perfil do afiliado.',
+        code: 'STRIPE_REQUIRED_FIRST',
+      });
+    }
 
-      const stripe = getStripeTestClient();
-      let account;
-      try {
-        account = await stripe.accounts.retrieve(stripeAccountId);
-      } catch {
-        return res.status(409).json({
-          error: 'Não foi possível confirmar sua conta Stripe. Atualize a página e tente novamente.',
-          code: 'STRIPE_ACCOUNT_UNAVAILABLE',
-        });
-      }
+    const stripe = getStripeTestClient();
+    let stripeAccount;
+    try {
+      stripeAccount = await stripe.accounts.retrieve(stripeAccountId);
+    } catch {
+      return res.status(409).json({
+        error: 'Não foi possível confirmar sua conta Stripe. Atualize a página e tente novamente.',
+        code: 'STRIPE_ACCOUNT_UNAVAILABLE',
+      });
+    }
 
-      if (
-        account.metadata?.firebase_uid !== identity.uid ||
-        account.metadata?.leadspay_role !== 'empresa'
-      ) {
-        return res.status(409).json({
-          error: 'A conta Stripe conectada não pertence a este perfil LeadsPay.',
-          code: 'STRIPE_ACCOUNT_MISMATCH',
-        });
-      }
+    if (
+      stripeAccount.metadata?.firebase_uid !== identity.uid ||
+      stripeAccount.metadata?.leadspay_role !== role
+    ) {
+      return res.status(409).json({
+        error: 'A conta Stripe conectada não pertence a este perfil LeadsPay.',
+        code: 'STRIPE_ACCOUNT_MISMATCH',
+      });
+    }
 
-      const stripeReady =
-        account.details_submitted === true &&
-        account.payouts_enabled === true &&
-        account.capabilities?.transfers === 'active';
+    const stripeReady =
+      stripeAccount.details_submitted === true &&
+      stripeAccount.payouts_enabled === true &&
+      stripeAccount.capabilities?.transfers === 'active';
 
-      if (!stripeReady) {
-        return res.status(409).json({
-          error: 'Finalize todas as etapas da Stripe antes de preencher o perfil da empresa.',
-          code: 'STRIPE_NOT_READY',
-        });
-      }
+    if (!stripeReady) {
+      return res.status(409).json({
+        error: role === 'empresa'
+          ? 'Finalize todas as etapas da Stripe antes de preencher o perfil da empresa.'
+          : 'Finalize todas as etapas da Stripe antes de preencher o perfil do afiliado.',
+        code: 'STRIPE_NOT_READY',
+      });
     }
 
     const email = role === 'afiliado' ? String(identity.email || '').trim().toLowerCase() : String(body.email || identity.email || '').trim().toLowerCase();
