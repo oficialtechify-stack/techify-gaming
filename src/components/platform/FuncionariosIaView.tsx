@@ -93,12 +93,12 @@ const FALLBACK_WORKERS: Worker[] = [
 ];
 
 const STATIONS = [
-  { left: '15%', top: '37%' },
-  { left: '40%', top: '37%' },
-  { left: '65%', top: '37%' },
-  { left: '24%', top: '72%' },
-  { left: '50%', top: '72%' },
-  { left: '76%', top: '72%' },
+  { left: '24%', top: '48%' },
+  { left: '50%', top: '48%' },
+  { left: '76%', top: '48%' },
+  { left: '24%', top: '79%' },
+  { left: '50%', top: '79%' },
+  { left: '76%', top: '79%' },
 ];
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -474,6 +474,11 @@ export const FuncionariosIaView: React.FC = () => {
                     </span>
 
                     <img className="pixel-furniture station-pc" src={pcFrame} alt="" />
+                    <img
+                      className="pixel-furniture station-chair"
+                      src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png"
+                      alt=""
+                    />
 
                     <span
                       className="pixel-agent-sprite"
