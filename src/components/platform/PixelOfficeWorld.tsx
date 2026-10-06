@@ -52,6 +52,7 @@ type MotionState = {
   targetKey: string;
   idleIndex: number;
   nextIdleAt: number;
+  lastPathAt: number;
 };
 
 type Interaction =
@@ -80,9 +81,12 @@ const COLS = 54;
 const ROWS = 42;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
-const AI_WALK_SPEED = 34;
-const PLAYER_WALK_SPEED = 72;
+const AI_WALK_SPEED = 42;
+const PLAYER_WALK_SPEED = 92;
 const EPSILON = 1.4;
+const VISUAL_FRAME_MS = 28;
+const PLAYER_FOOT_RADIUS_X = 9;
+const PLAYER_FOOT_RADIUS_Y = 6;
 
 const HOME_TARGET: Record<string, Cell> = {
   'lumy-manager': { x: 6, y: 21 },
@@ -227,6 +231,70 @@ function cellAtPixel(x: number, y: number): Cell {
     y: Math.max(0, Math.min(ROWS - 1, Math.floor(y / TILE))),
   };
 }
+
+function canOccupy(x: number, y: number): boolean {
+  const samples = [
+    [0, 0],
+    [-PLAYER_FOOT_RADIUS_X, 0],
+    [PLAYER_FOOT_RADIUS_X, 0],
+    [0, -PLAYER_FOOT_RADIUS_Y],
+    [0, PLAYER_FOOT_RADIUS_Y],
+    [-PLAYER_FOOT_RADIUS_X, -PLAYER_FOOT_RADIUS_Y],
+    [PLAYER_FOOT_RADIUS_X, -PLAYER_FOOT_RADIUS_Y],
+    [-PLAYER_FOOT_RADIUS_X, PLAYER_FOOT_RADIUS_Y],
+    [PLAYER_FOOT_RADIUS_X, PLAYER_FOOT_RADIUS_Y],
+  ];
+  return samples.every(([offsetX, offsetY]) => isWalkable(cellAtPixel(x + offsetX, y + offsetY)));
+}
+
+function hasClearLine(from: { x: number; y: number }, to: { x: number; y: number }): boolean {
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const steps = Math.max(1, Math.ceil(distance / 7));
+  for (let index = 1; index <= steps; index += 1) {
+    const ratio = index / steps;
+    const x = from.x + (to.x - from.x) * ratio;
+    const y = from.y + (to.y - from.y) * ratio;
+    if (!canOccupy(x, y)) return false;
+  }
+  return true;
+}
+
+function smoothPath(from: { x: number; y: number }, path: Cell[]): Cell[] {
+  if (path.length <= 2) return path;
+  const result: Cell[] = [];
+  let origin = from;
+  let index = 0;
+
+  while (index < path.length) {
+    let furthest = index;
+    for (let candidate = path.length - 1; candidate >= index; candidate -= 1) {
+      if (hasClearLine(origin, centerOf(path[candidate]))) {
+        furthest = candidate;
+        break;
+      }
+    }
+    result.push(path[furthest]);
+    origin = centerOf(path[furthest]);
+    index = furthest + 1;
+  }
+  return result;
+}
+
+function buildRoute(x: number, y: number, target: Cell): Cell[] {
+  const start = nearestWalkableCell(x, y);
+  return smoothPath({ x, y }, findPath(start, target));
+}
+
+function sameInteraction(a: Interaction, b: Interaction): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.type !== b.type || a.label !== b.label) return false;
+  if (a.type === 'computer' && b.type === 'computer') return a.ownerUid === b.ownerUid;
+  if (a.type === 'ai' && b.type === 'ai') return a.workerId === b.workerId;
+  if (a.type === 'human' && b.type === 'human') return a.userId === b.userId;
+  return a.type === 'meeting' && b.type === 'meeting';
+}
+
+
 
 function nearestWalkableCell(x: number, y: number): Cell {
   const base = cellAtPixel(x, y);
@@ -429,8 +497,12 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
   const [motion, setMotion] = useState<Record<string, MotionState>>({});
   const motionRef = useRef<Record<string, MotionState>>({});
   const [player, setPlayer] = useState<MotionState | null>(null);
+  const playerRef = useRef<MotionState | null>(null);
   const [playerPath, setPlayerPath] = useState<Cell[]>([]);
+  const playerPathRef = useRef<Cell[]>([]);
   const [interaction, setInteraction] = useState<Interaction>(null);
+  const interactionRef = useRef<Interaction>(null);
+  const renderClockRef = useRef(0);
   const tasksRef = useRef(tasks);
   const workersRef = useRef(workers);
   const keysRef = useRef(new Set<string>());
@@ -459,6 +531,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           targetKey: 'work',
           idleIndex: 0,
           nextIdleAt: Date.now() + 6000,
+          lastPathAt: 0,
         };
       }
       motionRef.current = next;
@@ -482,7 +555,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
       : { ...fallback, direction: 'down' as Direction };
     const safe = nearestWalkableCell(initial.x, initial.y);
     const safePosition = centerOf(safe);
-    setPlayer({
+    const nextPlayer: MotionState = {
       x: safePosition.x,
       y: safePosition.y,
       direction: initial.direction,
@@ -490,7 +563,12 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
       targetKey: 'player',
       idleIndex: 0,
       nextIdleAt: 0,
-    });
+      lastPathAt: 0,
+    };
+    playerRef.current = nextPlayer;
+    playerPathRef.current = [];
+    setPlayer(nextPlayer);
+    setPlayerPath([]);
   }, [currentMember?.userId]);
 
   useEffect(() => {
@@ -500,6 +578,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
       const key = event.key.toLowerCase();
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
         keysRef.current.add(key);
+        playerPathRef.current = [];
         setPlayerPath([]);
         event.preventDefault();
       }
@@ -524,71 +603,82 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
     let previous = performance.now();
 
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - previous) / 1000);
+      const dt = Math.min(0.035, Math.max(0.001, (now - previous) / 1000));
       previous = now;
 
-      setMotion((current) => {
-        const next = { ...current };
-        for (const worker of workersRef.current) {
-          const existing = next[worker.id];
-          if (!existing) continue;
+      const nextMotion = { ...motionRef.current };
+      for (const worker of workersRef.current) {
+        const existing = nextMotion[worker.id];
+        if (!existing) continue;
 
-          const state = visualState(tasksRef.current, worker.id);
-          const target = desiredTarget(worker.id, state, existing, Date.now());
-          let path = existing.path;
+        const state = visualState(tasksRef.current, worker.id);
+        const target = desiredTarget(worker.id, state, existing, Date.now());
+        let path = existing.path;
+        let lastPathAt = existing.lastPathAt || 0;
+        const currentCell = nearestWalkableCell(existing.x, existing.y);
+        const reachedCell = currentCell.x === target.cell.x && currentCell.y === target.cell.y;
 
-          if (existing.targetKey !== target.key) {
-            path = findPath(nearestWalkableCell(existing.x, existing.y), target.cell);
-          } else if (path.length === 0) {
-            const currentCell = nearestWalkableCell(existing.x, existing.y);
-            if (currentCell.x !== target.cell.x || currentCell.y !== target.cell.y) {
-              path = findPath(currentCell, target.cell);
-            }
-          }
+        if (existing.targetKey !== target.key) {
+          path = buildRoute(existing.x, existing.y, target.cell);
+          lastPathAt = now;
+        } else if (!path.length && !reachedCell && now - lastPathAt > 900) {
+          path = buildRoute(existing.x, existing.y, target.cell);
+          lastPathAt = now;
+        }
 
-          let x = existing.x;
-          let y = existing.y;
-          let direction = existing.direction;
-          let remaining = AI_WALK_SPEED * dt;
-          const nextPath = [...path];
+        let x = existing.x;
+        let y = existing.y;
+        let direction = existing.direction;
+        let remaining = AI_WALK_SPEED * dt;
+        const nextPath = [...path];
 
-          while (remaining > 0 && nextPath.length) {
-            const point = centerOf(nextPath[0]);
-            const dx = point.x - x;
-            const dy = point.y - y;
-            const distance = Math.hypot(dx, dy);
-            direction = directionFor(dx, dy, direction);
-            if (distance <= remaining + EPSILON) {
+        while (remaining > 0 && nextPath.length) {
+          const point = centerOf(nextPath[0]);
+          const dx = point.x - x;
+          const dy = point.y - y;
+          const distance = Math.hypot(dx, dy);
+          direction = directionFor(dx, dy, direction);
+
+          if (distance <= remaining + EPSILON) {
+            if (canOccupy(point.x, point.y)) {
               x = point.x;
               y = point.y;
-              remaining -= distance;
-              nextPath.shift();
-            } else if (distance > 0) {
-              x += (dx / distance) * remaining;
-              y += (dy / distance) * remaining;
-              remaining = 0;
             }
+            remaining -= Math.min(distance, remaining);
+            nextPath.shift();
+          } else if (distance > 0) {
+            const step = Math.min(remaining, distance);
+            const candidateX = x + (dx / distance) * step;
+            const candidateY = y + (dy / distance) * step;
+            if (canOccupy(candidateX, candidateY)) {
+              x = candidateX;
+              y = candidateY;
+            } else {
+              nextPath.length = 0;
+              lastPathAt = now - 650;
+            }
+            remaining = 0;
           }
-
-          next[worker.id] = {
-            x,
-            y,
-            direction,
-            path: nextPath,
-            targetKey: target.key,
-            idleIndex: target.idleIndex,
-            nextIdleAt: target.nextIdleAt,
-          };
         }
-        motionRef.current = next;
-        return next;
-      });
 
-      setPlayer((current) => {
-        if (!current) return current;
-        let x = current.x;
-        let y = current.y;
-        let direction = current.direction;
+        nextMotion[worker.id] = {
+          x,
+          y,
+          direction,
+          path: nextPath,
+          targetKey: target.key,
+          idleIndex: target.idleIndex,
+          nextIdleAt: target.nextIdleAt,
+          lastPathAt,
+        };
+      }
+      motionRef.current = nextMotion;
+
+      const currentPlayer = playerRef.current;
+      if (currentPlayer) {
+        let x = currentPlayer.x;
+        let y = currentPlayer.y;
+        let direction = currentPlayer.direction;
         let walking = false;
         const keys = keysRef.current;
         let dx = 0;
@@ -598,20 +688,23 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
         if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
         if (keys.has('d') || keys.has('arrowright')) dx += 1;
 
-        let remainingPath = [...playerPath];
+        let remainingPath = [...playerPathRef.current];
 
         if (dx !== 0 || dy !== 0) {
           const length = Math.hypot(dx, dy) || 1;
           const stepX = (dx / length) * PLAYER_WALK_SPEED * dt;
           const stepY = (dy / length) * PLAYER_WALK_SPEED * dt;
-          const nextX = x + stepX;
-          const nextY = y + stepY;
           direction = directionFor(stepX, stepY, direction);
 
-          if (isWalkable(cellAtPixel(nextX, y))) x = nextX;
-          if (isWalkable(cellAtPixel(x, nextY))) y = nextY;
+          const candidateX = x + stepX;
+          const candidateY = y + stepY;
+
+          if (canOccupy(candidateX, y)) x = candidateX;
+          if (canOccupy(x, candidateY)) y = candidateY;
+
           remainingPath = [];
-          walking = true;
+          playerPathRef.current = [];
+          walking = Math.abs(x - currentPlayer.x) > .05 || Math.abs(y - currentPlayer.y) > .05;
         } else if (remainingPath.length) {
           let remaining = PLAYER_WALK_SPEED * dt;
           while (remaining > 0 && remainingPath.length) {
@@ -621,23 +714,43 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
             const distance = Math.hypot(pathDx, pathDy);
             direction = directionFor(pathDx, pathDy, direction);
             walking = true;
+
             if (distance <= remaining + EPSILON) {
-              x = point.x;
-              y = point.y;
-              remaining -= distance;
+              if (canOccupy(point.x, point.y)) {
+                x = point.x;
+                y = point.y;
+              }
+              remaining -= Math.min(distance, remaining);
               remainingPath.shift();
             } else if (distance > 0) {
-              x += (pathDx / distance) * remaining;
-              y += (pathDy / distance) * remaining;
+              const step = Math.min(remaining, distance);
+              const candidateX = x + (pathDx / distance) * step;
+              const candidateY = y + (pathDy / distance) * step;
+              if (canOccupy(candidateX, candidateY)) {
+                x = candidateX;
+                y = candidateY;
+              } else {
+                remainingPath = buildRoute(x, y, remainingPath[remainingPath.length - 1]);
+              }
               remaining = 0;
             }
           }
-          if (remainingPath.length !== playerPath.length) setPlayerPath(remainingPath);
+          playerPathRef.current = remainingPath;
         }
 
-        const playerCell = nearestWalkableCell(x, y);
+        const nextPlayer: MotionState = {
+          ...currentPlayer,
+          x,
+          y,
+          direction,
+          path: remainingPath,
+        };
+        playerRef.current = nextPlayer;
+
+        const playerCell = cellAtPixel(x, y);
         let nextInteraction: Interaction = null;
         let bestDistance = Number.POSITIVE_INFINITY;
+
         for (const item of INTERACTIONS) {
           const distance = heuristic(playerCell, item.cell);
           if (distance <= 2 && distance < bestDistance) {
@@ -680,22 +793,30 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           }
         }
 
-        setInteraction(nextInteraction);
+        if (!sameInteraction(interactionRef.current, nextInteraction)) {
+          interactionRef.current = nextInteraction;
+          setInteraction(nextInteraction);
+        }
 
-        if (walking && onPlayerMove && now - presenceRef.current > 850) {
+        if (walking && onPlayerMove && now - presenceRef.current > 650) {
           presenceRef.current = now;
           onPlayerMove({ x, y, direction });
         }
+      }
 
-        return { ...current, x, y, direction, path: remainingPath };
-      });
+      if (now - renderClockRef.current >= VISUAL_FRAME_MS) {
+        renderClockRef.current = now;
+        setMotion({ ...motionRef.current });
+        if (playerRef.current) setPlayer({ ...playerRef.current });
+        setPlayerPath([...playerPathRef.current]);
+      }
 
       frameId = window.requestAnimationFrame(frame);
     };
 
     frameId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(frameId);
-  }, [officeMembers, onPlayerMove]);
+  }, [officeMembers, currentUserId, onPlayerMove]);
 
   const taskMap = useMemo(
     () => new Map(workers.map((worker) => [worker.id, currentTask(tasks, worker.id)])),
@@ -710,8 +831,9 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
     const x = (event.clientX - rect.left) * scaleX;
     const y = (event.clientY - rect.top) * scaleY;
     const target = nearestWalkableCell(x, y);
-    const start = nearestWalkableCell(player.x, player.y);
-    setPlayerPath(findPath(start, target));
+    const route = buildRoute(playerRef.current?.x ?? player.x, playerRef.current?.y ?? player.y, target);
+    playerPathRef.current = route;
+    setPlayerPath(route);
   };
 
   const humanPositions = officeMembers
@@ -729,8 +851,9 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
       };
     });
 
+  const playerWalking = playerPath.length > 0 || keysRef.current.size > 0;
   const currentFrame = player
-    ? spriteFrame('human', playerPath.length > 0 || keysRef.current.size > 0, player.direction, tick)
+    ? spriteFrame('human', playerWalking, player.direction, tick)
     : null;
 
   return (
@@ -782,6 +905,10 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           <img className="v3-furniture meeting-picture-v3" src="/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png" alt="" />
           <img className="v3-furniture meeting-plant-v3 a" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
           <img className="v3-furniture meeting-plant-v3 b" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
+          <img className="meeting-chair-v3 m1" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+          <img className="meeting-chair-v3 m2" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+          <img className="meeting-chair-v3 m3" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+          <img className="meeting-chair-v3 m4" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
           <img className="v3-furniture meeting-table-v3" src="/pixel-agents/assets/furniture/TABLE_FRONT/TABLE_FRONT.png" alt="" />
 
           {/* Operation */}
@@ -870,7 +997,8 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
                   className="game-agent-sprite-v3"
                   style={{
                     backgroundImage: `url('/pixel-agents/assets/characters/char_${worker.palette}.png')`,
-                    backgroundPosition: `${-frame.frame * 48}px ${-frame.row * 96}px`,
+                    backgroundPositionX: walking ? undefined : `${-frame.frame * 48}px`,
+                    backgroundPositionY: `${-frame.row * 96}px`,
                     transform: frame.flip ? 'scaleX(-1)' : undefined,
                   }}
                 />
@@ -917,7 +1045,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           {player && currentMember && currentFrame && (
             <button
               type="button"
-              className="human-agent-v3 current-player"
+              className={`human-agent-v3 current-player ${playerWalking ? 'is-walking' : ''}`}
               style={{ left: player.x, top: player.y, zIndex: 220 + Math.floor(player.y) }}
               onClick={(event) => event.stopPropagation()}
             >
@@ -925,7 +1053,8 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
                 className="game-agent-sprite-v3"
                 style={{
                   backgroundImage: `url('/pixel-agents/assets/characters/char_${currentMember.palette}.png')`,
-                  backgroundPosition: `${-currentFrame.frame * 48}px ${-currentFrame.row * 96}px`,
+                  backgroundPositionX: playerWalking ? undefined : `${-currentFrame.frame * 48}px`,
+                  backgroundPositionY: `${-currentFrame.row * 96}px`,
                   transform: currentFrame.flip ? 'scaleX(-1)' : undefined,
                 }}
               />

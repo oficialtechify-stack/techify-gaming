@@ -4996,3 +4996,97 @@
     display: block;
   }
 }
+
+
+/* =========================================================
+   LEADSPAY OFFICE — FLUID MOVEMENT ENGINE
+   React updates game snapshots; CSS interpolates the small gaps.
+   ========================================================= */
+
+.game-agent-v3,
+.human-agent-v3 {
+  will-change: left, top;
+  transition:
+    left 42ms linear,
+    top 42ms linear,
+    filter .14s ease;
+  backface-visibility: hidden;
+  transform: translate3d(-50%, -83%, 0);
+}
+
+.game-agent-v3 .game-agent-sprite-v3,
+.human-agent-v3 .game-agent-sprite-v3 {
+  will-change: background-position, transform;
+}
+
+.game-agent-v3.is-walking .game-agent-sprite-v3,
+.human-agent-v3.is-walking .game-agent-sprite-v3 {
+  animation: leadspayOfficeWalk .44s steps(1, end) infinite;
+}
+
+@keyframes leadspayOfficeWalk {
+  0% { background-position-x: 0; }
+  25% { background-position-x: -48px; }
+  50% { background-position-x: -96px; }
+  75% { background-position-x: -48px; }
+  100% { background-position-x: 0; }
+}
+
+.game-agent-v3.is-walking .game-agent-label-v3,
+.human-agent-v3.is-walking .human-agent-label {
+  transform: translate3d(-50%, 0, 0);
+}
+
+.current-player {
+  filter:
+    drop-shadow(0 0 8px rgba(217,242,42,.13))
+    drop-shadow(5px 9px 4px rgba(0,0,0,.12));
+}
+
+.current-player.is-walking .ceo-crown {
+  animation: officeCrownWalk .44s ease-in-out infinite alternate;
+}
+
+@keyframes officeCrownWalk {
+  from { transform: translateY(0); }
+  to { transform: translateY(-2px); }
+}
+
+/* Meeting furniture was visually too large and blocked the doorway. */
+.meeting-table-v3 {
+  left: 706px;
+  top: 132px;
+  width: 190px;
+  z-index: 52;
+  filter:
+    drop-shadow(0 5px 0 rgba(0,0,0,.17))
+    drop-shadow(5px 9px 8px rgba(0,0,0,.13));
+}
+
+.meeting-chair-v3 {
+  position: absolute;
+  width: 48px;
+  height: 96px;
+  z-index: 49;
+  image-rendering: pixelated;
+  pointer-events: none;
+  filter: drop-shadow(4px 7px 4px rgba(0,0,0,.14));
+}
+
+.meeting-chair-v3.m1 { left: 664px; top: 140px; }
+.meeting-chair-v3.m2 { left: 892px; top: 140px; }
+.meeting-chair-v3.m3 { left: 706px; top: 226px; }
+.meeting-chair-v3.m4 { left: 850px; top: 226px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .game-agent-v3,
+  .human-agent-v3 {
+    transition: none;
+  }
+
+  .game-agent-v3.is-walking .game-agent-sprite-v3,
+  .human-agent-v3.is-walking .game-agent-sprite-v3,
+  .current-player.is-walking .ceo-crown {
+    animation: none;
+  }
+}
