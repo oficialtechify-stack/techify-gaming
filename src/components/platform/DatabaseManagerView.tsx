@@ -14,6 +14,8 @@ import {
   rejectCompanyInFirebase,
   approveCompanyProfileEditRequestInFirebase,
   rejectCompanyProfileEditRequestInFirebase,
+  approveAffiliateProfileEditRequestInFirebase,
+  rejectAffiliateProfileEditRequestInFirebase,
   deleteCompanyInFirebase,
   banEntityInFirebase,
   unbanEntityInFirebase,
@@ -399,11 +401,13 @@ export const DatabaseManagerView: React.FC = () => {
     });
   };
 
-  const openProfileEditRejectModal = (target: { id: string; name: string; email?: string; type: 'company' }) => {
+  const openProfileEditRejectModal = (target: { id: string; name: string; email?: string; type: 'user' | 'company' }) => {
     setRejectModal({
       isOpen: true,
       target,
-      reason: 'Solicitação de ajuste recusada. Explique o motivo para a empresa.',
+      reason: target.type === 'company'
+        ? 'Solicitação de ajuste recusada. Explique o motivo para a empresa.'
+        : 'Solicitação de ajuste recusada. Explique o motivo para o afiliado.',
       isProcessing: false,
       modalError: null,
       mode: 'profile_edit'
@@ -420,17 +424,31 @@ export const DatabaseManagerView: React.FC = () => {
     setProcessingId(id);
     try {
       if (rejectModal.mode === 'profile_edit') {
-        await rejectCompanyProfileEditRequestInFirebase(id, reason);
-        setCompanies(prev => prev.map(company =>
-          company.id === id
-            ? { ...company, profileEditRequestStatus: 'rejected', profileEditUnlocked: false, profileEditRejectionReason: reason }
-            : company
-        ));
-        setVerifications(prev => prev.map(v =>
-          v.companyId === id
-            ? { ...v, companyEditRequestStatus: 'rejected', companyProfileEditUnlocked: false, companyEditRejectionReason: reason }
-            : v
-        ));
+        if (type === 'company') {
+          await rejectCompanyProfileEditRequestInFirebase(id, reason);
+          setCompanies(prev => prev.map(company =>
+            company.id === id
+              ? { ...company, profileEditRequestStatus: 'rejected', profileEditUnlocked: false, profileEditRejectionReason: reason }
+              : company
+          ));
+          setVerifications(prev => prev.map(v =>
+            v.companyId === id
+              ? { ...v, companyEditRequestStatus: 'rejected', companyProfileEditUnlocked: false, companyEditRejectionReason: reason }
+              : v
+          ));
+        } else {
+          await rejectAffiliateProfileEditRequestInFirebase(id, reason);
+          setVerifications(prev => prev.map(v =>
+            (v.userId === id || v.id === id)
+              ? { ...v, affiliateEditRequestStatus: 'rejected', affiliateProfileEditUnlocked: false, affiliateEditRejectionReason: reason }
+              : v
+          ));
+          setRegisteredProfiles(prev => prev.map(p =>
+            (p.userId === id || p.id === id)
+              ? { ...p, affiliateEditRequestStatus: 'rejected', affiliateProfileEditUnlocked: false, affiliateEditRejectionReason: reason }
+              : p
+          ));
+        }
         setStatusMessage(`Solicitação de ajuste de "${name}" recusada com motivo registrado.`);
       } else if (type === 'user') {
         await rejectVerificationInFirebase(id, reason);
@@ -552,6 +570,42 @@ export const DatabaseManagerView: React.FC = () => {
       ));
 
       setStatusMessage(`Edição do perfil de "${companyName}" liberada. A empresa poderá alterar os dados e reenviar para análise.`);
+      setTimeout(() => setStatusMessage(''), 7000);
+    } catch (err: any) {
+      setErrorMessage(`Erro ao liberar edição: ${err.message}`);
+      setTimeout(() => setErrorMessage(''), 7000);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleApproveAffiliateProfileEdit = async (userId: string, userName: string) => {
+    setProcessingId(userId);
+    try {
+      await approveAffiliateProfileEditRequestInFirebase(userId);
+
+      setVerifications(prev => prev.map(v =>
+        (v.userId === userId || v.id === userId)
+          ? {
+              ...v,
+              affiliateEditRequestStatus: 'approved',
+              affiliateProfileEditUnlocked: true,
+              affiliateEditRejectionReason: null
+            }
+          : v
+      ));
+      setRegisteredProfiles(prev => prev.map(p =>
+        (p.userId === userId || p.id === userId)
+          ? {
+              ...p,
+              affiliateEditRequestStatus: 'approved',
+              affiliateProfileEditUnlocked: true,
+              affiliateEditRejectionReason: null
+            }
+          : p
+      ));
+
+      setStatusMessage(`Edição do perfil de "${userName}" liberada. O afiliado poderá alterar os dados e reenviar para análise.`);
       setTimeout(() => setStatusMessage(''), 7000);
     } catch (err: any) {
       setErrorMessage(`Erro ao liberar edição: ${err.message}`);
@@ -1775,6 +1829,29 @@ export const DatabaseManagerView: React.FC = () => {
                           </div>
                         </div>
 
+                        {isApproved && req.affiliateEditRequestStatus === 'pending' && (
+                          <div className="mt-5 rounded-2xl border border-[#D9F22A]/25 bg-[#D9F22A]/[0.06] p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#D9F22A]/10 text-[#D9F22A]">
+                                <Edit3 className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-black uppercase tracking-wide text-[#D9F22A]">
+                                  Solicitação de ajuste pendente
+                                </div>
+                                <p className="mt-1 text-xs leading-5 text-white/70">
+                                  {req.affiliateEditRequestReason || 'O afiliado solicitou permissão para editar os dados do perfil.'}
+                                </p>
+                                {req.affiliateEditRequestedAt && (
+                                  <p className="mt-1 text-[10px] text-white/35">
+                                    Solicitado em {new Date(req.affiliateEditRequestedAt).toLocaleString('pt-BR')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Barra de Ações com Segurança */}
                         <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-2.5">
                           {/* Botão de Excluir Totalmente (Sempre acessível ao Admin) */}
@@ -1837,14 +1914,31 @@ export const DatabaseManagerView: React.FC = () => {
                               </>
                             )}
 
-                            {isApproved && !isBanned && (
-                              <button
-                                onClick={() => openRejectModal({ id: targetId, name: req.name || 'Afiliado', email: req.email, type: 'user' })}
-                                disabled={processingId === targetId}
-                                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                              >
-                                <span>Revogar / Solicitar Ajuste</span>
-                              </button>
+                            {isApproved && !isBanned && req.affiliateEditRequestStatus === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => openProfileEditRejectModal({ id: targetId, name: req.name || 'Afiliado', email: req.email, type: 'user' })}
+                                  disabled={processingId === targetId}
+                                  className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                                >
+                                  Recusar ajuste
+                                </button>
+                                <button
+                                  onClick={() => handleApproveAffiliateProfileEdit(targetId, req.name || 'Afiliado')}
+                                  disabled={processingId === targetId}
+                                  className="px-4 py-2.5 rounded-xl bg-[#D9F22A] hover:bg-[#cde71f] text-[#07100A] text-xs font-black transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                                >
+                                  {processingId === targetId ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Unlock className="w-4 h-4" />}
+                                  Liberar edição
+                                </button>
+                              </>
+                            )}
+
+                            {isApproved && !isBanned && req.affiliateEditRequestStatus !== 'pending' && (
+                              <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[11px] font-bold text-white/45">
+                                <Lock className="h-3.5 w-3.5" />
+                                Perfil protegido
+                              </div>
                             )}
                           </div>
                         </div>

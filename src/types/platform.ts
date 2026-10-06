@@ -464,6 +464,13 @@ export interface UserSellerProfile {
   companyEditReviewedAt?: string | null;
   companyEditReviewedBy?: string | null;
   companyEditRejectionReason?: string | null;
+  affiliateProfileEditUnlocked?: boolean;
+  affiliateEditRequestStatus?: 'pending' | 'approved' | 'rejected' | null;
+  affiliateEditRequestReason?: string | null;
+  affiliateEditRequestedAt?: string | null;
+  affiliateEditReviewedAt?: string | null;
+  affiliateEditReviewedBy?: string | null;
+  affiliateEditRejectionReason?: string | null;
   communicationPreferences?: {
     inApp?: { enabled: boolean; updatedAt?: string; consentVersion?: string; source?: string };
   };
@@ -528,6 +535,13 @@ export interface VerificationRequest {
   companyEditReviewedBy?: string | null;
   companyEditRejectionReason?: string | null;
   companyProfileEditUnlocked?: boolean;
+  affiliateEditRequestStatus?: 'pending' | 'approved' | 'rejected' | null;
+  affiliateEditRequestReason?: string | null;
+  affiliateEditRequestedAt?: string | null;
+  affiliateEditReviewedAt?: string | null;
+  affiliateEditReviewedBy?: string | null;
+  affiliateEditRejectionReason?: string | null;
+  affiliateProfileEditUnlocked?: boolean;
 }
 
 export interface AffiliateLinkItem {

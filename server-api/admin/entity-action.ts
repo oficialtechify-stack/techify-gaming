@@ -199,83 +199,117 @@ export default async function handler(req: Req, res: Res) {
     }
 
     if (action === 'approve-profile-edit' || action === 'reject-profile-edit') {
-      if (type !== 'company') {
-        return res.status(400).json({ error: 'Solicitação de ajuste disponível apenas para empresas.' });
-      }
-
-      const companyRef = db.collection('companies').doc(id);
-      const companySnap = await companyRef.get();
-      if (!companySnap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
-
-      const company = companySnap.data()!;
-      const ownerId = String(company.ownerId || company.submittedBy || '').trim();
-      if (!ownerId) return res.status(409).json({ error: 'Empresa sem proprietário válido.' });
-
-      const profileRef = db.collection('user_profiles').doc(ownerId);
-      const profileSnap = await profileRef.get();
-      if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil da empresa não encontrado.' });
-
-      const profile = profileSnap.data()!;
-      const currentRequestStatus = String(
-        profile.companyEditRequestStatus ||
-        company.profileEditRequestStatus ||
-        '',
-      ).toLowerCase();
-
-      if (currentRequestStatus !== 'pending') {
-        return res.status(409).json({ error: 'Não existe solicitação de ajuste pendente para esta empresa.' });
-      }
-
       const approved = action === 'approve-profile-edit';
       if (!approved && !reason) {
         return res.status(400).json({ error: 'Informe o motivo da recusa do ajuste.' });
       }
-
       const decision = approved ? 'approved' : 'rejected';
+
+      if (type === 'company') {
+        const companyRef = db.collection('companies').doc(id);
+        const companySnap = await companyRef.get();
+        if (!companySnap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
+
+        const company = companySnap.data()!;
+        const ownerId = String(company.ownerId || company.submittedBy || '').trim();
+        if (!ownerId) return res.status(409).json({ error: 'Empresa sem proprietário válido.' });
+
+        const profileRef = db.collection('user_profiles').doc(ownerId);
+        const profileSnap = await profileRef.get();
+        if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil da empresa não encontrado.' });
+
+        const profile = profileSnap.data()!;
+        const currentRequestStatus = String(
+          profile.companyEditRequestStatus ||
+          company.profileEditRequestStatus ||
+          '',
+        ).toLowerCase();
+
+        if (currentRequestStatus !== 'pending') {
+          return res.status(409).json({ error: 'Não existe solicitação de ajuste pendente para esta empresa.' });
+        }
+
+        const batch = db.batch();
+        batch.set(companyRef, {
+          profileEditRequestStatus: decision,
+          profileEditUnlocked: approved,
+          profileEditReviewedAt: now,
+          profileEditReviewedBy: reviewedBy,
+          profileEditRejectionReason: approved ? null : reason,
+          updatedAt: now,
+        }, { merge: true });
+
+        batch.set(profileRef, {
+          companyEditRequestStatus: decision,
+          companyProfileEditUnlocked: approved,
+          companyEditReviewedAt: now,
+          companyEditReviewedBy: reviewedBy,
+          companyEditRejectionReason: approved ? null : reason,
+          updatedAt: now,
+        }, { merge: true });
+
+        batch.set(db.collection('users').doc(ownerId), {
+          companyEditRequestStatus: decision,
+          companyProfileEditUnlocked: approved,
+          companyEditReviewedAt: now,
+          companyEditReviewedBy: reviewedBy,
+          companyEditRejectionReason: approved ? null : reason,
+          updatedAt: now,
+        }, { merge: true });
+
+        batch.set(db.collection('verification_requests').doc(ownerId), {
+          companyEditRequestStatus: decision,
+          companyProfileEditUnlocked: approved,
+          companyEditReviewedAt: now,
+          companyEditReviewedBy: reviewedBy,
+          companyEditRejectionReason: approved ? null : reason,
+          updatedAt: now,
+        }, { merge: true });
+
+        await batch.commit();
+
+        return res.status(200).json({
+          success: true,
+          entity: {
+            id,
+            ownerId,
+            companyEditRequestStatus: decision,
+            companyProfileEditUnlocked: approved,
+          },
+        });
+      }
+
+      const profileRef = db.collection('user_profiles').doc(id);
+      const profileSnap = await profileRef.get();
+      if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil de Afiliado não encontrado.' });
+      const profile = profileSnap.data()!;
+      const currentRequestStatus = String(profile.affiliateEditRequestStatus || '').toLowerCase();
+
+      if (currentRequestStatus !== 'pending') {
+        return res.status(409).json({ error: 'Não existe solicitação de ajuste pendente para este Afiliado.' });
+      }
+
       const batch = db.batch();
-
-      batch.set(companyRef, {
-        profileEditRequestStatus: decision,
-        profileEditUnlocked: approved,
-        profileEditReviewedAt: now,
-        profileEditReviewedBy: reviewedBy,
-        profileEditRejectionReason: approved ? null : reason,
+      const affiliateUpdate = {
+        affiliateEditRequestStatus: decision,
+        affiliateProfileEditUnlocked: approved,
+        affiliateEditReviewedAt: now,
+        affiliateEditReviewedBy: reviewedBy,
+        affiliateEditRejectionReason: approved ? null : reason,
         updatedAt: now,
-      }, { merge: true });
+      };
 
-      batch.set(profileRef, {
-        companyEditRequestStatus: decision,
-        companyProfileEditUnlocked: approved,
-        companyEditReviewedAt: now,
-        companyEditReviewedBy: reviewedBy,
-        companyEditRejectionReason: approved ? null : reason,
-        updatedAt: now,
-      }, { merge: true });
-
-      batch.set(db.collection('users').doc(ownerId), {
-        companyEditRequestStatus: decision,
-        companyProfileEditUnlocked: approved,
-        updatedAt: now,
-      }, { merge: true });
-
-      batch.set(db.collection('verification_requests').doc(ownerId), {
-        companyEditRequestStatus: decision,
-        companyProfileEditUnlocked: approved,
-        companyEditReviewedAt: now,
-        companyEditReviewedBy: reviewedBy,
-        companyEditRejectionReason: approved ? null : reason,
-        updatedAt: now,
-      }, { merge: true });
-
+      batch.set(profileRef, affiliateUpdate, { merge: true });
+      batch.set(db.collection('users').doc(id), affiliateUpdate, { merge: true });
+      batch.set(db.collection('verification_requests').doc(id), affiliateUpdate, { merge: true });
       await batch.commit();
 
       return res.status(200).json({
         success: true,
         entity: {
           id,
-          ownerId,
-          companyEditRequestStatus: decision,
-          companyProfileEditUnlocked: approved,
+          affiliateEditRequestStatus: decision,
+          affiliateProfileEditUnlocked: approved,
         },
       });
     }

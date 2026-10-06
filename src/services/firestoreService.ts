@@ -456,7 +456,15 @@ export async function rejectCompanyProfileEditRequestInFirebase(companyId: strin
   return callAdminAction('reject-profile-edit', { id: companyId, type: 'company', reason });
 }
 
-export async function requestCompanyProfileEditInFirebase(reason: string) {
+export async function approveAffiliateProfileEditRequestInFirebase(userId: string) {
+  return callAdminAction('approve-profile-edit', { id: userId, type: 'user' });
+}
+
+export async function rejectAffiliateProfileEditRequestInFirebase(userId: string, reason: string) {
+  return callAdminAction('reject-profile-edit', { id: userId, type: 'user', reason });
+}
+
+export async function requestProfileEditInFirebase(reason: string, role: 'empresa' | 'afiliado') {
   const user = auth.currentUser;
   if (!user) throw new Error('Faça login novamente para solicitar um ajuste.');
   const token = await user.getIdToken();
@@ -466,11 +474,19 @@ export async function requestCompanyProfileEditInFirebase(reason: string) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, role }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'Não foi possível solicitar o ajuste.');
   return data;
+}
+
+export async function requestCompanyProfileEditInFirebase(reason: string) {
+  return requestProfileEditInFirebase(reason, 'empresa');
+}
+
+export async function requestAffiliateProfileEditInFirebase(reason: string) {
+  return requestProfileEditInFirebase(reason, 'afiliado');
 }
 
 /** Update a Company in Firestore */

@@ -64,7 +64,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const currentRoleStatus = profileRoleStatus(current, role);
-    const editUnlocked = role === 'empresa' && current.companyProfileEditUnlocked === true;
+    const editUnlocked = role === 'empresa'
+      ? current.companyProfileEditUnlocked === true
+      : current.affiliateProfileEditUnlocked === true;
     if ((currentRoleStatus === 'approved' || currentRoleStatus === 'verified') && !editUnlocked) {
       return res.status(409).json({ error: 'Este perfil já foi aprovado e está bloqueado. Solicite um ajuste à administração.' });
     }
@@ -274,6 +276,21 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       } catch (stripeLinkError) {
         console.warn('[Profile submission] Stripe account metadata sync failed:', stripeLinkError instanceof Error ? stripeLinkError.message : 'falha');
       }
+    } else {
+      batch.set(db.collection('users').doc(identity.uid), {
+        hasAffiliateProfile: true,
+        activeRoleMode: 'afiliado',
+        affiliateProfileEditUnlocked: false,
+        affiliateEditRequestStatus: null,
+        affiliateEditRequestReason: null,
+        affiliateEditRequestedAt: null,
+        updatedAt: now,
+      }, { merge: true });
+
+      profileFields.affiliateProfileEditUnlocked = false;
+      profileFields.affiliateEditRequestStatus = null;
+      profileFields.affiliateEditRequestReason = null;
+      profileFields.affiliateEditRequestedAt = null;
     }
 
     // Só grava o perfil depois que os campos específicos do papel foram
@@ -286,7 +303,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         companyEditRequestReason: null,
         companyEditRequestedAt: null,
         companyProfileEditUnlocked: false,
-      } : {}),
+      } : {
+        affiliateEditRequestStatus: null,
+        affiliateEditRequestReason: null,
+        affiliateEditRequestedAt: null,
+        affiliateProfileEditUnlocked: false,
+      }),
     }, { merge: true });
     await batch.commit();
     return res.status(200).json({ success: true, status: 'pending', submittedAt: now });

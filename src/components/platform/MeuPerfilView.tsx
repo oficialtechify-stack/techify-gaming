@@ -31,7 +31,7 @@ import {
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
 import { StripeConnectCompanyPanel, type ConnectStatus } from './StripeConnectCompanyPanel';
-import { requestCompanyProfileEditInFirebase } from '../../services/firestoreService';
+import { requestProfileEditInFirebase } from '../../services/firestoreService';
 
 interface MeuPerfilViewProps {
   userProfile: UserSellerProfile;
@@ -141,13 +141,18 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   // Empresa e Afiliado seguem o mesmo onboarding financeiro: Stripe primeiro.
   const stripeReady = stripeStatus === 'connected';
   const companyEditUnlocked = roleMode === 'empresa' && userProfile.companyProfileEditUnlocked === true;
-  const companyEditRequestStatus = roleMode === 'empresa' ? userProfile.companyEditRequestStatus : null;
+  const affiliateEditUnlocked = roleMode === 'afiliado' && userProfile.affiliateProfileEditUnlocked === true;
+  const profileEditUnlocked = roleMode === 'empresa' ? companyEditUnlocked : affiliateEditUnlocked;
+  const profileEditRequestStatus = roleMode === 'empresa'
+    ? userProfile.companyEditRequestStatus
+    : userProfile.affiliateEditRequestStatus;
 
   // Os campos cadastrais só liberam após a Stripe estar pronta.
-  // Depois do envio/aprovação, o perfil permanece protegido.
-  const isLocked = roleMode === 'empresa'
-    ? (!stripeReady || isPending || (isApproved && !companyEditUnlocked) || (isRejected && !isEditingRejected))
-    : (!stripeReady || isPending || isApproved || (isRejected && !isEditingRejected));
+  // Depois do envio/aprovação, Empresa e Afiliado ficam protegidos até o Admin liberar uma edição.
+  const isLocked = !stripeReady ||
+    isPending ||
+    (isApproved && !profileEditUnlocked) ||
+    (isRejected && !isEditingRejected);
 
   // Synchronize when userProfile or company changes
   useEffect(() => {
@@ -487,7 +492,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     }
   };
 
-  const handleRequestCompanyEdit = async () => {
+  const handleRequestProfileEdit = async () => {
     const reason = editRequestReason.trim();
     if (reason.length < 10) {
       setToastMessage({ type: 'error', text: 'Explique em pelo menos 10 caracteres o que você deseja alterar.' });
@@ -496,7 +501,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
     setIsRequestingEdit(true);
     try {
-      await requestCompanyProfileEditInFirebase(reason);
+      await requestProfileEditInFirebase(reason, roleMode === 'empresa' ? 'empresa' : 'afiliado');
       setShowEditRequest(false);
       setEditRequestReason('');
       setToastMessage({
@@ -517,7 +522,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
   return (
     <div className="relative animate-in fade-in duration-200 pb-16" id="leadspay-meu-perfil-view">
-      {showEditRequest && roleMode === 'empresa' && (
+      {showEditRequest && (roleMode === 'empresa' || roleMode === 'afiliado') && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-[26px] border border-white/10 bg-[#0A1220] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.6)]">
             <div className="flex items-start gap-3">
@@ -537,7 +542,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               onChange={(event) => setEditRequestReason(event.target.value)}
               maxLength={800}
               rows={5}
-              placeholder="Ex.: preciso atualizar o endereço comercial e o WhatsApp da empresa."
+              placeholder={roleMode === 'empresa' ? 'Ex.: preciso atualizar o endereço comercial e o WhatsApp da empresa.' : 'Ex.: preciso atualizar meu endereço e meu número de celular.'}
               className="mt-5 w-full resize-none rounded-2xl border border-white/10 bg-[#060b14] px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#D9F22A]/50"
             />
 
@@ -555,7 +560,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleRequestCompanyEdit}
+                onClick={handleRequestProfileEdit}
                 disabled={isRequestingEdit || editRequestReason.trim().length < 10}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2.5 text-xs font-black text-[#07100A] disabled:opacity-40"
               >
@@ -694,18 +699,18 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {roleMode === 'empresa' && !companyEditUnlocked && (
+              {(roleMode === 'empresa' || roleMode === 'afiliado') && !profileEditUnlocked && (
                 <button
                   type="button"
                   onClick={() => setShowEditRequest(true)}
-                  disabled={companyEditRequestStatus === 'pending'}
+                  disabled={profileEditRequestStatus === 'pending'}
                   className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-black text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Edit3 className="h-4 w-4" />
-                  {companyEditRequestStatus === 'pending' ? 'Ajuste solicitado' : 'Solicitar ajuste'}
+                  {profileEditRequestStatus === 'pending' ? 'Ajuste solicitado' : 'Solicitar ajuste'}
                 </button>
               )}
-              {roleMode === 'empresa' && companyEditUnlocked && (
+              {(roleMode === 'empresa' || roleMode === 'afiliado') && profileEditUnlocked && (
                 <span className="inline-flex items-center gap-2 rounded-xl border border-[#D9F22A]/30 bg-[#D9F22A]/10 px-4 py-2.5 text-xs font-black text-[#D9F22A]">
                   <Edit3 className="h-4 w-4" />
                   Edição liberada pelo admin
