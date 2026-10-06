@@ -1053,6 +1053,33 @@ export default async function handler(req: Req, res: Res) {
         });
       }
 
+      const callRoom = cleanText(req.query?.callRoom, 120).replace(/[^A-Za-z0-9_-]/g, '');
+      if (callRoom) {
+        const roomRef = db.collection('admin_office_calls').doc(callRoom);
+        const [participantsSnap, signalsSnap] = await Promise.all([
+          roomRef.collection('participants').get(),
+          roomRef.collection('signals').limit(160).get(),
+        ]);
+        const nowMs = Date.now();
+        const participants = participantsSnap.docs
+          .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
+          .filter((item) => {
+            const updatedAt = new Date(String(item.updatedAt || '')).getTime();
+            return Number.isFinite(updatedAt) && nowMs - updatedAt < 18000;
+          });
+        const signals = signalsSnap.docs
+          .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
+          .filter((item) => String(item.toUid || '') === officeIdentity.uid);
+        return res.status(200).json({
+          success: true,
+          roomId: callRoom,
+          selfUid: officeIdentity.uid,
+          participants,
+          signals,
+          serverTime: new Date().toISOString(),
+        });
+      }
+
       const presenceOnly = cleanText(req.query?.presenceOnly, 10) === '1';
       if (presenceOnly) {
         const officeMembers = await resolveOfficeMembers(db, officeIdentity);
@@ -1126,6 +1153,52 @@ export default async function handler(req: Req, res: Res) {
 
     if (req.method === 'POST') {
       const action = cleanText(body.action, 40).toLowerCase();
+
+      if (action === 'call-presence') {
+        const roomId = cleanText(body.roomId, 120).replace(/[^A-Za-z0-9_-]/g, '');
+        if (!roomId) return res.status(400).json({ error: 'Sala de chamada inválida.' });
+        const now = new Date().toISOString();
+        const memberSnap = await db.collection('admin_office_members').doc(officeIdentity.uid).get();
+        const memberData = memberSnap.exists ? memberSnap.data() as Record<string, any> : {};
+        await db.collection('admin_office_calls').doc(roomId).collection('participants').doc(officeIdentity.uid).set({
+          uid: officeIdentity.uid,
+          displayName: cleanText(memberData.displayName || officeIdentity.displayName || officeIdentity.email || 'Equipe', 80),
+          officeRole: officeIdentity.officeRole,
+          palette: Number.isFinite(Number(memberData.palette)) ? Number(memberData.palette) : 0,
+          audio: body.audio === true,
+          video: body.video === true,
+          screen: body.screen === true,
+          updatedAt: now,
+        }, { merge: true });
+        return res.status(200).json({ success: true, roomId, updatedAt: now });
+      }
+
+      if (action === 'call-signal') {
+        const roomId = cleanText(body.roomId, 120).replace(/[^A-Za-z0-9_-]/g, '');
+        const toUid = cleanText(body.toUid, 180);
+        const signalType = cleanText(body.signalType, 20).toLowerCase();
+        const payload = body.payload;
+        if (!roomId || !toUid || !['offer', 'answer', 'candidate'].includes(signalType)) {
+          return res.status(400).json({ error: 'Sinalização de chamada inválida.' });
+        }
+        const id = 'rtc_' + Date.now().toString(36) + '_' + randomBytes(5).toString('hex');
+        const data = {
+          fromUid: officeIdentity.uid,
+          toUid,
+          signalType,
+          payload: payload ?? null,
+          createdAt: new Date().toISOString(),
+        };
+        await db.collection('admin_office_calls').doc(roomId).collection('signals').doc(id).set(data);
+        return res.status(201).json({ success: true, id });
+      }
+
+      if (action === 'call-leave') {
+        const roomId = cleanText(body.roomId, 120).replace(/[^A-Za-z0-9_-]/g, '');
+        if (!roomId) return res.status(400).json({ error: 'Sala de chamada inválida.' });
+        await db.collection('admin_office_calls').doc(roomId).collection('participants').doc(officeIdentity.uid).delete().catch(() => undefined);
+        return res.status(200).json({ success: true });
+      }
 
       if (action === 'team-message') {
         const text = cleanText(body.message, 3000);

@@ -7,7 +7,6 @@ import {
   ClipboardList,
   LocateFixed,
   Lock,
-  Map as MapIcon,
   MessageCircle,
   Mic,
   MicOff,
@@ -18,6 +17,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 type Worker = {
   id: string;
@@ -92,6 +92,26 @@ type OfficeArea = {
   h: number;
   max?: number;
   subtitle: string;
+};
+
+type CallParticipant = {
+  uid: string;
+  displayName: string;
+  officeRole?: string;
+  palette?: number;
+  audio?: boolean;
+  video?: boolean;
+  screen?: boolean;
+  updatedAt?: string;
+};
+
+type CallSignal = {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  signalType: 'offer' | 'answer' | 'candidate';
+  payload: any;
+  createdAt?: string;
 };
 
 type Interaction =
@@ -451,6 +471,19 @@ function distanceTiles(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by) / TILE;
 }
 
+const RemoteVideoTile: React.FC<{ stream: MediaStream; label: string }> = ({ stream, label }) => {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = stream;
+  }, [stream]);
+  return (
+    <div className="gather-remote-video">
+      <video ref={ref} autoPlay playsInline />
+      <span>{label}</span>
+    </div>
+  );
+};
+
 export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   workers,
   tasks,
@@ -466,6 +499,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   onInteract,
   onOpenTasks,
 }) => {
+  const { currentUser } = useAuth();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const keysRef = useRef(new Set<string>());
   const playerRef = useRef<MotionState | null>(null);
@@ -494,6 +528,14 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const peerRefs = useRef(new Map<string, RTCPeerConnection>());
+  const processedSignalIds = useRef(new Set<string>());
+  const [activeCallRoom, setActiveCallRoom] = useState<string | null>(null);
+  const [callParticipants, setCallParticipants] = useState<CallParticipant[]>([]);
+  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+  const [callConnecting, setCallConnecting] = useState(false);
 
   const currentMember = officeMembers.find((member) => member.userId === currentUserId) || null;
 
@@ -798,10 +840,221 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     videoRef.current.srcObject = cameraOn ? localStream : null;
   }, [cameraOn, localStream]);
 
+  useEffect(() => {
+    if (!activeCallRoom || !currentUser) return;
+    let cancelled = false;
+
+    const syncCall = async () => {
+      try {
+        await sendCallAction({
+          action: 'call-presence',
+          roomId: activeCallRoom,
+          audio: micOn,
+          video: cameraOn,
+          screen: screenOn,
+        });
+        const response = await fetch('/api/office/workers?callRoom=' + encodeURIComponent(activeCallRoom), {
+          headers: await officeHeaders(),
+          cache: 'no-store',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || cancelled) return;
+
+        const participants = Array.isArray(data.participants) ? data.participants as CallParticipant[] : [];
+        setCallParticipants(participants);
+
+        const activePeerIds = new Set(participants.map((item) => item.uid).filter((uid) => uid !== currentUser.uid));
+        for (const uid of [...peerRefs.current.keys()]) {
+          if (!activePeerIds.has(uid)) closePeer(uid);
+        }
+
+        for (const participant of participants) {
+          if (participant.uid === currentUser.uid) continue;
+          const shouldOffer = currentUser.uid.localeCompare(participant.uid) < 0;
+          await ensurePeer(activeCallRoom, participant.uid, shouldOffer);
+        }
+
+        const signals = Array.isArray(data.signals) ? data.signals as CallSignal[] : [];
+        for (const signal of signals) {
+          if (!signal?.id || processedSignalIds.current.has(signal.id) || signal.fromUid === currentUser.uid) continue;
+          processedSignalIds.current.add(signal.id);
+          const peer = await ensurePeer(activeCallRoom, signal.fromUid, false);
+
+          if (signal.signalType === 'offer') {
+            if (peer.signalingState !== 'stable') {
+              try { await peer.setLocalDescription({ type: 'rollback' }); } catch {}
+            }
+            await peer.setRemoteDescription(new RTCSessionDescription(signal.payload));
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+            await sendSignal(activeCallRoom, signal.fromUid, 'answer', answer);
+          } else if (signal.signalType === 'answer') {
+            if (peer.signalingState === 'have-local-offer') {
+              await peer.setRemoteDescription(new RTCSessionDescription(signal.payload));
+            }
+          } else if (signal.signalType === 'candidate') {
+            try {
+              await peer.addIceCandidate(new RTCIceCandidate(signal.payload));
+            } catch {}
+          }
+        }
+      } catch {}
+    };
+
+    void syncCall();
+    const interval = window.setInterval(() => void syncCall(), 900);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeCallRoom, currentUser?.uid, micOn, cameraOn, screenOn, localStream, screenStream]);
+
+  useEffect(() => {
+    if (!activeCallRoom || !player) return;
+    const area = areaForCell(cellAtPixel(player.x, player.y));
+    if (!area || area.id !== activeCallRoom) {
+      void stopPrivateCall();
+    }
+  }, [player?.x, player?.y, activeCallRoom]);
+
+
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
+
+  useEffect(() => {
+    screenStreamRef.current = screenStream;
+  }, [screenStream]);
+
   useEffect(() => () => {
-    localStream?.getTracks().forEach((track) => track.stop());
-    screenStream?.getTracks().forEach((track) => track.stop());
-  }, [localStream, screenStream]);
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+    [...peerRefs.current.keys()].forEach(closePeer);
+  }, []);
+
+  const officeHeaders = async () => {
+    if (!currentUser) throw new Error('Sessão do Office não encontrada.');
+    return {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + await currentUser.getIdToken(),
+    };
+  };
+
+  const sendCallAction = async (payload: Record<string, unknown>) => {
+    const response = await fetch('/api/office/workers', {
+      method: 'POST',
+      headers: await officeHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Falha na chamada do Office.');
+    return data;
+  };
+
+  const sendSignal = async (
+    roomId: string,
+    toUid: string,
+    signalType: 'offer' | 'answer' | 'candidate',
+    payload: any,
+  ) => {
+    await sendCallAction({
+      action: 'call-signal',
+      roomId,
+      toUid,
+      signalType,
+      payload,
+    });
+  };
+
+  const closePeer = (uid: string) => {
+    const peer = peerRefs.current.get(uid);
+    if (peer) {
+      peer.onicecandidate = null;
+      peer.ontrack = null;
+      peer.close();
+      peerRefs.current.delete(uid);
+    }
+    setRemoteStreams((current) => {
+      const next = { ...current };
+      delete next[uid];
+      return next;
+    });
+  };
+
+  const ensurePeer = async (roomId: string, peerUid: string, shouldOffer: boolean) => {
+    const existing = peerRefs.current.get(peerUid);
+    if (existing) return existing;
+
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+
+    if (localStream) {
+      localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
+    }
+    if (screenStream) {
+      screenStream.getTracks().forEach((track) => peer.addTrack(track, screenStream));
+    }
+
+    peer.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      void sendSignal(roomId, peerUid, 'candidate', event.candidate.toJSON()).catch(() => undefined);
+    };
+
+    peer.ontrack = (event) => {
+      const stream = event.streams[0] || new MediaStream([event.track]);
+      setRemoteStreams((current) => ({ ...current, [peerUid]: stream }));
+    };
+
+    peer.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(peer.connectionState)) {
+        closePeer(peerUid);
+      }
+    };
+
+    peerRefs.current.set(peerUid, peer);
+
+    if (shouldOffer) {
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      await sendSignal(roomId, peerUid, 'offer', offer);
+    }
+    return peer;
+  };
+
+  const stopPrivateCall = async () => {
+    const roomId = activeCallRoom;
+    setActiveCallRoom(null);
+    setCallParticipants([]);
+    processedSignalIds.current.clear();
+    [...peerRefs.current.keys()].forEach(closePeer);
+    if (roomId) {
+      void sendCallAction({ action: 'call-leave', roomId }).catch(() => undefined);
+    }
+  };
+
+  const startPrivateCall = async (area: OfficeArea) => {
+    if (area.kind !== 'private' || !currentUser) return;
+    if (activeCallRoom && activeCallRoom !== area.id) await stopPrivateCall();
+    setCallConnecting(true);
+    try {
+      const stream = await ensureLocalStream();
+      if (!micOn && !cameraOn) {
+        stream.getAudioTracks().forEach((track) => { track.enabled = true; });
+        setMicOn(true);
+      }
+      setActiveCallRoom(area.id);
+      await sendCallAction({
+        action: 'call-presence',
+        roomId: area.id,
+        audio: true,
+        video: cameraOn,
+        screen: screenOn,
+      });
+    } finally {
+      setCallConnecting(false);
+    }
+  };
 
   const ensureLocalStream = async () => {
     if (localStream) return localStream;
@@ -809,6 +1062,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     stream.getAudioTracks().forEach((track) => { track.enabled = false; });
     stream.getVideoTracks().forEach((track) => { track.enabled = false; });
     setLocalStream(stream);
+    for (const [uid, peer] of peerRefs.current.entries()) {
+      const existingTrackIds = new Set(peer.getSenders().map((sender) => sender.track?.id).filter(Boolean));
+      stream.getTracks().forEach((track) => {
+        if (!existingTrackIds.has(track.id)) peer.addTrack(track, stream);
+      });
+      if (activeCallRoom && currentUser) {
+        void peer.createOffer()
+          .then((offer) => peer.setLocalDescription(offer).then(() => offer))
+          .then((offer) => sendSignal(activeCallRoom, uid, 'offer', offer))
+          .catch(() => undefined);
+      }
+    }
     return stream;
   };
 
@@ -851,6 +1116,15 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       });
       setScreenStream(stream);
       setScreenOn(true);
+      if (activeCallRoom) {
+        for (const [uid, peer] of peerRefs.current.entries()) {
+          stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+          void peer.createOffer()
+            .then((offer) => peer.setLocalDescription(offer).then(() => offer))
+            .then((offer) => sendSignal(activeCallRoom, uid, 'offer', offer))
+            .catch(() => undefined);
+        }
+      }
     } catch {
       setScreenOn(false);
     }
@@ -1203,6 +1477,15 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </div>
         )}
 
+        {activeCallRoom && Object.keys(remoteStreams).length > 0 && (
+          <div className="gather-remote-video-strip">
+            {Object.entries(remoteStreams).map(([uid, stream]) => {
+              const participant = callParticipants.find((item) => item.uid === uid);
+              return <RemoteVideoTile key={uid} stream={stream} label={participant?.displayName || 'Equipe'} />;
+            })}
+          </div>
+        )}
+
         {nearbyMembers.length > 0 && (
           <div className="gather-nearby-strip">
             {nearbyMembers.slice(0, 4).map(({ member, distance }) => (
@@ -1268,9 +1551,17 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                     <small>{currentArea.subtitle}</small>
                   </div>
                 </div>
-                <button type="button" className="context-primary" onClick={() => onInteract?.({ type: 'meeting', label: currentArea.name })}>
-                  <Video className="h-4 w-4" />
-                  Iniciar reunião
+                <button
+                  type="button"
+                  className={'context-primary ' + (activeCallRoom === currentArea.id ? 'live' : '')}
+                  disabled={callConnecting}
+                  onClick={() => {
+                    if (activeCallRoom === currentArea.id) void stopPrivateCall();
+                    else void startPrivateCall(currentArea);
+                  }}
+                >
+                  {activeCallRoom === currentArea.id ? <X className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+                  {callConnecting ? 'Conectando...' : activeCallRoom === currentArea.id ? 'Sair da reunião' : 'Iniciar reunião'}
                 </button>
                 <div className="context-room-actions">
                   <button type="button" onClick={() => setLockedAreas((value) => ({ ...value, [currentArea.id]: !value[currentArea.id] }))}>
@@ -1279,7 +1570,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   </button>
                 </div>
                 <div className="context-participants">
-                  <span>{areaParticipants.length} participante{areaParticipants.length === 1 ? '' : 's'}</span>
+                  <span>{activeCallRoom === currentArea.id ? callParticipants.length : areaParticipants.length} participante{(activeCallRoom === currentArea.id ? callParticipants.length : areaParticipants.length) === 1 ? '' : 's'}</span>
                   {areaParticipants.map((member) => (
                     <button key={member.userId} type="button" onClick={() => locatePerson(member)}>
                       <i>{member.displayName.slice(0, 1).toUpperCase()}</i>
@@ -1373,6 +1664,14 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             <ClipboardList className="h-5 w-5" />
           </button>
         </div>
+
+        {activeCallRoom && (
+          <div className="gather-call-badge">
+            <span className="live-dot" />
+            <strong>{AREAS.find((area) => area.id === activeCallRoom)?.name || 'Reunião'}</strong>
+            <small>{callParticipants.length} conectado{callParticipants.length === 1 ? '' : 's'}</small>
+          </div>
+        )}
 
         <div className="gather-movement-help">
           <span><kbd>WASD</kbd> mover</span>
