@@ -88,18 +88,17 @@ function clampNumber(value: unknown, min: number, max: number, fallback = 0): nu
 
 function sanitizePaymentMethods(value: unknown, billingType: string): string[] {
   if (!Array.isArray(value)) return billingType === 'recorrente' ? ['CARD'] : ['PIX', 'CARD', 'BOLETO'];
-  const methods = [...new Set(
-    value
-      .map((item) => String(item || '').trim().toUpperCase())
-      .filter((item) => PAYMENT_METHODS.has(item))
-  )].slice(0, 5);
 
-  // Stripe recurring subscriptions currently use card rails in this flow.
-  if (billingType === 'recorrente') {
-    return methods.some((method) => method === 'CARD' || method === 'APPLE_PAY' || method === 'GOOGLE_PAY')
-      ? methods.filter((method) => method === 'CARD' || method === 'APPLE_PAY' || method === 'GOOGLE_PAY')
-      : ['CARD'];
-  }
+  const normalized = value
+    .map((item) => String(item || '').trim().toUpperCase())
+    .map((item) => item === 'APPLE_PAY' || item === 'GOOGLE_PAY' ? 'CARD' : item)
+    .filter((item) => item === 'PIX' || item === 'CARD' || item === 'BOLETO');
+  const methods = [...new Set(normalized)].slice(0, 3);
+
+  // Assinaturas recorrentes usam somente os rails de cartão neste fluxo.
+  // Apple Pay e Google Pay são carteiras sobre o cartão e aparecem quando
+  // Stripe + navegador/dispositivo do comprador oferecerem suporte.
+  if (billingType === 'recorrente') return ['CARD'];
 
   return methods.length ? methods : ['PIX', 'CARD', 'BOLETO'];
 }
