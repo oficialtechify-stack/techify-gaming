@@ -1081,13 +1081,19 @@ export default async function handler(req: Req, res: Res) {
         }
         const nowMs = Date.now();
         const participants = participantsSnap.docs
-          .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
+          .map((doc): Record<string, any> & { id: string } => ({
+            id: doc.id,
+            ...(doc.data() as Record<string, any>),
+          }))
           .filter((item) => {
             const updatedAt = new Date(String(item.updatedAt || '')).getTime();
             return Number.isFinite(updatedAt) && nowMs - updatedAt < 18000;
           });
         const signals = signalsSnap.docs
-          .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
+          .map((doc): Record<string, any> & { id: string } => ({
+            id: doc.id,
+            ...(doc.data() as Record<string, any>),
+          }))
           .filter((item) => String(item.toUid || '') === officeIdentity.uid);
         return res.status(200).json({
           success: true,
