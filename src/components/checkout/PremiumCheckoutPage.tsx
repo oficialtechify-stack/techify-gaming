@@ -104,6 +104,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     productAmountCents?: number;
     orderBumpAmountCents?: number;
     orderBumpName?: string | null;
+    soldItemCount?: number;
+    checkoutFeePerItemCents?: number;
     checkoutFeeCents?: number;
     totalCents?: number;
     couponCode?: string | null;
@@ -222,8 +224,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   );
   const selectedOrderBump = activeOrderBumps.find((item) => item.id === selectedOrderBumpId) || null;
   const selectedOrderBumpAmount = Number(selectedOrderBump?.price || 0);
+  const estimatedSoldItemCount = 1 + (selectedOrderBump ? 1 : 0);
+  const estimatedCheckoutFee = PLATFORM_CHECKOUT_FEE * estimatedSoldItemCount;
 
-  const estimatedTotal = Number((basePrice + selectedOrderBumpAmount + PLATFORM_CHECKOUT_FEE).toFixed(2));
+  const estimatedTotal = Number((basePrice + selectedOrderBumpAmount + estimatedCheckoutFee).toFixed(2));
   const resolvedProductAmount = serverPricing?.productAmountCents !== undefined
     ? serverPricing.productAmountCents / 100
     : basePrice;
@@ -231,6 +235,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
   const resolvedOrderBumpAmount = serverPricing?.orderBumpAmountCents !== undefined
     ? Number(serverPricing.orderBumpAmountCents || 0) / 100
     : selectedOrderBumpAmount;
+  const resolvedSoldItemCount = serverPricing?.soldItemCount ?? estimatedSoldItemCount;
+  const resolvedCheckoutFee = serverPricing?.checkoutFeeCents !== undefined
+    ? Number(serverPricing.checkoutFeeCents || 0) / 100
+    : estimatedCheckoutFee;
   const finalTotal = serverPricing?.totalCents !== undefined
     ? Number(serverPricing.totalCents || 0) / 100
     : estimatedTotal;
@@ -854,8 +862,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
               )}
 
               <div className="flex items-center justify-between gap-4">
-                <span className={mutedClass}>Taxa da plataforma</span>
-                <span className="font-medium">{formatBRL(PLATFORM_CHECKOUT_FEE)}</span>
+                <span className={mutedClass}>
+                  Taxa LeadsPay{resolvedSoldItemCount > 1 ? ` (${resolvedSoldItemCount} itens)` : ''}
+                </span>
+                <span className="font-medium">{formatBRL(resolvedCheckoutFee)}</span>
               </div>
             </div>
 
