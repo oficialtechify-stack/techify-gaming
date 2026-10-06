@@ -277,6 +277,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
 
   return (
     <div className="pixel-world-scroll">
+      <div className="pixel-world-stage">
       <div className="pixel-world" aria-label="Escritório completo dos Funcionários IA">
         <div className="pixel-world-void" />
 
@@ -395,6 +396,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
             </button>
           );
         })}
+      </div>
       </div>
     </div>
   );

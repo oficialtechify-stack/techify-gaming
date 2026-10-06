@@ -1692,7 +1692,7 @@
 }
 
 .pixel-world-scroll {
-  min-height: 760px;
+  min-height: 720px;
   height: calc(100% - 62px);
   overflow: auto;
   background:
@@ -1700,11 +1700,20 @@
     #03070d;
 }
 
+.pixel-world-stage {
+  --world-scale: .74;
+  position: relative;
+  width: 814px;
+  height: 696px;
+  margin: 12px auto 18px;
+}
+
 .pixel-world {
   position: relative;
   width: 1100px;
   height: 940px;
-  margin: 0 auto;
+  transform: scale(var(--world-scale));
+  transform-origin: top left;
   isolation: isolate;
   overflow: hidden;
   background: #1c1f2b;
@@ -2226,21 +2235,40 @@
 
 @media (max-width: 1180px) {
   .ai-office-panel-world {
-    min-height: 700px;
+    min-height: 820px;
   }
 
   .pixel-world-scroll {
-    min-height: 650px;
+    min-height: 760px;
+  }
+
+  .pixel-world-stage {
+    --world-scale: .86;
+    width: 946px;
+    height: 808px;
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .pixel-world-scroll {
-    min-height: 620px;
+    min-height: 650px;
+    overflow-x: auto;
   }
 
-  .pixel-world {
-    transform-origin: top left;
+  .pixel-world-stage {
+    --world-scale: .66;
+    width: 726px;
+    height: 620px;
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+}
+
+@media (max-width: 620px) {
+  .pixel-world-stage {
+    --world-scale: .54;
+    width: 594px;
+    height: 508px;
   }
 }
 
