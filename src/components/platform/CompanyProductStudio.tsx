@@ -61,17 +61,9 @@ type StudioTab =
   | 'checkout'
   | 'links';
 
-const TEMPORARILY_LOCKED_TABS = new Set<StudioTab>(['upsell', 'pixel', 'coproduction']);
+const TEMPORARILY_LOCKED_TABS = new Set<StudioTab>(['coproduction']);
 
 const LOCKED_TAB_COPY: Partial<Record<StudioTab, { title: string; description: string }>> = {
-  upsell: {
-    title: 'Upsell e Downsell em preparação',
-    description: 'Vamos liberar esta área hoje depois de concluir a cobrança pós-compra, a taxa LeadsPay e o comissionamento de ponta a ponta.'
-  },
-  pixel: {
-    title: 'Configuração de Pixel em preparação',
-    description: 'Vamos liberar esta área hoje quando os eventos reais de checkout e compra aprovada estiverem conectados aos provedores de rastreamento.'
-  },
   coproduction: {
     title: 'Coprodução em preparação',
     description: 'Vamos liberar esta área hoje depois de concluir convite, aceite, Stripe Connect e divisão financeira segura entre os participantes.'
@@ -668,7 +660,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                 <h3 className="text-lg font-black">Rastreamento e conversões</h3>
                 <p className="mt-1 text-xs text-white/50">Configure o pixel usado pela empresa para medir compras.</p>
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <div><label className={labelClass}>Provedor</label><select className={inputClass} value={pixelProvider} onChange={(e)=>setPixelProvider(e.target.value as any)}><option value="none">Nenhum</option><option value="meta">Meta Pixel</option><option value="google">Google Ads / Analytics</option><option value="tiktok">TikTok Pixel</option><option value="custom">Personalizado</option></select></div>
+                  <div><label className={labelClass}>Provedor</label><select className={inputClass} value={pixelProvider} onChange={(e)=>setPixelProvider(e.target.value as any)}><option value="none">Nenhum</option><option value="meta">Meta Pixel</option><option value="google">Google Ads / Analytics</option><option value="tiktok">TikTok Pixel</option></select></div>
                   <div><label className={labelClass}>ID do Pixel</label><input className={inputClass} value={pixelId} onChange={(e)=>setPixelId(e.target.value)} placeholder="Ex: 123456789" /></div>
                 </div>
                 <div className="mt-5 flex items-center justify-between rounded-xl border border-white/10 bg-[#070b12] p-4 text-sm"><span>Disparar evento de compra aprovada</span><Toggle value={pixelPurchaseEventEnabled} onChange={setPixelPurchaseEventEnabled}/></div>
