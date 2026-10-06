@@ -60,7 +60,7 @@ export default async function handler(req: Req, res: Res) {
       db.collection('product_subscriptions').limit(5000).get(),
     ]);
 
-    const profiles = profilesSnap.docs.map((doc) => ({
+    const profiles: Array<Record<string, any> & { id: string }> = profilesSnap.docs.map((doc) => ({
       id: doc.id,
       ...(doc.data() as Record<string, any>),
     }));
