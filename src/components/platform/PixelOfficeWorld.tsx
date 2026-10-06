@@ -1057,14 +1057,16 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           })}
 
           {humanPositions.map(({ member, x, y, direction }) => {
-            const frame = spriteFrame('human', false, direction, tick);
+            const updatedAt = member.position?.updatedAt ? new Date(member.position.updatedAt).getTime() : 0;
+            const remoteWalking = Number.isFinite(updatedAt) && updatedAt > 0 && Date.now() - updatedAt < 1800;
+            const frame = spriteFrame('human', remoteWalking, direction, tick);
             const humanTask = activeHumanTask(humanTasks, member.userId);
             const taskLabel = humanTaskLabel(humanTask);
             return (
               <button
                 key={member.userId}
                 type="button"
-                className="human-agent-v3 remote-human"
+                className={`human-agent-v3 remote-human ${remoteWalking ? 'is-walking' : ''}`}
                 style={{ left: x, top: y, zIndex: 160 + Math.floor(y) }}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -1075,7 +1077,8 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
                   className="game-agent-sprite-v3"
                   style={{
                     backgroundImage: `url('/pixel-agents/assets/characters/char_${member.palette}.png')`,
-                    backgroundPosition: `${-frame.frame * 48}px ${-frame.row * 96}px`,
+                    backgroundPositionX: remoteWalking ? undefined : `${-frame.frame * 48}px`,
+                    backgroundPositionY: `${-frame.row * 96}px`,
                     transform: frame.flip ? 'scaleX(-1)' : undefined,
                   }}
                 />
