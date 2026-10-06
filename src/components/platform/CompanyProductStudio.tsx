@@ -432,20 +432,20 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
 
   return (
     <div className="-m-3.5 min-h-screen bg-[#050811] text-white sm:-m-5 md:-m-6 lg:-m-8">
-      <div className="sticky top-16 z-20 border-b border-white/10 bg-[#050811]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3">
+      <div className="sticky top-16 z-30 border-b border-white/10 bg-[#050811]/98 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:px-6">
+        <div className="mx-auto flex max-w-[1500px] flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <button onClick={onBack} className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/5 hover:text-white">
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <img src={bannerImage || plan.companyLogo} alt="" className="h-14 w-14 rounded-xl border border-white/10 bg-black/30 object-cover" />
+            <img src={bannerImage || plan.companyLogo} alt="" className="h-12 w-12 shrink-0 rounded-xl border border-white/10 bg-black/30 object-cover" />
             <div className="min-w-0">
               <h2 className="truncate text-lg font-black sm:text-xl">{name || 'Produto sem nome'}</h2>
               <p className="truncate text-[11px] text-white/45">ID: {plan.id}</p>
               <p className="text-[11px] text-white/35">Produto da empresa • edição completa</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button onClick={() => copy(checkoutUrl, 'header-link')} className="hidden items-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-xs font-bold hover:bg-white/5 sm:flex">
               <Link2 className="h-3.5 w-3.5" /> {copied === 'header-link' ? 'Copiado' : 'Ver Links'}
             </button>
@@ -460,7 +460,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
       </div>
 
       <div className="mx-auto grid max-w-[1500px] grid-cols-1 gap-0 lg:grid-cols-[255px_minmax(0,1fr)]">
-        <aside className="border-b border-white/10 p-4 lg:min-h-[calc(100vh-87px)] lg:border-b-0 lg:border-r lg:p-5">
+        <aside className="border-b border-white/10 p-4 lg:sticky lg:top-[8.75rem] lg:h-[calc(100vh-8.75rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5">
           <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-6">
             {navGroups.map((group) => (
               <div key={group.label} className="min-w-max lg:min-w-0">
