@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { resolveApprovedOwnedCompany } from '../../lib/companyAccess.js';
 import { assertSafeWebhookUrl, webhookUrlErrorMessage } from '../../lib/webhookSecurity.js';
 
 type Req = {
@@ -27,9 +27,8 @@ export default async function handler(req: Req, res: Res) {
     );
 
     const db = getServerAdminFirestore();
-    const [profileSnap, requestSnap, settingsSnap] = await Promise.all([
+    const [profileSnap, settingsSnap] = await Promise.all([
       db.collection('user_profiles').doc(identity.uid).get(),
-      db.collection('verification_requests').doc(identity.uid).get(),
       db.collection('partner_settings').doc(identity.uid).get(),
     ]);
 
@@ -37,33 +36,16 @@ export default async function handler(req: Req, res: Res) {
       return res.status(404).json({ error: 'Perfil não encontrado.' });
     }
 
-    const profile = applyVerificationRequest(
-      profileSnap.data()!,
-      requestSnap.exists ? requestSnap.data()! : null,
-    ) as Record<string, any>;
-
-    if (!profileHasRole(profile, 'empresa') || !profileRoleIsApproved(profile, 'empresa')) {
-      return res.status(403).json({ error: 'A Empresa precisa estar aprovada para testar integrações.' });
+    const rawProfile = profileSnap.data() as Record<string, any>;
+    const approvedCompany = await resolveApprovedOwnedCompany(
+      db,
+      identity.uid,
+      String(rawProfile.companyId || '').trim(),
+    );
+    if (!approvedCompany) {
+      return res.status(403).json({ error: 'A empresa precisa estar aprovada e ativa para testar integrações.' });
     }
-
-    const companyId = String(profile.companyId || '').trim();
-    if (!companyId) {
-      return res.status(409).json({ error: 'A conta ainda não está vinculada a uma empresa válida.' });
-    }
-
-    const companySnap = await db.collection('companies').doc(companyId).get();
-    const company = companySnap.exists ? companySnap.data()! : null;
-    if (
-      !company ||
-      String(company.ownerId || company.submittedBy || '') !== identity.uid ||
-      company.verified !== true ||
-      String(company.status || '').toLowerCase() !== 'approved' ||
-      company.archived === true ||
-      company.isArchived === true ||
-      company.banned === true
-    ) {
-      return res.status(403).json({ error: 'A empresa vinculada não está aprovada para testar integrações.' });
-    }
+    const companyId = approvedCompany.companyId;
 
     if (!settingsSnap.exists) {
       return res.status(400).json({ error: 'Configure e salve um webhook antes de enviar o teste.' });
