@@ -41,6 +41,13 @@ type TaskLite = {
   status: TaskStatus;
 };
 
+type HumanTaskLite = {
+  id: string;
+  assigneeUid: string;
+  title: string;
+  status: 'todo' | 'working' | 'review' | 'completed' | 'blocked';
+};
+
 type Direction = 'down' | 'up' | 'left' | 'right';
 type Cell = { x: number; y: number };
 
@@ -66,6 +73,7 @@ type Interaction =
 interface PixelOfficeWorldProps {
   workers: Worker[];
   tasks: TaskLite[];
+  humanTasks?: HumanTaskLite[];
   officeMembers?: OfficeMember[];
   currentUserId?: string | null;
   selectedWorkerId: string;
@@ -477,6 +485,23 @@ function activityLabel(
   return worker.brain?.mood || 'livre';
 }
 
+function activeHumanTask(tasks: HumanTaskLite[], userId: string) {
+  return tasks.find((task) => task.assigneeUid === userId && task.status === 'working') ||
+    tasks.find((task) => task.assigneeUid === userId && task.status === 'todo') ||
+    tasks.find((task) => task.assigneeUid === userId && task.status === 'review') ||
+    tasks.find((task) => task.assigneeUid === userId && task.status === 'blocked') ||
+    null;
+}
+
+function humanTaskLabel(task: HumanTaskLite | null) {
+  if (!task) return null;
+  if (task.status === 'working') return 'trabalhando';
+  if (task.status === 'todo') return 'nova demanda';
+  if (task.status === 'review') return 'em revisão';
+  if (task.status === 'blocked') return 'bloqueada';
+  return null;
+}
+
 function defaultHumanPosition(member: OfficeMember) {
   if (member.officeRole === 'ceo') return centerOf({ x: 7, y: 8 });
   if (member.officeRole === 'designer') return centerOf({ x: 45, y: 29 });
@@ -490,6 +515,7 @@ function memberDirection(value?: string): Direction {
 export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
   workers,
   tasks,
+  humanTasks = [],
   officeMembers = [],
   currentUserId,
   selectedWorkerId,
@@ -869,6 +895,8 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
   const currentFrame = player
     ? spriteFrame('human', playerWalking, player.direction, tick)
     : null;
+  const currentHumanTask = currentMember ? activeHumanTask(humanTasks, currentMember.userId) : null;
+  const currentHumanTaskLabel = humanTaskLabel(currentHumanTask);
 
   return (
     <div className="pixel-game-scroll">
@@ -1030,6 +1058,8 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
 
           {humanPositions.map(({ member, x, y, direction }) => {
             const frame = spriteFrame('human', false, direction, tick);
+            const humanTask = activeHumanTask(humanTasks, member.userId);
+            const taskLabel = humanTaskLabel(humanTask);
             return (
               <button
                 key={member.userId}
@@ -1051,8 +1081,13 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
                 />
                 <span className="human-agent-label">
                   <strong>{member.displayName}</strong>
-                  <small>{member.officeRole === 'ceo' ? 'CEO' : member.title}</small>
+                  <small>{taskLabel || (member.officeRole === 'ceo' ? 'CEO' : member.title)}</small>
                 </span>
+                {humanTask && (
+                  <i className={`human-task-bubble status-${humanTask.status}`}>
+                    {humanTask.status === 'working' ? '•••' : humanTask.status === 'review' ? '✓' : humanTask.status === 'blocked' ? '!' : '+'}
+                  </i>
+                )}
               </button>
             );
           })}
@@ -1075,9 +1110,18 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
               />
               <span className="human-agent-label">
                 <strong>{currentMember.displayName}</strong>
-                <small>{currentMember.officeRole === 'ceo' ? 'Você · CEO' : 'Você · ' + currentMember.title}</small>
+                <small>
+                  {currentHumanTaskLabel
+                    ? `Você · ${currentHumanTaskLabel}`
+                    : currentMember.officeRole === 'ceo' ? 'Você · CEO' : 'Você · ' + currentMember.title}
+                </small>
               </span>
               {currentMember.officeRole === 'ceo' && <i className="ceo-crown">★</i>}
+              {currentHumanTask && (
+                <i className={`human-task-bubble status-${currentHumanTask.status}`}>
+                  {currentHumanTask.status === 'working' ? '•••' : currentHumanTask.status === 'review' ? '✓' : currentHumanTask.status === 'blocked' ? '!' : '+'}
+                </i>
+              )}
             </button>
           )}
 

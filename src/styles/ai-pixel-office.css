@@ -5151,3 +5151,44 @@
     transform: translate(-50%, 0);
   }
 }
+
+
+.human-task-bubble {
+  position: absolute;
+  right: -4px;
+  top: 7px;
+  z-index: 20;
+  min-width: 22px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #10141d;
+  border-radius: 6px 6px 6px 2px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-family: "DM Mono", monospace;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: 2px 3px 0 rgba(0,0,0,.24);
+}
+
+.human-task-bubble.status-working {
+  background: #d9f22a;
+  color: #263100;
+}
+
+.human-task-bubble.status-review {
+  background: #fbbf24;
+  color: #422b00;
+}
+
+.human-task-bubble.status-blocked {
+  background: #ef4444;
+  color: #fff;
+  animation: humanTaskAlert .8s steps(2,end) infinite;
+}
+
+@keyframes humanTaskAlert {
+  50% { transform: translateY(-2px); }
+}

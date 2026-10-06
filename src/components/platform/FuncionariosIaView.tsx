@@ -971,6 +971,7 @@ export const FuncionariosIaView: React.FC = () => {
           <PixelOfficeWorld
             workers={workers}
             tasks={tasks}
+            humanTasks={humanTasks}
             officeMembers={officeMembers}
             currentUserId={currentUser?.uid || null}
             selectedWorkerId={selectedWorkerId}
