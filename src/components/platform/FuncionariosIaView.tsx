@@ -92,6 +92,8 @@ const FALLBACK_WORKERS: Worker[] = [
   { id: 'growth', name: 'Nova', role: 'Marketing & Comunidade', specialty: 'Campanhas e comunidade.', palette: 5 },
 ];
 
+type OfficeRoomId = 'office' | 'meeting' | 'creative' | 'lab';
+
 const STATIONS = [
   { left: '24%', top: '48%' },
   { left: '50%', top: '48%' },
@@ -100,6 +102,32 @@ const STATIONS = [
   { left: '50%', top: '79%' },
   { left: '76%', top: '79%' },
 ];
+
+const ROOM_INFO: Record<OfficeRoomId, { name: string; description: string }> = {
+  office: {
+    name: 'Escritório',
+    description: 'Mesas individuais e fila de trabalho diária.',
+  },
+  meeting: {
+    name: 'Sala de reunião',
+    description: 'Planejamento, revisão e decisões do time.',
+  },
+  creative: {
+    name: 'Sala criativa',
+    description: 'Frontend, Design e Marketing trabalhando juntos.',
+  },
+  lab: {
+    name: 'Laboratório',
+    description: 'Backend, QA e validações técnicas.',
+  },
+};
+
+const ROOM_WORKERS: Record<OfficeRoomId, string[]> = {
+  office: ['lumy-manager', 'frontend', 'backend', 'designer', 'qa', 'growth'],
+  meeting: ['lumy-manager', 'frontend', 'backend', 'designer', 'qa', 'growth'],
+  creative: ['frontend', 'designer', 'growth'],
+  lab: ['backend', 'qa', 'lumy-manager'],
+};
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   queued: 'Na fila',
@@ -172,6 +200,8 @@ export const FuncionariosIaView: React.FC = () => {
   const [selectedWorkerId, setSelectedWorkerId] = useState('lumy-manager');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | TaskStatus>('all');
+  const [taskScope, setTaskScope] = useState<'selected' | 'all'>('selected');
+  const [activeRoom, setActiveRoom] = useState<OfficeRoomId>('office');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const [pcTick, setPcTick] = useState(0);
@@ -334,7 +364,19 @@ export const FuncionariosIaView: React.FC = () => {
   const selectedWorker = workers.find((worker) => worker.id === selectedWorkerId) || workers[0];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
   const selectedWorkerTasks = tasks.filter((task) => task.workerId === selectedWorker?.id);
-  const visibleTasks = tasks.filter((task) => filter === 'all' || task.status === filter);
+  const scopedTasks = taskScope === 'selected' ? selectedWorkerTasks : tasks;
+  const visibleTasks = scopedTasks.filter((task) => filter === 'all' || task.status === filter);
+
+  const selectWorker = (workerId: string) => {
+    const nextTask = activeTaskForWorker(workerId) ||
+      tasks.find((task) => task.workerId === workerId) ||
+      null;
+
+    setSelectedWorkerId(workerId);
+    setSelectedTaskId(nextTask?.id || null);
+    setTaskScope('selected');
+    setFilter('all');
+  };
 
   const openTaskFor = (workerId?: string) => {
     const nextWorkerId = workerId || selectedWorkerId || workers[0]?.id || 'lumy-manager';
@@ -422,8 +464,8 @@ export const FuncionariosIaView: React.FC = () => {
         <div className="ai-office-panel">
           <div className="ai-office-toolbar">
             <div>
-              <strong>Escritório LeadsPay</strong>
-              <span>Clique em um funcionário para ver as tarefas dele.</span>
+              <strong>{ROOM_INFO[activeRoom].name}</strong>
+              <span>{ROOM_INFO[activeRoom].description}</span>
             </div>
             <div className="ai-office-legend">
               <span><i className="legend-dot working" /> trabalhando</span>
@@ -432,8 +474,21 @@ export const FuncionariosIaView: React.FC = () => {
             </div>
           </div>
 
+          <div className="ai-office-room-tabs" role="tablist" aria-label="Salas do escritório">
+            {(Object.keys(ROOM_INFO) as OfficeRoomId[]).map((roomId) => (
+              <button
+                key={roomId}
+                type="button"
+                className={activeRoom === roomId ? 'active' : ''}
+                onClick={() => setActiveRoom(roomId)}
+              >
+                {ROOM_INFO[roomId].name}
+              </button>
+            ))}
+          </div>
+
           <div className="ai-office-scroll">
-            <div className="pixel-office-room" aria-label="Escritório pixel dos Funcionários IA">
+            <div className={`pixel-office-room room-${activeRoom}`} aria-label={ROOM_INFO[activeRoom].name}>
               <div className="pixel-office-wall">
                 <img className="pixel-furniture wall-books left" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
                 <img className="pixel-furniture wall-clock" src="/pixel-agents/assets/furniture/CLOCK/CLOCK.png" alt="" />
@@ -444,63 +499,129 @@ export const FuncionariosIaView: React.FC = () => {
 
               <div className="pixel-office-floor" />
 
-              <img className="pixel-furniture office-plant p1" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
-              <img className="pixel-furniture office-plant p2" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
-              <img className="pixel-furniture office-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
-              <img className="pixel-furniture office-coffee-table" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
+              {activeRoom === 'office' && (
+                <>
+                  <img className="pixel-furniture office-plant p1" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
+                  <img className="pixel-furniture office-plant p2" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
+                  <img className="pixel-furniture office-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
+                  <img className="pixel-furniture office-coffee-table" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
+                </>
+              )}
 
-              {workers.map((worker, index) => {
-                const state = workerVisualState(tasks, worker.id);
-                const frame = characterFrameFor(state, tick);
-                const task = activeTaskForWorker(worker.id);
-                const station = STATIONS[index] || STATIONS[index % STATIONS.length];
-                const pcFrame = state === 'working'
-                  ? `/pixel-agents/assets/furniture/PC/PC_FRONT_ON_${pcTick + 1}.png`
-                  : '/pixel-agents/assets/furniture/PC/PC_FRONT_OFF.png';
+              {activeRoom === 'meeting' && (
+                <>
+                  <img className="pixel-furniture meeting-whiteboard" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+                  <img className="pixel-furniture meeting-table" src="/pixel-agents/assets/furniture/TABLE_FRONT/TABLE_FRONT.png" alt="" />
+                  <img className="pixel-furniture meeting-chair c1" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
+                  <img className="pixel-furniture meeting-chair c2" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
+                  <img className="pixel-furniture meeting-chair c3" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
+                  <img className="pixel-furniture meeting-chair c4" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
+                </>
+              )}
 
-                return (
-                  <button
-                    key={worker.id}
-                    type="button"
-                    className={`pixel-worker-station ${selectedWorkerId === worker.id ? 'selected' : ''} state-${state}`}
-                    style={{ left: station.left, top: station.top }}
-                    onClick={() => {
-                      setSelectedWorkerId(worker.id);
-                      if (task) setSelectedTaskId(task.id);
-                    }}
-                  >
-                    <span className="pixel-worker-status-bubble">
-                      {state === 'working' ? '...' : state === 'waiting_approval' ? '!' : state === 'queued' ? '⌛' : '✓'}
-                    </span>
+              {activeRoom === 'creative' && (
+                <>
+                  <img className="pixel-furniture creative-painting p1" src="/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png" alt="" />
+                  <img className="pixel-furniture creative-painting p2" src="/pixel-agents/assets/furniture/SMALL_PAINTING_2/SMALL_PAINTING_2.png" alt="" />
+                  <img className="pixel-furniture creative-bench" src="/pixel-agents/assets/furniture/CUSHIONED_BENCH/CUSHIONED_BENCH.png" alt="" />
+                  <img className="pixel-furniture creative-plant" src="/pixel-agents/assets/furniture/HANGING_PLANT/HANGING_PLANT.png" alt="" />
+                </>
+              )}
 
-                    <img className="pixel-furniture station-pc" src={pcFrame} alt="" />
-                    <img
-                      className="pixel-furniture station-chair"
-                      src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png"
-                      alt=""
-                    />
+              {activeRoom === 'lab' && (
+                <>
+                  <img className="pixel-furniture lab-books" src="/pixel-agents/assets/furniture/BOOKSHELF/BOOKSHELF.png" alt="" />
+                  <img className="pixel-furniture lab-bin" src="/pixel-agents/assets/furniture/BIN/BIN.png" alt="" />
+                  <img className="pixel-furniture lab-cactus" src="/pixel-agents/assets/furniture/CACTUS/CACTUS.png" alt="" />
+                </>
+              )}
 
-                    <span
-                      className="pixel-agent-sprite"
-                      style={{
-                        backgroundImage: `url('/pixel-agents/assets/characters/char_${worker.palette}.png')`,
-                        backgroundPosition: `${-frame.frame * 48}px ${-frame.row * 96}px`,
-                      }}
-                    />
+              {workers
+                .filter((worker) => ROOM_WORKERS[activeRoom].includes(worker.id))
+                .map((worker, roomIndex) => {
+                  const workerIndex = workers.findIndex((item) => item.id === worker.id);
+                  const state = workerVisualState(tasks, worker.id);
+                  const frame = characterFrameFor(state, tick);
+                  const task = activeTaskForWorker(worker.id);
+                  const roomStations = activeRoom === 'meeting'
+                    ? [
+                        { left: '28%', top: '52%' },
+                        { left: '50%', top: '46%' },
+                        { left: '72%', top: '52%' },
+                        { left: '28%', top: '78%' },
+                        { left: '50%', top: '82%' },
+                        { left: '72%', top: '78%' },
+                      ]
+                    : activeRoom === 'creative'
+                      ? [
+                          { left: '28%', top: '58%' },
+                          { left: '50%', top: '72%' },
+                          { left: '72%', top: '58%' },
+                        ]
+                      : activeRoom === 'lab'
+                        ? [
+                            { left: '27%', top: '62%' },
+                            { left: '50%', top: '62%' },
+                            { left: '73%', top: '62%' },
+                          ]
+                        : STATIONS;
+                  const station = roomStations[roomIndex] || STATIONS[workerIndex] || STATIONS[0];
+                  const pcFrame = state === 'working'
+                    ? `/pixel-agents/assets/furniture/PC/PC_FRONT_ON_${pcTick + 1}.png`
+                    : '/pixel-agents/assets/furniture/PC/PC_FRONT_OFF.png';
 
-                    <img
-                      className="pixel-furniture station-desk"
-                      src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png"
-                      alt=""
-                    />
+                  return (
+                    <button
+                      key={`${activeRoom}-${worker.id}`}
+                      type="button"
+                      className={`pixel-worker-station ${selectedWorkerId === worker.id ? 'selected' : ''} state-${state} ${activeRoom === 'meeting' ? 'meeting-station' : ''}`}
+                      style={{ left: station.left, top: station.top }}
+                      onClick={() => selectWorker(worker.id)}
+                    >
+                      <span className="pixel-worker-status-bubble">
+                        {state === 'working' ? '...' : state === 'waiting_approval' ? '!' : state === 'queued' ? '⌛' : '✓'}
+                      </span>
 
-                    <span className="pixel-worker-nameplate">
-                      <strong>{worker.name}</strong>
-                      <small>{task ? task.title : worker.role}</small>
-                    </span>
-                  </button>
-                );
-              })}
+                      {activeRoom !== 'meeting' && (
+                        <>
+                          <img
+                            className="pixel-furniture station-chair"
+                            src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png"
+                            alt=""
+                          />
+                          <span
+                            className="pixel-agent-sprite"
+                            style={{
+                              backgroundImage: `url('/pixel-agents/assets/characters/char_${worker.palette}.png')`,
+                              backgroundPosition: `${-frame.frame * 48}px ${-frame.row * 96}px`,
+                            }}
+                          />
+                          <img
+                            className="pixel-furniture station-desk"
+                            src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png"
+                            alt=""
+                          />
+                          <img className="pixel-furniture station-pc" src={pcFrame} alt="" />
+                        </>
+                      )}
+
+                      {activeRoom === 'meeting' && (
+                        <span
+                          className="pixel-agent-sprite meeting-agent"
+                          style={{
+                            backgroundImage: `url('/pixel-agents/assets/characters/char_${worker.palette}.png')`,
+                            backgroundPosition: `${-frame.frame * 48}px ${-frame.row * 96}px`,
+                          }}
+                        />
+                      )}
+
+                      <span className="pixel-worker-nameplate">
+                        <strong>{worker.name}</strong>
+                        <small>{task ? task.title : worker.role}</small>
+                      </span>
+                    </button>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -508,11 +629,24 @@ export const FuncionariosIaView: React.FC = () => {
         <aside className="ai-task-panel">
           <div className="ai-task-panel-head">
             <div>
-              <strong>Fila de tarefas</strong>
-              <span>{tasks.length} tarefa{tasks.length === 1 ? '' : 's'} registrada{tasks.length === 1 ? '' : 's'}</span>
+              <strong>{taskScope === 'selected' ? `Tarefas de ${selectedWorker?.name || 'funcionário'}` : 'Fila de tarefas'}</strong>
+              <span>
+                {taskScope === 'selected'
+                  ? `${selectedWorkerTasks.length} tarefa${selectedWorkerTasks.length === 1 ? '' : 's'} deste funcionário`
+                  : `${tasks.length} tarefa${tasks.length === 1 ? '' : 's'} registrada${tasks.length === 1 ? '' : 's'}`}
+              </span>
             </div>
-            <button type="button" onClick={() => openTaskFor()} className="mini-add-task" title="Nova tarefa">
+            <button type="button" onClick={() => openTaskFor(selectedWorker?.id)} className="mini-add-task" title="Nova tarefa">
               <Plus className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="ai-task-scope">
+            <button type="button" className={taskScope === 'selected' ? 'active' : ''} onClick={() => setTaskScope('selected')}>
+              {selectedWorker?.name || 'Funcionário'}
+            </button>
+            <button type="button" className={taskScope === 'all' ? 'active' : ''} onClick={() => setTaskScope('all')}>
+              Equipe inteira
             </button>
           </div>
 
@@ -540,8 +674,12 @@ export const FuncionariosIaView: React.FC = () => {
               <div className="ai-task-empty">
                 <ClipboardList className="h-7 w-7" />
                 <strong>Nenhuma tarefa aqui</strong>
-                <span>Crie uma tarefa e escolha quem será responsável.</span>
-                <button type="button" onClick={() => openTaskFor()}>
+                <span>
+                  {taskScope === 'selected'
+                    ? `${selectedWorker?.name || 'Este funcionário'} ainda não tem tarefa neste filtro.`
+                    : 'Crie uma tarefa e escolha quem será responsável.'}
+                </span>
+                <button type="button" onClick={() => openTaskFor(taskScope === 'selected' ? selectedWorker?.id : undefined)}>
                   <Plus className="h-3.5 w-3.5" />
                   Criar primeira tarefa
                 </button>
@@ -556,7 +694,10 @@ export const FuncionariosIaView: React.FC = () => {
                     className={`ai-task-card ${selectedTaskId === task.id ? 'selected' : ''}`}
                     onClick={() => {
                       setSelectedTaskId(task.id);
-                      if (worker) setSelectedWorkerId(worker.id);
+                      if (worker) {
+                        setSelectedWorkerId(worker.id);
+                        setTaskScope('selected');
+                      }
                     }}
                   >
                     <div className="ai-task-card-top">

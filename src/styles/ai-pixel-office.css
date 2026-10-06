@@ -319,8 +319,44 @@
 .legend-dot.queued { background: #60a5fa; }
 .legend-dot.approval { background: #f59e0b; }
 
+.ai-office-room-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 7px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  background: #060b13;
+}
+
+.ai-office-room-tabs button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255,255,255,.42);
+  padding: 0 10px;
+  font-family: "DM Mono", monospace;
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ai-office-room-tabs button:hover {
+  color: #fff;
+  background: rgba(255,255,255,.04);
+}
+
+.ai-office-room-tabs button.active {
+  color: #07100a;
+  border-color: #d9f22a;
+  background: #d9f22a;
+}
+
 .ai-office-scroll {
-  height: calc(100% - 62px);
+  height: calc(100% - 106px);
   min-height: 555px;
   overflow: auto;
   background: #03070d;
@@ -382,6 +418,42 @@
   inset: 20px;
   border: 2px solid rgba(255,255,255,.025);
   pointer-events: none;
+}
+
+.pixel-office-room.room-meeting .pixel-office-wall {
+  background: linear-gradient(to bottom, rgba(255,255,255,.03), rgba(0,0,0,.06)), #243044;
+}
+
+.pixel-office-room.room-meeting .pixel-office-floor {
+  background-color: #493f42;
+  background-image:
+    linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px),
+    url('/pixel-agents/assets/floors/floor_3.png');
+}
+
+.pixel-office-room.room-creative .pixel-office-wall {
+  background: linear-gradient(to bottom, rgba(255,255,255,.035), rgba(0,0,0,.04)), #3a2d48;
+}
+
+.pixel-office-room.room-creative .pixel-office-floor {
+  background-color: #55463d;
+  background-image:
+    linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px),
+    url('/pixel-agents/assets/floors/floor_8.png');
+}
+
+.pixel-office-room.room-lab .pixel-office-wall {
+  background: linear-gradient(to bottom, rgba(255,255,255,.025), rgba(0,0,0,.07)), #1f3440;
+}
+
+.pixel-office-room.room-lab .pixel-office-floor {
+  background-color: #2f4145;
+  background-image:
+    linear-gradient(rgba(0,0,0,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,.06) 1px, transparent 1px),
+    url('/pixel-agents/assets/floors/floor_5.png');
 }
 
 .pixel-furniture {
@@ -460,6 +532,110 @@
   opacity: .9;
 }
 
+.meeting-whiteboard,
+.meeting-table,
+.meeting-chair,
+.creative-painting,
+.creative-bench,
+.creative-plant,
+.lab-books,
+.lab-bin,
+.lab-cactus {
+  position: absolute;
+  z-index: 2;
+}
+
+.meeting-whiteboard {
+  width: 112px;
+  left: 50%;
+  top: 28px;
+  transform: translateX(-50%);
+}
+
+.meeting-table {
+  width: 192px;
+  left: 50%;
+  top: 230px;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+.meeting-chair {
+  width: 48px;
+  height: 96px;
+  z-index: 2;
+}
+
+.meeting-chair.c1 { left: 25%; top: 205px; }
+.meeting-chair.c2 { right: 25%; top: 205px; }
+.meeting-chair.c3 { left: 31%; top: 330px; }
+.meeting-chair.c4 { right: 31%; top: 330px; }
+
+.creative-painting.p1 {
+  width: 96px;
+  left: 18%;
+  top: 34px;
+}
+
+.creative-painting.p2 {
+  width: 48px;
+  right: 20%;
+  top: 50px;
+}
+
+.creative-bench {
+  width: 96px;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+}
+
+.creative-plant {
+  width: 48px;
+  right: 8%;
+  top: 22px;
+}
+
+.lab-books {
+  width: 48px;
+  left: 7%;
+  top: 198px;
+}
+
+.lab-bin {
+  width: 48px;
+  right: 7%;
+  bottom: 24px;
+}
+
+.lab-cactus {
+  width: 48px;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+}
+
+.pixel-worker-station.meeting-station {
+  width: 120px;
+  height: 118px;
+}
+
+.pixel-worker-station.meeting-station .meeting-agent {
+  left: 36px;
+  top: 6px;
+  z-index: 5;
+}
+
+.pixel-worker-station.meeting-station .pixel-worker-nameplate {
+  bottom: -5px;
+  min-width: 96px;
+}
+
+.pixel-worker-station.meeting-station .pixel-worker-status-bubble {
+  left: 74px;
+  top: 8px;
+}
+
 .pixel-worker-station {
   position: absolute;
   width: 176px;
@@ -508,8 +684,9 @@
   width: 48px;
   height: 96px;
   left: 64px;
-  top: 4px;
-  z-index: 0;
+  top: 35px;
+  z-index: 5;
+  filter: drop-shadow(0 3px 2px rgba(0,0,0,.24));
 }
 
 .station-chair {
@@ -517,7 +694,7 @@
   width: 48px;
   height: 96px;
   left: 64px;
-  top: 43px;
+  top: 39px;
   z-index: 1;
 }
 
@@ -534,7 +711,7 @@
 .pixel-worker-station .pixel-agent-sprite {
   position: absolute;
   left: 64px;
-  top: 27px;
+  top: 20px;
   z-index: 2;
   filter: drop-shadow(0 5px 2px rgba(0,0,0,.25));
 }
@@ -552,7 +729,7 @@
   width: 144px;
   height: 96px;
   left: 16px;
-  top: 68px;
+  top: 66px;
   z-index: 3;
 }
 
@@ -647,6 +824,34 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+}
+
+.ai-task-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding: 8px 10px 0;
+}
+
+.ai-task-scope button {
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  background: rgba(255,255,255,.025);
+  color: rgba(255,255,255,.42);
+  padding: 7px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ai-task-scope button.active {
+  border-color: rgba(217,242,42,.24);
+  background: rgba(217,242,42,.07);
+  color: #d9f22a;
 }
 
 .ai-task-filter {
@@ -1382,6 +1587,31 @@
 
 .leadspay-platform[data-theme="light"] .ai-office-panel .ai-office-toolbar span {
   color: #66766d !important;
+}
+
+.leadspay-platform[data-theme="light"] .ai-office-room-tabs {
+  border-color: #dfe6df;
+  background: #f7f9f6;
+}
+
+.leadspay-platform[data-theme="light"] .ai-office-room-tabs button {
+  color: #66766d;
+}
+
+.leadspay-platform[data-theme="light"] .ai-office-room-tabs button.active {
+  color: #17211b;
+}
+
+.leadspay-platform[data-theme="light"] .ai-task-scope button {
+  border-color: #dfe6df;
+  background: #f7f9f6;
+  color: #66766d;
+}
+
+.leadspay-platform[data-theme="light"] .ai-task-scope button.active {
+  border-color: #a9bc55;
+  background: #eef6d7;
+  color: #506500;
 }
 
 @media (max-width: 1180px) {
