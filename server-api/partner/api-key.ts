@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { resolveApprovedOwnedCompany } from '../../lib/companyAccess.js';
 import { scopesForApprovedRoles } from '../../lib/mcpApi.js';
 import type { PlatformRole } from '../../lib/platformBilling.js';
 
@@ -33,20 +34,13 @@ export default async function handler(req:Req,res:Res){
     const allowedRoles:PlatformRole[]=[];
     if(profileHasRole(profile,'afiliado')&&profileRoleIsApproved(profile,'afiliado')) allowedRoles.push('afiliado');
 
-    const companyId=String(profile.companyId||'').trim();
-    if(profileHasRole(profile,'empresa')&&profileRoleIsApproved(profile,'empresa')&&companyId){
-      const companySnap=await db.collection('companies').doc(companyId).get();
-      const company=companySnap.exists?companySnap.data()!:null;
-      if(
-        company &&
-        String(company.ownerId||company.submittedBy||'')===identity.uid &&
-        company.verified===true &&
-        String(company.status||'').toLowerCase()==='approved' &&
-        company.archived!==true &&
-        company.isArchived!==true &&
-        company.banned!==true
-      ) allowedRoles.push('empresa');
-    }
+    const approvedCompany=await resolveApprovedOwnedCompany(
+      db,
+      identity.uid,
+      String(rawProfile.companyId||profile.companyId||'').trim(),
+    );
+    const companyId=approvedCompany?.companyId||'';
+    if(approvedCompany) allowedRoles.push('empresa');
 
     if(!allowedRoles.length) return res.status(403).json({error:'Seu perfil precisa estar aprovado e ativo para usar integrações de IA/API.'});
 
