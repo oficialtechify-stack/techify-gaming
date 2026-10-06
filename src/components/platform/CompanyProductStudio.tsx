@@ -503,17 +503,29 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
           </div>
 
           <div className="mt-6 hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:block">
-            <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-white/35">Status do produto</p>
-            <button
-              onClick={() => setStatus(status === 'Ativo' ? 'Pausado' : 'Ativo')}
-              className="flex w-full items-center gap-3 rounded-xl bg-[#070b12] p-3 text-left"
-            >
-              <span className={`h-2.5 w-2.5 rounded-full ${status === 'Ativo' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              <div>
-                <p className="text-sm font-black">{status}</p>
-                <p className="text-[10px] text-white/40">Clique para {status === 'Ativo' ? 'pausar' : 'ativar'}.</p>
-              </div>
-            </button>
+            <div className="mb-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-white/35">Status do produto</p>
+              <p className="mt-1 text-[11px] text-white/45">
+                {status === 'Ativo' ? 'Disponível para novas compras.' : 'Checkout suspenso para novas compras.'}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-[#070b12] p-1">
+              <button
+                type="button"
+                onClick={() => setStatus('Ativo')}
+                className={`rounded-lg px-3 py-2.5 text-xs font-black transition-all ${status === 'Ativo' ? 'bg-emerald-400 text-[#07110b]' : 'text-white/45 hover:bg-white/5 hover:text-white'}`}
+              >
+                Ativo
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatus('Pausado')}
+                className={`rounded-lg px-3 py-2.5 text-xs font-black transition-all ${status === 'Pausado' ? 'bg-amber-300 text-[#171006]' : 'text-white/45 hover:bg-white/5 hover:text-white'}`}
+              >
+                Pausado
+              </button>
+            </div>
+            <p className="mt-3 text-[10px] text-white/30">A alteração é aplicada quando você salvar o produto.</p>
           </div>
         </aside>
 
