@@ -525,6 +525,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [screenOn, setScreenOn] = useState(false);
   const [quietMode, setQuietMode] = useState(false);
   const [lockedAreas, setLockedAreas] = useState<Record<string, boolean>>({});
+  const [callNotice, setCallNotice] = useState('');
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -862,6 +863,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
         const participants = Array.isArray(data.participants) ? data.participants as CallParticipant[] : [];
         setCallParticipants(participants);
+        if (data.room && typeof data.room.locked === 'boolean') {
+          setLockedAreas((current) => ({ ...current, [activeCallRoom]: data.room.locked === true }));
+        }
 
         const activePeerIds = new Set(participants.map((item) => item.uid).filter((uid) => uid !== currentUser.uid));
         for (const uid of [...peerRefs.current.keys()]) {
@@ -1038,6 +1042,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     if (activeCallRoom && activeCallRoom !== area.id) await stopPrivateCall();
     setCallConnecting(true);
     try {
+      setCallNotice('');
       const stream = await ensureLocalStream();
       if (!micOn && !cameraOn) {
         stream.getAudioTracks().forEach((track) => { track.enabled = true; });
@@ -1051,8 +1056,22 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         video: cameraOn,
         screen: screenOn,
       });
+    } catch (error: any) {
+      setActiveCallRoom(null);
+      setCallNotice(error?.message || 'Não foi possível entrar nessa reunião.');
     } finally {
       setCallConnecting(false);
+    }
+  };
+
+  const toggleRoomLock = async (area: OfficeArea) => {
+    const next = !lockedAreas[area.id];
+    try {
+      setCallNotice('');
+      await sendCallAction({ action: 'call-room-lock', roomId: area.id, locked: next });
+      setLockedAreas((current) => ({ ...current, [area.id]: next }));
+    } catch (error: any) {
+      setCallNotice(error?.message || 'Não foi possível alterar o bloqueio da sala.');
     }
   };
 
@@ -1564,11 +1583,12 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   {callConnecting ? 'Conectando...' : activeCallRoom === currentArea.id ? 'Sair da reunião' : 'Iniciar reunião'}
                 </button>
                 <div className="context-room-actions">
-                  <button type="button" onClick={() => setLockedAreas((value) => ({ ...value, [currentArea.id]: !value[currentArea.id] }))}>
+                  <button type="button" onClick={() => void toggleRoomLock(currentArea)}>
                     <Lock className="h-3.5 w-3.5" />
                     {lockedAreas[currentArea.id] ? 'Desbloquear' : 'Bloquear sala'}
                   </button>
                 </div>
+                {callNotice && <div className="context-call-notice">{callNotice}</div>}
                 <div className="context-participants">
                   <span>{activeCallRoom === currentArea.id ? callParticipants.length : areaParticipants.length} participante{(activeCallRoom === currentArea.id ? callParticipants.length : areaParticipants.length) === 1 ? '' : 's'}</span>
                   {areaParticipants.map((member) => (

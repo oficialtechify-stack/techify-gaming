@@ -6567,3 +6567,15 @@
     bottom: 116px;
   }
 }
+
+
+.context-call-notice {
+  margin-top: 9px;
+  border: 1px solid rgba(239,68,68,.16);
+  border-radius: 9px;
+  background: rgba(239,68,68,.055);
+  color: #b42318;
+  padding: 7px 8px;
+  font-size: 8px;
+  line-height: 1.45;
+}

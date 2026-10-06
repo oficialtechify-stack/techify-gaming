@@ -1056,7 +1056,8 @@ export default async function handler(req: Req, res: Res) {
       const callRoom = cleanText(req.query?.callRoom, 120).replace(/[^A-Za-z0-9_-]/g, '');
       if (callRoom) {
         const roomRef = db.collection('admin_office_calls').doc(callRoom);
-        const [participantsSnap, signalsSnap] = await Promise.all([
+        const [roomSnap, participantsSnap, signalsSnap] = await Promise.all([
+          roomRef.get(),
           roomRef.collection('participants').get(),
           roomRef.collection('signals').limit(160).get(),
         ]);
@@ -1076,6 +1077,7 @@ export default async function handler(req: Req, res: Res) {
           selfUid: officeIdentity.uid,
           participants,
           signals,
+          room: roomSnap.exists ? roomSnap.data() : { locked: false, lockedBy: null },
           serverTime: new Date().toISOString(),
         });
       }
@@ -1158,9 +1160,23 @@ export default async function handler(req: Req, res: Res) {
         const roomId = cleanText(body.roomId, 120).replace(/[^A-Za-z0-9_-]/g, '');
         if (!roomId) return res.status(400).json({ error: 'Sala de chamada inválida.' });
         const now = new Date().toISOString();
+        const roomRef = db.collection('admin_office_calls').doc(roomId);
+        const [roomSnap, existingParticipant] = await Promise.all([
+          roomRef.get(),
+          roomRef.collection('participants').doc(officeIdentity.uid).get(),
+        ]);
+        const roomData = roomSnap.exists ? roomSnap.data() as Record<string, any> : {};
+        if (
+          roomData.locked === true &&
+          !existingParticipant.exists &&
+          String(roomData.lockedBy || '') !== officeIdentity.uid &&
+          !officeIdentity.isOfficeAdmin
+        ) {
+          return res.status(423).json({ error: 'Essa sala está trancada por quem está na reunião.' });
+        }
         const memberSnap = await db.collection('admin_office_members').doc(officeIdentity.uid).get();
         const memberData = memberSnap.exists ? memberSnap.data() as Record<string, any> : {};
-        await db.collection('admin_office_calls').doc(roomId).collection('participants').doc(officeIdentity.uid).set({
+        await roomRef.collection('participants').doc(officeIdentity.uid).set({
           uid: officeIdentity.uid,
           displayName: cleanText(memberData.displayName || officeIdentity.displayName || officeIdentity.email || 'Equipe', 80),
           officeRole: officeIdentity.officeRole,
@@ -1171,6 +1187,30 @@ export default async function handler(req: Req, res: Res) {
           updatedAt: now,
         }, { merge: true });
         return res.status(200).json({ success: true, roomId, updatedAt: now });
+      }
+
+      if (action === 'call-room-lock') {
+        const roomId = cleanText(body.roomId, 120).replace(/[^A-Za-z0-9_-]/g, '');
+        const locked = body.locked === true;
+        if (!roomId) return res.status(400).json({ error: 'Sala inválida.' });
+        const roomRef = db.collection('admin_office_calls').doc(roomId);
+        const roomSnap = await roomRef.get();
+        const roomData = roomSnap.exists ? roomSnap.data() as Record<string, any> : {};
+        if (
+          roomData.locked === true &&
+          locked === false &&
+          String(roomData.lockedBy || '') !== officeIdentity.uid &&
+          !officeIdentity.isOfficeAdmin
+        ) {
+          return res.status(403).json({ error: 'Somente quem trancou a sala ou o CEO pode desbloqueá-la.' });
+        }
+        await roomRef.set({
+          locked,
+          lockedBy: locked ? officeIdentity.uid : null,
+          lockedAt: locked ? new Date().toISOString() : null,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+        return res.status(200).json({ success: true, room: { locked, lockedBy: locked ? officeIdentity.uid : null } });
       }
 
       if (action === 'call-signal') {
