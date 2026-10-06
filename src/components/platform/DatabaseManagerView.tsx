@@ -1183,7 +1183,7 @@ export const DatabaseManagerView: React.FC = () => {
             Central Global da LeadsPay
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Visão consolidada da plataforma: financeiro real, empresas, afiliados, produtos, checkouts, assinaturas, saques, aprovações e segurança.
+            Conta master da plataforma. Use as áreas abaixo para separar visão global, empresas, afiliados, identidade visual e banco de dados.
           </p>
         </div>
 
@@ -1200,15 +1200,17 @@ export const DatabaseManagerView: React.FC = () => {
             <span>Atualizar</span>
           </button>
 
-          <button
-            onClick={handleWipeAllData}
-            disabled={loading}
-            className="bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
-            title="Remove somente registros marcados como teste/sandbox"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Limpar Testes</span>
-          </button>
+          {mainTab === 'database_explorer' && (
+            <button
+              onClick={handleWipeAllData}
+              disabled={loading}
+              className="bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2"
+              title="Remove somente registros marcados como teste/sandbox"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Limpar Testes</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1429,10 +1431,10 @@ export const DatabaseManagerView: React.FC = () => {
           </div>
           <div>
             <h3 className="font-['Syne'] font-black text-sm uppercase tracking-tight">
-              Aprovação de Afiliados
+              Afiliados
             </h3>
             <p className={`text-[11px] mt-0.5 ${mainTab === 'affiliates_approval' ? 'text-black/80 font-medium' : 'text-white/50'}`}>
-              Validação de KYC, dados bancários e liberação de vendas
+              Contas individuais, KYC, status e aprovação
             </p>
           </div>
         </button>
