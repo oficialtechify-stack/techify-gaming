@@ -36,7 +36,7 @@ export default async function handler(req:Req,res:Res){
       version:'1.0.0',
       environment:process.env.VERCEL_ENV||process.env.NODE_ENV||'unknown',
       authentication:'Bearer API Key',
-      endpoints:['balance','products','coupons','checkout','affiliations'],
+      endpoints:['balance','products','coupons','checkout','affiliations','affiliate-performance','affiliate-coupons'],
     });
   }
 
@@ -68,6 +68,16 @@ export default async function handler(req:Req,res:Res){
 
     if(route==='affiliations' && req.method==='GET'){
       return res.status(200).json(await executeMcpAction('get_affiliations',{},principal));
+    }
+
+    if(route==='affiliate-performance' && req.method==='GET'){
+      return res.status(200).json(await executeMcpAction('get_affiliate_performance',{
+        days:queryText(req.query?.days)||undefined,
+      },principal));
+    }
+
+    if(route==='affiliate-coupons' && req.method==='GET'){
+      return res.status(200).json(await executeMcpAction('list_affiliate_coupons',{},principal));
     }
 
     if(route==='coupons'){

@@ -1948,6 +1948,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               userProfile={userProfile}
               onSaveProfile={handleSaveProfile}
               roleMode={roleMode}
+              onNavigateToProfile={() => setActiveTab('meu_perfil')}
             />
           )}
 

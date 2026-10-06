@@ -72,7 +72,7 @@ export default async function handler(req:Req,res:Res){
         protocolVersion:'2025-11-25',
         capabilities:{tools:{}},
         serverInfo:{name:'leadspay',version:'1.0.0'},
-        instructions:'Use as ferramentas LeadsPay para consultar saldo, listar produtos, criar cupons da sua empresa e gerar checkouts oficiais.'
+        instructions:'Use as ferramentas LeadsPay respeitando o perfil autenticado. Afiliados podem consultar saldo, afiliações, desempenho, cupons liberados, marketplace e gerar checkouts oficiais apenas para afiliações ativas. Empresas recebem apenas as ações corporativas permitidas.'
       }));
     }catch(error){
       return res.status(401).json(rpcError(id,-32001,error instanceof Error?error.message:'Authentication failed'));
@@ -91,7 +91,21 @@ export default async function handler(req:Req,res:Res){
 
     if(method==='ping') return res.status(200).json(result(id,{}));
     if(method==='tools/list'){
-      return res.status(200).json(result(id,{tools:MCP_TOOLS}));
+      const tools = MCP_TOOLS.filter((tool) => {
+        const name = tool.name;
+        if (name === 'create_coupon' || name === 'list_coupons') {
+          return principal.approvedRoles.includes('empresa');
+        }
+        if (
+          name === 'get_affiliations' ||
+          name === 'get_affiliate_performance' ||
+          name === 'list_affiliate_coupons'
+        ) {
+          return principal.approvedRoles.includes('afiliado');
+        }
+        return true;
+      });
+      return res.status(200).json(result(id,{tools}));
     }
     if(method==='tools/call'){
       const name=body.params?.name;

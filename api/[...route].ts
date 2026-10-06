@@ -239,6 +239,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'mcp/v1/balance':
     case 'mcp/v1/products':
     case 'mcp/v1/affiliations':
+    case 'mcp/v1/affiliate-performance':
+    case 'mcp/v1/affiliate-coupons':
     case 'mcp/v1/coupons':
     case 'mcp/v1/checkout':
       (req as any).mcpRoute = cleanPath.replace(/^mcp\/v1\/?/, '');

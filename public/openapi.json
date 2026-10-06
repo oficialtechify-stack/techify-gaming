@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LeadsPay AI Actions API",
-    "description": "API oficial da LeadsPay para GPT Actions e agentes compatíveis com OpenAPI. Usa a mesma API Key segura do servidor MCP.",
+    "description": "API oficial da LeadsPay para GPT Actions e agentes compatíveis com OpenAPI. Afiliados podem consultar saldo, afiliações, desempenho, cupons liberados, marketplace e gerar checkouts oficiais de afiliações ativas. Usa a mesma API Key segura do servidor MCP.",
     "version": "1.0.0",
     "contact": {
       "name": "LeadsPay",
@@ -172,6 +172,53 @@
           }
         }
       }
+    },
+    "/affiliate-performance": {
+      "get": {
+        "operationId": "getAffiliatePerformance",
+        "summary": "Resume o desempenho real do afiliado autenticado",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resumo de vendas, comissões, cliques, conversão e recorrência"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "403": {
+            "description": "Requer perfil Afiliado aprovado"
+          }
+        }
+      }
+    },
+    "/affiliate-coupons": {
+      "get": {
+        "operationId": "listAffiliateCoupons",
+        "summary": "Lista cupons liberados para as afiliações ativas do afiliado autenticado",
+        "responses": {
+          "200": {
+            "description": "Cupons elegíveis e links oficiais com código do afiliado"
+          },
+          "401": {
+            "description": "Não autorizado"
+          },
+          "403": {
+            "description": "Requer perfil Afiliado aprovado"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -198,7 +245,9 @@
               "get_affiliations",
               "create_coupon",
               "list_coupons",
-              "create_checkout"
+              "create_checkout",
+              "get_affiliate_performance",
+              "list_affiliate_coupons"
             ]
           },
           "params": {

@@ -10,7 +10,9 @@ export type McpActionName =
   | 'create_coupon'
   | 'list_coupons'
   | 'create_checkout'
-  | 'get_affiliations';
+  | 'get_affiliations'
+  | 'get_affiliate_performance'
+  | 'list_affiliate_coupons';
 
 export type McpPrincipal = {
   userId: string;
@@ -86,6 +88,22 @@ export const MCP_TOOLS = [
     description: 'Retorna as afiliações ativas do afiliado autenticado e seus links oficiais.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'get_affiliate_performance',
+    description: 'Resume o desempenho real do afiliado: vendas, comissões, cliques, conversão, recorrência e principais origens de tráfego.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 1, maximum: 365, default: 30 }
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_affiliate_coupons',
+    description: 'Lista somente os cupons atualmente liberados para as afiliações ativas do afiliado e devolve links oficiais com código e cupom.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
 ] as const;
 
 function normalizeRole(value: unknown): PlatformRole | undefined {
@@ -118,6 +136,27 @@ function normalizeExpiry(value: unknown): string {
 function activeState(value: unknown): boolean {
   const state = String(value || '').trim().toLowerCase();
   return state === 'ativo' || state === 'active' || state === 'approved';
+}
+
+function approvedSaleState(value: unknown): boolean {
+  return ['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(
+    String(value || '').trim().toLowerCase(),
+  );
+}
+
+function dateMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof value === 'object' && value !== null) {
+    const maybe = value as Record<string, any>;
+    if (typeof maybe.toMillis === 'function') {
+      const ms = Number(maybe.toMillis());
+      return Number.isFinite(ms) ? ms : 0;
+    }
+    if (Number.isFinite(Number(maybe._seconds))) return Number(maybe._seconds) * 1000;
+    if (Number.isFinite(Number(maybe.seconds))) return Number(maybe.seconds) * 1000;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function profileScopes(roles: PlatformRole[]): string[] {
@@ -252,6 +291,7 @@ async function validateCouponForCheckout(
   planId: string,
   couponCode: string,
   affiliateCode?: string,
+  affiliateUserId?: string,
 ) {
   if (!couponCode) return null;
   const db = getServerAdminFirestore();
@@ -270,7 +310,11 @@ async function validateCouponForCheckout(
     (Number.isFinite(expiresAt) && expiresAt < Date.now()) ||
     (maxUses > 0 && usedCount >= maxUses) ||
     (!plans.includes('all') && !plans.includes(planId)) ||
-    (!affiliates.includes('all') && (!affiliateCode || !affiliates.includes(affiliateCode)))
+    (
+      !affiliates.includes('all') &&
+      (!affiliateCode || !affiliates.includes(affiliateCode)) &&
+      (!affiliateUserId || !affiliates.includes(affiliateUserId))
+    )
   ) throw new Error('Este cupom não está disponível para este checkout.');
   return { id: snap.id, code: couponCode, discountType: coupon.discountType, value: Number(coupon.value || 0) };
 }
@@ -388,6 +432,161 @@ export async function executeMcpAction(
     return { success: true, action, count: affiliations.length, affiliations };
   }
 
+  if (action === 'get_affiliate_performance') {
+    requireScope(principal, 'affiliations:read');
+    if (!principal.approvedRoles.includes('afiliado')) throw new Error('Esta ação requer perfil Afiliado aprovado.');
+
+    const days = Math.max(1, Math.min(365, Math.floor(Number(params.days || 30))));
+    const sinceMs = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    const [salesSnap, clicksSnap, affiliationsSnap] = await Promise.all([
+      db.collection('sales').where('affiliateId', '==', principal.userId).limit(1500).get(),
+      db.collection('affiliate_clicks').where('affiliateId', '==', principal.userId).limit(5000).get(),
+      db.collection('affiliations').where('userId', '==', principal.userId).limit(300).get(),
+    ]);
+
+    const sales = salesSnap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
+      .filter((sale) => approvedSaleState(sale.status))
+      .filter((sale) => {
+        const ms = dateMillis(sale.createdAt || sale.paidAt || sale.updatedAt || sale.date);
+        return !ms || ms >= sinceMs;
+      });
+
+    const clicks = clicksSnap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
+      .filter((click) => {
+        const ms = dateMillis(click.createdAt || click.clickedAt || click.date);
+        return !ms || ms >= sinceMs;
+      });
+
+    const activeAffiliations = affiliationsSnap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
+      .filter((item) => activeState(item.status));
+
+    const totalCommission = sales.reduce((sum, sale) => sum + Number(sale.commissionEarned || 0), 0);
+    const recurringCommission = sales
+      .filter((sale) => String(sale.saleKind || '') === 'subscription_renewal')
+      .reduce((sum, sale) => sum + Number(sale.commissionEarned || 0), 0);
+
+    const sourceMap = new Map<string, { clicks: number; sales: number; commission: number }>();
+    for (const click of clicks) {
+      const source = String(click.utmSource || 'direto').trim().toLowerCase() || 'direto';
+      const row = sourceMap.get(source) || { clicks: 0, sales: 0, commission: 0 };
+      row.clicks += 1;
+      sourceMap.set(source, row);
+    }
+    for (const sale of sales) {
+      const source = String(sale.utmSource || 'direto').trim().toLowerCase() || 'direto';
+      const row = sourceMap.get(source) || { clicks: 0, sales: 0, commission: 0 };
+      row.sales += 1;
+      row.commission += Number(sale.commissionEarned || 0);
+      sourceMap.set(source, row);
+    }
+
+    const sources = [...sourceMap.entries()]
+      .map(([source, row]) => ({
+        source,
+        ...row,
+        conversionRate: row.clicks > 0 ? Number(((row.sales / row.clicks) * 100).toFixed(2)) : null,
+      }))
+      .sort((a, b) => b.commission - a.commission || b.sales - a.sales || b.clicks - a.clicks)
+      .slice(0, 10);
+
+    return {
+      success: true,
+      action,
+      periodDays: days,
+      activeAffiliations: activeAffiliations.length,
+      approvedSales: sales.length,
+      totalClicks: clicks.length,
+      conversionRate: clicks.length > 0 ? Number(((sales.length / clicks.length) * 100).toFixed(2)) : null,
+      totalCommission,
+      formattedCommission: formatBRL(totalCommission),
+      recurringCommission,
+      formattedRecurringCommission: formatBRL(recurringCommission),
+      sources,
+    };
+  }
+
+  if (action === 'list_affiliate_coupons') {
+    requireScope(principal, 'affiliations:read');
+    if (!principal.approvedRoles.includes('afiliado')) throw new Error('Esta ação requer perfil Afiliado aprovado.');
+
+    const affiliationSnap = await db.collection('affiliations').where('userId', '==', principal.userId).limit(300).get();
+    const affiliations = affiliationSnap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
+      .filter((item) => activeState(item.status));
+
+    if (!affiliations.length) {
+      return { success: true, action, count: 0, coupons: [] };
+    }
+
+    const couponSnap = await db.collection('coupons').limit(1000).get();
+    const planIds = [...new Set(affiliations.map((aff) => String(aff.planId || aff.plan_id || '')).filter(Boolean))];
+    const planEntries = await Promise.all(planIds.map(async (id) => {
+      const snap = await db.collection('plans').doc(id).get();
+      return [id, snap.exists ? ({ id: snap.id, ...snap.data()! } as Record<string, any>) : null] as const;
+    }));
+    const planMap = new Map(planEntries);
+    const now = Date.now();
+
+    const coupons = couponSnap.docs.flatMap((doc) => {
+      const coupon = { id: doc.id, ...doc.data() } as Record<string, any>;
+      if (String(coupon.status || '').toLowerCase() !== 'active') return [];
+      const expiresMs = coupon.expiresAt ? Date.parse(String(coupon.expiresAt)) : NaN;
+      if (Number.isFinite(expiresMs) && expiresMs <= now) return [];
+      const maxUses = Number(coupon.maxUses || 0);
+      const usedCount = Number(coupon.usedCount || 0);
+      if (maxUses > 0 && usedCount >= maxUses) return [];
+
+      const planRules = Array.isArray(coupon.applicablePlans) ? coupon.applicablePlans.map(String) : ['all'];
+      const affiliateRules = Array.isArray(coupon.applicableAffiliates) ? coupon.applicableAffiliates.map(String) : ['all'];
+
+      const eligibleLinks = affiliations.flatMap((aff) => {
+        const planId = String(aff.planId || aff.plan_id || '');
+        const companyId = String(aff.companyId || '');
+        const affiliateCode = String(aff.affiliateCode || aff.affiliate_code || '');
+        if (!planId || !companyId || !affiliateCode || companyId !== String(coupon.companyId || '')) return [];
+        if (!planRules.includes('all') && !planRules.includes(planId)) return [];
+        if (
+          !affiliateRules.includes('all') &&
+          !affiliateRules.includes(principal.userId) &&
+          !affiliateRules.includes(affiliateCode)
+        ) return [];
+
+        const plan = planMap.get(planId);
+        if (!plan) return [];
+        const slug = String(plan.checkoutSlug || plan.slug || planId);
+        const query = new URLSearchParams();
+        query.set('ref', affiliateCode);
+        query.set('coupon', String(coupon.code || ''));
+        return [{
+          planId,
+          planName: String(plan.name || aff.planName || 'Produto'),
+          companyId,
+          affiliateCode,
+          url: `${baseUrl}/checkout/${encodeURIComponent(slug)}?${query.toString()}`,
+        }];
+      });
+
+      if (!eligibleLinks.length) return [];
+      return [{
+        id: coupon.id,
+        code: String(coupon.code || ''),
+        discountType: String(coupon.discountType || 'percentage'),
+        value: Number(coupon.value || 0),
+        formattedDiscount: String(coupon.discountType || 'percentage') === 'percentage'
+          ? `${Number(coupon.value || 0)}%`
+          : formatBRL(Number(coupon.value || 0)),
+        expiresAt: coupon.expiresAt || null,
+        eligibleLinks,
+      }];
+    }).slice(0, 200);
+
+    return { success: true, action, count: coupons.length, coupons };
+  }
+
   if (action === 'list_coupons') {
     requireScope(principal, 'coupons:read');
     if (!principal.approvedRoles.includes('empresa') || !principal.companyId) throw new Error('Esta ação requer perfil Empresa aprovado.');
@@ -465,7 +664,7 @@ export async function executeMcpAction(
     if (!/^[A-Za-z0-9_-]{1,150}$/.test(productId)) throw new Error('productId inválido.');
 
     const plan = await findPlan(productId);
-    if (!plan || plan.status !== 'Ativo' || plan.active === false) throw new Error('Oferta não encontrada ou indisponível.');
+    if (!plan || String(plan.status || '').toLowerCase() !== 'ativo' || plan.active === false) throw new Error('Oferta não encontrada ou indisponível.');
     const planId = String(plan.id);
     const companyId = String(plan.companyId || '');
     if (!companyId) throw new Error('Oferta sem empresa responsável.');
@@ -502,7 +701,13 @@ export async function executeMcpAction(
     }
 
     const couponCode = cleanCouponCode(params.couponCode || params.coupon);
-    const coupon = await validateCouponForCheckout(companyId, planId, couponCode, affiliateCode || undefined);
+    const coupon = await validateCouponForCheckout(
+      companyId,
+      planId,
+      couponCode,
+      affiliateCode || undefined,
+      principal.userId,
+    );
     const query = new URLSearchParams();
     if (affiliateCode) query.set('ref', affiliateCode);
     if (coupon) query.set('coupon', coupon.code);
@@ -533,7 +738,16 @@ export async function executeMcpAction(
 }
 
 export function actionExists(value: unknown): value is McpActionName {
-  return ['get_balance', 'list_products', 'create_coupon', 'list_coupons', 'create_checkout', 'get_affiliations'].includes(String(value));
+  return [
+    'get_balance',
+    'list_products',
+    'create_coupon',
+    'list_coupons',
+    'create_checkout',
+    'get_affiliations',
+    'get_affiliate_performance',
+    'list_affiliate_coupons',
+  ].includes(String(value));
 }
 
 export function scopesForApprovedRoles(roles: PlatformRole[]): string[] {

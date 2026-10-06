@@ -1,7 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import {
+  applyVerificationRequest,
+  profileHasRole,
+  profileRoleIsApproved,
+  profileRoleStatus,
+} from '../../lib/profileEligibility.js';
 import { resolveApprovedOwnedCompany } from '../../lib/companyAccess.js';
 import { scopesForApprovedRoles } from '../../lib/mcpApi.js';
 import type { PlatformRole } from '../../lib/platformBilling.js';
@@ -16,6 +21,7 @@ function preferredRole(value:unknown):PlatformRole|undefined{
 export default async function handler(req:Req,res:Res){
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
+
   try{
     const identity=await verifyFirebaseIdentity(typeof req.headers.authorization==='string'?req.headers.authorization:undefined);
     const db=getServerAdminFirestore();
@@ -23,33 +29,47 @@ export default async function handler(req:Req,res:Res){
       db.collection('user_profiles').doc(identity.uid).get(),
       db.collection('verification_requests').doc(identity.uid).get(),
     ]);
+
     if(!profileSnap.exists) return res.status(404).json({error:'Perfil não encontrado.'});
 
     const rawProfile=profileSnap.data()!;
     const profile=applyVerificationRequest(rawProfile,requestSnap.exists?requestSnap.data()!:null) as Record<string,any>;
-    if(profile.banned===true || profile.archived===true || profile.isArchived===true || ['banned','archived'].includes(String(profile.status||'').toLowerCase())){
-      return res.status(403).json({error:'Esta conta está bloqueada ou arquivada.'});
-    }
+    const blocked=
+      profile.banned===true ||
+      profile.archived===true ||
+      profile.isArchived===true ||
+      ['banned','archived'].includes(String(profile.status||'').toLowerCase());
 
     const allowedRoles:PlatformRole[]=[];
-    if(profileHasRole(profile,'afiliado')&&profileRoleIsApproved(profile,'afiliado')) allowedRoles.push('afiliado');
+    if(!blocked && profileHasRole(profile,'afiliado')&&profileRoleIsApproved(profile,'afiliado')) {
+      allowedRoles.push('afiliado');
+    }
 
-    const approvedCompany=await resolveApprovedOwnedCompany(
-      db,
-      identity.uid,
-      String(rawProfile.companyId||profile.companyId||'').trim(),
-    );
+    const approvedCompany=!blocked
+      ? await resolveApprovedOwnedCompany(
+          db,
+          identity.uid,
+          String(rawProfile.companyId||profile.companyId||'').trim(),
+        )
+      : null;
     const companyId=approvedCompany?.companyId||'';
     if(approvedCompany) allowedRoles.push('empresa');
 
-    if(!allowedRoles.length) return res.status(403).json({error:'Seu perfil precisa estar aprovado e ativo para usar integrações de IA/API.'});
-
     const keys=await db.collection('partner_api_keys').where('userId','==',identity.uid).limit(20).get();
-    const active=keys.docs.map(d=>({id:d.id,...d.data()} as Record<string,any>)).find(x=>x.active===true);
+    const active=keys.docs
+      .map(d=>({id:d.id,...d.data()} as Record<string,any>))
+      .find(x=>x.active===true);
 
     if(req.method==='GET'){
       return res.status(200).json({
         success:true,
+        eligible:allowedRoles.length>0,
+        allowedRoles,
+        blocked,
+        roleStatus:{
+          afiliado:profileRoleStatus(profile,'afiliado'),
+          empresa:profileRoleStatus(profile,'empresa'),
+        },
         key:active?{
           id:active.id,
           prefix:active.prefix||'',
@@ -58,8 +78,14 @@ export default async function handler(req:Req,res:Res){
           allowedRoles:Array.isArray(active.allowedRoles)?active.allowedRoles:allowedRoles,
           scopes:Array.isArray(active.scopes)?active.scopes:scopesForApprovedRoles(allowedRoles),
           environment:active.environment||null,
+          usable:allowedRoles.length>0,
         }:null,
         legacyKeyDetected:Boolean(rawProfile.apiKey),
+        message:allowedRoles.length
+          ? 'Integrações de IA liberadas para o perfil aprovado.'
+          : blocked
+            ? 'Esta conta está bloqueada ou arquivada.'
+            : 'Conclua a aprovação do perfil para liberar integrações de IA/API.',
       });
     }
 
@@ -79,6 +105,10 @@ export default async function handler(req:Req,res:Res){
     }
 
     if(req.method!=='POST') return res.status(405).json({error:'Método não permitido.'});
+    if(blocked) return res.status(403).json({error:'Esta conta está bloqueada ou arquivada.'});
+    if(!allowedRoles.length) {
+      return res.status(403).json({error:'Seu perfil precisa estar aprovado e ativo para gerar uma chave de IA/API.'});
+    }
 
     const body=req.body&&typeof req.body==='object'?req.body as Record<string,unknown>:{};
     const requestedRole=preferredRole(body.preferredRole);
@@ -98,6 +128,7 @@ export default async function handler(req:Req,res:Res){
     for(const doc of keys.docs){
       if(doc.data().active===true) batch.set(doc.ref,{active:false,revokedAt:now,updatedAt:now},{merge:true});
     }
+
     batch.create(db.collection('partner_api_keys').doc(keyId),{
       id:keyId,
       userId:identity.uid,
@@ -113,11 +144,13 @@ export default async function handler(req:Req,res:Res){
       updatedAt:now,
       lastUsedAt:null,
     });
+
     batch.set(db.collection('user_profiles').doc(identity.uid),{
       partnerApiKeyId:keyId,
       apiKey:FieldValue.delete(),
       updatedAt:now,
     },{merge:true});
+
     await batch.commit();
 
     return res.status(200).json({
@@ -131,13 +164,16 @@ export default async function handler(req:Req,res:Res){
         allowedRoles,
         scopes,
         environment:env,
+        usable:true,
       },
       warning:'Copie esta chave agora. Por segurança, o valor completo não será exibido novamente.',
     });
   }catch(error){
     const message=error instanceof Error?error.message:'Falha';
     console.error('[Partner API key]',message);
-    if(/Firebase ID token|token inválido|auth\/id-token/i.test(message)) return res.status(401).json({error:'Sua sessão expirou. Entre novamente.'});
+    if(/Firebase ID token|token inválido|auth\/id-token/i.test(message)){
+      return res.status(401).json({error:'Sua sessão expirou. Entre novamente.'});
+    }
     return res.status(503).json({error:'Não foi possível gerenciar a chave de API agora.'});
   }
 }
