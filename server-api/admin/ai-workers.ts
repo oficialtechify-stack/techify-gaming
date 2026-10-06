@@ -1061,6 +1061,16 @@ export default async function handler(req: Req, res: Res) {
           roomRef.collection('participants').get(),
           roomRef.collection('signals').limit(160).get(),
         ]);
+        const roomData = roomSnap.exists ? roomSnap.data() as Record<string, any> : {};
+        const selfParticipant = participantsSnap.docs.some((doc) => doc.id === officeIdentity.uid);
+        if (
+          roomData.locked === true &&
+          !selfParticipant &&
+          String(roomData.lockedBy || '') !== officeIdentity.uid &&
+          !officeIdentity.isOfficeAdmin
+        ) {
+          return res.status(423).json({ error: 'Essa sala está trancada.' });
+        }
         const nowMs = Date.now();
         const participants = participantsSnap.docs
           .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))

@@ -882,7 +882,12 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           cache: 'no-store',
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || cancelled) return;
+        if (!response.ok) {
+          if (!cancelled) setCallNotice(data.error || 'Não foi possível conectar a esta área.');
+          return;
+        }
+        if (cancelled) return;
+        if (callNotice) setCallNotice('');
 
         const participants = Array.isArray(data.participants) ? data.participants as CallParticipant[] : [];
         setCallParticipants(participants);
@@ -925,7 +930,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             } catch {}
           }
         }
-      } catch {}
+      } catch (error: any) {
+        if (!cancelled) setCallNotice(error?.message || 'Não foi possível conectar ao áudio desta área.');
+      }
     };
 
     void syncCall();
@@ -937,25 +944,21 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   }, [activeCallRoom, currentUser?.uid, micOn, cameraOn, screenOn, localStream, screenStream]);
 
   useEffect(() => {
-    if (!activeCallRoom || !player) return;
+    if (!player || !currentUser) return;
     const area = areaForCell(cellAtPixel(player.x, player.y));
-    if (activeCallRoom === 'open-office') {
-      if (area?.kind === 'private' || (!micOn && !cameraOn)) {
-        void stopPrivateCall();
-      }
-      return;
-    }
-    if (!area || area.id !== activeCallRoom) {
-      void stopPrivateCall();
-    }
-  }, [player?.x, player?.y, activeCallRoom, micOn, cameraOn]);
+    const desiredRoom = area?.kind === 'private' ? area.id : 'open-office';
+    if (activeCallRoom === desiredRoom) return;
 
-  useEffect(() => {
-    if (!player || !currentUser || activeCallRoom || (!micOn && !cameraOn)) return;
-    const area = areaForCell(cellAtPixel(player.x, player.y));
-    if (area?.kind === 'private') return;
-    setActiveCallRoom('open-office');
-  }, [player?.x, player?.y, currentUser?.uid, activeCallRoom, micOn, cameraOn]);
+    const previousRoom = activeCallRoom;
+    if (previousRoom) {
+      void sendCallAction({ action: 'call-leave', roomId: previousRoom }).catch(() => undefined);
+    }
+    [...peerRefs.current.keys()].forEach(closePeer);
+    processedSignalIds.current.clear();
+    setCallParticipants([]);
+    setCallNotice('');
+    setActiveCallRoom(desiredRoom);
+  }, [player ? cellKey(cellAtPixel(player.x, player.y)) : '', currentUser?.uid, activeCallRoom]);
 
 
   useEffect(() => {
@@ -1648,13 +1651,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   type="button"
                   className={'context-primary ' + (activeCallRoom === currentArea.id ? 'live' : '')}
                   disabled={callConnecting}
-                  onClick={() => {
-                    if (activeCallRoom === currentArea.id) void stopPrivateCall();
-                    else void startPrivateCall(currentArea);
-                  }}
+                  onClick={() => void toggleMic()}
                 >
-                  {activeCallRoom === currentArea.id ? <X className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-                  {callConnecting ? 'Conectando...' : activeCallRoom === currentArea.id ? 'Sair da reunião' : 'Iniciar reunião'}
+                  {micOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                  {micOn ? 'Microfone ligado' : 'Ligar microfone'}
                 </button>
                 <div className="context-room-actions">
                   <button type="button" onClick={() => void toggleRoomLock(currentArea)}>
@@ -1776,7 +1776,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         {activeCallRoom && (
           <div className="gather-call-badge">
             <span className="live-dot" />
-            <strong>{activeCallRoom === 'open-office' ? 'Áudio espacial' : AREAS.find((area) => area.id === activeCallRoom)?.name || 'Reunião'}</strong>
+            <strong>{activeCallRoom === 'open-office' ? 'Áudio espacial' : AREAS.find((area) => area.id === activeCallRoom)?.name || 'Área privada'}</strong>
             <small>{callParticipants.length} conectado{callParticipants.length === 1 ? '' : 's'}</small>
           </div>
         )}
