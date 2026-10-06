@@ -2,7 +2,7 @@ import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient } from '../../lib/stripeServer.js';
 import { calculateSplit, toCents } from '../../lib/stripeSplit.js';
 import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
-import { releaseDelayDays } from '../../lib/platformBilling.js';
+import { CHECKOUT_FEE_PER_ITEM_CENTS, releaseDelayDays } from '../../lib/platformBilling.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown; end(): unknown };
@@ -299,14 +299,16 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const orderBumpAmountCents = selectedOrderBump ? toCents(orderBumpAmount) : 0;
-    const grossAmountCents = productAmountCents + orderBumpAmountCents + 99;
+    const soldItemCount = 1 + (selectedOrderBump ? 1 : 0);
+    const checkoutFeeCents = CHECKOUT_FEE_PER_ITEM_CENTS * soldItemCount;
+    const grossAmountCents = productAmountCents + orderBumpAmountCents + checkoutFeeCents;
     const commissionableAmountCents =
       productAmountCents +
       (plan.affiliateCommissionOnOrderBump === false ? 0 : orderBumpAmountCents);
     const split = calculateSplit({
       grossAmountCents,
       affiliatePercent,
-      platformFeeCents: 99,
+      platformFeeCents: checkoutFeeCents,
       commissionableAmountCents,
     });
     if (split.companyAmountCents <= 0) {
@@ -393,6 +395,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         orderBumpId: selectedOrderBump ? String(selectedOrderBump.id || '') : null,
         orderBumpName: selectedOrderBump ? String(selectedOrderBump.name || '') : null,
         orderBumpAmountCents,
+        soldItemCount,
+        checkoutFeePerItemCents: CHECKOUT_FEE_PER_ITEM_CENTS,
         platformFeeCents: split.platformFeeCents,
         affiliateAmountCents: split.affiliateAmountCents,
         companyAmountCents: split.companyAmountCents,
@@ -430,6 +434,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         checkoutVariant: selectedCheckout ? String(selectedCheckout.checkoutSlug || '') : '',
         orderBumpId: selectedOrderBump ? String(selectedOrderBump.id || '') : '',
         orderBumpAmountCents: String(orderBumpAmountCents),
+        soldItemCount: String(soldItemCount),
+        checkoutFeePerItemCents: String(CHECKOUT_FEE_PER_ITEM_CENTS),
+        platformFeeCents: String(checkoutFeeCents),
         utmSource,
         utmMedium,
         utmCampaign,
@@ -460,7 +467,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         orderBumpAmountCents,
         orderBumpName: selectedOrderBump ? String(selectedOrderBump.name || '') : null,
         checkoutVariant: selectedCheckout ? String(selectedCheckout.checkoutSlug || '') : null,
-        checkoutFeeCents: 99,
+        soldItemCount,
+        checkoutFeePerItemCents: CHECKOUT_FEE_PER_ITEM_CENTS,
+        checkoutFeeCents,
         totalCents: split.grossAmountCents,
         couponCode: validCouponCode || null,
       },
