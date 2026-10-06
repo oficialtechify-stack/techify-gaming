@@ -1023,7 +1023,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
               <button
                 key={member.userId}
                 type="button"
-                className="human-agent-v3"
+                className="human-agent-v3 remote-human"
                 style={{ left: x, top: y, zIndex: 160 + Math.floor(y) }}
                 onClick={(event) => {
                   event.stopPropagation();

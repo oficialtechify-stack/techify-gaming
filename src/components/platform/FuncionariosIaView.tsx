@@ -353,8 +353,36 @@ export const FuncionariosIaView: React.FC = () => {
 
   useEffect(() => {
     void load();
-    const interval = window.setInterval(() => void load(true), 6000);
-    return () => window.clearInterval(interval);
+    const dataInterval = window.setInterval(() => void load(true), 6000);
+
+    const presenceInterval = window.setInterval(() => {
+      if (!currentUser) return;
+      void currentUser.getIdToken()
+        .then((token) => fetch('/api/office/workers?presenceOnly=1', {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }))
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return response.json().catch(() => null);
+        })
+        .then((data) => {
+          if (!data || !Array.isArray(data.officeMembers)) return;
+          setOfficeMembers((current) => {
+            const next = new Map(current.map((member) => [member.userId, member]));
+            for (const member of data.officeMembers as OfficeMember[]) {
+              next.set(member.userId, { ...(next.get(member.userId) || {}), ...member });
+            }
+            return [...next.values()];
+          });
+        })
+        .catch(() => undefined);
+    }, 950);
+
+    return () => {
+      window.clearInterval(dataInterval);
+      window.clearInterval(presenceInterval);
+    };
   }, [currentUser?.uid]);
 
   const runTask = async (taskId: string) => {
@@ -916,7 +944,7 @@ export const FuncionariosIaView: React.FC = () => {
           <div className="ai-office-toolbar">
             <div>
               <strong>Escritório LeadsPay</strong>
-              <span>Uma planta única: os funcionários andam entre operação, reunião, copa, criação e laboratório.</span>
+              <span>Uma planta única: CEO, equipe humana e IAs circulam entre operação, reunião, copa, criação, sala da designer e laboratório.</span>
             </div>
             <div className="ai-office-legend">
               <span><i className="legend-dot working" /> trabalhando</span>

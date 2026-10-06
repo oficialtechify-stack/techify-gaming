@@ -5090,3 +5090,20 @@
     animation: none;
   }
 }
+
+
+/* Human presence from another logged-in LeadsPay account is sampled from the
+   server, so interpolate the samples instead of visually teleporting. */
+.human-agent-v3.remote-human {
+  transition:
+    left 820ms linear,
+    top 820ms linear,
+    filter .14s ease;
+}
+
+.human-agent-v3.current-player {
+  transition:
+    left 42ms linear,
+    top 42ms linear,
+    filter .14s ease;
+}

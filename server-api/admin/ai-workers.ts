@@ -1053,6 +1053,16 @@ export default async function handler(req: Req, res: Res) {
         });
       }
 
+      const presenceOnly = cleanText(req.query?.presenceOnly, 10) === '1';
+      if (presenceOnly) {
+        const officeMembers = await resolveOfficeMembers(db, officeIdentity);
+        return res.status(200).json({
+          success: true,
+          serverTime: new Date().toISOString(),
+          officeMembers,
+        });
+      }
+
       const requestedWorkerId = cleanText(req.query?.workerId, 80);
       if (requestedWorkerId && VALID_WORKER_IDS.has(requestedWorkerId as WorkerId)) {
         const messages = await loadWorkerChat(db, requestedWorkerId as WorkerId);
