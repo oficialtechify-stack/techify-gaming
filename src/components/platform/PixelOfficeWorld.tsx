@@ -296,6 +296,9 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
 
         <div className="pixel-corridor pixel-corridor-vertical" />
         <div className="pixel-corridor pixel-corridor-junction" />
+        <div className="pixel-doorway pixel-doorway-kitchen" />
+        <div className="pixel-doorway pixel-doorway-lounge" />
+        <div className="pixel-doorway pixel-doorway-lab" />
 
         <section className="pixel-room pixel-room-office">
           <span className="pixel-room-title">OPERAÇÃO</span>

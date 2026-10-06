@@ -1841,6 +1841,36 @@
   border-right: 0;
 }
 
+.pixel-doorway {
+  position: absolute;
+  z-index: 6;
+  background-color: #6a4a31;
+  background-image: url('/pixel-agents/assets/floors/floor_7.png');
+  background-size: 48px 48px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.018);
+}
+
+.pixel-doorway-kitchen {
+  left: 658px;
+  top: 390px;
+  width: 28px;
+  height: 58px;
+}
+
+.pixel-doorway-lounge {
+  left: 658px;
+  top: 655px;
+  width: 28px;
+  height: 70px;
+}
+
+.pixel-doorway-lab {
+  left: 158px;
+  top: 748px;
+  width: 66px;
+  height: 28px;
+}
+
 .world-furniture,
 .world-chair,
 .world-desk,
