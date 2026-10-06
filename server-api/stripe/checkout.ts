@@ -265,39 +265,68 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     let productAmountCents = originalProductAmountCents;
     let discountCents = 0;
     let couponId = '';
+    let planCouponId = '';
     let validCouponCode = '';
 
     if (couponCode) {
       const candidateRef = db.collection('coupons').doc(`${companyId}_${couponCode}`);
       const couponSnap = await candidateRef.get();
-      if (!couponSnap.exists) return fail(res, 400, 'Cupom inválido ou inexistente.', 'INVALID_COUPON');
-      const coupon = couponSnap.data()!;
-      const nowMs = Date.now();
-      const expiresMs = coupon.expiresAt ? Date.parse(String(coupon.expiresAt)) : NaN;
-      const maxUses = Number(coupon.maxUses || 0);
-      const usedCount = Number(coupon.usedCount || 0);
-      const plans = Array.isArray(coupon.applicablePlans) ? coupon.applicablePlans.map(String) : ['all'];
-      const affiliates = Array.isArray(coupon.applicableAffiliates) ? coupon.applicableAffiliates.map(String) : ['all'];
-      const affiliateAllowed = affiliates.includes('all') || (!!validAffiliateCode && (affiliates.includes(validAffiliateCode) || affiliates.includes(affiliateId)));
-      if (
-        String(coupon.companyId || '') !== companyId ||
-        String(coupon.status || '').toLowerCase() !== 'active' ||
-        (Number.isFinite(expiresMs) && expiresMs < nowMs) ||
-        (maxUses > 0 && usedCount >= maxUses) ||
-        (!plans.includes('all') && !plans.includes(planId)) ||
-        !affiliateAllowed
-      ) {
-        return fail(res, 400, 'Este cupom não está disponível para esta compra.', 'COUPON_NOT_APPLICABLE');
+
+      if (couponSnap.exists) {
+        const coupon = couponSnap.data()!;
+        const nowMs = Date.now();
+        const expiresMs = coupon.expiresAt ? Date.parse(String(coupon.expiresAt)) : NaN;
+        const maxUses = Number(coupon.maxUses || 0);
+        const usedCount = Number(coupon.usedCount || 0);
+        const plans = Array.isArray(coupon.applicablePlans) ? coupon.applicablePlans.map(String) : ['all'];
+        const affiliates = Array.isArray(coupon.applicableAffiliates) ? coupon.applicableAffiliates.map(String) : ['all'];
+        const affiliateAllowed = affiliates.includes('all') || (!!validAffiliateCode && (affiliates.includes(validAffiliateCode) || affiliates.includes(affiliateId)));
+        if (
+          String(coupon.companyId || '') !== companyId ||
+          String(coupon.status || '').toLowerCase() !== 'active' ||
+          (Number.isFinite(expiresMs) && expiresMs < nowMs) ||
+          (maxUses > 0 && usedCount >= maxUses) ||
+          (!plans.includes('all') && !plans.includes(planId)) ||
+          !affiliateAllowed
+        ) {
+          return fail(res, 400, 'Este cupom não está disponível para esta compra.', 'COUPON_NOT_APPLICABLE');
+        }
+        const couponValue = Number(coupon.value || 0);
+        if (coupon.discountType === 'fixed') discountCents = Math.round(couponValue * 100);
+        else discountCents = Math.round(originalProductAmountCents * couponValue / 100);
+        couponId = couponSnap.id;
+        validCouponCode = couponCode;
+      } else {
+        const productCoupons = Array.isArray(plan.coupons) ? plan.coupons : [];
+        const coupon = productCoupons.find((item: any) =>
+          String(item?.code || '').trim().toUpperCase() === couponCode &&
+          item?.active !== false
+        );
+        if (!coupon) return fail(res, 400, 'Cupom inválido ou inexistente.', 'INVALID_COUPON');
+
+        const expiresMs = coupon.expiresAt ? Date.parse(String(coupon.expiresAt)) : NaN;
+        const maxUses = Number(coupon.maxUses || 0);
+        const usedCount = Number(coupon.usedCount || 0);
+        if (
+          (Number.isFinite(expiresMs) && expiresMs < Date.now()) ||
+          (maxUses > 0 && usedCount >= maxUses)
+        ) {
+          return fail(res, 400, 'Este cupom não está disponível para esta compra.', 'COUPON_NOT_APPLICABLE');
+        }
+
+        const couponValue = Number(coupon.discountValue || 0);
+        if (!Number.isFinite(couponValue) || couponValue <= 0) {
+          return fail(res, 400, 'Este cupom possui desconto inválido.', 'INVALID_COUPON');
+        }
+        if (coupon.discountType === 'fixed') discountCents = Math.round(couponValue * 100);
+        else discountCents = Math.round(originalProductAmountCents * couponValue / 100);
+        planCouponId = String(coupon.id || couponCode);
+        validCouponCode = couponCode;
       }
-      const couponValue = Number(coupon.value || 0);
-      if (coupon.discountType === 'fixed') discountCents = Math.round(couponValue * 100);
-      else discountCents = Math.round(originalProductAmountCents * couponValue / 100);
+
       discountCents = Math.max(0, Math.min(discountCents, Math.max(0, originalProductAmountCents - 50)));
       productAmountCents = originalProductAmountCents - discountCents;
-      couponId = couponSnap.id;
-      validCouponCode = couponCode;
     }
-
     const orderBumpAmountCents = selectedOrderBump ? toCents(orderBumpAmount) : 0;
     const soldItemCount = 1 + (selectedOrderBump ? 1 : 0);
     const checkoutFeeCents = CHECKOUT_FEE_PER_ITEM_CENTS * soldItemCount;
@@ -389,6 +418,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         productAmountCents,
         discountCents,
         couponId: couponId || null,
+        planCouponId: planCouponId || null,
         couponCode: validCouponCode || null,
         checkoutVariant: selectedCheckout ? String(selectedCheckout.checkoutSlug || '') : null,
         checkoutName: selectedCheckout ? String(selectedCheckout.name || '') : null,
