@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { resolveApprovedOwnedCompany } from '../../lib/companyAccess.js';
 import { assertSafeWebhookUrl, webhookUrlErrorMessage } from '../../lib/webhookSecurity.js';
 
 type Req={method?:string;headers:Record<string,string|string[]|undefined>;body?:unknown};
@@ -11,27 +11,16 @@ export default async function handler(req:Req,res:Res){
   try{
     const identity=await verifyFirebaseIdentity(typeof req.headers.authorization==='string'?req.headers.authorization:undefined);
     const db=getServerAdminFirestore();
-    const [profileSnap,requestSnap]=await Promise.all([
-      db.collection('user_profiles').doc(identity.uid).get(),
-      db.collection('verification_requests').doc(identity.uid).get(),
-    ]);
+    const profileSnap=await db.collection('user_profiles').doc(identity.uid).get();
     if(!profileSnap.exists) return res.status(404).json({error:'Perfil não encontrado.'});
-    const profile=applyVerificationRequest(profileSnap.data()!,requestSnap.exists?requestSnap.data()!:null) as Record<string,any>;
-    if(!profileHasRole(profile,'empresa')||!profileRoleIsApproved(profile,'empresa')) return res.status(403).json({error:'A Empresa precisa estar aprovada para configurar integrações.'});
-    const companyId=String(profile.companyId||'').trim();
-    if(!companyId) return res.status(409).json({error:'A conta ainda não está vinculada a uma empresa válida.'});
-
-    const companySnap=await db.collection('companies').doc(companyId).get();
-    const company=companySnap.exists?companySnap.data()!:null;
-    if(
-      !company ||
-      String(company.ownerId||company.submittedBy||'')!==identity.uid ||
-      company.verified!==true ||
-      String(company.status||'').toLowerCase()!=='approved' ||
-      company.archived===true ||
-      company.isArchived===true ||
-      company.banned===true
-    ) return res.status(403).json({error:'A empresa vinculada não está aprovada para configurar integrações.'});
+    const rawProfile=profileSnap.data() as Record<string,any>;
+    const approvedCompany=await resolveApprovedOwnedCompany(
+      db,
+      identity.uid,
+      String(rawProfile.companyId||'').trim(),
+    );
+    if(!approvedCompany) return res.status(403).json({error:'A empresa precisa estar aprovada e ativa para configurar integrações.'});
+    const companyId=approvedCompany.companyId;
 
     const ref=db.collection('partner_settings').doc(identity.uid);
     if(req.method==='GET'){
