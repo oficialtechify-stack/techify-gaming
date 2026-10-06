@@ -73,11 +73,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         }
       }
     } else {
-      if (!profileHasRole(profile, role)) {
+      // Assim como a Empresa, o Afiliado configura a Stripe antes de enviar
+      // o perfil cadastral para análise. O papel pode existir apenas pelo
+      // modo ativo/cadastro inicial, portanto não exigimos aprovação prévia.
+      if (!profileHasRole(profile, role) && String(profile.activeRoleMode || '').toLowerCase() !== 'afiliado') {
         return fail(res, 403, 'O perfil autenticado não possui cadastro de Afiliado.');
-      }
-      if (!profileRoleIsApproved(profile, role)) {
-        return fail(res, 403, 'A aprovação do perfil de Afiliado é necessária antes de configurar recebimentos.');
       }
     }
 
@@ -117,8 +117,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         account.payouts_enabled === true &&
         account.capabilities?.transfers === 'active';
 
-      // Depois de verificada, a configuração Stripe fica bloqueada.
-      if (role === 'empresa' && alreadyVerified) {
+      // Depois de verificada, a configuração Stripe fica bloqueada para os dois papéis.
+      if (alreadyVerified) {
         return res.status(200).json({
           role,
           accountId,
