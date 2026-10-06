@@ -63,18 +63,18 @@ const HOME_TARGET: Record<string, Cell> = {
 };
 
 const MEETING_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 22, y: 3 },
-  frontend: { x: 19, y: 5 },
-  backend: { x: 27, y: 5 },
+  'lumy-manager': { x: 22, y: 2 },
+  frontend: { x: 18, y: 5 },
+  backend: { x: 28, y: 5 },
   designer: { x: 20, y: 8 },
   qa: { x: 26, y: 8 },
   growth: { x: 23, y: 8 },
 };
 
 const QUEUE_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 6, y: 21 },
-  frontend: { x: 11, y: 21 },
-  backend: { x: 16, y: 21 },
+  'lumy-manager': { x: 6, y: 20 },
+  frontend: { x: 11, y: 20 },
+  backend: { x: 16, y: 20 },
   designer: { x: 6, y: 28 },
   qa: { x: 11, y: 28 },
   growth: { x: 16, y: 28 },
@@ -82,17 +82,17 @@ const QUEUE_TARGET: Record<string, Cell> = {
 
 const IDLE_TARGETS: Record<string, Cell[]> = {
   'lumy-manager': [{ x: 21, y: 17 }, { x: 23, y: 11 }, { x: 35, y: 24 }],
-  frontend: [{ x: 19, y: 17 }, { x: 32, y: 26 }, { x: 36, y: 18 }],
-  backend: [{ x: 8, y: 34 }, { x: 20, y: 18 }, { x: 36, y: 16 }],
-  designer: [{ x: 33, y: 29 }, { x: 39, y: 31 }, { x: 20, y: 22 }],
-  qa: [{ x: 11, y: 34 }, { x: 20, y: 23 }, { x: 20, y: 19 }],
-  growth: [{ x: 38, y: 27 }, { x: 34, y: 17 }, { x: 31, y: 30 }],
+  frontend: [{ x: 20, y: 17 }, { x: 34, y: 25 }, { x: 36, y: 18 }],
+  backend: [{ x: 7, y: 35 }, { x: 20, y: 18 }, { x: 36, y: 16 }],
+  designer: [{ x: 31, y: 30 }, { x: 39, y: 31 }, { x: 20, y: 22 }],
+  qa: [{ x: 14, y: 32 }, { x: 20, y: 23 }, { x: 20, y: 19 }],
+  growth: [{ x: 37, y: 30 }, { x: 38, y: 18 }, { x: 31, y: 30 }],
 };
 
 const PAUSE_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 34, y: 29 },
+  'lumy-manager': { x: 34, y: 31 },
   frontend: { x: 32, y: 29 },
-  backend: { x: 36, y: 29 },
+  backend: { x: 36, y: 31 },
   designer: { x: 38, y: 29 },
   qa: { x: 34, y: 32 },
   growth: { x: 38, y: 32 },
@@ -156,10 +156,15 @@ function isWalkable(cell: Cell) {
     return false;
   }
 
-  const blocked = [...BLOCKED_RECTS, ...WALL_BLOCKS].some(([x, y, width, height]) =>
+  // Furniture gets a one-tile safety margin so 48x96 sprites do not visually
+  // clip through desks, sofas, plants or cabinets while walking.
+  const blockedByFurniture = BLOCKED_RECTS.some(([x, y, width, height]) =>
+    inRect(cell, x - 1, y - 1, width + 2, height + 2),
+  );
+  const blockedByWall = WALL_BLOCKS.some(([x, y, width, height]) =>
     inRect(cell, x, y, width, height),
   );
-  return !blocked;
+  return !blockedByFurniture && !blockedByWall;
 }
 
 function cellKey(cell: Cell) {

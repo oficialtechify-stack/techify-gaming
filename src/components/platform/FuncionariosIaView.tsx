@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -160,6 +160,7 @@ export const FuncionariosIaView: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSending, setChatSending] = useState(false);
+  const chatBodyRef = useRef<HTMLDivElement | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -182,6 +183,15 @@ export const FuncionariosIaView: React.FC = () => {
     }, 360);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!isChatOpen) return;
+    const node = chatBodyRef.current;
+    if (!node) return;
+    window.requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+  }, [chatMessages, chatSending, isChatOpen]);
 
   const authHeaders = async () => {
     if (!currentUser) throw new Error('Sessão do administrador não encontrada.');
@@ -226,6 +236,7 @@ export const FuncionariosIaView: React.FC = () => {
         : task
     ));
 
+    const visualStartedAt = Date.now();
     try {
       const response = await fetch('/api/admin/ai-workers', {
         method: 'POST',
@@ -234,6 +245,10 @@ export const FuncionariosIaView: React.FC = () => {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || data.error || 'O funcionário não conseguiu executar a tarefa.');
+      const remainingVisualTime = Math.max(0, 4500 - (Date.now() - visualStartedAt));
+      if (remainingVisualTime > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remainingVisualTime));
+      }
       setTasks((current) => current.map((task) => task.id === taskId ? data.task : task));
       setSelectedTaskId(taskId);
     } catch (err: any) {
@@ -884,7 +899,7 @@ export const FuncionariosIaView: React.FC = () => {
               </button>
             </header>
 
-            <div className="ai-worker-chat-body">
+            <div className="ai-worker-chat-body" ref={chatBodyRef}>
               {chatLoading ? (
                 <div className="ai-chat-loading">
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -925,7 +940,7 @@ export const FuncionariosIaView: React.FC = () => {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
-                    if (chatInput.trim()) void sendChat(event as unknown as React.FormEvent);
+                    event.currentTarget.form?.requestSubmit();
                   }
                 }}
               />
