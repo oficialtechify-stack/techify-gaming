@@ -20,6 +20,7 @@ import {
   Eye,
   Image as ImageIcon,
   Link2,
+  LockKeyhole,
   MousePointerClick,
   Package,
   Percent,
@@ -60,6 +61,23 @@ type StudioTab =
   | 'checkout'
   | 'links';
 
+const TEMPORARILY_LOCKED_TABS = new Set<StudioTab>(['upsell', 'pixel', 'coproduction']);
+
+const LOCKED_TAB_COPY: Partial<Record<StudioTab, { title: string; description: string }>> = {
+  upsell: {
+    title: 'Upsell e Downsell em preparação',
+    description: 'Vamos liberar esta área hoje depois de concluir a cobrança pós-compra, a taxa LeadsPay e o comissionamento de ponta a ponta.'
+  },
+  pixel: {
+    title: 'Configuração de Pixel em preparação',
+    description: 'Vamos liberar esta área hoje quando os eventos reais de checkout e compra aprovada estiverem conectados aos provedores de rastreamento.'
+  },
+  coproduction: {
+    title: 'Coprodução em preparação',
+    description: 'Vamos liberar esta área hoje depois de concluir convite, aceite, Stripe Connect e divisão financeira segura entre os participantes.'
+  },
+};
+
 const Toggle = ({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) => (
   <button
     type="button"
@@ -68,6 +86,27 @@ const Toggle = ({ value, onChange }: { value: boolean; onChange: (value: boolean
   >
     <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
   </button>
+);
+
+const LockedFeature = ({ title, description }: { title: string; description: string }) => (
+  <div className="group relative overflow-hidden rounded-3xl border border-[#D9F22A]/20 bg-[radial-gradient(circle_at_top_right,rgba(217,242,42,0.10),transparent_38%),linear-gradient(180deg,rgba(13,18,28,0.98),rgba(7,11,18,0.98))] p-7 shadow-[0_18px_60px_rgba(0,0,0,0.28)] sm:p-10">
+    <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-[#D9F22A]/10 blur-3xl transition duration-500 group-hover:scale-125 group-hover:bg-[#D9F22A]/15" />
+    <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[#D9F22A]/25 bg-[#D9F22A]/10 text-[#D9F22A] shadow-[0_0_28px_rgba(217,242,42,0.10)] transition duration-300 group-hover:-translate-y-1 group-hover:rotate-3 group-hover:scale-105">
+        <LockKeyhole className="h-6 w-6 transition-transform duration-300 group-hover:scale-110" />
+      </div>
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h3 className="text-xl font-black text-white">{title}</h3>
+          <span className="rounded-full border border-[#D9F22A]/25 bg-[#D9F22A]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#D9F22A]">
+            Temporariamente bloqueado
+          </span>
+        </div>
+        <p className="max-w-2xl text-sm leading-relaxed text-white/55">{description}</p>
+        <p className="mt-3 text-xs font-semibold text-white/35">Este bloqueio é temporário e será removido assim que o fluxo estiver validado hoje.</p>
+      </div>
+    </div>
+  </div>
 );
 
 export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
@@ -389,9 +428,22 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
     [checkouts, search]
   );
 
+  const recurringLimitedTab =
+    paymentType !== 'Único' && (activeTab === 'order_bump' || activeTab === 'coupons');
+  const activeTabLocked = TEMPORARILY_LOCKED_TABS.has(activeTab) || recurringLimitedTab;
+  const activeTabLockCopy = recurringLimitedTab
+    ? {
+        title: activeTab === 'order_bump' ? 'Order Bump recorrente em preparação' : 'Cupom recorrente em preparação',
+        description:
+          activeTab === 'order_bump'
+            ? 'O Order Bump continua liberado para pagamento único. Vamos destravar o uso em assinatura somente depois de validar a cobrança recorrente do adicional e a taxa por item.'
+            : 'Os cupons continuam liberados para pagamento único. Vamos destravar em assinaturas quando desconto inicial e renovações estiverem consistentes no backend.'
+      }
+    : LOCKED_TAB_COPY[activeTab];
+
   return (
     <div className="-m-3.5 min-h-screen bg-[#050811] text-white sm:-m-5 md:-m-6 lg:-m-8">
-      <div className="sticky top-0 z-30 border-b border-white/10 bg-[#050811]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
+      <div className="sticky top-16 z-20 border-b border-white/10 bg-[#050811]/95 px-4 py-4 backdrop-blur-xl sm:px-6">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <button onClick={onBack} className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/5 hover:text-white">
@@ -429,10 +481,20 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                     <button
                       key={id}
                       onClick={() => setActiveTab(id)}
-                      className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold transition ${activeTab === id ? 'bg-[#D9F22A]/12 text-[#D9F22A] ring-1 ring-[#D9F22A]/25' : 'text-white/65 hover:bg-white/5 hover:text-white'}`}
+                      className={`group flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 ${activeTab === id ? 'bg-[#D9F22A]/12 text-[#D9F22A] ring-1 ring-[#D9F22A]/25 shadow-[0_8px_24px_rgba(217,242,42,0.06)]' : 'text-white/65 hover:bg-white/5 hover:text-white'}`}
                     >
-                      <span className="flex items-center gap-2.5"><Icon className="h-4 w-4" /> {label}</span>
-                      <ChevronRight className="hidden h-3.5 w-3.5 opacity-50 lg:block" />
+                      <span className="flex items-center gap-2.5">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/5 bg-white/[0.025] transition-all duration-200 group-hover:rotate-3 group-hover:scale-110 group-hover:border-[#D9F22A]/20 group-hover:bg-[#D9F22A]/8">
+                          <Icon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                        </span>
+                        {label}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        {(TEMPORARILY_LOCKED_TABS.has(id) || (paymentType !== 'Único' && (id === 'order_bump' || id === 'coupons'))) && (
+                          <LockKeyhole className="h-3.5 w-3.5 text-white/30" />
+                        )}
+                        <ChevronRight className="hidden h-3.5 w-3.5 opacity-50 transition-transform duration-200 group-hover:translate-x-0.5 lg:block" />
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -461,6 +523,10 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
               <h1 className="text-2xl font-black sm:text-3xl">{titleMap[activeTab]}</h1>
               <button type="button" disabled={isSaving} onClick={saveAll} className="hidden rounded-xl bg-[#D9F22A] px-4 py-2 text-xs font-black text-[#060A15] disabled:opacity-60 sm:block">{isSaving ? 'Salvando...' : 'Salvar Produto'}</button>
             </div>
+
+            {activeTabLocked && activeTabLockCopy && (
+              <LockedFeature title={activeTabLockCopy.title} description={activeTabLockCopy.description} />
+            )}
 
             {activeTab === 'info' && (
               <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -560,7 +626,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
               </Section>
             )}
 
-            {activeTab === 'order_bump' && (
+            {activeTab === 'order_bump' && !activeTabLocked && (
               <div className="space-y-4">
                 <Section>
                   <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black">Order Bump</h3><p className="text-xs text-white/50">Oferta complementar antes da conclusão da compra.</p></div><button onClick={() => setOrderBumps([...orderBumps,{id:`bump-${Date.now()}`,name:'Novo Order Bump',description:'Oferta complementar',price:19.9,active:true}])} className="rounded-xl bg-[#D9F22A] px-3 py-2 text-xs font-black text-black"><Plus className="mr-1 inline h-3.5 w-3.5"/>Adicionar</button></div>
@@ -569,14 +635,14 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
               </div>
             )}
 
-            {activeTab === 'coupons' && (
+            {activeTab === 'coupons' && !activeTabLocked && (
               <div className="space-y-4">
                 <Section><div className="flex items-center justify-between"><div><h3 className="text-lg font-black">Cupons</h3><p className="text-xs text-white/50">Descontos para campanhas e afiliados.</p></div><button onClick={()=>setCoupons([...coupons,{id:`coupon-${Date.now()}`,code:'NOVO10',discountType:'percentage',discountValue:10,active:true,usedCount:0}])} className="rounded-xl bg-[#D9F22A] px-3 py-2 text-xs font-black text-black">Adicionar Cupom</button></div></Section>
                 {coupons.length === 0 ? <Section><div className="py-10 text-center text-sm text-white/45">Nenhum cupom cadastrado.</div></Section> : coupons.map((coupon,index)=><Section key={coupon.id}><div className="grid gap-3 lg:grid-cols-[1fr_160px_120px_120px_160px_auto]"><div><label className={labelClass}>Código</label><input className={inputClass} value={coupon.code} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,code:e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'')}:c))}/></div><div><label className={labelClass}>Tipo</label><select className={inputClass} value={coupon.discountType} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,discountType:e.target.value as any}:c))}><option value="percentage">Porcentagem</option><option value="fixed">Valor fixo</option></select></div><div><label className={labelClass}>Desconto</label><input type="number" min="0.01" className={inputClass} value={coupon.discountValue} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,discountValue:Number(e.target.value)}:c))}/></div><div><label className={labelClass}>Limite</label><input type="number" min="0" className={inputClass} value={coupon.maxUses || 0} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,maxUses:Number(e.target.value)}:c))} title="0 = ilimitado" /></div><div><label className={labelClass}>Validade</label><input type="date" className={inputClass} value={(coupon.expiresAt || '').slice(0,10)} onChange={(e)=>setCoupons(coupons.map((c,i)=>i===index?{...c,expiresAt:e.target.value}:c))}/></div><div className="flex items-end gap-2"><Toggle value={coupon.active} onChange={(value)=>setCoupons(coupons.map((c,i)=>i===index?{...c,active:value}:c))}/><button type="button" onClick={()=>setCoupons(coupons.filter((_,i)=>i!==index))} className="rounded-xl border border-rose-500/20 p-2 text-rose-400"><Trash2 className="h-4 w-4"/></button></div></div></Section>)}
               </div>
             )}
 
-            {activeTab === 'upsell' && (
+            {activeTab === 'upsell' && !activeTabLocked && (
               <div className="space-y-5">
                 <Section>
                   <h3 className="text-lg font-black">Upsell e página de obrigado</h3>
@@ -595,7 +661,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
               </div>
             )}
 
-            {activeTab === 'pixel' && (
+            {activeTab === 'pixel' && !activeTabLocked && (
               <Section>
                 <h3 className="text-lg font-black">Rastreamento e conversões</h3>
                 <p className="mt-1 text-xs text-white/50">Configure o pixel usado pela empresa para medir compras.</p>
@@ -626,7 +692,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
               </div>
             )}
 
-            {activeTab === 'coproduction' && (
+            {activeTab === 'coproduction' && !activeTabLocked && (
               <div className="space-y-4">
                 <Section><div className="flex items-center justify-between"><div><h3 className="text-lg font-black">Coprodução</h3><p className="text-xs text-white/50">Cadastre parceiros e percentuais. O repasse financeiro só fica ativo depois que o coprodutor aceitar o vínculo e tiver Stripe Connect validada.</p></div><button onClick={()=>setCoproducers([...coproducers,{id:`cop-${Date.now()}`,name:'Novo Coprodutor',email:'',commissionPercentage:10,status:'pending',createdAt:new Date().toISOString()}])} className="rounded-xl bg-[#D9F22A] px-3 py-2 text-xs font-black text-black">Convidar Coprodutor</button></div></Section>
                 {coproducers.length===0?<Section><div className="py-10 text-center text-sm text-white/45">Nenhum coprodutor cadastrado.</div></Section>:coproducers.map((c,index)=><Section key={c.id}><div className="grid gap-3 sm:grid-cols-[1fr_1fr_130px_auto]"><input className={inputClass} value={c.name} onChange={(e)=>setCoproducers(coproducers.map((x,i)=>i===index?{...x,name:e.target.value}:x))}/><input type="email" className={inputClass} value={c.email} onChange={(e)=>setCoproducers(coproducers.map((x,i)=>i===index?{...x,email:e.target.value}:x))}/><div className="relative"><input type="number" className={inputClass} value={c.commissionPercentage} onChange={(e)=>setCoproducers(coproducers.map((x,i)=>i===index?{...x,commissionPercentage:Number(e.target.value)}:x))}/><Percent className="absolute right-3 top-3 h-4 w-4 text-white/35"/></div><button onClick={()=>setCoproducers(coproducers.filter((_,i)=>i!==index))} className="text-rose-400"><Trash2 className="h-4 w-4"/></button></div></Section>)}
