@@ -186,6 +186,16 @@
   line-height: 1.5;
 }
 
+.ai-engine-note.online {
+  border-color: rgba(34,197,94,.2);
+  background: rgba(34,197,94,.06);
+  color: #86efac;
+}
+
+.ai-engine-note.online span {
+  color: rgba(255,255,255,.5);
+}
+
 .ai-staff-error {
   border: 1px solid rgba(239,68,68,.22);
   background: rgba(239,68,68,.07);
@@ -918,6 +928,118 @@
   font-size: 9px;
 }
 
+.ai-execution-report {
+  margin-top: 10px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 14px;
+  background: #050a12;
+  overflow: hidden;
+}
+
+.ai-execution-report-head {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.065);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-execution-report-head > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #d9f22a;
+}
+
+.ai-execution-report-head strong {
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.ai-execution-report-head > span {
+  color: rgba(255,255,255,.28);
+  font-size: 7px;
+  text-align: right;
+}
+
+.ai-report-block {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+
+.ai-report-block > strong,
+.ai-report-files > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(255,255,255,.62);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.ai-report-block ul {
+  margin: 0;
+  padding-left: 15px;
+  color: rgba(255,255,255,.48);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.ai-report-block li + li {
+  margin-top: 4px;
+}
+
+.ai-report-block.warning {
+  background: rgba(245,158,11,.035);
+}
+
+.ai-report-block.warning > strong {
+  color: #fcd34d;
+}
+
+.ai-report-files {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+
+.ai-report-files > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ai-report-files code {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid rgba(147,197,253,.11);
+  border-radius: 6px;
+  background: rgba(59,130,246,.05);
+  padding: 3px 5px;
+  color: #93c5fd;
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.ai-report-next {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  color: #d9f22a;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.ai-report-next svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 .ai-selected-task-actions {
   display: flex;
   flex-wrap: wrap;
@@ -944,6 +1066,23 @@
   background: #d9f22a;
   color: #07100a;
   border-color: #d9f22a;
+}
+
+.ai-selected-task-actions .run-ai-task {
+  color: #07100a;
+  border-color: #d9f22a;
+  background: #d9f22a;
+}
+
+.ai-selected-task-actions .run-ai-task.secondary {
+  color: #d9f22a;
+  border-color: rgba(217,242,42,.2);
+  background: rgba(217,242,42,.07);
+}
+
+.ai-selected-task-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .48;
 }
 
 .ai-selected-task-actions .pause-task {
@@ -1166,6 +1305,44 @@
 .leadspay-platform[data-theme="light"] .ai-task-empty,
 .leadspay-platform[data-theme="light"] .ai-worker-profile strong {
   color: #66766d !important;
+}
+
+.leadspay-platform[data-theme="light"] .ai-engine-note.online {
+  border-color: #b7dac2;
+  background: #edf8f0;
+  color: #067647;
+}
+
+.leadspay-platform[data-theme="light"] .ai-engine-note.online span {
+  color: #526158;
+}
+
+.leadspay-platform[data-theme="light"] .ai-execution-report {
+  border-color: #dfe6df;
+  background: #f7f9f6;
+}
+
+.leadspay-platform[data-theme="light"] .ai-execution-report-head,
+.leadspay-platform[data-theme="light"] .ai-report-block,
+.leadspay-platform[data-theme="light"] .ai-report-files {
+  border-color: #dfe6df;
+}
+
+.leadspay-platform[data-theme="light"] .ai-execution-report-head strong,
+.leadspay-platform[data-theme="light"] .ai-report-block > strong,
+.leadspay-platform[data-theme="light"] .ai-report-files > strong {
+  color: #33433a;
+}
+
+.leadspay-platform[data-theme="light"] .ai-execution-report-head > span,
+.leadspay-platform[data-theme="light"] .ai-report-block ul {
+  color: #66766d;
+}
+
+.leadspay-platform[data-theme="light"] .ai-report-files code {
+  border-color: #c8d8ef;
+  background: #eef5ff;
+  color: #175cd3;
 }
 
 .leadspay-platform[data-theme="light"] .ai-office-panel {

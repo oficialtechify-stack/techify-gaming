@@ -40,6 +40,16 @@ type TaskStatus =
   | 'failed'
   | 'cancelled';
 
+type AiExecutionReport = {
+  summary?: string;
+  findings?: string[];
+  proposedChanges?: string[];
+  validation?: string[];
+  risks?: string[];
+  nextStep?: string;
+  filesReviewed?: string[];
+};
+
 type AiTask = {
   id: string;
   workerId: string;
@@ -53,6 +63,10 @@ type AiTask = {
   executionMode: string;
   runtimeStatus: string;
   resultSummary?: string | null;
+  executionReport?: AiExecutionReport | null;
+  executorProvider?: string | null;
+  executorModel?: string | null;
+  lastRunAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   startedAt?: string | null;
@@ -63,6 +77,10 @@ type EngineInfo = {
   connected: boolean;
   mode: string;
   message: string;
+  provider?: string | null;
+  model?: string | null;
+  repoReadConnected?: boolean;
+  repoWriteConnected?: boolean;
 };
 
 const FALLBACK_WORKERS: Worker[] = [
@@ -149,6 +167,7 @@ export const FuncionariosIaView: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [savingTask, setSavingTask] = useState(false);
+  const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [selectedWorkerId, setSelectedWorkerId] = useState('lumy-manager');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -207,6 +226,34 @@ export const FuncionariosIaView: React.FC = () => {
     void load();
   }, [currentUser?.uid]);
 
+  const runTask = async (taskId: string) => {
+    if (!engine.connected || runningTaskId) return;
+    setRunningTaskId(taskId);
+    setError('');
+    setTasks((current) => current.map((task) =>
+      task.id === taskId
+        ? { ...task, status: 'working', progress: Math.max(15, task.progress || 0), runtimeStatus: 'ai_analyzing' }
+        : task
+    ));
+
+    try {
+      const response = await fetch('/api/admin/ai-workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'run-task', taskId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || data.error || 'O funcionário não conseguiu executar a tarefa.');
+      setTasks((current) => current.map((task) => task.id === taskId ? data.task : task));
+      setSelectedTaskId(taskId);
+    } catch (err: any) {
+      setError(err?.message || 'O funcionário não conseguiu executar a tarefa.');
+      await load();
+    } finally {
+      setRunningTaskId(null);
+    }
+  };
+
   const createTask = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.title.trim() || form.description.trim().length < 10) return;
@@ -227,6 +274,9 @@ export const FuncionariosIaView: React.FC = () => {
       setSelectedTaskId(data.task.id);
       setIsTaskModalOpen(false);
       setForm((current) => ({ ...current, title: '', description: '' }));
+      if (engine.connected) {
+        void runTask(data.task.id);
+      }
     } catch (err: any) {
       setError(err?.message || 'Não foi possível criar a tarefa.');
     } finally {
@@ -322,12 +372,22 @@ export const FuncionariosIaView: React.FC = () => {
         </div>
       </section>
 
-      {!engine.connected && (
+      {!engine.connected ? (
         <div className="ai-engine-note">
           <ShieldCheck className="h-4 w-4" />
           <div>
             <strong>A fila de tarefas já é real e fica salva no Admin.</strong>
             <span>{engine.message} Nenhuma tarefa será marcada como concluída automaticamente sem retorno real de um executor.</span>
+          </div>
+        </div>
+      ) : (
+        <div className="ai-engine-note online">
+          <Sparkles className="h-4 w-4" />
+          <div>
+            <strong>{engine.provider || 'IA'} conectado · {engine.model || 'modelo ativo'}</strong>
+            <span>
+              Os funcionários já analisam tarefas e o repositório. A escrita automática no GitHub continua bloqueada até conectarmos a etapa de execução aprovada.
+            </span>
           </div>
         </div>
       )}
@@ -562,28 +622,142 @@ export const FuncionariosIaView: React.FC = () => {
                 <span>{selectedTask.resultSummary}</span>
               </div>
             )}
+
+            {selectedTask.executionReport && (
+              <div className="ai-execution-report">
+                <div className="ai-execution-report-head">
+                  <div>
+                    <Sparkles className="h-4 w-4" />
+                    <strong>Trabalho do funcionário</strong>
+                  </div>
+                  <span>
+                    {selectedTask.executorProvider || 'IA'}
+                    {selectedTask.executorModel ? ` · ${selectedTask.executorModel}` : ''}
+                    {selectedTask.lastRunAt ? ` · ${fmtDate(selectedTask.lastRunAt)}` : ''}
+                  </span>
+                </div>
+
+                {!!selectedTask.executionReport.findings?.length && (
+                  <div className="ai-report-block">
+                    <strong>O que encontrou</strong>
+                    <ul>
+                      {selectedTask.executionReport.findings.map((item, index) => <li key={`finding-${index}`}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {!!selectedTask.executionReport.proposedChanges?.length && (
+                  <div className="ai-report-block">
+                    <strong>Mudanças propostas</strong>
+                    <ul>
+                      {selectedTask.executionReport.proposedChanges.map((item, index) => <li key={`change-${index}`}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {!!selectedTask.executionReport.validation?.length && (
+                  <div className="ai-report-block">
+                    <strong>Validação</strong>
+                    <ul>
+                      {selectedTask.executionReport.validation.map((item, index) => <li key={`validation-${index}`}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {!!selectedTask.executionReport.risks?.length && (
+                  <div className="ai-report-block warning">
+                    <strong>Riscos</strong>
+                    <ul>
+                      {selectedTask.executionReport.risks.map((item, index) => <li key={`risk-${index}`}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {!!selectedTask.executionReport.filesReviewed?.length && (
+                  <div className="ai-report-files">
+                    <strong>Arquivos analisados</strong>
+                    <div>
+                      {selectedTask.executionReport.filesReviewed.map((file) => <code key={file}>{file}</code>)}
+                    </div>
+                  </div>
+                )}
+
+                {selectedTask.executionReport.nextStep && (
+                  <div className="ai-report-next">
+                    <ChevronRight className="h-4 w-4" />
+                    <span>{selectedTask.executionReport.nextStep}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="ai-selected-task-actions">
-            {selectedTask.status === 'waiting_approval' && (
-              <button type="button" className="approve-task" onClick={() => void updateTask(selectedTask.id, 'working', selectedTask.progress)}>
-                <Play className="h-4 w-4" />
-                Aprovar e continuar
+            {selectedTask.status === 'queued' && engine.connected && (
+              <button
+                type="button"
+                className="run-ai-task"
+                disabled={runningTaskId === selectedTask.id}
+                onClick={() => void runTask(selectedTask.id)}
+              >
+                {runningTaskId === selectedTask.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {runningTaskId === selectedTask.id ? 'IA trabalhando...' : 'Executar com IA'}
               </button>
             )}
+
             {selectedTask.status === 'working' && (
-              <button type="button" className="pause-task" onClick={() => void updateTask(selectedTask.id, 'paused', selectedTask.progress)}>
-                <Pause className="h-4 w-4" />
-                Pausar
-              </button>
+              runningTaskId === selectedTask.id ? (
+                <button type="button" className="run-ai-task" disabled>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  IA trabalhando...
+                </button>
+              ) : engine.connected ? (
+                <button type="button" className="run-ai-task" onClick={() => void runTask(selectedTask.id)}>
+                  <Sparkles className="h-4 w-4" />
+                  Continuar com IA
+                </button>
+              ) : (
+                <button type="button" className="pause-task" onClick={() => void updateTask(selectedTask.id, 'paused', selectedTask.progress)}>
+                  <Pause className="h-4 w-4" />
+                  Pausar
+                </button>
+              )
             )}
-            {selectedTask.status === 'paused' && (
-              <button type="button" className="approve-task" onClick={() => void updateTask(selectedTask.id, 'queued', selectedTask.progress)}>
+
+            {selectedTask.status === 'paused' && engine.connected && (
+              <button type="button" className="run-ai-task" onClick={() => void runTask(selectedTask.id)}>
                 <Play className="h-4 w-4" />
-                Voltar para fila
+                Continuar com IA
               </button>
             )}
-            {!['completed', 'cancelled'].includes(selectedTask.status) && (
+
+            {selectedTask.status === 'waiting_approval' && (
+              <>
+                <button
+                  type="button"
+                  className="approve-task"
+                  onClick={() => void updateTask(selectedTask.id, 'completed', 100)}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Aprovar trabalho
+                </button>
+                {engine.connected && (
+                  <button type="button" className="run-ai-task secondary" onClick={() => void runTask(selectedTask.id)}>
+                    <RefreshCw className="h-4 w-4" />
+                    Pedir nova análise
+                  </button>
+                )}
+              </>
+            )}
+
+            {selectedTask.status === 'failed' && engine.connected && (
+              <button type="button" className="run-ai-task" onClick={() => void runTask(selectedTask.id)}>
+                <RefreshCw className="h-4 w-4" />
+                Tentar novamente
+              </button>
+            )}
+
+            {!['completed', 'cancelled'].includes(selectedTask.status) && runningTaskId !== selectedTask.id && (
               <button type="button" className="cancel-task" onClick={() => void updateTask(selectedTask.id, 'cancelled', selectedTask.progress)}>
                 <X className="h-4 w-4" />
                 Cancelar
