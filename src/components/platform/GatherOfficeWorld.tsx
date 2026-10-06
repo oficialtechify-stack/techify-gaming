@@ -4,6 +4,7 @@ import {
   Camera,
   CameraOff,
   ChevronRight,
+  ClipboardList,
   LocateFixed,
   Lock,
   Map as MapIcon,
@@ -1154,7 +1155,6 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 onClick={(event) => {
                   event.stopPropagation();
                   setSelectedHumanId(member.userId);
-                  onSelectHuman?.(member.userId);
                 }}
               >
                 <span
@@ -1370,7 +1370,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             <BellOff className="h-5 w-5" />
           </button>
           <button type="button" onClick={onOpenTasks} title="Tarefas">
-            <MapIcon className="h-5 w-5" />
+            <ClipboardList className="h-5 w-5" />
           </button>
         </div>
 

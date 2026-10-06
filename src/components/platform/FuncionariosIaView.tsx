@@ -30,7 +30,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { PixelOfficeWorld } from './PixelOfficeWorld';
+import { GatherOfficeWorld } from './GatherOfficeWorld';
 import '../../styles/ai-pixel-office.css';
 
 type WorkerBrain = {
@@ -237,6 +237,7 @@ export const FuncionariosIaView: React.FC = () => {
   const teamChatBodyRef = useRef<HTMLDivElement | null>(null);
   const [codeActionTaskId, setCodeActionTaskId] = useState<string | null>(null);
   const [officeNotice, setOfficeNotice] = useState('');
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
   const [engine, setEngine] = useState<EngineInfo>({
     connected: false,
     mode: 'supervised',
@@ -968,7 +969,7 @@ export const FuncionariosIaView: React.FC = () => {
             </div>
           )}
 
-          <PixelOfficeWorld
+          <GatherOfficeWorld
             workers={workers}
             tasks={tasks}
             humanTasks={humanTasks}
@@ -983,6 +984,7 @@ export const FuncionariosIaView: React.FC = () => {
               setHumanTaskForm((current) => ({ ...current, assigneeUid: userId }));
               setIsComputerOpen(true);
             }}
+            onOpenTasks={() => setTaskDrawerOpen(true)}
             onPlayerMove={sendPresence}
             onInteract={(interaction) => {
               if (interaction.type === 'computer') openMyComputer(interaction.ownerUid);
@@ -1020,7 +1022,7 @@ export const FuncionariosIaView: React.FC = () => {
           />
         </div>
 
-        <aside className="ai-task-panel">
+        <aside className={'ai-task-panel gather-task-drawer ' + (taskDrawerOpen ? 'open' : '')}>
           <div className="ai-task-panel-head">
             <div>
               <strong>{taskScope === 'selected' ? `Tarefas de ${selectedWorker?.name || 'funcionário'}` : 'Fila de tarefas'}</strong>
@@ -1030,9 +1032,14 @@ export const FuncionariosIaView: React.FC = () => {
                   : `${tasks.length} tarefa${tasks.length === 1 ? '' : 's'} registrada${tasks.length === 1 ? '' : 's'}`}
               </span>
             </div>
-            <button type="button" onClick={() => openTaskFor(selectedWorker?.id)} className="mini-add-task" title="Nova tarefa">
-              <Plus className="h-4 w-4" />
-            </button>
+            <div className="gather-task-head-actions">
+              <button type="button" onClick={() => openTaskFor(selectedWorker?.id)} className="mini-add-task" title="Nova tarefa">
+                <Plus className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setTaskDrawerOpen(false)} className="mini-add-task" title="Fechar">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className="ai-task-scope">
