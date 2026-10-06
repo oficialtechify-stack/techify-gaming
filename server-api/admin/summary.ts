@@ -44,7 +44,8 @@ export default async function handler(req: Req, res: Res) {
       releasesSnap,
       companiesSnap,
       profilesSnap,
-      plansCount,
+      plansSnap,
+      affiliationsSnap,
       financeSnap,
       checkoutOrdersSnap,
       productSubscriptionCheckoutsSnap,
@@ -56,7 +57,8 @@ export default async function handler(req: Req, res: Res) {
       db.collection('balance_releases').limit(5000).get(),
       db.collection('companies').limit(5000).get(),
       db.collection('user_profiles').limit(5000).get(),
-      db.collection('plans').where('status', '==', 'Ativo').count().get(),
+      db.collection('plans').limit(5000).get(),
+      db.collection('affiliations').limit(5000).get(),
       db.collection('platform_finances').doc('global_summary').get(),
       db.collection('stripe_checkout_orders').limit(5000).get(),
       db.collection('stripe_product_subscription_checkouts').limit(5000).get(),
@@ -154,19 +156,21 @@ export default async function handler(req: Req, res: Res) {
 
     const availableBalance = profileAvailableBalanceCents / 100;
 
-    const approvedCompanies = companiesSnap.docs.filter((doc) => {
-      const item = doc.data() as Record<string, any>;
-      const ownerId = String(item.ownerId || item.submittedBy || '').trim();
-      const ownerEmail = String(item.submittedByEmail || item.email || '').trim().toLowerCase();
+    const realCompanies = companiesSnap.docs
+      .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
+      .filter((item) => {
+        const ownerId = String(item.ownerId || item.submittedBy || '').trim();
+        const ownerEmail = String(item.submittedByEmail || item.email || '').trim().toLowerCase();
+        return !globalAdminIds.has(ownerId) && ownerEmail !== LEADSPAY_GLOBAL_ADMIN_EMAIL;
+      });
 
-      return !globalAdminIds.has(ownerId) &&
-        ownerEmail !== LEADSPAY_GLOBAL_ADMIN_EMAIL &&
-        item.verified === true &&
-        String(item.status || '').toLowerCase() === 'approved' &&
-        item.banned !== true &&
-        item.archived !== true &&
-        item.isArchived !== true;
-    }).length;
+    const approvedCompanies = realCompanies.filter((item) =>
+      item.verified === true &&
+      String(item.status || '').toLowerCase() === 'approved' &&
+      item.banned !== true &&
+      item.archived !== true &&
+      item.isArchived !== true
+    ).length;
 
     const approvedAffiliates = userProfiles.filter((item) => {
       const status = String(item.affiliateVerificationStatus || item.verificationStatus || '').toLowerCase();
@@ -205,6 +209,127 @@ export default async function handler(req: Req, res: Res) {
       return item.active === true || status === 'active' || status === 'trialing';
     }).length;
 
+    const plans = plansSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
+    const affiliations = affiliationsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
+    const productSubscriptions = productSubscriptionsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
+
+    const companySummaries = realCompanies.map((company) => {
+      const companyId = String(company.id);
+      const ownerId = String(company.ownerId || company.submittedBy || '').trim();
+      const ownerProfile = userProfiles.find((profile) =>
+        String(profile.id) === ownerId || String(profile.companyId || '') === companyId
+      );
+
+      const companySales = realSales.filter((sale) =>
+        String(sale.companyId || '') === companyId ||
+        (ownerId && String(sale.companyOwnerId || '') === ownerId)
+      );
+
+      let companyGrossVolume = 0;
+      let companyCheckoutFees = 0;
+      let companyAffiliateCommissions = 0;
+      let companyNetRevenue = 0;
+
+      for (const sale of companySales) {
+        const amount = Number(sale.amount || sale.financialBreakdown?.grossAmount || 0);
+        const checkoutFee = Number(sale.checkoutFee ?? sale.financialBreakdown?.platformFee ?? 0);
+        const commission = Number(sale.commissionEarned ?? sale.financialBreakdown?.affiliateCommission ?? 0);
+        const explicitNet = Number(sale.netCompanyAmount ?? sale.financialBreakdown?.netCompanyAmount);
+
+        companyGrossVolume += Number.isFinite(amount) ? amount : 0;
+        companyCheckoutFees += Number.isFinite(checkoutFee) ? checkoutFee : 0;
+        companyAffiliateCommissions += Number.isFinite(commission) ? commission : 0;
+        companyNetRevenue += Number.isFinite(explicitNet)
+          ? explicitNet
+          : Math.max(0, amount - checkoutFee - commission);
+      }
+
+      const activeProducts = plans.filter((plan) =>
+        String(plan.companyId || '') === companyId &&
+        String(plan.status || '').toLowerCase() === 'ativo' &&
+        plan.active !== false
+      ).length;
+
+      const connectedAffiliates = affiliations.filter((affiliation) => {
+        if (String(affiliation.companyId || '') !== companyId) return false;
+        const status = String(affiliation.status || '').trim().toLowerCase();
+        return ['ativo', 'active', 'aprovado', 'approved'].includes(status);
+      }).length;
+
+      const companyCheckouts = checkoutDocuments.filter((item) =>
+        String(item.companyId || '') === companyId ||
+        (ownerId && String(item.companyOwnerId || '') === ownerId)
+      );
+
+      const companyCompletedCheckouts = companyCheckouts.filter((item) =>
+        COMPLETED_CHECKOUTS.has(String(item.status || '').trim().toLowerCase())
+      ).length;
+
+      const activeSubscriptions = productSubscriptions.filter((subscription) => {
+        if (
+          String(subscription.companyId || '') !== companyId &&
+          !(ownerId && String(subscription.companyOwnerId || '') === ownerId)
+        ) return false;
+        if (!isRealMoney(subscription)) return false;
+        const status = String(subscription.status || '').trim().toLowerCase();
+        return subscription.active === true || status === 'active' || status === 'trialing';
+      }).length;
+
+      const companyWithdrawals = realWithdrawals.filter((withdrawal) =>
+        String(withdrawal.companyId || '') === companyId ||
+        (ownerId && String(withdrawal.userId || '') === ownerId && String(withdrawal.role || 'empresa') === 'empresa')
+      );
+
+      const completedCompanyWithdrawals = companyWithdrawals.filter((withdrawal) =>
+        COMPLETED_WITHDRAWALS.has(String(withdrawal.status || '').trim().toLowerCase())
+      );
+
+      const totalWithdrawnByCompany = completedCompanyWithdrawals.reduce((sum, withdrawal) => {
+        const value = Number(withdrawal.netAmount ?? withdrawal.amount ?? withdrawal.requestedAmount ?? 0);
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+
+      const stripeAccountId = String(
+        company.stripeAccountId ||
+        ownerProfile?.stripeAccounts?.empresa ||
+        ownerProfile?.stripeAccountId ||
+        ''
+      ).trim();
+
+      return {
+        companyId,
+        ownerId: ownerId || null,
+        name: String(company.name || company.companyName || 'Empresa'),
+        logo: String(company.logo || ''),
+        email: String(company.email || ownerProfile?.email || ''),
+        category: String(company.category || ''),
+        status: String(company.status || 'pending'),
+        verified: company.verified === true,
+        banned: company.banned === true,
+        stripeConnected: Boolean(stripeAccountId),
+        salesCount: companySales.length,
+        grossVolume: Number(companyGrossVolume.toFixed(2)),
+        checkoutFees: Number(companyCheckoutFees.toFixed(2)),
+        affiliateCommissions: Number(companyAffiliateCommissions.toFixed(2)),
+        netRevenue: Number(companyNetRevenue.toFixed(2)),
+        pendingBalance: Number((centsFromProfile(ownerProfile || {}, 'empresaPendingBalanceCents') / 100).toFixed(2)),
+        availableBalance: Number((centsFromProfile(ownerProfile || {}, 'empresaAvailableBalanceCents') / 100).toFixed(2)),
+        activeProducts,
+        connectedAffiliates,
+        checkoutAttempts: companyCheckouts.length,
+        completedCheckouts: companyCompletedCheckouts,
+        activeSubscriptions,
+        withdrawalsInFlight: companyWithdrawals.filter((withdrawal) =>
+          !NON_ACTIVE_WITHDRAWALS.has(String(withdrawal.status || '').trim().toLowerCase())
+        ).length,
+        completedWithdrawals: completedCompanyWithdrawals.length,
+        totalWithdrawn: Number(totalWithdrawnByCompany.toFixed(2)),
+      };
+    }).sort((a, b) => {
+      if (a.verified !== b.verified) return a.verified ? -1 : 1;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
+
     const finance = financeSnap.exists ? financeSnap.data() as Record<string, any> : {};
     const platformRevenue = checkoutFees + withdrawalFees;
     const stripeSecret = String(process.env.STRIPE_SECRET_KEY || '').trim();
@@ -232,12 +357,15 @@ export default async function handler(req: Req, res: Res) {
         totalWithdrawn: Number(totalWithdrawn.toFixed(2)),
         approvedCompanies,
         approvedAffiliates,
-        activeProducts: Number(plansCount.data().count || 0),
+        activeProducts: plans.filter((plan) =>
+          String(plan.status || '').toLowerCase() === 'ativo' && plan.active !== false
+        ).length,
         checkoutAttempts,
         completedCheckouts,
         activeProductSubscriptions,
         activePlanSubscribers,
         platformPlanMrr: Number(platformPlanMrr.toFixed(2)),
+        companySummaries,
         totalSalesProcessedCounter: Number(finance.totalSalesProcessed || 0),
         lastUpdated: String(finance.lastUpdated || new Date().toISOString()),
         stripeConfig,
@@ -247,6 +375,8 @@ export default async function handler(req: Req, res: Res) {
           releasesSnap.size >= 5000 ||
           companiesSnap.size >= 5000 ||
           profilesSnap.size >= 5000 ||
+          plansSnap.size >= 5000 ||
+          affiliationsSnap.size >= 5000 ||
           checkoutOrdersSnap.size >= 5000 ||
           productSubscriptionCheckoutsSnap.size >= 5000 ||
           platformSubscriptionCheckoutsSnap.size >= 5000 ||
