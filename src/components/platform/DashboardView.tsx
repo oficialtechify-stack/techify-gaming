@@ -5,7 +5,8 @@ import {
   UserSellerProfile, 
   SaleTransaction, 
   PaymentMethodStat, 
-  CompanyPlan, 
+  CompanyPlan,
+  UserAffiliation,
   PlatformTab,
   UserRoleMode 
 } from '../../types/platform';
@@ -48,6 +49,7 @@ interface DashboardViewProps {
   transactions: SaleTransaction[];
   paymentStats: PaymentMethodStat[];
   platforms: CompanyPlan[];
+  affiliations?: UserAffiliation[];
   setActiveTab: (tab: PlatformTab) => void;
   onOpenWithdraw: () => void;
   onSelectProductDetail: (product: CompanyPlan) => void;
@@ -261,6 +263,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   transactions = [],
   paymentStats = [],
   platforms = [],
+  affiliations = [],
   setActiveTab,
   onOpenWithdraw,
   onSelectProductDetail,
@@ -281,7 +284,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenNotifications
 }) => {
   const { currentUser } = useAuth();
-  const [releasePolicyDays, setReleasePolicyDays] = useState<8 | 15>(15);
+  const [releasePolicyDays, setReleasePolicyDays] = useState<number>(10);
   const [nextReleaseAt, setNextReleaseAt] = useState<string | null>(null);
   const [releasePendingCents, setReleasePendingCents] = useState<number | null>(null);
   const [releaseAvailableCents, setReleaseAvailableCents] = useState<number | null>(null);
@@ -304,7 +307,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Não foi possível carregar as liberações.');
         if (cancelled) return;
-        setReleasePolicyDays(data.policyDays === 8 ? 8 : 15);
+        const policyDays = Number(data.policyDays);
+        setReleasePolicyDays(Number.isFinite(policyDays) && policyDays > 0 ? policyDays : 10);
         setNextReleaseAt(data.nextReleaseAt || null);
         setReleasePendingCents(Number.isFinite(Number(data.pendingAmountCents)) ? Number(data.pendingAmountCents) : 0);
         setReleaseAvailableCents(Number.isFinite(Number(data.availableAmountCents)) ? Number(data.availableAmountCents) : 0);
@@ -331,6 +335,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Search filter query
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  useEffect(() => {
+    if (
+      selectedProductFilter !== 'all' &&
+      !platforms.some((product) => product.id === selectedProductFilter)
+    ) {
+      setSelectedProductFilter('all');
+    }
+  }, [platforms, selectedProductFilter, setSelectedProductFilter]);
+
   // Dropdown open states
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState<boolean>(false);
   const [isProductMenuOpen, setIsProductMenuOpen] = useState<boolean>(false);
@@ -341,8 +354,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   // Safe user display name
-  const displayName = userName || userProfile?.name || 'Marcos Henrique';
+  const displayName = userName || userProfile?.name || (roleMode === 'afiliado' ? 'Afiliado' : 'Empresa');
   const userInitial = displayName.trim().charAt(0).toUpperCase() || 'M';
+
+  const isApprovedTransaction = (status: unknown) =>
+    ['aprovado', 'approved', 'liberado', 'received', 'confirmed'].includes(
+      String(status || '').trim().toLowerCase()
+    );
+  const isPendingTransaction = (status: unknown) =>
+    ['pendente', 'pending', 'processing', 'em análise', 'em analise'].includes(
+      String(status || '').trim().toLowerCase()
+    );
+  const isRejectedTransaction = (status: unknown) =>
+    ['recusado', 'rejected', 'cancelado', 'cancelled', 'canceled', 'refunded', 'disputed'].includes(
+      String(status || '').trim().toLowerCase()
+    );
 
   // Real filtered sales calculation based on props and selected period
   const filteredSales = useMemo(() => {
@@ -396,15 +422,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return filteredSales.reduce((acc, curr) => {
       // Regra de negócio: O valor só aparece no dashboard se for Aprovado ou Liberado.
       // Se for Pendente, Recusado ou Cancelado, não aparece no faturamento.
-      const isApproved = curr.status === 'Aprovado' || curr.status === 'Liberado' || (curr as any).status === 'RECEIVED' || (curr as any).status === 'CONFIRMED';
-      if (!isApproved) return acc;
+      if (!isApprovedTransaction(curr.status)) return acc;
       const val = roleMode === 'afiliado' ? (curr.commissionEarned || 0) : (curr.amount || 0);
       return acc + val;
     }, 0);
   }, [filteredSales, roleMode]);
 
   const approvedSalesCount = useMemo(() => {
-    return filteredSales.filter(s => s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED').length;
+    return filteredSales.filter(s => isApprovedTransaction(s.status)).length;
   }, [filteredSales]);
 
   const averageTicket = useMemo(() => {
@@ -418,9 +443,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // 3. Cartão de crédito
   // 4. PIX automático
   const paymentMethodRows = useMemo(() => {
-    const approvedTransactions = filteredSales.filter(s => 
-      s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED'
-    );
+    const approvedTransactions = filteredSales.filter(s => isApprovedTransaction(s.status));
 
     let pixVal = 0, pixCount = 0;
     let boletoVal = 0, boletoCount = 0;
@@ -495,9 +518,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [filteredSales, roleMode]);
 
   // Transaction Statuses for Donut Chart
-  const approvedCount = useMemo(() => transactions.filter(t => t.status === 'Aprovado').length, [transactions]);
-  const pendingCount = useMemo(() => transactions.filter(t => t.status === 'Pendente').length, [transactions]);
-  const rejectedCount = useMemo(() => transactions.filter(t => t.status === 'Recusado' || t.status === 'Cancelado').length, [transactions]);
+  const approvedCount = useMemo(() => filteredSales.filter(t => isApprovedTransaction(t.status)).length, [filteredSales]);
+  const pendingCount = useMemo(() => filteredSales.filter(t => isPendingTransaction(t.status)).length, [filteredSales]);
+  const rejectedCount = useMemo(() => filteredSales.filter(t => isRejectedTransaction(t.status)).length, [filteredSales]);
   const totalCount = approvedCount + pendingCount + rejectedCount;
 
   const approvedPercent = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0;
@@ -599,7 +622,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const pointsRaw = intervals.map((inv, idx) => {
       let sum = 0;
       filteredSales.forEach((s) => {
-        if (s.status !== 'Aprovado' && s.status !== 'Liberado') return;
+        if (!isApprovedTransaction(s.status)) return;
         const d = parseTxDate(s);
         if (inv.filterFn(d)) {
           const val = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
@@ -736,6 +759,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       ? `Prazo de liberação: ${releasePolicyDays} dias`
       : 'Nenhum saldo aguardando liberação';
 
+  const affiliateDashboardMetrics = useMemo(() => {
+    const activeAffiliations = affiliations.filter((aff) =>
+      ['ativo', 'active', 'approved'].includes(String(aff.status || '').trim().toLowerCase())
+    );
+    const pendingAffiliations = affiliations.filter((aff) =>
+      ['pendente', 'pending', 'requested', 'solicitado'].includes(String(aff.status || '').trim().toLowerCase())
+    );
+    const trackedClicks = affiliations.reduce(
+      (sum, aff) => sum + Number(aff.clicks ?? aff.clicksCount ?? 0),
+      0
+    );
+    const recurringCommission = filteredSales
+      .filter((sale) => isApprovedTransaction(sale.status) && sale.saleKind === 'subscription_renewal')
+      .reduce((sum, sale) => sum + Number(sale.commissionEarned || 0), 0);
+
+    return {
+      activeAffiliations: activeAffiliations.length,
+      pendingAffiliations: pendingAffiliations.length,
+      trackedClicks,
+      recurringCommission,
+    };
+  }, [affiliations, filteredSales]);
+
   return (
     <div className="flex flex-col gap-2.5 sm:gap-6 text-white min-w-0" id="leadspay-dashboard-exact">
       {/* ========================================================================= */}
@@ -749,7 +795,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-xl sm:text-3xl inline-block origin-bottom-right hover:rotate-12 transition-transform flex-shrink-0">👋</span>
           </h1>
           <p className="text-[11px] sm:text-sm text-gray-400 mt-0.5 font-medium truncate">
-            Aqui está o resumo da sua operação hoje.
+            {roleMode === 'afiliado'
+              ? 'Aqui está o resumo das suas vendas, comissões e afiliações.'
+              : 'Aqui está o resumo da sua operação hoje.'}
           </p>
         </div>
 
@@ -760,7 +808,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Search className="w-3.5 h-3.5 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar vendas, produtos..."
+              placeholder={roleMode === 'afiliado' ? 'Buscar vendas ou produtos afiliados...' : 'Buscar vendas, produtos...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-[#070d18] hover:bg-[#0a1222] focus:bg-[#0a1222] border border-white/10 focus:border-[#a3e635]/50 rounded-full pl-9 pr-4 py-1.5 sm:py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all shadow-inner"
@@ -933,7 +981,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {displayName}
                       </div>
                       <div className="text-[11px] text-white/50 truncate">
-                        {userEmail || userProfile?.email || 'afiliado@leadspay.com'}
+                        {userEmail || userProfile?.email || 'E-mail não informado'}
                       </div>
                       <span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full mt-1 ${
                         roleMode === 'afiliado'
@@ -954,7 +1002,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
                     >
                       <User className="w-3.5 h-3.5 text-[#D9F22A]" />
-                      <span>Meu Perfil & Chave PIX</span>
+                      <span>Meu Perfil & Stripe</span>
                     </button>
 
                     <button
@@ -987,7 +1035,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
                       >
-                        <span>{roleMode === 'afiliado' ? 'Mudar para Produtor/Empresa' : 'Mudar para Afiliado'}</span>
+                        <span>{roleMode === 'afiliado' ? 'Mudar para Empresa' : 'Mudar para Afiliado'}</span>
                         <ArrowRightLeft className="w-3.5 h-3.5 text-[#D9F22A]" />
                       </button>
                     )}
@@ -1028,11 +1076,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Banner de Boas-Vindas & Comunidade para Afiliados (NUNCA exibido para empresas, startups ou produtores) */}
-      {roleMode === 'afiliado' && 
-       userProfile?.accountType !== 'empresa' && 
-       userProfile?.accountType !== 'admin' && 
-       !userProfile?.hasCompanyProfile && 
-       !userProfile?.companyId && (
+      {roleMode === 'afiliado' && (
         <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-r from-[#102419] via-[#09130d] to-[#070d18] border border-[#D9F22A]/30 p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
           <div className="flex items-start sm:items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-[#D9F22A]/15 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A] flex-shrink-0 mt-0.5 sm:mt-0">
@@ -1097,7 +1141,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <BarChart2 className="w-3.5 h-3.5" />
                   </div>
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-white/90">
-                    Visão geral de vendas
+                    {roleMode === 'afiliado' ? 'Visão geral de comissões' : 'Visão geral de vendas'}
                   </h2>
                 </div>
                 <button
@@ -1119,8 +1163,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div className="flex items-center gap-1 text-[10px] sm:text-xs text-[#a3e635] font-semibold mt-0.5 sm:mt-1">
                     <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     <span>
-                      {approvedSalesCount > 0 
-                        ? `${approvedSalesCount} vendas liquidadas` 
+                      {approvedSalesCount > 0
+                        ? roleMode === 'afiliado'
+                          ? `${approvedSalesCount} vendas com comissão`
+                          : `${approvedSalesCount} vendas liquidadas`
                         : 'Nenhuma venda no período'}
                     </span>
                   </div>
@@ -1148,7 +1194,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="text-sm sm:text-2xl font-bold text-white leading-tight">
                       {showValues ? `R$ ${(averageTicket).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••'}
                     </div>
-                    <span className="text-[10px] sm:text-xs text-gray-400 block">Ticket médio</span>
+                    <span className="text-[10px] sm:text-xs text-gray-400 block">
+                      {roleMode === 'afiliado' ? 'Comissão média' : 'Ticket médio'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1166,13 +1214,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <BarChart3 className="w-3.5 h-3.5" />
                   </div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                    Desempenho mensal de vendas
+                    {roleMode === 'afiliado' ? 'Evolução das comissões' : 'Evolução das vendas'}
                   </h3>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-white/40 hidden md:inline">
-                    Evolução ao longo do ano
+                    {roleMode === 'afiliado' ? 'Comissões confirmadas' : 'Vendas confirmadas'}
                   </span>
 
                   {/* Pills 1D, 1S, 1M, 6M, 1A */}
@@ -1359,11 +1407,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <CreditCard className="w-3.5 h-3.5" />
                 </div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                  Meios de pagamento
+                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Meios de pagamento'}
                 </h3>
               </div>
               <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
-                Taxas e conversão em tempo real
+                {roleMode === 'afiliado' ? 'Distribuição das vendas aprovadas' : 'Distribuição das vendas aprovadas'}
               </span>
             </div>
 
@@ -1373,8 +1421,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <thead>
                   <tr className="text-gray-400 uppercase tracking-wider text-[10px] border-b border-white/5">
                     <th className="pb-1.5 sm:pb-3 font-semibold">Meio de pagamento</th>
-                    <th className="pb-1.5 sm:pb-3 font-semibold text-center">Conversão</th>
-                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">Valor</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-center">Participação</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">{roleMode === 'afiliado' ? 'Comissão' : 'Valor'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -1641,88 +1689,172 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </motion.div>
 
-          {/* CARD 4: "Saúde da operação" with 2x2 Metric Grid */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 shadow-2xl backdrop-blur-xl"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-2.5 sm:mb-5">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
-                  <Activity className="w-3.5 h-3.5" />
+          {roleMode === 'afiliado' ? (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 shadow-2xl backdrop-blur-xl"
+            >
+              <div className="flex items-center justify-between mb-2.5 sm:mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
+                    <Activity className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
+                    Desempenho do afiliado
+                  </h3>
                 </div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                  Saúde da operação
-                </h3>
+                <span className="text-[10px] text-white/35">Dados reais da sua conta</span>
               </div>
 
-              <button
-                onClick={() => setShowValues(!showValues)}
-                className="text-white/40 hover:text-white transition-colors cursor-pointer p-1"
-                title={showValues ? "Ocultar valores" : "Mostrar valores"}
-              >
-                {showValues ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-              </button>
-            </div>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('minhas_afiliacoes')}
+                  className="text-left bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-[#D9F22A]/30 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all"
+                >
+                  <div className="flex items-center gap-1.5 text-white/60 mb-1 sm:mb-2">
+                    <Layers className="w-3.5 h-3.5 text-[#D9F22A]" />
+                    <span className="text-[10px] sm:text-[11px] font-medium text-gray-400">Afiliações ativas</span>
+                  </div>
+                  <div className="text-base sm:text-2xl font-black text-white font-['Syne']">
+                    {showValues ? affiliateDashboardMetrics.activeAffiliations : '•'}
+                  </div>
+                  <span className="text-[9px] sm:text-[10px] text-[#D9F22A]">Ver afiliações →</span>
+                </button>
 
-            {/* 2x2 Metric Grid */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-3.5">
-              {/* Box 1: Leads & Pendentes / Remarketing */}
-              <div 
-                onClick={() => setActiveTab('clientes')}
-                className="bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-[#D9F22A]/30 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between cursor-pointer transition-all"
-                title="Ver leads e fazer remarketing"
-              >
-                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
-                  <ShoppingCart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#38bdf8]" />
-                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Leads & Pendentes</span>
-                </div>
-                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                  {showValues ? pendingCount : '•'}
-                </div>
-                <span className="text-[9px] sm:text-[10px] text-[#D9F22A] mt-0.5 sm:mt-1 truncate hover:underline">Remarketing →</span>
-              </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('minhas_afiliacoes')}
+                  className="text-left bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-amber-400/30 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all"
+                >
+                  <div className="flex items-center gap-1.5 text-white/60 mb-1 sm:mb-2">
+                    <Clock className="w-3.5 h-3.5 text-amber-300" />
+                    <span className="text-[10px] sm:text-[11px] font-medium text-gray-400">Aguardando aprovação</span>
+                  </div>
+                  <div className="text-base sm:text-2xl font-black text-amber-300 font-['Syne']">
+                    {showValues ? affiliateDashboardMetrics.pendingAffiliations : '•'}
+                  </div>
+                  <span className="text-[9px] sm:text-[10px] text-white/40">Solicitações pendentes</span>
+                </button>
 
-              {/* Box 2: Reembolso */}
-              <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
-                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
-                  <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#38bdf8]" />
-                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Reembolso</span>
-                </div>
-                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                  {showValues ? '0%' : '•'}
-                </div>
-                <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Taxa de estornos</span>
-              </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('relatorios')}
+                  className="text-left bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-sky-400/30 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all"
+                >
+                  <div className="flex items-center gap-1.5 text-white/60 mb-1 sm:mb-2">
+                    <Eye className="w-3.5 h-3.5 text-sky-300" />
+                    <span className="text-[10px] sm:text-[11px] font-medium text-gray-400">Cliques rastreados</span>
+                  </div>
+                  <div className="text-base sm:text-2xl font-black text-sky-300 font-['Syne']">
+                    {showValues ? affiliateDashboardMetrics.trackedClicks : '•'}
+                  </div>
+                  <span className="text-[9px] sm:text-[10px] text-[#D9F22A]">Abrir relatórios →</span>
+                </button>
 
-              {/* Box 3: Chargeback */}
-              <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
-                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
-                  <Shield className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Chargeback</span>
-                </div>
-                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                  {showValues ? '0%' : '•'}
-                </div>
-                <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Contestações</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('assinaturas')}
+                  className="text-left bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-purple-400/30 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all"
+                >
+                  <div className="flex items-center gap-1.5 text-white/60 mb-1 sm:mb-2">
+                    <RotateCcw className="w-3.5 h-3.5 text-purple-300" />
+                    <span className="text-[10px] sm:text-[11px] font-medium text-gray-400">Comissão recorrente</span>
+                  </div>
+                  <div className="text-base sm:text-2xl font-black text-purple-300 font-['Syne']">
+                    {showValues
+                      ? `R$ ${affiliateDashboardMetrics.recurringCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                      : '••••'}
+                  </div>
+                  <span className="text-[9px] sm:text-[10px] text-[#D9F22A]">No período filtrado →</span>
+                </button>
               </div>
-
-              {/* Box 4: MED */}
-              <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
-                <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
-                  <Landmark className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">MED</span>
-                </div>
-                <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                  {showValues ? '0%' : '•'}
-                </div>
-                <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">BACEN</span>
-              </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          ) : (
+                      <motion.div
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-6 shadow-2xl backdrop-blur-xl"
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-2.5 sm:mb-5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
+                              <Activity className="w-3.5 h-3.5" />
+                            </div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
+                              Saúde da operação
+                            </h3>
+                          </div>
+            
+                          <button
+                            onClick={() => setShowValues(!showValues)}
+                            className="text-white/40 hover:text-white transition-colors cursor-pointer p-1"
+                            title={showValues ? "Ocultar valores" : "Mostrar valores"}
+                          >
+                            {showValues ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          </button>
+                        </div>
+            
+                        {/* 2x2 Metric Grid */}
+                        <div className="grid grid-cols-2 gap-2 sm:gap-3.5">
+                          {/* Box 1: Leads & Pendentes / Remarketing */}
+                          <div 
+                            onClick={() => setActiveTab('clientes')}
+                            className="bg-[#070e1c] hover:bg-[#0c1628] border border-white/5 hover:border-[#D9F22A]/30 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between cursor-pointer transition-all"
+                            title="Ver leads e fazer remarketing"
+                          >
+                            <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
+                              <ShoppingCart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#38bdf8]" />
+                              <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Leads & Pendentes</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
+                              {showValues ? pendingCount : '•'}
+                            </div>
+                            <span className="text-[9px] sm:text-[10px] text-[#D9F22A] mt-0.5 sm:mt-1 truncate hover:underline">Remarketing →</span>
+                          </div>
+            
+                          {/* Box 2: Reembolso */}
+                          <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
+                            <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
+                              <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#38bdf8]" />
+                              <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Reembolso</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
+                              {showValues ? '0%' : '•'}
+                            </div>
+                            <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Taxa de estornos</span>
+                          </div>
+            
+                          {/* Box 3: Chargeback */}
+                          <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
+                            <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
+                              <Shield className="w-3.5 h-3.5 text-[#38bdf8]" />
+                              <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Chargeback</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
+                              {showValues ? '0%' : '•'}
+                            </div>
+                            <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Contestações</span>
+                          </div>
+            
+                          {/* Box 4: MED */}
+                          <div className="bg-[#070e1c] border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between">
+                            <div className="flex items-center gap-1 sm:gap-1.5 text-white/60 mb-1 sm:mb-2">
+                              <Landmark className="w-3.5 h-3.5 text-[#38bdf8]" />
+                              <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">MED</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
+                              {showValues ? '0%' : '•'}
+                            </div>
+                            <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">BACEN</span>
+                          </div>
+                        </div>
+                      </motion.div>
+          )}
 
         </div>
 

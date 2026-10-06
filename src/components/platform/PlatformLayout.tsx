@@ -650,6 +650,19 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return affiliations.map(a => a.affiliateCode || a.affiliate_code).filter(Boolean) as string[];
   }, [affiliations]);
 
+  const affiliateDashboardPlans = useMemo(() => {
+    const linkedPlanIds = new Set(
+      affiliations
+        .filter((aff) => {
+          const status = String(aff.status || '').trim().toLowerCase();
+          return ['ativo', 'active', 'approved', 'encerrada', 'ended', 'cancelled', 'canceled'].includes(status);
+        })
+        .map((aff) => String(aff.planId || aff.plan_id || '').trim())
+        .filter(Boolean)
+    );
+    return plans.filter((plan) => linkedPlanIds.has(plan.id));
+  }, [plans, affiliations]);
+
   // Companies owned strictly by THIS user
   const myCompanies = useMemo(() => {
     if (!effectiveUserId) return [];
@@ -1882,7 +1895,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   userProfile={userProfile}
                   transactions={userVisibleTransactions}
                   paymentStats={userPaymentStats}
-                  platforms={roleMode === 'empresa' && !isSuperAdmin ? myCompanyPlans : plans}
+                  platforms={
+                    roleMode === 'afiliado'
+                      ? affiliateDashboardPlans
+                      : roleMode === 'empresa' && !isSuperAdmin
+                        ? myCompanyPlans
+                        : plans
+                  }
+                  affiliations={roleMode === 'afiliado' ? affiliations : []}
                   setActiveTab={setActiveTab}
                   onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
                   onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
@@ -1894,7 +1914,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setSelectedProductFilter={setSelectedProductFilter}
                   selectedTypeFilter={selectedTypeFilter}
                   setSelectedTypeFilter={setSelectedTypeFilter}
-                  userName={userProfile?.name || currentUser?.displayName || 'Marcos Henrique'}
+                  userName={userProfile?.name || currentUser?.displayName || (roleMode === 'afiliado' ? 'Afiliado' : 'Empresa')}
                   userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
                   userEmail={userEmail || currentUser?.email || undefined}
                   onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
