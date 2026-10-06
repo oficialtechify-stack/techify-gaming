@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,6 +8,8 @@ import {
   Cpu,
   Filter,
   Gamepad2,
+  Brain,
+  Laptop,
   Loader2,
   MessageCircle,
   Pause,
@@ -19,6 +21,8 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserPlus,
+  Users,
   UserRoundCog,
   X,
   Zap,
@@ -27,12 +31,61 @@ import { useAuth } from '../../context/AuthContext';
 import { PixelOfficeWorld } from './PixelOfficeWorld';
 import '../../styles/ai-pixel-office.css';
 
+type WorkerBrain = {
+  workerId?: string;
+  mood?: string;
+  focus?: string;
+  currentIntent?: string;
+  lastThought?: string;
+  updatedAt?: string;
+};
+
 type Worker = {
   id: string;
   name: string;
   role: string;
   specialty: string;
   palette: number;
+  brain?: WorkerBrain | null;
+};
+
+type OfficeAccess = {
+  uid: string;
+  email?: string | null;
+  officeRole: 'ceo' | 'designer' | 'member';
+  isOfficeAdmin: boolean;
+  canManageTeam?: boolean;
+  canAssignHumanTasks?: boolean;
+  canUseAi?: boolean;
+};
+
+type OfficeMember = {
+  id?: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  officeRole: 'ceo' | 'designer' | 'member';
+  title: string;
+  palette: number;
+  active: boolean;
+  deskId: string;
+  avatar?: string | null;
+  position?: { x: number; y: number; direction?: string; updatedAt?: string } | null;
+};
+
+type HumanTaskStatus = 'todo' | 'working' | 'review' | 'completed' | 'blocked';
+
+type HumanTask = {
+  id: string;
+  assigneeUid: string;
+  title: string;
+  description: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  status: HumanTaskStatus;
+  response?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
 };
 
 type TaskStatus =
@@ -141,6 +194,9 @@ export const FuncionariosIaView: React.FC = () => {
   const { currentUser } = useAuth();
   const [workers, setWorkers] = useState<Worker[]>(FALLBACK_WORKERS);
   const [tasks, setTasks] = useState<AiTask[]>([]);
+  const [access, setAccess] = useState<OfficeAccess | null>(null);
+  const [officeMembers, setOfficeMembers] = useState<OfficeMember[]>([]);
+  const [humanTasks, setHumanTasks] = useState<HumanTask[]>([]);
   const [engine, setEngine] = useState<EngineInfo>({
     connected: false,
     mode: 'supervised',
@@ -164,6 +220,25 @@ export const FuncionariosIaView: React.FC = () => {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [thinkingWorkerId, setThinkingWorkerId] = useState<string | null>(null);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isComputerOpen, setIsComputerOpen] = useState(false);
+  const [selectedHumanId, setSelectedHumanId] = useState<string | null>(null);
+  const [savingMember, setSavingMember] = useState(false);
+  const [savingHumanTask, setSavingHumanTask] = useState(false);
+  const [memberForm, setMemberForm] = useState({
+    email: '',
+    displayName: '',
+    officeRole: 'designer' as 'designer' | 'member',
+    title: 'Designer',
+    palette: 3,
+  });
+  const [humanTaskForm, setHumanTaskForm] = useState({
+    assigneeUid: '',
+    title: '',
+    description: '',
+    priority: 'normal' as HumanTask['priority'],
+  });
   const [tick, setTick] = useState(0);
   const [pcTick, setPcTick] = useState(0);
 
@@ -194,36 +269,43 @@ export const FuncionariosIaView: React.FC = () => {
   }, [chatMessages, chatSending, isChatOpen]);
 
   const authHeaders = async () => {
-    if (!currentUser) throw new Error('Sessão do administrador não encontrada.');
+    if (!currentUser) throw new Error('Sessão do LeadsPay Office não encontrada.');
     return {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${await currentUser.getIdToken()}`,
     };
   };
 
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!currentUser) return;
-    setLoading(true);
-    setError('');
+    if (!silent) setLoading(true);
+    if (!silent) setError('');
     try {
-      const response = await fetch('/api/admin/ai-workers', {
+      const response = await fetch('/api/office/workers', {
         headers: await authHeaders(),
         cache: 'no-store',
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os Funcionários IA.');
-      setWorkers(Array.isArray(data.workers) && data.workers.length ? data.workers : FALLBACK_WORKERS);
+      if (!response.ok) throw new Error(data.error || 'Não foi possível carregar o LeadsPay Office.');
+      const workerList = Array.isArray(data.workers) && data.workers.length ? data.workers : FALLBACK_WORKERS;
+      const brains = data.brains && typeof data.brains === 'object' ? data.brains : {};
+      setWorkers(workerList.map((worker: Worker) => ({ ...worker, brain: brains[worker.id] || worker.brain || null })));
       setTasks(Array.isArray(data.tasks) ? data.tasks : []);
+      setOfficeMembers(Array.isArray(data.officeMembers) ? data.officeMembers : []);
+      setHumanTasks(Array.isArray(data.humanTasks) ? data.humanTasks : []);
+      if (data.access) setAccess(data.access);
       if (data.executionEngine) setEngine(data.executionEngine);
     } catch (err: any) {
-      setError(err?.message || 'Não foi possível carregar o escritório.');
+      if (!silent) setError(err?.message || 'Não foi possível carregar o escritório.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     void load();
+    const interval = window.setInterval(() => void load(true), 6000);
+    return () => window.clearInterval(interval);
   }, [currentUser?.uid]);
 
   const runTask = async (taskId: string) => {
@@ -238,7 +320,7 @@ export const FuncionariosIaView: React.FC = () => {
 
     const visualStartedAt = Date.now();
     try {
-      const response = await fetch('/api/admin/ai-workers', {
+      const response = await fetch('/api/office/workers', {
         method: 'POST',
         headers: await authHeaders(),
         body: JSON.stringify({ action: 'run-task', taskId }),
@@ -266,7 +348,7 @@ export const FuncionariosIaView: React.FC = () => {
     setSavingTask(true);
     setError('');
     try {
-      const response = await fetch('/api/admin/ai-workers', {
+      const response = await fetch('/api/office/workers', {
         method: 'POST',
         headers: await authHeaders(),
         body: JSON.stringify({ ...form, autoRun: false }),
@@ -290,7 +372,7 @@ export const FuncionariosIaView: React.FC = () => {
   const updateTask = async (taskId: string, status: TaskStatus, progress?: number) => {
     setError('');
     try {
-      const response = await fetch('/api/admin/ai-workers', {
+      const response = await fetch('/api/office/workers', {
         method: 'PATCH',
         headers: await authHeaders(),
         body: JSON.stringify({ taskId, status, ...(progress === undefined ? {} : { progress }) }),
@@ -307,7 +389,7 @@ export const FuncionariosIaView: React.FC = () => {
     if (!window.confirm('Excluir esta tarefa do histórico?')) return;
     setError('');
     try {
-      const response = await fetch('/api/admin/ai-workers', {
+      const response = await fetch('/api/office/workers', {
         method: 'DELETE',
         headers: await authHeaders(),
         body: JSON.stringify({ taskId }),
@@ -326,7 +408,7 @@ export const FuncionariosIaView: React.FC = () => {
     setChatLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/admin/ai-workers?workerId=${encodeURIComponent(workerId)}`, {
+      const response = await fetch(`/api/office/workers?workerId=${encodeURIComponent(workerId)}`, {
         headers: await authHeaders(),
         cache: 'no-store',
       });
@@ -364,7 +446,7 @@ export const FuncionariosIaView: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch('/api/admin/ai-workers', {
+      const response = await fetch('/api/office/workers', {
         method: 'POST',
         headers: await authHeaders(),
         body: JSON.stringify({
@@ -400,7 +482,7 @@ export const FuncionariosIaView: React.FC = () => {
     setSavingName(true);
     setError('');
     try {
-      const response = await fetch('/api/admin/ai-workers', {
+      const response = await fetch('/api/office/workers', {
         method: 'POST',
         headers: await authHeaders(),
         body: JSON.stringify({
@@ -418,6 +500,139 @@ export const FuncionariosIaView: React.FC = () => {
     } finally {
       setSavingName(false);
     }
+  };
+
+  const askWorkerToThink = async (workerId: string) => {
+    if (thinkingWorkerId || !engine.connected) return;
+    setThinkingWorkerId(workerId);
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'think', workerId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'O funcionário não conseguiu organizar o pensamento agora.');
+      setWorkers((current) => current.map((worker) =>
+        worker.id === workerId ? { ...worker, brain: data.brain || worker.brain } : worker
+      ));
+    } catch (err: any) {
+      setError(err?.message || 'O funcionário não conseguiu pensar agora.');
+    } finally {
+      setThinkingWorkerId(null);
+    }
+  };
+
+  const addOfficeMember = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!memberForm.email.trim() || savingMember) return;
+    setSavingMember(true);
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'add-office-member', ...memberForm }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível adicionar essa pessoa.');
+      setOfficeMembers(Array.isArray(data.members) ? data.members : officeMembers);
+      setMemberForm({ email: '', displayName: '', officeRole: 'designer', title: 'Designer', palette: 3 });
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível adicionar essa pessoa.');
+    } finally {
+      setSavingMember(false);
+    }
+  };
+
+  const toggleMember = async (member: OfficeMember, active: boolean) => {
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'update-office-member', userId: member.userId, active }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar o acesso.');
+      setOfficeMembers(Array.isArray(data.members) ? data.members : officeMembers);
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível atualizar o acesso.');
+    }
+  };
+
+  const createHumanTask = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!humanTaskForm.assigneeUid || humanTaskForm.title.trim().length < 3 || savingHumanTask) return;
+    setSavingHumanTask(true);
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'create-human-task', ...humanTaskForm }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível enviar a demanda.');
+      if (data.task) setHumanTasks((current) => [data.task, ...current]);
+      setHumanTaskForm((current) => ({ ...current, title: '', description: '', priority: 'normal' }));
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível enviar a demanda.');
+    } finally {
+      setSavingHumanTask(false);
+    }
+  };
+
+  const updateHumanTask = async (
+    taskId: string,
+    status: HumanTaskStatus,
+    responseText?: string,
+  ) => {
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          action: 'update-human-task',
+          taskId,
+          status,
+          response: responseText || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar a demanda.');
+      if (data.task) {
+        setHumanTasks((current) => current.map((task) => task.id === taskId ? data.task : task));
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível atualizar a demanda.');
+    }
+  };
+
+  const sendPresence = useCallback((position: { x: number; y: number; direction: 'up' | 'down' | 'left' | 'right' }) => {
+    if (!currentUser) return;
+    void currentUser.getIdToken().then((token) =>
+      fetch('/api/office/workers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'update-presence', ...position }),
+      })
+    ).catch(() => undefined);
+  }, [currentUser?.uid]);
+
+  const openMyComputer = (ownerUid?: string) => {
+    if (access?.isOfficeAdmin && ownerUid && ownerUid !== currentUser?.uid) {
+      setSelectedHumanId(ownerUid);
+      setHumanTaskForm((current) => ({ ...current, assigneeUid: ownerUid }));
+    } else {
+      setSelectedHumanId(currentUser?.uid || null);
+    }
+    setIsComputerOpen(true);
   };
 
   const activeTaskForWorker = (workerId: string) =>
@@ -438,6 +653,11 @@ export const FuncionariosIaView: React.FC = () => {
   const selectedWorkerTasks = tasks.filter((task) => task.workerId === selectedWorker?.id);
   const scopedTasks = taskScope === 'selected' ? selectedWorkerTasks : tasks;
   const visibleTasks = scopedTasks.filter((task) => filter === 'all' || task.status === filter);
+  const currentOfficeMember = officeMembers.find((member) => member.userId === currentUser?.uid) || null;
+  const selectedHuman = officeMembers.find((member) => member.userId === selectedHumanId) || currentOfficeMember;
+  const computerTasks = access?.isOfficeAdmin
+    ? (selectedHuman?.userId ? humanTasks.filter((task) => task.assigneeUid === selectedHuman.userId) : humanTasks)
+    : humanTasks.filter((task) => task.assigneeUid === currentUser?.uid);
 
   const selectWorker = (workerId: string) => {
     const nextTask = activeTaskForWorker(workerId) ||
@@ -462,11 +682,11 @@ export const FuncionariosIaView: React.FC = () => {
         <div>
           <div className="ai-staff-eyebrow">
             <Gamepad2 className="h-4 w-4" />
-            PIXEL OFFICE · ADMIN
+            LEADSPAY OFFICE · {access?.officeRole === 'ceo' ? 'CEO' : access?.officeRole === 'designer' ? 'DESIGNER' : 'EQUIPE'}
           </div>
-          <h1>Funcionários IA</h1>
+          <h1>LeadsPay Office</h1>
           <p>
-            Seu escritório digital da LeadsPay. Crie tarefas, distribua responsabilidades e acompanhe cada funcionário visualmente.
+            Um escritório jogável para você, sua equipe humana e os funcionários IA trabalharem no mesmo ambiente.
           </p>
         </div>
 
@@ -475,13 +695,23 @@ export const FuncionariosIaView: React.FC = () => {
             <span className="ai-engine-dot" />
             {engine.connected ? 'Executor conectado' : 'Modo supervisionado'}
           </div>
+          <button type="button" className="ai-staff-secondary" onClick={() => setIsComputerOpen(true)}>
+            <Laptop className="h-4 w-4" />
+            Meu computador
+          </button>
+          {access?.canManageTeam && (
+            <button type="button" className="ai-staff-secondary" onClick={() => setIsTeamModalOpen(true)}>
+              <Users className="h-4 w-4" />
+              Equipe humana
+            </button>
+          )}
           <button type="button" className="ai-staff-secondary" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
           <button type="button" className="ai-staff-primary" onClick={() => openTaskFor()}>
             <Plus className="h-4 w-4" />
-            Nova tarefa
+            Nova tarefa IA
           </button>
         </div>
       </section>
@@ -549,10 +779,22 @@ export const FuncionariosIaView: React.FC = () => {
           <PixelOfficeWorld
             workers={workers}
             tasks={tasks}
+            officeMembers={officeMembers}
+            currentUserId={currentUser?.uid || null}
             selectedWorkerId={selectedWorkerId}
             tick={tick}
             pcTick={pcTick}
             onSelectWorker={selectWorker}
+            onSelectHuman={(userId) => {
+              setSelectedHumanId(userId);
+              setHumanTaskForm((current) => ({ ...current, assigneeUid: userId }));
+              setIsComputerOpen(true);
+            }}
+            onPlayerMove={sendPresence}
+            onInteract={(interaction) => {
+              if (interaction.type === 'computer') openMyComputer(interaction.ownerUid);
+              if (interaction.type === 'meeting') setIsTeamModalOpen(access?.isOfficeAdmin === true);
+            }}
           />
         </div>
 
@@ -685,13 +927,26 @@ export const FuncionariosIaView: React.FC = () => {
             ) : (
               <div className="ai-worker-name-line">
                 <h2>{selectedWorker?.name}</h2>
-                <button type="button" onClick={beginRename} title="Trocar nome">
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
+                {access?.isOfficeAdmin && (
+                  <button type="button" onClick={beginRename} title="Trocar nome">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             )}
             <strong>{selectedWorker?.role}</strong>
             <p>{selectedWorker?.specialty}</p>
+            {selectedWorker?.brain && (
+              <div className="ai-worker-brain-card">
+                <div>
+                  <Brain className="h-3.5 w-3.5" />
+                  <strong>{selectedWorker.brain.mood || 'tranquilo'}</strong>
+                  <span>· {selectedWorker.brain.focus || 'LeadsPay'}</span>
+                </div>
+                <p>{selectedWorker.brain.lastThought || 'Estou disponível para ajudar.'}</p>
+                <small>{selectedWorker.brain.currentIntent || 'Aguardando o próximo passo.'}</small>
+              </div>
+            )}
           </div>
         </div>
 
@@ -700,6 +955,15 @@ export const FuncionariosIaView: React.FC = () => {
             <small>Tarefas deste funcionário</small>
             <strong>{selectedWorkerTasks.length}</strong>
           </div>
+          <button
+            type="button"
+            className="ai-staff-secondary"
+            disabled={!engine.connected || thinkingWorkerId === selectedWorker?.id}
+            onClick={() => selectedWorker && void askWorkerToThink(selectedWorker.id)}
+          >
+            {thinkingWorkerId === selectedWorker?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+            Pensar
+          </button>
           <button type="button" className="ai-staff-secondary ai-chat-button" onClick={() => selectedWorker && openChat(selectedWorker.id)}>
             <MessageCircle className="h-4 w-4" />
             Conversar
@@ -869,12 +1133,321 @@ export const FuncionariosIaView: React.FC = () => {
                 Cancelar
               </button>
             )}
-            <button type="button" className="delete-task" onClick={() => void deleteTask(selectedTask.id)}>
-              <Trash2 className="h-4 w-4" />
-              Excluir
-            </button>
+            {access?.isOfficeAdmin && (
+              <button type="button" className="delete-task" onClick={() => void deleteTask(selectedTask.id)}>
+                <Trash2 className="h-4 w-4" />
+                Excluir
+              </button>
+            )}
           </div>
         </section>
+      )}
+
+      {isTeamModalOpen && access?.isOfficeAdmin && (
+        <div className="ai-chat-backdrop" onMouseDown={() => setIsTeamModalOpen(false)}>
+          <section className="office-team-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+            <header className="office-modal-head">
+              <div>
+                <span><Users className="h-4 w-4" /></span>
+                <div>
+                  <small>EQUIPE HUMANA</small>
+                  <h2>Quem trabalha no LeadsPay Office</h2>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsTeamModalOpen(false)}><X className="h-4 w-4" /></button>
+            </header>
+
+            <div className="office-team-content">
+              <form className="office-member-form" onSubmit={addOfficeMember}>
+                <div className="office-form-title">
+                  <UserPlus className="h-4 w-4" />
+                  <div>
+                    <strong>Adicionar pessoa</strong>
+                    <span>Ela precisa já ter uma conta na LeadsPay.</span>
+                  </div>
+                </div>
+
+                <label>
+                  E-mail da conta LeadsPay
+                  <input
+                    type="email"
+                    value={memberForm.email}
+                    onChange={(event) => setMemberForm((current) => ({ ...current, email: event.target.value }))}
+                    placeholder="designer@exemplo.com"
+                    required
+                  />
+                </label>
+
+                <div className="office-member-grid">
+                  <label>
+                    Nome no escritório
+                    <input
+                      value={memberForm.displayName}
+                      onChange={(event) => setMemberForm((current) => ({ ...current, displayName: event.target.value }))}
+                      placeholder="Nome da designer"
+                    />
+                  </label>
+                  <label>
+                    Função
+                    <select
+                      value={memberForm.officeRole}
+                      onChange={(event) => {
+                        const role = event.target.value as 'designer' | 'member';
+                        setMemberForm((current) => ({
+                          ...current,
+                          officeRole: role,
+                          title: role === 'designer' ? 'Designer' : current.title || 'Equipe LeadsPay',
+                        }));
+                      }}
+                    >
+                      <option value="designer">Designer</option>
+                      <option value="member">Outro membro</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="office-member-grid">
+                  <label>
+                    Cargo
+                    <input
+                      value={memberForm.title}
+                      onChange={(event) => setMemberForm((current) => ({ ...current, title: event.target.value }))}
+                      placeholder="Designer gráfico"
+                    />
+                  </label>
+                  <label>
+                    Personagem
+                    <select
+                      value={memberForm.palette}
+                      onChange={(event) => setMemberForm((current) => ({ ...current, palette: Number(event.target.value) }))}
+                    >
+                      {[0,1,2,3,4,5].map((palette) => (
+                        <option key={palette} value={palette}>Visual {palette + 1}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <button type="submit" className="ai-staff-primary" disabled={savingMember || !memberForm.email.trim()}>
+                  {savingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                  {savingMember ? 'Adicionando...' : 'Adicionar ao escritório'}
+                </button>
+              </form>
+
+              <div className="office-member-list">
+                <div className="office-list-title">
+                  <strong>Membros</strong>
+                  <span>{officeMembers.length}</span>
+                </div>
+                {officeMembers.map((member) => (
+                  <article key={member.userId} className="office-member-card">
+                    <span
+                      className="pixel-agent-sprite office-member-sprite"
+                      style={{
+                        backgroundImage: `url('/pixel-agents/assets/characters/char_${member.palette}.png')`,
+                        backgroundPosition: `${-48}px 0px`,
+                      }}
+                    />
+                    <div>
+                      <strong>{member.displayName}</strong>
+                      <span>{member.officeRole === 'ceo' ? 'CEO' : member.title}</span>
+                      <small>{member.email}</small>
+                    </div>
+                    {member.officeRole !== 'ceo' && (
+                      <button
+                        type="button"
+                        className="office-member-disable"
+                        onClick={() => void toggleMember(member, false)}
+                      >
+                        Desativar
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {isComputerOpen && (
+        <div className="ai-chat-backdrop" onMouseDown={() => setIsComputerOpen(false)}>
+          <section className="office-computer-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+            <header className="office-modal-head">
+              <div>
+                <span><Laptop className="h-4 w-4" /></span>
+                <div>
+                  <small>ESTAÇÃO DE TRABALHO</small>
+                  <h2>{access?.isOfficeAdmin && selectedHuman ? `Computador de ${selectedHuman.displayName}` : 'Meu computador'}</h2>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsComputerOpen(false)}><X className="h-4 w-4" /></button>
+            </header>
+
+            <div className="office-computer-content">
+              {access?.isOfficeAdmin && (
+                <aside className="office-computer-sidebar">
+                  <strong>Pessoa</strong>
+                  <button
+                    type="button"
+                    className={!selectedHumanId ? 'active' : ''}
+                    onClick={() => {
+                      setSelectedHumanId(null);
+                      setHumanTaskForm((current) => ({ ...current, assigneeUid: '' }));
+                    }}
+                  >
+                    Toda a equipe
+                  </button>
+                  {officeMembers.filter((member) => member.officeRole !== 'ceo').map((member) => (
+                    <button
+                      type="button"
+                      key={member.userId}
+                      className={selectedHuman?.userId === member.userId ? 'active' : ''}
+                      onClick={() => {
+                        setSelectedHumanId(member.userId);
+                        setHumanTaskForm((current) => ({ ...current, assigneeUid: member.userId }));
+                      }}
+                    >
+                      {member.displayName}
+                      <small>{member.title}</small>
+                    </button>
+                  ))}
+                </aside>
+              )}
+
+              <main className="office-computer-main">
+                {access?.canAssignHumanTasks && (
+                  <form className="office-demand-form" onSubmit={createHumanTask}>
+                    <div className="office-demand-title">
+                      <strong>Nova demanda humana</strong>
+                      <span>Envie uma tarefa para sua designer ou outro membro real da equipe.</span>
+                    </div>
+
+                    {!selectedHuman?.userId && (
+                      <select
+                        value={humanTaskForm.assigneeUid}
+                        onChange={(event) => setHumanTaskForm((current) => ({ ...current, assigneeUid: event.target.value }))}
+                        required
+                      >
+                        <option value="">Escolha a pessoa</option>
+                        {officeMembers.filter((member) => member.officeRole !== 'ceo').map((member) => (
+                          <option key={member.userId} value={member.userId}>{member.displayName} · {member.title}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    <div className="office-demand-grid">
+                      <input
+                        value={humanTaskForm.title}
+                        onChange={(event) => setHumanTaskForm((current) => ({ ...current, title: event.target.value }))}
+                        placeholder="Título da demanda"
+                        maxLength={140}
+                        required
+                      />
+                      <select
+                        value={humanTaskForm.priority}
+                        onChange={(event) => setHumanTaskForm((current) => ({ ...current, priority: event.target.value as HumanTask['priority'] }))}
+                      >
+                        <option value="low">Baixa</option>
+                        <option value="normal">Normal</option>
+                        <option value="high">Alta</option>
+                        <option value="urgent">Urgente</option>
+                      </select>
+                    </div>
+
+                    <textarea
+                      rows={3}
+                      value={humanTaskForm.description}
+                      onChange={(event) => setHumanTaskForm((current) => ({ ...current, description: event.target.value }))}
+                      placeholder="Explique o que precisa ser feito, arquivos, referências e resultado esperado."
+                      required
+                    />
+
+                    <button
+                      type="submit"
+                      className="ai-staff-primary"
+                      disabled={
+                        savingHumanTask ||
+                        !(selectedHuman?.userId || humanTaskForm.assigneeUid) ||
+                        humanTaskForm.title.trim().length < 3 ||
+                        humanTaskForm.description.trim().length < 5
+                      }
+                      onClick={() => {
+                        if (selectedHuman?.userId) {
+                          setHumanTaskForm((current) => ({ ...current, assigneeUid: selectedHuman.userId }));
+                        }
+                      }}
+                    >
+                      {savingHumanTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      Enviar demanda
+                    </button>
+                  </form>
+                )}
+
+                <div className="office-human-task-list">
+                  <div className="office-list-title">
+                    <strong>{access?.isOfficeAdmin ? 'Demandas' : 'Minhas demandas'}</strong>
+                    <span>{computerTasks.length}</span>
+                  </div>
+
+                  {computerTasks.length === 0 ? (
+                    <div className="office-computer-empty">
+                      <ClipboardList className="h-6 w-6" />
+                      <strong>Nenhuma demanda</strong>
+                      <span>{access?.isOfficeAdmin ? 'Escolha uma pessoa e envie a primeira demanda.' : 'Quando o CEO enviar uma demanda, ela aparece aqui.'}</span>
+                    </div>
+                  ) : (
+                    computerTasks.map((task) => {
+                      const assignee = officeMembers.find((member) => member.userId === task.assigneeUid);
+                      return (
+                        <article key={task.id} className={`office-human-task status-${task.status}`}>
+                          <div className="office-human-task-top">
+                            <span>{task.status === 'todo' ? 'A fazer' : task.status === 'working' ? 'Trabalhando' : task.status === 'review' ? 'Em revisão' : task.status === 'blocked' ? 'Bloqueada' : 'Concluída'}</span>
+                            <small>{PRIORITY_LABEL[task.priority]}</small>
+                          </div>
+                          <h3>{task.title}</h3>
+                          {access?.isOfficeAdmin && <em>{assignee?.displayName || 'Equipe'}</em>}
+                          <p>{task.description}</p>
+                          {task.response && <blockquote>{task.response}</blockquote>}
+                          <small>{fmtDate(task.updatedAt || task.createdAt)}</small>
+
+                          <div className="office-human-task-actions">
+                            {task.status === 'todo' && (
+                              <button type="button" onClick={() => void updateHumanTask(task.id, 'working')}>Iniciar</button>
+                            )}
+                            {task.status === 'working' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const note = window.prompt('Escreva uma atualização ou o que foi feito:') || '';
+                                    void updateHumanTask(task.id, 'review', note);
+                                  }}
+                                >
+                                  Enviar para revisão
+                                </button>
+                                <button type="button" onClick={() => void updateHumanTask(task.id, 'blocked')}>Marcar bloqueio</button>
+                              </>
+                            )}
+                            {task.status === 'blocked' && (
+                              <button type="button" onClick={() => void updateHumanTask(task.id, 'working')}>Retomar</button>
+                            )}
+                            {task.status === 'review' && access?.isOfficeAdmin && (
+                              <>
+                                <button type="button" onClick={() => void updateHumanTask(task.id, 'completed')}>Aprovar</button>
+                                <button type="button" onClick={() => void updateHumanTask(task.id, 'working')}>Pedir ajuste</button>
+                              </>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              </main>
+            </div>
+          </section>
+        </div>
       )}
 
       {isChatOpen && selectedWorker && (

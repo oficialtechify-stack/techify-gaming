@@ -174,6 +174,46 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase().trim();
   const isSuperAdmin = isSuperAdminEmail(userEmail);
+  const [hasOfficeAccess, setHasOfficeAccess] = useState<boolean>(isSuperAdmin);
+  const [officeAccessRole, setOfficeAccessRole] = useState<'ceo' | 'designer' | 'member' | null>(isSuperAdmin ? 'ceo' : null);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setHasOfficeAccess(false);
+      setOfficeAccessRole(null);
+      return;
+    }
+    if (isSuperAdmin) {
+      setHasOfficeAccess(true);
+      setOfficeAccessRole('ceo');
+      return;
+    }
+
+    let cancelled = false;
+    currentUser.getIdToken()
+      .then((token) => fetch('/api/office/workers?accessOnly=1', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      }))
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Sem acesso ao Office');
+        if (!cancelled) {
+          setHasOfficeAccess(true);
+          setOfficeAccessRole(data.access?.officeRole || 'member');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHasOfficeAccess(false);
+          setOfficeAccessRole(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.uid, isSuperAdmin]);
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -1267,6 +1307,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Ativo' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
+    ...(hasOfficeAccess ? [
+      { id: 'funcionarios_ia' as PlatformTab, label: 'LeadsPay Office', icon: Gamepad2, badge: officeAccessRole === 'designer' ? 'Designer' : 'Equipe' }
+    ] : []),
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
       { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
@@ -1281,6 +1324,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
+    ...(hasOfficeAccess ? [
+      { id: 'funcionarios_ia' as PlatformTab, label: 'LeadsPay Office', icon: Gamepad2, badge: officeAccessRole === 'designer' ? 'Designer' : 'Equipe' }
+    ] : []),
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
       { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
@@ -1289,7 +1335,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const adminNavItems = [
     { id: 'database' as PlatformTab, label: 'Painel Global LeadsPay', icon: Database, badge: 'Master' },
-    { id: 'funcionarios_ia' as PlatformTab, label: 'Funcionários IA', icon: Gamepad2, badge: 'Pixel Office' },
+    { id: 'funcionarios_ia' as PlatformTab, label: 'LeadsPay Office', icon: Gamepad2, badge: 'HQ' },
     { id: 'vendas' as PlatformTab, label: 'Todas as Vendas', icon: Receipt },
     { id: 'financeiro' as PlatformTab, label: 'Financeiro Global', icon: Wallet },
     { id: 'saques' as PlatformTab, label: 'Saques da Plataforma', icon: ArrowUpRight },
@@ -1955,7 +2001,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
 
-          {activeTab === 'funcionarios_ia' && roleMode === 'admin' && isSuperAdmin && (
+          {activeTab === 'funcionarios_ia' && ((roleMode === 'admin' && isSuperAdmin) || hasOfficeAccess) && (
             <FuncionariosIaView />
           )}
 

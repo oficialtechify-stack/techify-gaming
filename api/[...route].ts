@@ -253,6 +253,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     case 'admin/summary':
       return adminSummaryHandler(req as any, res as any);
     case 'admin/ai-workers':
+    case 'office/workers':
       return adminAiWorkersHandler(req as any, res as any);
     case 'admin/entity-action':
     case 'admin/approve-company':
