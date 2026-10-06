@@ -36,6 +36,7 @@ export const PlanLinksModal: React.FC<PlanLinksModalProps> = ({
   const planTarget = plan.slug || plan.id;
   const checkoutUrl = `${currentOrigin}/plan/${planTarget}`;
   const salesPageUrl = `${currentOrigin}/plan/${planTarget}`;
+  const embedButtonHtml = `<a href="${checkoutUrl}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`;
 
   const copyToClipboard = (text: string, linkType: string) => {
     navigator.clipboard.writeText(text);
@@ -184,12 +185,12 @@ export const PlanLinksModal: React.FC<PlanLinksModalProps> = ({
               <textarea
                 readOnly
                 rows={2}
-                value={`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`}
+                value={embedButtonHtml}
                 className="flex-1 bg-[#050811] border border-white/10 rounded-xl p-2.5 text-[11px] text-white/90 font-mono select-all resize-none"
               />
               <button
                 type="button"
-                onClick={() => copyToClipboard(`<a href="https://leadspay.app/pay/${plan.id}" class="btn-comprar" style="background: #84CC16; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">Comprar Agora</a>`, 'embed-btn')}
+                onClick={() => copyToClipboard(embedButtonHtml, 'embed-btn')}
                 className="bg-lime-500 hover:bg-lime-400 text-black font-black px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 self-stretch"
               >
                 {copiedLink === 'embed-btn' ? <Check className="w-4 h-4 stroke-[3] text-black" /> : <Copy className="w-4 h-4" />}
