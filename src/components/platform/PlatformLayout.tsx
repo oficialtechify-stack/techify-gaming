@@ -13,7 +13,8 @@ import {
 } from '../../types/platform';
 import { 
   INITIAL_USER_PROFILE, 
-  INITIAL_PAYMENT_STATS 
+  INITIAL_PAYMENT_STATS,
+  isSuperAdminEmail
 } from '../../data/platformData';
 import { 
   seedFirestoreIfEmpty,
@@ -127,11 +128,6 @@ interface PlatformLayoutProps {
   onBackToHome: () => void;
 }
 
-const ADMIN_EMAILS = [
-  'rickmarketing81@gmail.com',
-  'leadspay.oficial@gmail.com'
-];
-
 export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) => {
   const { currentUser, userProfile, userRole, setUserRole, logout } = useAuth();
 
@@ -175,7 +171,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase().trim();
-  const isSuperAdmin = ADMIN_EMAILS.includes(userEmail);
+  const isSuperAdmin = isSuperAdminEmail(userEmail);
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -345,8 +341,24 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   }, [isAnyModalOrDrawerOpen]);
 
+  // A conta oficial da LeadsPay é exclusivamente global/admin.
+  // Ela não entra como empresa ou afiliado comum.
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+
+    if (roleMode !== 'admin') {
+      setRoleMode('admin');
+      setActiveTab('database');
+    }
+    if (userRole !== 'admin') {
+      setUserRole('admin');
+    }
+  }, [isSuperAdmin, roleMode, userRole, setUserRole]);
+
   // Role Security & Tab Guard
   useEffect(() => {
+    if (isSuperAdmin) return;
+
     if (isMobileScreen) {
       if (roleMode !== 'afiliado') {
         setRoleMode('afiliado');
@@ -356,7 +368,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     if (userRole && userRole !== roleMode) {
       setRoleMode(userRole);
     }
-  }, [userRole, isMobileScreen]);
+  }, [userRole, isMobileScreen, isSuperAdmin, roleMode]);
 
   useEffect(() => {
     if ((activeTab === 'database' || activeTab === 'modal_backgrounds') && !isSuperAdmin) {
@@ -715,7 +727,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   // Every user/account is unique and receives only its OWN sales!
   // - Affiliate: only sees sales where affiliateId matches, or affiliateCode matches, or utmSource matches their code
   // - Company: only sees sales where companyId matches their owned companies or planId matches their plans or companyOwnerId matches
-  // - Admin (Rick): sees all sales if in admin role mode
+  // - Admin global LeadsPay: vê todas as vendas somente no modo admin
   const userVisibleTransactions = useMemo(() => {
     if (!effectiveUserId) return [];
     if (roleMode === 'admin' && isSuperAdmin) return transactions;
@@ -1256,7 +1268,24 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     ] : [])
   ];
 
-  const currentNavItems = roleMode === 'afiliado' ? affiliateNavItems : companyNavItems;
+  const adminNavItems = [
+    { id: 'database' as PlatformTab, label: 'Painel Global LeadsPay', icon: Database, badge: 'Master' },
+    { id: 'vendas' as PlatformTab, label: 'Todas as Vendas', icon: Receipt },
+    { id: 'financeiro' as PlatformTab, label: 'Financeiro Global', icon: Wallet },
+    { id: 'saques' as PlatformTab, label: 'Saques da Plataforma', icon: ArrowUpRight },
+    { id: 'produtos' as PlatformTab, label: 'Produtos da Plataforma', icon: Package, badge: plans.length > 0 ? `${plans.length}` : undefined },
+    { id: 'clientes' as PlatformTab, label: 'Clientes Globais', icon: Users },
+    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
+    { id: 'relatorios' as PlatformTab, label: 'Relatórios Globais', icon: BarChart3 },
+    { id: 'modal_backgrounds' as PlatformTab, label: 'Design da Plataforma', icon: ImageIcon, badge: 'Design' },
+  ];
+
+  const currentNavItems =
+    roleMode === 'admin' && isSuperAdmin
+      ? adminNavItems
+      : roleMode === 'afiliado'
+        ? affiliateNavItems
+        : companyNavItems;
 
   const sidebarAvailableBalance = roleMode === 'admin'
     ? 0
