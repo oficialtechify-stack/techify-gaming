@@ -471,11 +471,13 @@ function distanceTiles(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by) / TILE;
 }
 
-const RemoteVideoTile: React.FC<{ stream: MediaStream; label: string }> = ({ stream, label }) => {
+const RemoteVideoTile: React.FC<{ stream: MediaStream; label: string; volume?: number }> = ({ stream, label, volume = 1 }) => {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream;
-  }, [stream]);
+    if (!ref.current) return;
+    ref.current.srcObject = stream;
+    ref.current.volume = Math.max(0, Math.min(1, volume));
+  }, [stream, volume]);
   return (
     <div className="gather-remote-video">
       <video ref={ref} autoPlay playsInline />
@@ -483,6 +485,13 @@ const RemoteVideoTile: React.FC<{ stream: MediaStream; label: string }> = ({ str
     </div>
   );
 };
+
+function spatialVolume(distance: number, quiet: boolean) {
+  const radius = quiet ? 1.25 : 5.25;
+  if (distance > radius) return 0;
+  if (distance <= 2) return 1;
+  return Math.max(.08, Math.min(1, 1 - (distance - 2) / Math.max(.25, radius - 2)));
+}
 
 export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   workers,
@@ -916,10 +925,23 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   useEffect(() => {
     if (!activeCallRoom || !player) return;
     const area = areaForCell(cellAtPixel(player.x, player.y));
+    if (activeCallRoom === 'open-office') {
+      if (area?.kind === 'private' || (!micOn && !cameraOn)) {
+        void stopPrivateCall();
+      }
+      return;
+    }
     if (!area || area.id !== activeCallRoom) {
       void stopPrivateCall();
     }
-  }, [player?.x, player?.y, activeCallRoom]);
+  }, [player?.x, player?.y, activeCallRoom, micOn, cameraOn]);
+
+  useEffect(() => {
+    if (!player || !currentUser || activeCallRoom || (!micOn && !cameraOn)) return;
+    const area = areaForCell(cellAtPixel(player.x, player.y));
+    if (area?.kind === 'private') return;
+    setActiveCallRoom('open-office');
+  }, [player?.x, player?.y, currentUser?.uid, activeCallRoom, micOn, cameraOn]);
 
 
   useEffect(() => {
@@ -1244,6 +1266,15 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         .sort((a, b) => a.distance - b.distance)
     : [];
 
+  const remoteMediaEntries = Object.entries(remoteStreams)
+    .map(([uid, stream]) => {
+      const remote = remoteHumans.find((item) => item.member.userId === uid);
+      const distance = player && remote ? distanceTiles(player.x, player.y, remote.x, remote.y) : 0;
+      const volume = activeCallRoom === 'open-office' ? spatialVolume(distance, quietMode) : 1;
+      return { uid, stream, distance, volume };
+    })
+    .filter((item) => activeCallRoom !== 'open-office' || item.volume > 0);
+
   const selectedHuman = officeMembers.find((member) => member.userId === selectedHumanId) || null;
   const playerWalking = player ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
   const playerFrame = player ? spriteFrame(playerWalking, player.direction, tick) : null;
@@ -1496,11 +1527,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </div>
         )}
 
-        {activeCallRoom && Object.keys(remoteStreams).length > 0 && (
+        {activeCallRoom && remoteMediaEntries.length > 0 && (
           <div className="gather-remote-video-strip">
-            {Object.entries(remoteStreams).map(([uid, stream]) => {
+            {remoteMediaEntries.map(({ uid, stream, volume }) => {
               const participant = callParticipants.find((item) => item.uid === uid);
-              return <RemoteVideoTile key={uid} stream={stream} label={participant?.displayName || 'Equipe'} />;
+              return (
+                <RemoteVideoTile
+                  key={uid}
+                  stream={stream}
+                  label={participant?.displayName || 'Equipe'}
+                  volume={volume}
+                />
+              );
             })}
           </div>
         )}
@@ -1688,7 +1726,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         {activeCallRoom && (
           <div className="gather-call-badge">
             <span className="live-dot" />
-            <strong>{AREAS.find((area) => area.id === activeCallRoom)?.name || 'Reunião'}</strong>
+            <strong>{activeCallRoom === 'open-office' ? 'Áudio espacial' : AREAS.find((area) => area.id === activeCallRoom)?.name || 'Reunião'}</strong>
             <small>{callParticipants.length} conectado{callParticipants.length === 1 ? '' : 's'}</small>
           </div>
         )}
