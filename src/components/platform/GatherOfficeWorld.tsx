@@ -44,7 +44,7 @@ type OfficeMember = {
   title: string;
   palette: number;
   deskId: string;
-  position?: { x: number; y: number; direction?: string; updatedAt?: string } | null;
+  position?: { x: number; y: number; direction?: string; updatedAt?: string; mapVersion?: string } | null;
   emote?: { emoji?: string; updatedAt?: string } | null;
 };
 
@@ -152,6 +152,7 @@ const AI_SPEED = 54;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 28;
+const OFFICE_MAP_VERSION = 'gather-v1';
 
 const AREAS: OfficeArea[] = [
   { id: 'operations', name: 'Operação', kind: 'open', x: 3, y: 3, w: 29, h: 19, subtitle: 'Mesas dos funcionários IA e operação diária' },
@@ -173,20 +174,38 @@ const HOME_TARGET: Record<string, Cell> = {
 };
 
 const MEETING_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 57, y: 7 },
-  frontend: { x: 60, y: 7 },
-  backend: { x: 63, y: 7 },
-  designer: { x: 57, y: 11 },
-  qa: { x: 60, y: 11 },
+  'lumy-manager': { x: 56, y: 6 },
+  frontend: { x: 56, y: 10 },
+  backend: { x: 65, y: 6 },
+  designer: { x: 65, y: 10 },
+  qa: { x: 59, y: 11 },
   growth: { x: 63, y: 11 },
 };
 
+const QUEUE_TARGET: Record<string, Cell> = {
+  'lumy-manager': { x: 26, y: 20 },
+  frontend: { x: 28, y: 20 },
+  backend: { x: 30, y: 20 },
+  designer: { x: 32, y: 20 },
+  qa: { x: 40, y: 20 },
+  growth: { x: 42, y: 20 },
+};
+
+const PAUSE_TARGET: Record<string, Cell> = {
+  'lumy-manager': { x: 39, y: 18 },
+  frontend: { x: 40, y: 18 },
+  backend: { x: 41, y: 18 },
+  designer: { x: 39, y: 20 },
+  qa: { x: 40, y: 20 },
+  growth: { x: 41, y: 20 },
+};
+
 const IDLE_TARGETS: Record<string, Cell[]> = {
-  'lumy-manager': [{ x: 37, y: 32 }, { x: 38, y: 39 }, { x: 36, y: 18 }],
-  frontend: [{ x: 38, y: 10 }, { x: 42, y: 16 }, { x: 35, y: 38 }],
-  backend: [{ x: 58, y: 19 }, { x: 42, y: 18 }, { x: 35, y: 34 }],
-  designer: [{ x: 56, y: 34 }, { x: 61, y: 39 }, { x: 39, y: 34 }],
-  qa: [{ x: 59, y: 19 }, { x: 43, y: 10 }, { x: 33, y: 37 }],
+  'lumy-manager': [{ x: 37, y: 34 }, { x: 38, y: 39 }, { x: 38, y: 18 }],
+  frontend: [{ x: 38, y: 10 }, { x: 42, y: 17 }, { x: 35, y: 38 }],
+  backend: [{ x: 61, y: 19 }, { x: 41, y: 18 }, { x: 35, y: 34 }],
+  designer: [{ x: 56, y: 36 }, { x: 65, y: 39 }, { x: 39, y: 34 }],
+  qa: [{ x: 61, y: 20 }, { x: 43, y: 10 }, { x: 33, y: 37 }],
   growth: [{ x: 41, y: 32 }, { x: 44, y: 16 }, { x: 38, y: 41 }],
 };
 
@@ -201,10 +220,10 @@ const AI_DESKS = [
 
 const SOLID_RECTS: Array<[number, number, number, number]> = [
   // AI desks
-  [4, 5, 5, 4], [10, 5, 5, 4], [16, 5, 5, 4],
-  [4, 13, 5, 4], [10, 13, 5, 4], [16, 13, 5, 4],
+  [5, 5, 5, 4], [11, 5, 5, 4], [17, 5, 5, 4],
+  [5, 13, 5, 4], [11, 13, 5, 4], [17, 13, 5, 4],
   // Team pods and lounge
-  [35, 5, 5, 3], [42, 5, 5, 3], [35, 13, 5, 3], [42, 13, 5, 3],
+  [35, 6, 5, 4], [42, 6, 5, 4], [35, 14, 5, 4], [42, 14, 5, 4],
   [34, 18, 4, 3], [43, 18, 4, 3],
   // Meeting
   [57, 6, 8, 4],
@@ -433,6 +452,29 @@ function memberDirection(value?: string): Direction {
   return value === 'up' || value === 'left' || value === 'right' ? value : 'down';
 }
 
+function hasCurrentMapPosition(member: OfficeMember) {
+  return Boolean(
+    member.position &&
+    member.position.mapVersion === OFFICE_MAP_VERSION &&
+    Number.isFinite(member.position.x) &&
+    Number.isFinite(member.position.y),
+  );
+}
+
+function resolvedMemberPosition(member: OfficeMember) {
+  if (hasCurrentMapPosition(member) && member.position) {
+    return {
+      x: member.position.x,
+      y: member.position.y,
+      direction: memberDirection(member.position.direction),
+    };
+  }
+  return {
+    ...defaultHumanPosition(member),
+    direction: 'down' as Direction,
+  };
+}
+
 function spriteFrame(walking: boolean, direction: Direction, tick: number) {
   const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
   const frames = [0, 1, 2, 1];
@@ -443,8 +485,8 @@ function spriteFrame(walking: boolean, direction: Direction, tick: number) {
 function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motion: MotionState, now: number) {
   if (state === 'working') return { key: 'desk', cell: HOME_TARGET[workerId] || { x: 8, y: 10 }, idleIndex: motion.idleIndex, nextIdleAt: now + 7000 };
   if (state === 'waiting_approval') return { key: 'meeting', cell: MEETING_TARGET[workerId] || { x: 60, y: 10 }, idleIndex: motion.idleIndex, nextIdleAt: now + 7000 };
-  if (state === 'queued') return { key: 'queue', cell: { x: 29 + (motion.idleIndex % 6), y: 20 }, idleIndex: motion.idleIndex, nextIdleAt: now + 6000 };
-  if (state === 'paused') return { key: 'lounge', cell: { x: 39, y: 19 }, idleIndex: motion.idleIndex, nextIdleAt: now + 8000 };
+  if (state === 'queued') return { key: 'queue', cell: QUEUE_TARGET[workerId] || { x: 30, y: 20 }, idleIndex: motion.idleIndex, nextIdleAt: now + 6000 };
+  if (state === 'paused') return { key: 'lounge', cell: PAUSE_TARGET[workerId] || { x: 39, y: 19 }, idleIndex: motion.idleIndex, nextIdleAt: now + 8000 };
 
   const list = IDLE_TARGETS[workerId] || [{ x: 37, y: 34 }];
   let idleIndex = motion.idleIndex % list.length;
@@ -573,11 +615,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       setPlayer(null);
       return;
     }
-    const fallback = defaultHumanPosition(currentMember);
-    const stored = currentMember.position;
-    const raw = stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)
-      ? { x: stored.x, y: stored.y, direction: memberDirection(stored.direction) }
-      : { ...fallback, direction: 'down' as Direction };
+    const raw = resolvedMemberPosition(currentMember);
     const safe = centerOf(nearestWalkableCell(raw.x, raw.y));
     const initial: MotionState = {
       x: safe.x,
@@ -817,9 +855,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
         for (const member of officeMembers) {
           if (member.userId === currentUserId) continue;
-          const fallback = defaultHumanPosition(member);
-          const px = member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x;
-          const py = member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y;
+          const resolved = resolvedMemberPosition(member);
+          const px = resolved.x;
+          const py = resolved.y;
           const distance = distanceTiles(x, y, px, py);
           if (distance <= 2.2 && distance < nearestDistance) {
             nearest = { type: 'human', label: 'Falar com ' + member.displayName, userId: member.userId };
@@ -832,20 +870,21 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           onPlayerMove({ x, y, direction });
         }
 
-        if (followPlayer) {
-          const viewport = viewportRef.current;
-          if (viewport) {
-            const nextCamera = clampCamera({
-              x: viewport.clientWidth / 2 - x * zoom,
-              y: viewport.clientHeight / 2 - y * zoom,
-            });
-            cameraRef.current = nextCamera;
-            setCamera(nextCamera);
-          }
-        }
-
         if (now - renderRef.current >= FRAME_MS) {
           renderRef.current = now;
+
+          if (followPlayer) {
+            const viewport = viewportRef.current;
+            if (viewport) {
+              const nextCamera = clampCamera({
+                x: viewport.clientWidth / 2 - x * zoom,
+                y: viewport.clientHeight / 2 - y * zoom,
+              });
+              cameraRef.current = nextCamera;
+              setCamera(nextCamera);
+            }
+          }
+
           setPlayer({ ...nextPlayer });
           setWorkersMotion({ ...nextWorkers });
           setInteraction(nearest);
@@ -1224,9 +1263,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   };
 
   const locatePerson = (member: OfficeMember) => {
-    const fallback = defaultHumanPosition(member);
-    const x = member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x;
-    const y = member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y;
+    const resolved = resolvedMemberPosition(member);
+    const x = resolved.x;
+    const y = resolved.y;
     setFollowPlayer(false);
     centerCameraOn(x, y);
     setSelectedHumanId(member.userId);
@@ -1274,12 +1313,12 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const remoteHumans = officeMembers
     .filter((member) => member.userId !== currentUserId)
     .map((member) => {
-      const fallback = defaultHumanPosition(member);
+      const resolved = resolvedMemberPosition(member);
       return {
         member,
-        x: member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x,
-        y: member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y,
-        direction: memberDirection(member.position?.direction),
+        x: resolved.x,
+        y: resolved.y,
+        direction: resolved.direction,
       };
     });
 
@@ -1287,10 +1326,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const areaParticipants = currentArea
     ? officeMembers.filter((member) => {
         if (member.userId === currentUserId && player) return areaContains(currentArea, player.x, player.y);
-        const fallback = defaultHumanPosition(member);
-        const x = member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x;
-        const y = member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y;
-        return areaContains(currentArea, x, y);
+        const resolved = resolvedMemberPosition(member);
+        return areaContains(currentArea, resolved.x, resolved.y);
       })
     : [];
 
@@ -1625,10 +1662,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 </div>
                 <button type="button" className="context-primary" onClick={() => {
                   locatePerson(selectedHuman);
-                  const fallback = defaultHumanPosition(selectedHuman);
-                  const x = selectedHuman.position?.x ?? fallback.x;
-                  const y = selectedHuman.position?.y ?? fallback.y;
-                  goToWorldPoint(x, y);
+                  const resolved = resolvedMemberPosition(selectedHuman);
+                  goToWorldPoint(resolved.x, resolved.y);
                 }}>
                   <LocateFixed className="h-4 w-4" />
                   Ir até essa pessoa

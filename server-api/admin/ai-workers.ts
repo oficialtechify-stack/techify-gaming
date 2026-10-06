@@ -100,7 +100,8 @@ type OfficeMember = {
   active: boolean;
   deskId: string;
   avatar?: string | null;
-  position?: { x: number; y: number; direction?: string; updatedAt?: string } | null;
+  position?: { x: number; y: number; direction?: string; updatedAt?: string; mapVersion?: string } | null;
+  emote?: { emoji?: string; updatedAt?: string } | null;
   createdAt?: string | null;
 };
 
@@ -285,6 +286,13 @@ function serializeOfficeMember(id: string, data: Record<string, any>): OfficeMem
           y: Number(data.position.y || 0),
           direction: data.position.direction ? String(data.position.direction) : undefined,
           updatedAt: data.position.updatedAt ? String(data.position.updatedAt) : undefined,
+          mapVersion: data.position.mapVersion ? String(data.position.mapVersion) : undefined,
+        }
+      : null,
+    emote: data.emote && typeof data.emote === 'object'
+      ? {
+          emoji: data.emote.emoji ? String(data.emote.emoji) : undefined,
+          updatedAt: data.emote.updatedAt ? String(data.emote.updatedAt) : undefined,
         }
       : null,
     createdAt: data.createdAt ? String(data.createdAt) : null,
@@ -1059,7 +1067,7 @@ export default async function handler(req: Req, res: Res) {
         const [roomSnap, participantsSnap, signalsSnap] = await Promise.all([
           roomRef.get(),
           roomRef.collection('participants').get(),
-          roomRef.collection('signals').limit(160).get(),
+          roomRef.collection('signals').orderBy('createdAt', 'desc').limit(160).get(),
         ]);
         const roomData = roomSnap.exists ? roomSnap.data() as Record<string, any> : {};
         const selfParticipant = participantsSnap.docs.some((doc) => doc.id === officeIdentity.uid);
@@ -1377,12 +1385,12 @@ export default async function handler(req: Req, res: Res) {
             palette: 0,
             active: true,
             deskId: 'ceo',
-            position: { x, y, direction, updatedAt: now },
+            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v1' },
             updatedAt: now,
           }, { merge: true });
         } else {
           await db.collection('admin_office_members').doc(officeIdentity.uid).set({
-            position: { x, y, direction, updatedAt: now },
+            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v1' },
             updatedAt: now,
           }, { merge: true });
         }
