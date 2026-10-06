@@ -76,7 +76,7 @@ import firebaseConfig from '../../../firebase-applet-config.json';
 import { AdminBrandingManager } from './AdminBrandingManager';
 import { AdminModalImagesManager } from './AdminModalImagesManager';
 
-type MainAdminTab = 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'modal_backgrounds' | 'database_explorer';
+type MainAdminTab = 'global_overview' | 'affiliates_approval' | 'companies_approval' | 'branding_manager' | 'modal_backgrounds' | 'database_explorer';
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'banned' | 'all';
 
 interface SecurityTarget {
@@ -85,6 +85,34 @@ interface SecurityTarget {
   email?: string;
   type: 'user' | 'company';
   document?: string;
+}
+
+interface CompanyAdminSummary {
+  companyId: string;
+  ownerId?: string | null;
+  name: string;
+  logo?: string;
+  email?: string;
+  category?: string;
+  status: string;
+  verified: boolean;
+  banned: boolean;
+  stripeConnected: boolean;
+  salesCount: number;
+  grossVolume: number;
+  checkoutFees: number;
+  affiliateCommissions: number;
+  netRevenue: number;
+  pendingBalance: number;
+  availableBalance: number;
+  activeProducts: number;
+  connectedAffiliates: number;
+  checkoutAttempts: number;
+  completedCheckouts: number;
+  activeSubscriptions: number;
+  withdrawalsInFlight: number;
+  completedWithdrawals: number;
+  totalWithdrawn: number;
 }
 
 interface AdminFinancialSummary {
@@ -109,6 +137,7 @@ interface AdminFinancialSummary {
   activeProductSubscriptions: number;
   activePlanSubscribers: number;
   platformPlanMrr: number;
+  companySummaries?: CompanyAdminSummary[];
   totalSalesProcessedCounter: number;
   lastUpdated: string;
   stripeConfig?: {
@@ -122,7 +151,7 @@ export const DatabaseManagerView: React.FC = () => {
   const { currentUser, userProfile } = useAuth();
   
   // Tab Principal de Navegação
-  const [mainTab, setMainTab] = useState<MainAdminTab>('affiliates_approval');
+  const [mainTab, setMainTab] = useState<MainAdminTab>('global_overview');
   
   // Sub-filtro de Status (Padrão 'all' para exibir todas as empresas e afiliados cadastrados)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -1132,6 +1161,12 @@ export const DatabaseManagerView: React.FC = () => {
   const approvedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'approved').length;
   const rejectedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'rejected').length;
   const bannedCompaniesCount = allCompanies.filter(c => getStatusOfCompany(c) === 'banned').length;
+
+  const companyMetricsById = useMemo(() => {
+    const map = new Map<string, CompanyAdminSummary>();
+    (adminSummary?.companySummaries || []).forEach((item) => map.set(item.companyId, item));
+    return map;
+  }, [adminSummary?.companySummaries]);
 
   return (
     <div className="flex flex-col gap-6" id="leadspay-database-view">
