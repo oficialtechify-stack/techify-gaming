@@ -13,9 +13,10 @@ export type ConnectStatus =
 
 export const StripeConnectCompanyPanel: React.FC<{
   companyId?: string;
+  role?: 'empresa' | 'afiliado';
   onStatusChange?: (status: ConnectStatus) => void;
   onboardingMode?: boolean;
-}> = ({ companyId, onStatusChange, onboardingMode = false }) => {
+}> = ({ companyId, role = 'empresa', onStatusChange, onboardingMode = false }) => {
   const { currentUser } = useAuth();
   const [status, setStatus] = useState<ConnectStatus>('loading');
   const [message, setMessage] = useState('');
@@ -34,7 +35,7 @@ export const StripeConnectCompanyPanel: React.FC<{
     setRequirementMessage('');
     try {
       const token = await currentUser.getIdToken();
-      const response = await fetch('/api/stripe/connect-status?role=empresa', {
+      const response = await fetch(`/api/stripe/connect-status?role=${role}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       });
@@ -74,7 +75,7 @@ export const StripeConnectCompanyPanel: React.FC<{
       onStatusChange?.('error');
       setMessage(error instanceof Error ? error.message : 'Não foi possível consultar a Stripe.');
     }
-  }, [currentUser, companyId, onStatusChange]);
+  }, [currentUser, companyId, role, onStatusChange]);
 
   useEffect(() => {
     loadStatus();
@@ -93,7 +94,7 @@ export const StripeConnectCompanyPanel: React.FC<{
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ role: 'empresa' }),
+        body: JSON.stringify({ role }),
       });
       const data = await response.json().catch(() => ({}));
       if (data.locked && data.status === 'connected') {
@@ -135,11 +136,13 @@ export const StripeConnectCompanyPanel: React.FC<{
               )}
             </div>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-white/50">
-              A Stripe é usada apenas para validar a empresa e encaminhar saques ao banco cadastrado. O dinheiro das vendas permanece na LeadsPay durante o prazo de liberação.
+              {role === 'empresa'
+                ? 'A Stripe é usada para validar os dados de recebimento da empresa e encaminhar saques ao banco cadastrado. O dinheiro das vendas permanece na LeadsPay durante o prazo de liberação.'
+                : 'A Stripe é usada para validar seus dados de recebimento como afiliado e encaminhar saques ao banco cadastrado. Suas comissões permanecem na LeadsPay durante o prazo de liberação.'}
             </p>
             {status === 'connected' && (
               <p className="mt-2 text-[11px] text-emerald-300/80">
-                Conta Stripe verificada e bloqueada para alterações pela LeadsPay. O saldo só é enviado depois que estiver disponível e você solicitar o saque.
+                Conta Stripe verificada e protegida. O saldo só é enviado depois que estiver disponível na LeadsPay e você solicitar o saque.
               </p>
             )}
             {(status === 'onboarding_incomplete' || status === 'action_required') && (
@@ -154,7 +157,7 @@ export const StripeConnectCompanyPanel: React.FC<{
             )}
             {status === 'not_connected' && (
               <p className="mt-2 text-[11px] text-white/40">
-                Configure seus dados bancários pela Stripe. Isso não libera nem transfere o saldo das vendas antecipadamente.
+                Configure seus dados bancários pela Stripe. Isso não libera nem transfere saldo ou comissão antecipadamente.
               </p>
             )}
             {message && <p className="mt-2 text-[11px] text-red-400">{message}</p>}
