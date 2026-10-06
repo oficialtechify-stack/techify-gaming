@@ -87,16 +87,25 @@ interface SecurityTarget {
 interface AdminFinancialSummary {
   salesCount: number;
   grossVolume: number;
+  averageTicket: number;
   checkoutFees: number;
   withdrawalFees: number;
   platformRevenue: number;
   affiliateCommissions: number;
   companyNet: number;
   pendingBalance: number;
+  availableBalance: number;
   withdrawalsInFlight: number;
+  completedWithdrawals: number;
+  totalWithdrawn: number;
   approvedCompanies: number;
   approvedAffiliates: number;
   activeProducts: number;
+  checkoutAttempts: number;
+  completedCheckouts: number;
+  activeProductSubscriptions: number;
+  activePlanSubscribers: number;
+  platformPlanMrr: number;
   totalSalesProcessedCounter: number;
   lastUpdated: string;
   stripeConfig?: {
@@ -284,7 +293,6 @@ export const DatabaseManagerView: React.FC = () => {
             O painel de validação e gerenciamento do banco de dados Cloud é protegido e acessível apenas pelos administradores autorizados:
           </p>
           <div className="bg-[#050811] border border-white/10 rounded-xl px-4 py-2.5 font-mono text-xs text-[#D9F22A] font-bold space-y-1">
-            <div>rickmarketing81@gmail.com</div>
             <div>leadspay.oficial@gmail.com</div>
           </div>
           <p className="text-[11px] text-white/40 mt-1">
@@ -820,6 +828,10 @@ export const DatabaseManagerView: React.FC = () => {
     // 1. Empresas reais existentes na coleção companies do banco
     companies.forEach((c) => {
       if (deletedEntityIds.has(c.id) || (c.ownerId && deletedEntityIds.has(c.ownerId))) return;
+      if (
+        currentUser?.uid &&
+        (String(c.ownerId || '') === currentUser.uid || String(c.submittedBy || '') === currentUser.uid)
+      ) return;
       // Pula registros órfãos ou corrompidos sem nenhum dado identificável
       if (!c.name && !c.companyName && !c.ownerId && !c.submittedBy && !c.email) return;
 
@@ -1045,7 +1057,7 @@ export const DatabaseManagerView: React.FC = () => {
     });
 
     return Array.from(deduped.values());
-  }, [companies, verifications, registeredProfiles, deletedEntityIds]);
+  }, [companies, verifications, registeredProfiles, deletedEntityIds, currentUser?.uid]);
 
   // Helper para verificar status de um registro
   const getStatusOfVerification = (v: VerificationRequest): StatusFilter => {
@@ -1126,14 +1138,14 @@ export const DatabaseManagerView: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[10px] font-bold tracking-widest text-[#D9F22A] uppercase">
-              Super Painel Administrativo LeadsPay
+              Conta Global LeadsPay · Master
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne'] mt-1">
-            Gestão de Cadastros, Segurança & Banco de Dados
+            Central Global da LeadsPay
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Aprovação separada de Afiliados e Empresas, controle de suspensão/banimento e expurgo total com segurança reforçada.
+            Visão consolidada da plataforma: financeiro real, empresas, afiliados, produtos, checkouts, assinaturas, saques, aprovações e segurança.
           </p>
         </div>
 
@@ -1212,20 +1224,29 @@ export const DatabaseManagerView: React.FC = () => {
             Carregando dados financeiros...
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7">
             {[
               { label: 'Vendas confirmadas', value: String(adminSummary?.salesCount || 0), icon: ShoppingCart },
               { label: 'Volume bruto', value: `R$ ${Number(adminSummary?.grossVolume || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign },
+              { label: 'Ticket médio', value: `R$ ${Number(adminSummary?.averageTicket || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingUp },
               { label: 'Receita LeadsPay', value: `R$ ${Number(adminSummary?.platformRevenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: BadgeDollarSign },
               { label: 'Taxas checkout', value: `R$ ${Number(adminSummary?.checkoutFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: HandCoins },
               { label: 'Taxas de saque', value: `R$ ${Number(adminSummary?.withdrawalFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: WalletCards },
               { label: 'Saldo futuro usuários', value: `R$ ${Number(adminSummary?.pendingBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Clock },
+              { label: 'Saldo disponível usuários', value: `R$ ${Number(adminSummary?.availableBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: WalletCards },
               { label: 'Comissões afiliados', value: `R$ ${Number(adminSummary?.affiliateCommissions || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Users },
               { label: 'Líquido empresas', value: `R$ ${Number(adminSummary?.companyNet || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Building2 },
               { label: 'Empresas aprovadas', value: String(adminSummary?.approvedCompanies || 0), icon: Building2 },
               { label: 'Afiliados aprovados', value: String(adminSummary?.approvedAffiliates || 0), icon: UserCheck },
               { label: 'Produtos ativos', value: String(adminSummary?.activeProducts || 0), icon: Layers },
+              { label: 'Checkouts iniciados', value: String(adminSummary?.checkoutAttempts || 0), icon: CreditCard },
+              { label: 'Checkouts concluídos', value: String(adminSummary?.completedCheckouts || 0), icon: CheckCircle2 },
+              { label: 'Assinaturas de produtos', value: String(adminSummary?.activeProductSubscriptions || 0), icon: Repeat },
+              { label: 'Planos LeadsPay ativos', value: String(adminSummary?.activePlanSubscribers || 0), icon: Zap },
+              { label: 'MRR planos LeadsPay', value: `R$ ${Number(adminSummary?.platformPlanMrr || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: BadgeDollarSign },
               { label: 'Saques em andamento', value: String(adminSummary?.withdrawalsInFlight || 0), icon: Send },
+              { label: 'Saques concluídos', value: String(adminSummary?.completedWithdrawals || 0), icon: CheckCircle },
+              { label: 'Total sacado', value: `R$ ${Number(adminSummary?.totalWithdrawn || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign },
             ].map(({ label, value, icon: Icon }) => (
               <article key={label} className="rounded-xl border border-white/8 bg-[#050811] p-3.5">
                 <div className="flex items-center justify-between gap-2">
