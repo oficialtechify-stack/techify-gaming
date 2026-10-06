@@ -429,6 +429,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       utmMedium: utmMedium || null,
       utmCampaign: utmCampaign || null,
       status: 'checkout_open',
+      is_test: !session.livemode,
+      environment: session.livemode ? 'production' : 'development',
       createdAt: now,
       updatedAt: now,
     }, { merge: true });
