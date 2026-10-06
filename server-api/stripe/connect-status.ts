@@ -39,11 +39,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         }
       }
     } else {
-      if (!profileHasRole(profile, role)) {
+      // O afiliado também usa Stripe como primeira etapa, antes da análise cadastral.
+      if (!profileHasRole(profile, role) && String(profile.activeRoleMode || '').toLowerCase() !== 'afiliado') {
         return res.status(403).json({ error: 'O perfil autenticado não possui cadastro de Afiliado.' });
-      }
-      if (!profileRoleIsApproved(profile, role)) {
-        return res.status(403).json({ error: 'A aprovação do perfil de Afiliado é necessária para consultar recebimentos.' });
       }
     }
 
