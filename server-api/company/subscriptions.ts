@@ -1,6 +1,6 @@
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient } from '../../lib/stripeServer.js';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { resolveApprovedOwnedCompany } from '../../lib/companyAccess.js';
 
 type Req = {
   method?: string;
@@ -22,31 +22,20 @@ export default async function handler(req: Req, res: Res) {
     );
 
     const db = getServerAdminFirestore();
-    const [profileSnap, requestSnap] = await Promise.all([
-      db.collection('user_profiles').doc(identity.uid).get(),
-      db.collection('verification_requests').doc(identity.uid).get(),
-    ]);
+    const profileSnap = await db.collection('user_profiles').doc(identity.uid).get();
 
     if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
 
-    const profile = applyVerificationRequest(
-      profileSnap.data()!,
-      requestSnap.exists ? requestSnap.data()! : null,
-    ) as Record<string, any>;
-
-    if (!profileHasRole(profile, 'empresa') || !profileRoleIsApproved(profile, 'empresa')) {
-      return res.status(403).json({ error: 'A Empresa precisa estar aprovada.' });
+    const rawProfile = profileSnap.data() as Record<string, any>;
+    const approvedCompany = await resolveApprovedOwnedCompany(
+      db,
+      identity.uid,
+      String(rawProfile.companyId || '').trim(),
+    );
+    if (!approvedCompany) {
+      return res.status(403).json({ error: 'A empresa precisa estar aprovada e ativa.' });
     }
-
-    const companyId = String(profile.companyId || '').trim();
-    if (!companyId) return res.status(409).json({ error: 'Empresa não vinculada.' });
-
-    const companySnap = await db.collection('companies').doc(companyId).get();
-    if (!companySnap.exists) return res.status(404).json({ error: 'Empresa não encontrada.' });
-    const company = companySnap.data()!;
-    if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
-      return res.status(403).json({ error: 'Esta empresa não pertence à conta autenticada.' });
-    }
+    const companyId = approvedCompany.companyId;
 
     if (req.method === 'GET') {
       const snap = await db.collection('product_subscriptions')
