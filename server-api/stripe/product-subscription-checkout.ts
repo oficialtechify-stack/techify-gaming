@@ -2,7 +2,7 @@ import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getLeadspayBaseUrl, getStripeTestClient } from '../../lib/stripeServer.js';
 import { calculateSplit, toCents } from '../../lib/stripeSplit.js';
 import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
-import { releaseDelayDays } from '../../lib/platformBilling.js';
+import { CHECKOUT_FEE_PER_ITEM_CENTS, releaseDelayDays } from '../../lib/platformBilling.js';
 
 type RequestLike = {
   method?: string;
@@ -269,7 +269,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const productAmountCents = toCents(productAmount);
-    const checkoutFeeCents = 99;
+    const soldItemCount = 1;
+    const checkoutFeeCents = CHECKOUT_FEE_PER_ITEM_CENTS * soldItemCount;
     const grossAmountCents = productAmountCents + checkoutFeeCents;
 
     const initialSplit = calculateSplit({
@@ -345,6 +346,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       affiliate_percent_recurring: String(validAffiliateCode ? recurringAffiliatePercent : 0),
       recurring_commission_enabled: recurringCommissionEnabled ? '1' : '0',
       product_amount_cents: String(productAmountCents),
+      sold_item_count: String(soldItemCount),
+      checkout_fee_per_item_cents: String(CHECKOUT_FEE_PER_ITEM_CENTS),
       checkout_fee_cents: String(checkoutFeeCents),
       company_release_delay_days: String(companyDelayDays),
       affiliate_release_delay_days: String(affiliateDelayDays),
@@ -415,6 +418,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       buyerName,
       buyerEmail,
       productAmountCents,
+      soldItemCount,
+      checkoutFeePerItemCents: CHECKOUT_FEE_PER_ITEM_CENTS,
       checkoutFeeCents,
       grossAmountCents,
       billingCycle: cycle,
@@ -435,6 +440,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       billingCycle: cycle,
       pricing: {
         productAmountCents,
+        soldItemCount,
+        checkoutFeePerItemCents: CHECKOUT_FEE_PER_ITEM_CENTS,
         checkoutFeeCents,
         totalCents: grossAmountCents,
       },
