@@ -214,11 +214,15 @@ function centerOf(cell: Cell) {
   return { x: cell.x * TILE + TILE / 2, y: cell.y * TILE + TILE / 2 };
 }
 
-function nearestWalkableCell(x: number, y: number): Cell {
-  const base = {
+function cellAtPixel(x: number, y: number): Cell {
+  return {
     x: Math.max(0, Math.min(COLS - 1, Math.floor(x / TILE))),
     y: Math.max(0, Math.min(ROWS - 1, Math.floor(y / TILE))),
   };
+}
+
+function nearestWalkableCell(x: number, y: number): Cell {
+  const base = cellAtPixel(x, y);
   if (isWalkable(base)) return base;
 
   for (let radius = 1; radius < 10; radius += 1) {
@@ -246,7 +250,8 @@ function heuristic(a: Cell, b: Cell) {
 }
 
 function findPath(start: Cell, goal: Cell): Cell[] {
-  const safeGoal = isWalkable(goal) ? goal : nearestWalkableCell(...Object.values(centerOf(goal)) as [number, number]);
+  const goalPoint = centerOf(goal);
+  const safeGoal = isWalkable(goal) ? goal : nearestWalkableCell(goalPoint.x, goalPoint.y);
   if (start.x === safeGoal.x && start.y === safeGoal.y) return [];
 
   const open = new Map<string, { cell: Cell; f: number }>();
@@ -570,8 +575,8 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           const nextY = y + stepY;
           direction = directionFor(stepX, stepY, direction);
 
-          if (isWalkable(nearestWalkableCell(nextX, y))) x = nextX;
-          if (isWalkable(nearestWalkableCell(x, nextY))) y = nextY;
+          if (isWalkable(cellAtPixel(nextX, y))) x = nextX;
+          if (isWalkable(cellAtPixel(x, nextY))) y = nextY;
           remainingPath = [];
           walking = true;
         } else if (remainingPath.length) {
