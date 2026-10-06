@@ -18,7 +18,11 @@ const COMPLETED_WITHDRAWALS = new Set(['completed', 'concluido', 'concluído']);
 const COMPLETED_CHECKOUTS = new Set(['paid', 'completed', 'succeeded', 'confirmed']);
 
 function isRealMoney(data: Record<string, any>): boolean {
-  return data.is_test !== true && String(data.environment || '').toLowerCase() !== 'development';
+  return data.is_test !== true && !['development', 'test', 'sandbox', 'preview'].includes(String(data.environment || '').toLowerCase());
+}
+
+function isExplicitProductionRecord(data: Record<string, any>): boolean {
+  return data.is_test === false && String(data.environment || '').toLowerCase() === 'production';
 }
 
 function centsFromProfile(profile: Record<string, any>, field: string): number {
@@ -77,7 +81,7 @@ export default async function handler(req: Req, res: Res) {
 
     const realSales = salesSnap.docs
       .map((doc) => doc.data() as Record<string, any>)
-      .filter((sale) => isRealMoney(sale) && APPROVED_SALE_STATUSES.has(String(sale.status || '').toLowerCase()));
+      .filter((sale) => isExplicitProductionRecord(sale) && APPROVED_SALE_STATUSES.has(String(sale.status || '').toLowerCase()));
 
     let grossVolume = 0;
     let checkoutFees = 0;
@@ -187,7 +191,7 @@ export default async function handler(req: Req, res: Res) {
       ...checkoutOrdersSnap.docs.map((doc) => doc.data() as Record<string, any>),
       ...productSubscriptionCheckoutsSnap.docs.map((doc) => doc.data() as Record<string, any>),
       ...platformSubscriptionCheckoutsSnap.docs.map((doc) => doc.data() as Record<string, any>),
-    ].filter(isRealMoney);
+    ].filter(isExplicitProductionRecord);
 
     const checkoutAttempts = checkoutDocuments.length;
     const completedCheckouts = checkoutDocuments.filter((item) =>
