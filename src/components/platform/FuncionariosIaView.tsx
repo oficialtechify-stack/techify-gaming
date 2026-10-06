@@ -236,6 +236,7 @@ export const FuncionariosIaView: React.FC = () => {
   const [teamChatSending, setTeamChatSending] = useState(false);
   const teamChatBodyRef = useRef<HTMLDivElement | null>(null);
   const [codeActionTaskId, setCodeActionTaskId] = useState<string | null>(null);
+  const [officeNotice, setOfficeNotice] = useState('');
   const [engine, setEngine] = useState<EngineInfo>({
     connected: false,
     mode: 'supervised',
@@ -671,6 +672,13 @@ export const FuncionariosIaView: React.FC = () => {
     }
   };
 
+  const showOfficeNotice = (message: string) => {
+    setOfficeNotice(message);
+    window.setTimeout(() => {
+      setOfficeNotice((current) => current === message ? '' : current);
+    }, 2600);
+  };
+
   const askWorkerToThink = async (workerId: string) => {
     if (thinkingWorkerId || !engine.connected) return;
     setThinkingWorkerId(workerId);
@@ -953,6 +961,13 @@ export const FuncionariosIaView: React.FC = () => {
             </div>
           </div>
 
+          {officeNotice && (
+            <div className="office-game-notice">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>{officeNotice}</span>
+            </div>
+          )}
+
           <PixelOfficeWorld
             workers={workers}
             tasks={tasks}
@@ -976,6 +991,29 @@ export const FuncionariosIaView: React.FC = () => {
                 setSelectedHumanId(interaction.userId);
                 if (access?.isOfficeAdmin) setIsComputerOpen(true);
                 else setIsTeamChatOpen(true);
+              }
+              if (interaction.type === 'object') {
+                if (interaction.objectId === 'creative-board') {
+                  setIsTeamChatOpen(true);
+                  showOfficeNotice('Quadro criativo aberto para o brainstorming da equipe.');
+                }
+                if (interaction.objectId === 'lab-terminal') {
+                  openChat('backend');
+                  showOfficeNotice('Terminal do laboratório conectado ao Stack.');
+                }
+                if (interaction.objectId === 'designer-board') {
+                  const designer = officeMembers.find((member) => member.officeRole === 'designer');
+                  if (designer) {
+                    setSelectedHumanId(designer.userId);
+                    setHumanTaskForm((current) => ({ ...current, assigneeUid: designer.userId }));
+                    setIsComputerOpen(true);
+                  } else {
+                    showOfficeNotice('Adicione sua designer à Equipe Humana para usar este moodboard com ela.');
+                  }
+                }
+                if (interaction.objectId === 'coffee') {
+                  showOfficeNotice('☕ Café pego. A copa agora é um ponto de pausa do escritório.');
+                }
               }
             }}
           />

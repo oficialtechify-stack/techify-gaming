@@ -60,6 +60,7 @@ type Interaction =
   | { type: 'meeting'; label: string }
   | { type: 'ai'; label: string; workerId: string }
   | { type: 'human'; label: string; userId: string }
+  | { type: 'object'; label: string; objectId: 'coffee' | 'creative-board' | 'lab-terminal' | 'designer-board' }
   | null;
 
 interface PixelOfficeWorldProps {
@@ -182,6 +183,10 @@ const INTERACTIONS = [
   { type: 'computer' as const, owner: 'ceo', cell: { x: 7, y: 8 }, label: 'Abrir computador do CEO' },
   { type: 'computer' as const, owner: 'designer-human', cell: { x: 45, y: 28 }, label: 'Abrir computador da designer' },
   { type: 'meeting' as const, owner: 'meeting', cell: { x: 25, y: 9 }, label: 'Abrir sala de reunião' },
+  { type: 'object' as const, objectId: 'coffee' as const, cell: { x: 36, y: 17 }, label: 'Pegar um café' },
+  { type: 'object' as const, objectId: 'creative-board' as const, cell: { x: 34, y: 24 }, label: 'Abrir quadro criativo' },
+  { type: 'object' as const, objectId: 'lab-terminal' as const, cell: { x: 9, y: 37 }, label: 'Usar terminal do laboratório' },
+  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 41, y: 24 }, label: 'Abrir moodboard da designer' },
 ];
 
 function inRect(cell: Cell, x: number, y: number, width: number, height: number) {
@@ -291,6 +296,7 @@ function sameInteraction(a: Interaction, b: Interaction): boolean {
   if (a.type === 'computer' && b.type === 'computer') return a.ownerUid === b.ownerUid;
   if (a.type === 'ai' && b.type === 'ai') return a.workerId === b.workerId;
   if (a.type === 'human' && b.type === 'human') return a.userId === b.userId;
+  if (a.type === 'object' && b.type === 'object') return a.objectId === b.objectId;
   return a.type === 'meeting' && b.type === 'meeting';
 }
 
@@ -764,9 +770,13 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
                 : item.owner === 'designer-human'
                   ? officeMembers.find((member) => member.officeRole === 'designer')?.userId
                   : undefined;
-            nextInteraction = item.type === 'computer'
-              ? { type: 'computer', label: item.label, ownerUid }
-              : { type: 'meeting', label: item.label };
+            if (item.type === 'computer') {
+              nextInteraction = { type: 'computer', label: item.label, ownerUid };
+            } else if (item.type === 'meeting') {
+              nextInteraction = { type: 'meeting', label: item.label };
+            } else {
+              nextInteraction = { type: 'object', label: item.label, objectId: item.objectId };
+            }
             bestDistance = distance;
           }
         }
@@ -952,6 +962,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           <img className="v3-furniture kitchen-plant-v3" src="/pixel-agents/assets/furniture/PLANT/PLANT.png" alt="" />
 
           {/* Creative */}
+          <img className="v3-furniture creative-board-v3" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
           <img className="v3-furniture creative-books-v3 a" src="/pixel-agents/assets/furniture/BOOKSHELF/BOOKSHELF.png" alt="" />
           <img className="v3-furniture creative-sofa-v3 a" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
           <img className="v3-furniture creative-table-v3" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
