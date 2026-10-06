@@ -1,6 +1,7 @@
 import { verifyFirebaseIdentity, getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { getStripeTestClient } from '../../lib/stripeServer.js';
 import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { resolveApprovedOwnedCompany } from '../../lib/companyAccess.js';
 
 type RequestLike = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type ResponseLike = { setHeader(name: string, value: string): void; status(code: number): ResponseLike; json(body: unknown): unknown };
@@ -17,10 +18,28 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const profileSnap = await db.collection('user_profiles').doc(identity.uid).get();
     if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
     const requestSnap = await db.collection('verification_requests').doc(identity.uid).get();
-    const profile = applyVerificationRequest(profileSnap.data()!, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
-    if (!profileHasRole(profile, role)) return res.status(403).json({ error: `O perfil autenticado não possui um cadastro de ${role === 'afiliado' ? 'Afiliado' : 'Empresa'}.` });
-    if (!profileRoleIsApproved(profile, role)) return res.status(403).json({ error: 'O perfil precisa estar aprovado para abrir os recebimentos.' });
-    const accountId = String(profile.stripeAccounts?.[role] || '');
+    const rawProfile = profileSnap.data() as Record<string, any>;
+    const profile = applyVerificationRequest(rawProfile, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
+
+    if (role === 'empresa') {
+      const approvedCompany = await resolveApprovedOwnedCompany(
+        db,
+        identity.uid,
+        String(rawProfile.companyId || profile.companyId || '').trim(),
+      );
+      if (!approvedCompany) {
+        return res.status(403).json({ error: 'A empresa precisa estar aprovada e ativa para acessar recebimentos.' });
+      }
+    } else {
+      if (!profileHasRole(profile, 'afiliado')) {
+        return res.status(403).json({ error: 'O perfil autenticado não possui cadastro de Afiliado.' });
+      }
+      if (!profileRoleIsApproved(profile, 'afiliado')) {
+        return res.status(403).json({ error: 'O perfil de Afiliado precisa estar aprovado para abrir os recebimentos.' });
+      }
+    }
+
+    const accountId = String(rawProfile.stripeAccounts?.[role] || profile.stripeAccounts?.[role] || '');
     if (!accountId) return res.status(409).json({ error: 'Conecte sua conta Stripe antes de abrir o painel.' });
     const stripe = getStripeTestClient();
     const account = await stripe.accounts.retrieve(accountId);
