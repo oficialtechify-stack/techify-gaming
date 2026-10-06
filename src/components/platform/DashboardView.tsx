@@ -19,6 +19,8 @@ import {
   Calendar,
   Package,
   Bell,
+  Moon,
+  Sun,
   ChevronDown,
   BarChart2,
   BarChart3,
@@ -65,6 +67,8 @@ interface DashboardViewProps {
   onBackToHome?: () => void;
   notificationItems?: Array<{ id: string; title: string; body: string; createdAt: string; unread: boolean }>;
   onOpenNotifications?: () => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
 // 3D Glowing Wallet Illustration matching the reference screenshots (Green & Purple variants)
@@ -276,7 +280,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   userEmail,
   onBackToHome,
   notificationItems = [],
-  onOpenNotifications
+  onOpenNotifications,
+  isDarkMode = true,
+  onToggleTheme
 }) => {
   const { currentUser } = useAuth();
   const [releasePolicyDays, setReleasePolicyDays] = useState<8 | 15>(15);
@@ -764,6 +770,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="w-full bg-[#070d18] hover:bg-[#0a1222] focus:bg-[#0a1222] border border-white/10 focus:border-[#a3e635]/50 rounded-full pl-9 pr-4 py-1.5 sm:py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all shadow-inner"
             />
           </div>
+
+          {/* Theme switch — desktop dashboard uses the same global platform theme. */}
+          {onToggleTheme && (
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className={`hidden lg:flex items-center w-11 h-6 rounded-full p-0.5 border transition-all duration-300 cursor-pointer relative flex-shrink-0 ${
+                isDarkMode
+                  ? 'bg-[#1f293d] border-white/10'
+                  : 'bg-[#dbeafe] border-slate-300 shadow-inner'
+              }`}
+              title="Alternar tema"
+              aria-label={`Ativar tema ${isDarkMode ? 'claro' : 'escuro'}`}
+              aria-pressed={isDarkMode}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                isDarkMode
+                  ? 'translate-x-5 bg-[#0f172a] text-white shadow-sm'
+                  : 'translate-x-0 bg-[#38bdf8] text-[#060A15]'
+              }`}>
+                {isDarkMode ? <Moon className="w-3 h-3 fill-current" /> : <Sun className="w-3 h-3" />}
+              </span>
+            </button>
+          )}
 
           {/* Period Filter Dropdown (📅 Hoje v) */}
           <div className="relative flex-shrink-0">
