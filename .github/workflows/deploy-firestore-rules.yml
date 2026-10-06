@@ -1,4 +1,4 @@
-name: Deploy Firestore rules
+name: Firestore rules safety check
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
       - 'firestore.rules'
       - 'firebase.json'
       - '.firebaserc'
+      - 'scripts/publish-firestore-preview.mjs'
       - '.github/workflows/deploy-firestore-rules.yml'
   workflow_dispatch:
 
@@ -14,88 +15,39 @@ permissions:
   contents: read
 
 jobs:
-  deploy-rules:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      VERCEL_ORG_ID: team_NbEe7FyvVyYANMVHDoJVfaAL
-      VERCEL_PROJECT_ID: prj_1gaBGjVLeja0aMLkzYz7oXMO8qQq
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Verify Vercel token
-        run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "VERCEL_TOKEN_NOT_CONFIGURED"
-            exit 1
-          fi
 
       - name: Use Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      - name: Pull protected production environment
-        run: npx --yes vercel@50.10.0 env pull .env.firebase --environment=production --yes --token="$VERCEL_TOKEN"
-
-      - name: Prepare Firebase credentials
-        shell: bash
+      - name: Verify production publisher is wired
         run: |
           node <<'NODE'
           const fs = require('fs');
-          const path = require('path');
-
-          const raw = fs.readFileSync('.env.firebase', 'utf8');
-          const env = {};
-
-          for (const line of raw.split(/\r?\n/)) {
-            if (!line || line.trim().startsWith('#')) continue;
-            const index = line.indexOf('=');
-            if (index < 0) continue;
-            const key = line.slice(0, index).trim();
-            let value = line.slice(index + 1).trim();
-
-            if (
-              (value.startsWith('"') && value.endsWith('"')) ||
-              (value.startsWith("'") && value.endsWith("'"))
-            ) {
-              value = value.slice(1, -1);
-            }
-
-            value = value
-              .replace(/\\n/g, '\n')
-              .replace(/\\r/g, '\r')
-              .replace(/\\\"/g, '"');
-
-            env[key] = value;
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const build = String(pkg.scripts?.build || '');
+          if (!build.includes('scripts/publish-firestore-preview.mjs')) {
+            throw new Error('O build de produção não chama o publicador de regras do Firestore.');
           }
-
-          if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-            throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON não veio da Vercel Production.');
+          const publisher = fs.readFileSync('scripts/publish-firestore-preview.mjs', 'utf8');
+          if (!publisher.includes("VERCEL_ENV === 'production'") || !publisher.includes("PRODUCTION_BRANCH = 'main'")) {
+            throw new Error('O publicador do Firestore não está protegido para produção/main.');
           }
-          if (!env.FIREBASE_PROJECT_ID) {
-            throw new Error('FIREBASE_PROJECT_ID não veio da Vercel Production.');
+          if (!publisher.includes('firebaserules.googleapis.com')) {
+            throw new Error('Publicador de Security Rules não encontrado.');
           }
-
-          const credentialsPath = path.join(process.env.RUNNER_TEMP, 'firebase-service-account.json');
-          fs.writeFileSync(credentialsPath, env.FIREBASE_SERVICE_ACCOUNT_JSON, { mode: 0o600 });
-
-          fs.appendFileSync(
-            process.env.GITHUB_ENV,
-            `GOOGLE_APPLICATION_CREDENTIALS=${credentialsPath}\nFIREBASE_PROJECT_ID=${env.FIREBASE_PROJECT_ID}\n`
-          );
+          console.log('OK: o deploy real das regras é executado pelo build Production da Vercel.');
           NODE
 
-      - name: Validate Firebase rules
-        run: npx --yes firebase-tools@14.18.0 firestore:rules --help >/dev/null
-
-      - name: Deploy Firestore rules
-        run: npx --yes firebase-tools@14.18.0 deploy --only firestore:rules --project "$FIREBASE_PROJECT_ID" --non-interactive
-
-      - name: Remove temporary credentials
-        if: always()
+      - name: Explain deployment path
         run: |
-          rm -f "$GOOGLE_APPLICATION_CREDENTIALS" .env.firebase
+          echo "Security Rules são publicadas dentro do npm run build na Vercel Production."
+          echo "As credenciais Firebase permanecem somente no ambiente protegido da Vercel."
