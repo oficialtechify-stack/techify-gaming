@@ -6652,3 +6652,401 @@
   background: rgba(255,255,255,.10);
   transform: translateY(-1px);
 }
+
+
+/* =========================================================
+   LEADSPAY OFFICE — STANDALONE APP + PERFORMANCE PASS
+   ========================================================= */
+
+.office-standalone-page {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  background: #071019;
+  color: #fff;
+}
+
+.office-standalone-nav {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 22000;
+  height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid rgba(255,255,255,.09);
+  background: rgba(7,13,22,.96);
+  padding: 0 12px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.18);
+  backdrop-filter: blur(18px);
+}
+
+.office-standalone-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.office-standalone-logo {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(217,242,42,.22);
+  border-radius: 10px;
+  background: rgba(217,242,42,.09);
+  color: #d9f22a;
+}
+
+.office-standalone-brand > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.office-standalone-brand strong {
+  color: #fff;
+  font-family: "Syne", sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.office-standalone-brand small {
+  color: rgba(255,255,255,.38);
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.office-standalone-engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 4px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+  color: rgba(255,255,255,.52);
+  padding: 4px 7px;
+  font-size: 7px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.office-standalone-engine i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+
+.office-standalone-engine.online {
+  color: #86efac;
+}
+
+.office-standalone-engine.online i {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34,197,94,.55);
+}
+
+.office-standalone-tabs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.office-standalone-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.office-standalone-tabs button,
+.office-standalone-actions button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255,255,255,.58);
+  padding: 0 10px;
+  font-size: 8px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.office-standalone-tabs button:hover,
+.office-standalone-actions button:hover {
+  border-color: rgba(255,255,255,.08);
+  background: rgba(255,255,255,.05);
+  color: #fff;
+}
+
+.office-standalone-tabs button.active {
+  border-color: rgba(217,242,42,.20);
+  background: rgba(217,242,42,.09);
+  color: #d9f22a;
+}
+
+.office-standalone-tabs button b {
+  min-width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  font-size: 7px;
+}
+
+.office-standalone-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.office-standalone-actions button {
+  width: 36px;
+  padding: 0;
+}
+
+.office-standalone-actions .new-task {
+  width: auto;
+  border-color: #d9f22a;
+  background: #d9f22a;
+  color: #071019;
+  padding: 0 12px;
+}
+
+.office-standalone-page .ai-staff-workspace {
+  position: absolute;
+  inset: 58px 0 0 0;
+  width: 100%;
+  height: calc(100dvh - 58px);
+  min-height: 0;
+  margin: 0;
+}
+
+.office-standalone-page .ai-office-panel.ai-office-panel-world {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.office-standalone-page .ai-office-panel-world > .ai-office-toolbar {
+  display: none;
+}
+
+.office-standalone-page .gather-office-shell {
+  min-height: 0;
+  height: 100%;
+}
+
+.office-standalone-page .gather-viewport {
+  height: 100%;
+  min-height: 0;
+}
+
+.office-standalone-page .gather-task-drawer {
+  position: absolute !important;
+  right: 14px;
+  top: 14px;
+  height: calc(100% - 28px);
+  z-index: 19000;
+}
+
+.office-standalone-page .office-standalone-task-detail {
+  position: absolute;
+  right: 393px;
+  top: 14px;
+  z-index: 18800;
+  width: min(560px, calc(100% - 425px));
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  margin: 0;
+  border-radius: 16px;
+  transform: translateX(22px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease, transform .2s ease;
+}
+
+.office-standalone-page .office-standalone-task-detail.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.office-standalone-error {
+  position: absolute;
+  left: 50%;
+  top: 70px;
+  z-index: 23000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(248,113,113,.20);
+  border-radius: 10px;
+  background: rgba(67,18,24,.94);
+  color: #fecaca;
+  padding: 8px 11px;
+  font-size: 8px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.24);
+}
+
+.office-standalone-page .gather-minimap {
+  bottom: 16px;
+}
+
+.office-standalone-page .gather-map-controls {
+  bottom: 16px;
+}
+
+.office-standalone-page .gather-bottom-dock {
+  bottom: 14px;
+}
+
+.office-standalone-page .gather-movement-help {
+  bottom: 69px;
+}
+
+/* Let CSS interpolate React snapshots so the world stays fluid at a lower render rate. */
+.gather-avatar {
+  transition:
+    left 78ms linear,
+    top 78ms linear,
+    filter .14s ease;
+  contain: layout paint style;
+}
+
+.gather-avatar-sprite {
+  contain: strict;
+}
+
+.gather-avatar.walking .gather-avatar-sprite {
+  animation:
+    gatherAvatarBob .28s ease-in-out infinite alternate,
+    gatherSpriteWalk .44s steps(1, end) infinite;
+}
+
+@keyframes gatherSpriteWalk {
+  0% { background-position-x: 0; }
+  25% { background-position-x: -48px; }
+  50% { background-position-x: -96px; }
+  75% { background-position-x: -48px; }
+  100% { background-position-x: 0; }
+}
+
+.gather-pc-screen {
+  animation: gatherPcBlink 1.6s steps(1,end) infinite;
+}
+
+@keyframes gatherPcBlink {
+  0%, 55%, 100% { filter: brightness(1); }
+  56%, 75% { filter: brightness(1.14); }
+}
+
+@media (max-width: 1080px) {
+  .office-standalone-nav {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .office-standalone-actions {
+    position: absolute;
+    right: 8px;
+    top: 64px;
+    z-index: 22500;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 12px;
+    background: rgba(7,13,22,.90);
+    padding: 4px;
+  }
+
+  .office-standalone-brand small,
+  .office-standalone-engine {
+    display: none;
+  }
+
+  .office-standalone-tabs {
+    justify-content: flex-end;
+  }
+
+  .office-standalone-page .office-standalone-task-detail {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .office-standalone-nav {
+    height: 54px;
+    grid-template-columns: auto 1fr;
+    padding: 0 7px;
+  }
+
+  .office-standalone-brand > div {
+    display: none;
+  }
+
+  .office-standalone-tabs {
+    justify-content: flex-start;
+  }
+
+  .office-standalone-tabs button {
+    width: 35px;
+    min-height: 35px;
+    padding: 0;
+  }
+
+  .office-standalone-tabs button:not(.active) {
+    color: rgba(255,255,255,.58);
+  }
+
+  .office-standalone-tabs button {
+    font-size: 0;
+  }
+
+  .office-standalone-tabs button b {
+    position: absolute;
+    transform: translate(10px,-10px);
+    font-size: 7px;
+  }
+
+  .office-standalone-page .ai-staff-workspace {
+    inset: 54px 0 0 0;
+    height: calc(100dvh - 54px);
+  }
+
+  .office-standalone-actions {
+    top: 59px;
+  }
+
+  .office-standalone-page .gather-task-drawer {
+    right: 6px;
+    top: 8px;
+    width: calc(100% - 12px);
+    height: calc(100% - 16px);
+  }
+}

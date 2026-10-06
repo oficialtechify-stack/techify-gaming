@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  ArrowLeft,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
@@ -72,7 +73,8 @@ type OfficeMember = {
   active: boolean;
   deskId: string;
   avatar?: string | null;
-  position?: { x: number; y: number; direction?: string; updatedAt?: string } | null;
+  position?: { x: number; y: number; direction?: string; updatedAt?: string; mapVersion?: string } | null;
+  emote?: { emoji?: string; updatedAt?: string } | null;
 };
 
 type HumanTaskStatus = 'todo' | 'working' | 'review' | 'completed' | 'blocked';
@@ -223,7 +225,12 @@ const statusTone = (status: TaskStatus) => {
   return 'queued';
 };
 
-export const FuncionariosIaView: React.FC = () => {
+interface FuncionariosIaViewProps {
+  standalone?: boolean;
+  onExit?: () => void;
+}
+
+export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalone = false, onExit }) => {
   const { currentUser } = useAuth();
   const [workers, setWorkers] = useState<Worker[]>(FALLBACK_WORKERS);
   const [tasks, setTasks] = useState<AiTask[]>([]);
@@ -280,9 +287,6 @@ export const FuncionariosIaView: React.FC = () => {
     description: '',
     priority: 'normal' as HumanTask['priority'],
   });
-  const [tick, setTick] = useState(0);
-  const [pcTick, setPcTick] = useState(0);
-
   const [form, setForm] = useState({
     workerId: 'lumy-manager',
     title: '',
@@ -291,14 +295,6 @@ export const FuncionariosIaView: React.FC = () => {
     priority: 'normal' as AiTask['priority'],
     requiresApproval: true,
   });
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setTick((value) => value + 1);
-      setPcTick((value) => (value + 1) % 3);
-    }, 360);
-    return () => window.clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (!isChatOpen) return;
@@ -857,96 +853,171 @@ export const FuncionariosIaView: React.FC = () => {
   };
 
   return (
-    <div className="ai-staff-page" id="leadspay-ai-staff-office">
-      <section className="ai-staff-header">
-        <div>
-          <div className="ai-staff-eyebrow">
-            <Gamepad2 className="h-4 w-4" />
-            LEADSPAY OFFICE · {access?.officeRole === 'ceo' ? 'CEO' : access?.officeRole === 'designer' ? 'DESIGNER' : 'EQUIPE'}
-          </div>
-          <h1>LeadsPay Office</h1>
-          <p>
-            Um escritório jogável para você, sua equipe humana e os funcionários IA trabalharem no mesmo ambiente.
-          </p>
-        </div>
-
-        <div className="ai-staff-header-actions">
-          <div className={`ai-engine-pill ${engine.connected ? 'online' : 'supervised'}`}>
-            <span className="ai-engine-dot" />
-            {engine.connected ? 'Executor conectado' : 'Modo supervisionado'}
-          </div>
-          <button type="button" className="ai-staff-secondary" onClick={() => setIsTeamChatOpen(true)}>
-            <MessageCircle className="h-4 w-4" />
-            Chat da equipe
-          </button>
-          <button type="button" className="ai-staff-secondary" onClick={() => setIsComputerOpen(true)}>
-            <Laptop className="h-4 w-4" />
-            Meu computador
-          </button>
-          {access?.canManageTeam && (
-            <button type="button" className="ai-staff-secondary" onClick={() => setIsTeamModalOpen(true)}>
-              <Users className="h-4 w-4" />
-              Equipe humana
-            </button>
-          )}
-          <button type="button" className="ai-staff-secondary" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </button>
-          <button type="button" className="ai-staff-primary" onClick={() => openTaskFor()}>
-            <Plus className="h-4 w-4" />
-            Nova tarefa IA
-          </button>
-        </div>
-      </section>
-
-      {!engine.connected ? (
-        <div className="ai-engine-note">
-          <ShieldCheck className="h-4 w-4" />
-          <div>
-            <strong>A fila de tarefas já é real e fica salva no Admin.</strong>
-            <span>{engine.message} Nenhuma tarefa será marcada como concluída automaticamente sem retorno real de um executor.</span>
-          </div>
-        </div>
-      ) : (
-        <div className="ai-engine-note online">
-          <Sparkles className="h-4 w-4" />
-          <div>
-            <strong>{engine.provider || 'IA'} conectado · {engine.model || 'modelo ativo'}</strong>
-            <span>
-              {engine.repoWriteConnected
-                ? 'Os funcionários podem preparar patches e, após sua aprovação, criar uma branch de revisão antes de qualquer publicação.'
-                : 'Os funcionários já preparam patches executáveis. Falta conectar LEADSPAY_GITHUB_TOKEN para o botão de aplicar no GitHub funcionar.'}
+    <div className={`ai-staff-page ${standalone ? 'office-standalone-page' : ''}`} id="leadspay-ai-staff-office">
+      {standalone ? (
+        <section className="office-standalone-nav">
+          <div className="office-standalone-brand">
+            <span className="office-standalone-logo"><Gamepad2 className="h-4 w-4" /></span>
+            <div>
+              <strong>LeadsPay Office</strong>
+              <small>{access?.officeRole === 'ceo' ? 'CEO' : access?.officeRole === 'designer' ? 'Designer' : 'Equipe'} · escritório ao vivo</small>
+            </div>
+            <span className={`office-standalone-engine ${engine.connected ? 'online' : 'supervised'}`}>
+              <i />
+              {engine.connected ? 'IA online' : 'Supervisionado'}
             </span>
           </div>
-        </div>
+
+          <nav className="office-standalone-tabs">
+            <button type="button" className={!taskDrawerOpen && !isTeamChatOpen && !isComputerOpen && !isTeamModalOpen ? 'active' : ''} onClick={() => {
+              setTaskDrawerOpen(false);
+              setIsTeamChatOpen(false);
+              setIsComputerOpen(false);
+              setIsTeamModalOpen(false);
+            }}>
+              <Gamepad2 className="h-4 w-4" />
+              Office
+            </button>
+            <button type="button" className={taskDrawerOpen ? 'active' : ''} onClick={() => setTaskDrawerOpen((value) => !value)}>
+              <ClipboardList className="h-4 w-4" />
+              Tarefas
+              {tasks.length > 0 && <b>{tasks.length}</b>}
+            </button>
+            <button type="button" className={isTeamChatOpen ? 'active' : ''} onClick={() => setIsTeamChatOpen(true)}>
+              <MessageCircle className="h-4 w-4" />
+              Chat
+            </button>
+            <button type="button" className={isComputerOpen ? 'active' : ''} onClick={() => setIsComputerOpen(true)}>
+              <Laptop className="h-4 w-4" />
+              Computador
+            </button>
+            {access?.canManageTeam && (
+              <button type="button" className={isTeamModalOpen ? 'active' : ''} onClick={() => setIsTeamModalOpen(true)}>
+                <Users className="h-4 w-4" />
+                Equipe
+              </button>
+            )}
+            <button type="button" onClick={() => selectedWorker && openChat(selectedWorker.id)}>
+              <Brain className="h-4 w-4" />
+              Funcionários IA
+            </button>
+          </nav>
+
+          <div className="office-standalone-actions">
+            <button type="button" title="Atualizar dados" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button type="button" className="new-task" onClick={() => openTaskFor()}>
+              <Plus className="h-4 w-4" />
+              Nova tarefa
+            </button>
+            <button type="button" title="Voltar para LeadsPay" onClick={onExit}>
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className="ai-staff-header">
+          <div>
+            <div className="ai-staff-eyebrow">
+              <Gamepad2 className="h-4 w-4" />
+              LEADSPAY OFFICE · {access?.officeRole === 'ceo' ? 'CEO' : access?.officeRole === 'designer' ? 'DESIGNER' : 'EQUIPE'}
+            </div>
+            <h1>LeadsPay Office</h1>
+            <p>
+              Um escritório jogável para você, sua equipe humana e os funcionários IA trabalharem no mesmo ambiente.
+            </p>
+          </div>
+
+          <div className="ai-staff-header-actions">
+            <div className={`ai-engine-pill ${engine.connected ? 'online' : 'supervised'}`}>
+              <span className="ai-engine-dot" />
+              {engine.connected ? 'Executor conectado' : 'Modo supervisionado'}
+            </div>
+            <button type="button" className="ai-staff-secondary" onClick={() => setIsTeamChatOpen(true)}>
+              <MessageCircle className="h-4 w-4" />
+              Chat da equipe
+            </button>
+            <button type="button" className="ai-staff-secondary" onClick={() => setIsComputerOpen(true)}>
+              <Laptop className="h-4 w-4" />
+              Meu computador
+            </button>
+            {access?.canManageTeam && (
+              <button type="button" className="ai-staff-secondary" onClick={() => setIsTeamModalOpen(true)}>
+                <Users className="h-4 w-4" />
+                Equipe humana
+              </button>
+            )}
+            <button type="button" className="ai-staff-secondary" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </button>
+            <button type="button" className="ai-staff-primary" onClick={() => openTaskFor()}>
+              <Plus className="h-4 w-4" />
+              Nova tarefa IA
+            </button>
+          </div>
+        </section>
       )}
 
-      {error && (
-        <div className="ai-staff-error">
+      {!standalone && (
+        <>
+          {!engine.connected ? (
+            <div className="ai-engine-note">
+              <ShieldCheck className="h-4 w-4" />
+              <div>
+                <strong>A fila de tarefas já é real e fica salva no Admin.</strong>
+                <span>{engine.message} Nenhuma tarefa será marcada como concluída automaticamente sem retorno real de um executor.</span>
+              </div>
+            </div>
+          ) : (
+            <div className="ai-engine-note online">
+              <Sparkles className="h-4 w-4" />
+              <div>
+                <strong>{engine.provider || 'IA'} conectado · {engine.model || 'modelo ativo'}</strong>
+                <span>
+                  {engine.repoWriteConnected
+                    ? 'Os funcionários podem preparar patches e, após sua aprovação, criar uma branch de revisão antes de qualquer publicação.'
+                    : 'Os funcionários já preparam patches executáveis. Falta conectar LEADSPAY_GITHUB_TOKEN para o botão de aplicar no GitHub funcionar.'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="ai-staff-error">
+              <AlertCircle className="h-4 w-4" />
+              {error}
+            </div>
+          )}
+
+          <section className="ai-staff-stats">
+            <article>
+              <span className="stat-icon working"><Cpu className="h-4 w-4" /></span>
+              <div><small>Trabalhando</small><strong>{counts.working}</strong></div>
+            </article>
+            <article>
+              <span className="stat-icon queued"><ClipboardList className="h-4 w-4" /></span>
+              <div><small>Na fila</small><strong>{counts.queued}</strong></div>
+            </article>
+            <article>
+              <span className="stat-icon approval"><Clock3 className="h-4 w-4" /></span>
+              <div><small>Aguardando você</small><strong>{counts.approval}</strong></div>
+            </article>
+            <article>
+              <span className="stat-icon done"><CheckCircle2 className="h-4 w-4" /></span>
+              <div><small>Concluídas</small><strong>{counts.completed}</strong></div>
+            </article>
+          </section>
+        </>
+      )}
+
+      {standalone && error && (
+        <div className="office-standalone-error">
           <AlertCircle className="h-4 w-4" />
-          {error}
+          <span>{error}</span>
         </div>
       )}
-
-      <section className="ai-staff-stats">
-        <article>
-          <span className="stat-icon working"><Cpu className="h-4 w-4" /></span>
-          <div><small>Trabalhando</small><strong>{counts.working}</strong></div>
-        </article>
-        <article>
-          <span className="stat-icon queued"><ClipboardList className="h-4 w-4" /></span>
-          <div><small>Na fila</small><strong>{counts.queued}</strong></div>
-        </article>
-        <article>
-          <span className="stat-icon approval"><Clock3 className="h-4 w-4" /></span>
-          <div><small>Aguardando você</small><strong>{counts.approval}</strong></div>
-        </article>
-        <article>
-          <span className="stat-icon done"><CheckCircle2 className="h-4 w-4" /></span>
-          <div><small>Concluídas</small><strong>{counts.completed}</strong></div>
-        </article>
-      </section>
 
       <section className="ai-staff-workspace">
         <div className="ai-office-panel ai-office-panel-world">
@@ -976,8 +1047,6 @@ export const FuncionariosIaView: React.FC = () => {
             officeMembers={officeMembers}
             currentUserId={currentUser?.uid || null}
             selectedWorkerId={selectedWorkerId}
-            tick={tick}
-            pcTick={pcTick}
             onSelectWorker={selectWorker}
             onSelectHuman={(userId) => {
               setSelectedHumanId(userId);
@@ -1123,89 +1192,91 @@ export const FuncionariosIaView: React.FC = () => {
         </aside>
       </section>
 
-      <section className="ai-worker-detail">
-        <div className="ai-worker-profile">
-          <span
-            className="pixel-agent-sprite profile-sprite"
-            style={{
-              backgroundImage: `url('/pixel-agents/assets/characters/char_${selectedWorker?.palette || 0}.png')`,
-              backgroundPosition: `${-48}px 0px`,
-            }}
-          />
-          <div>
-            <span className="ai-worker-kicker">FUNCIONÁRIO SELECIONADO</span>
-            {editingName ? (
-              <div className="ai-worker-rename">
-                <input
-                  value={nameDraft}
-                  onChange={(event) => setNameDraft(event.target.value)}
-                  maxLength={32}
-                  autoFocus
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') void saveWorkerName();
-                    if (event.key === 'Escape') setEditingName(false);
-                  }}
-                />
-                <button type="button" onClick={() => void saveWorkerName()} disabled={savingName}>
-                  {savingName ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                </button>
-                <button type="button" onClick={() => setEditingName(false)}>
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="ai-worker-name-line">
-                <h2>{selectedWorker?.name}</h2>
-                {access?.isOfficeAdmin && (
-                  <button type="button" onClick={beginRename} title="Trocar nome">
-                    <Pencil className="h-3.5 w-3.5" />
+      {!standalone && (
+        <section className="ai-worker-detail">
+          <div className="ai-worker-profile">
+            <span
+              className="pixel-agent-sprite profile-sprite"
+              style={{
+                backgroundImage: `url('/pixel-agents/assets/characters/char_${selectedWorker?.palette || 0}.png')`,
+                backgroundPosition: `${-48}px 0px`,
+              }}
+            />
+            <div>
+              <span className="ai-worker-kicker">FUNCIONÁRIO SELECIONADO</span>
+              {editingName ? (
+                <div className="ai-worker-rename">
+                  <input
+                    value={nameDraft}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    maxLength={32}
+                    autoFocus
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void saveWorkerName();
+                      if (event.key === 'Escape') setEditingName(false);
+                    }}
+                  />
+                  <button type="button" onClick={() => void saveWorkerName()} disabled={savingName}>
+                    {savingName ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                   </button>
-                )}
-              </div>
-            )}
-            <strong>{selectedWorker?.role}</strong>
-            <p>{selectedWorker?.specialty}</p>
-            {selectedWorker?.brain && (
-              <div className="ai-worker-brain-card">
-                <div>
-                  <Brain className="h-3.5 w-3.5" />
-                  <strong>{selectedWorker.brain.mood || 'tranquilo'}</strong>
-                  <span>· {selectedWorker.brain.focus || 'LeadsPay'}</span>
+                  <button type="button" onClick={() => setEditingName(false)}>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <p>{selectedWorker.brain.lastThought || 'Estou disponível para ajudar.'}</p>
-                <small>{selectedWorker.brain.currentIntent || 'Aguardando o próximo passo.'}</small>
-              </div>
-            )}
+              ) : (
+                <div className="ai-worker-name-line">
+                  <h2>{selectedWorker?.name}</h2>
+                  {access?.isOfficeAdmin && (
+                    <button type="button" onClick={beginRename} title="Trocar nome">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+              <strong>{selectedWorker?.role}</strong>
+              <p>{selectedWorker?.specialty}</p>
+              {selectedWorker?.brain && (
+                <div className="ai-worker-brain-card">
+                  <div>
+                    <Brain className="h-3.5 w-3.5" />
+                    <strong>{selectedWorker.brain.mood || 'tranquilo'}</strong>
+                    <span>· {selectedWorker.brain.focus || 'LeadsPay'}</span>
+                  </div>
+                  <p>{selectedWorker.brain.lastThought || 'Estou disponível para ajudar.'}</p>
+                  <small>{selectedWorker.brain.currentIntent || 'Aguardando o próximo passo.'}</small>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="ai-worker-detail-actions">
-          <div>
-            <small>Tarefas deste funcionário</small>
-            <strong>{selectedWorkerTasks.length}</strong>
+          <div className="ai-worker-detail-actions">
+            <div>
+              <small>Tarefas deste funcionário</small>
+              <strong>{selectedWorkerTasks.length}</strong>
+            </div>
+            <button
+              type="button"
+              className="ai-staff-secondary"
+              disabled={!engine.connected || thinkingWorkerId === selectedWorker?.id}
+              onClick={() => selectedWorker && void askWorkerToThink(selectedWorker.id)}
+            >
+              {thinkingWorkerId === selectedWorker?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+              Pensar
+            </button>
+            <button type="button" className="ai-staff-secondary ai-chat-button" onClick={() => selectedWorker && openChat(selectedWorker.id)}>
+              <MessageCircle className="h-4 w-4" />
+              Conversar
+            </button>
+            <button type="button" className="ai-staff-primary" onClick={() => openTaskFor(selectedWorker?.id)}>
+              <Plus className="h-4 w-4" />
+              Atribuir tarefa
+            </button>
           </div>
-          <button
-            type="button"
-            className="ai-staff-secondary"
-            disabled={!engine.connected || thinkingWorkerId === selectedWorker?.id}
-            onClick={() => selectedWorker && void askWorkerToThink(selectedWorker.id)}
-          >
-            {thinkingWorkerId === selectedWorker?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-            Pensar
-          </button>
-          <button type="button" className="ai-staff-secondary ai-chat-button" onClick={() => selectedWorker && openChat(selectedWorker.id)}>
-            <MessageCircle className="h-4 w-4" />
-            Conversar
-          </button>
-          <button type="button" className="ai-staff-primary" onClick={() => openTaskFor(selectedWorker?.id)}>
-            <Plus className="h-4 w-4" />
-            Atribuir tarefa
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
 
       {selectedTask && (
-        <section className="ai-selected-task">
+        <section className={`ai-selected-task ${standalone ? `office-standalone-task-detail ${taskDrawerOpen ? 'open' : ''}` : ''}`}>
           <div className="ai-selected-task-main">
             <div className="ai-selected-task-meta">
               <span className={`ai-task-status ${statusTone(selectedTask.status)}`}>{STATUS_LABEL[selectedTask.status]}</span>

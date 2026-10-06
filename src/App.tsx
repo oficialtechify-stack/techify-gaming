@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ActiveModal } from './types';
 import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
+import { FuncionariosIaView } from './components/platform/FuncionariosIaView';
 import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
@@ -17,7 +18,10 @@ import './styles/leadspay-landing.css';
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [viewPlatform, setViewPlatform] = useState<boolean>(false);
+  const [appPath, setAppPath] = useState<string>(() => typeof window !== 'undefined' ? window.location.pathname : '/');
   const { isAuthenticated, currentUser } = useAuth();
+
+  const isOfficePath = appPath === '/office' || appPath === '/leadspay-office';
 
   // Direct checkout link state
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -25,6 +29,13 @@ function MainApp() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [isThankYouPage, setIsThankYouPage] = useState<boolean>(false);
   const [affiliateRef, setAffiliateRef] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncPath = () => setAppPath(window.location.pathname);
+    window.addEventListener('popstate', syncPath);
+    return () => window.removeEventListener('popstate', syncPath);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -234,6 +245,48 @@ function MainApp() {
       setViewPlatform(true);
     }
   };
+
+  // LeadsPay Office roda como aplicativo independente do dashboard.
+  if (isOfficePath) {
+    if (!isAuthenticated || !currentUser) {
+      return (
+        <div className="min-h-[100dvh] bg-[#071019] text-white flex items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b131d] p-7 text-center shadow-2xl">
+            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-[#D9F22A]/30 bg-[#D9F22A]/10 text-[#D9F22A]">
+              <span className="text-lg font-black">LP</span>
+            </div>
+            <h1 className="text-2xl font-black">LeadsPay Office</h1>
+            <p className="mt-2 text-sm text-white/60">Entre na sua conta LeadsPay para acessar o escritório.</p>
+            <button
+              type="button"
+              onClick={() => setActiveModal('login')}
+              className="mt-6 w-full rounded-xl bg-[#D9F22A] px-4 py-3 text-sm font-black text-[#071019]"
+            >
+              Entrar no Office
+            </button>
+          </div>
+          <Modals
+            activeModal={activeModal}
+            onClose={handleCloseModal}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <ErrorBoundary fallbackTitle="Erro ao carregar o LeadsPay Office">
+        <FuncionariosIaView
+          standalone
+          onExit={() => {
+            window.history.pushState({}, '', '/');
+            setAppPath('/');
+            setViewPlatform(true);
+          }}
+        />
+      </ErrorBoundary>
+    );
+  }
 
   // If user opens platform or is logged in and wants to see platform
   if (viewPlatform) {

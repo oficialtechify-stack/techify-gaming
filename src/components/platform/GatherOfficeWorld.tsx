@@ -133,8 +133,6 @@ interface GatherOfficeWorldProps {
   officeMembers?: OfficeMember[];
   currentUserId?: string | null;
   selectedWorkerId: string;
-  tick: number;
-  pcTick: number;
   onSelectWorker: (workerId: string) => void;
   onSelectHuman?: (userId: string) => void;
   onPlayerMove?: (position: { x: number; y: number; direction: Direction }) => void;
@@ -151,7 +149,7 @@ const PLAYER_SPEED = 138;
 const AI_SPEED = 54;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
-const FRAME_MS = 28;
+const FRAME_MS = 72;
 const OFFICE_MAP_VERSION = 'gather-v1';
 
 const AREAS: OfficeArea[] = [
@@ -475,11 +473,9 @@ function resolvedMemberPosition(member: OfficeMember) {
   };
 }
 
-function spriteFrame(walking: boolean, direction: Direction, tick: number) {
+function spriteFrame(direction: Direction) {
   const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
-  const frames = [0, 1, 2, 1];
-  const frame = walking ? frames[Math.floor(tick / 2) % frames.length] : 1;
-  return { row, frame, flip: direction === 'left' };
+  return { row, flip: direction === 'left' };
 }
 
 function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motion: MotionState, now: number) {
@@ -488,16 +484,41 @@ function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motio
   if (state === 'queued') return { key: 'queue', cell: QUEUE_TARGET[workerId] || { x: 30, y: 20 }, idleIndex: motion.idleIndex, nextIdleAt: now + 6000 };
   if (state === 'paused') return { key: 'lounge', cell: PAUSE_TARGET[workerId] || { x: 39, y: 19 }, idleIndex: motion.idleIndex, nextIdleAt: now + 8000 };
 
+  const home = HOME_TARGET[workerId] || { x: 8, y: 10 };
   const list = IDLE_TARGETS[workerId] || [{ x: 37, y: 34 }];
-  let idleIndex = motion.idleIndex % list.length;
-  let nextIdleAt = motion.nextIdleAt;
-  const destination = list[idleIndex];
   const cell = cellAtPixel(motion.x, motion.y);
-  if (cell.x === destination.x && cell.y === destination.y && motion.path.length === 0 && now >= nextIdleAt) {
-    idleIndex = (idleIndex + 1) % list.length;
-    nextIdleAt = now + 8500 + idleIndex * 1200;
+  const isBreak = motion.targetKey.startsWith('break:');
+
+  if (!isBreak) {
+    if (now < motion.nextIdleAt) {
+      return { key: 'home', cell: home, idleIndex: motion.idleIndex, nextIdleAt: motion.nextIdleAt };
+    }
+    const idleIndex = (motion.idleIndex + 1) % list.length;
+    return {
+      key: 'break:' + idleIndex,
+      cell: list[idleIndex],
+      idleIndex,
+      nextIdleAt: now + 10000 + idleIndex * 1800,
+    };
   }
-  return { key: 'idle:' + idleIndex, cell: list[idleIndex], idleIndex, nextIdleAt };
+
+  const destination = list[motion.idleIndex % list.length];
+  const reachedBreak = cell.x === destination.x && cell.y === destination.y && motion.path.length === 0;
+  if (reachedBreak && now >= motion.nextIdleAt) {
+    return {
+      key: 'home',
+      cell: home,
+      idleIndex: motion.idleIndex,
+      nextIdleAt: now + 45000 + motion.idleIndex * 7000,
+    };
+  }
+
+  return {
+    key: 'break:' + motion.idleIndex,
+    cell: destination,
+    idleIndex: motion.idleIndex,
+    nextIdleAt: motion.nextIdleAt,
+  };
 }
 
 function humanTaskText(task: HumanTaskLite | null) {
@@ -546,8 +567,6 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   officeMembers = [],
   currentUserId,
   selectedWorkerId,
-  tick,
-  pcTick,
   onSelectWorker,
   onSelectHuman,
   onPlayerMove,
@@ -635,7 +654,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   useEffect(() => {
     const next = { ...workersMotionRef.current };
-    for (const worker of workers) {
+    for (const [index, worker] of workers.entries()) {
       if (next[worker.id]) continue;
       const home = centerOf(HOME_TARGET[worker.id] || { x: 8, y: 10 });
       next[worker.id] = {
@@ -647,7 +666,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         path: [],
         targetKey: '',
         idleIndex: 0,
-        nextIdleAt: Date.now() + 5000,
+        nextIdleAt: Date.now() + 26000 + index * 9000,
       };
     }
     workersMotionRef.current = next;
@@ -713,6 +732,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       previous = now;
 
       const nextWorkers = { ...workersMotionRef.current };
+      let workersMoved = false;
       for (const worker of workersRef.current) {
         const current = nextWorkers[worker.id];
         if (!current) continue;
@@ -750,6 +770,16 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             if (canOccupy(x, ny)) y = ny;
             direction = directionFor(vx, vy, direction);
           }
+        }
+
+        if (
+          Math.abs(x - current.x) > .2 ||
+          Math.abs(y - current.y) > .2 ||
+          direction !== current.direction ||
+          nextRoute.length !== current.path.length ||
+          target.key !== current.targetKey
+        ) {
+          workersMoved = true;
         }
 
         nextWorkers[worker.id] = {
@@ -885,9 +915,27 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             }
           }
 
-          setPlayer({ ...nextPlayer });
-          setWorkersMotion({ ...nextWorkers });
-          setInteraction(nearest);
+          setPlayer((previousPlayer) => {
+            if (
+              previousPlayer &&
+              Math.abs(previousPlayer.x - nextPlayer.x) < .2 &&
+              Math.abs(previousPlayer.y - nextPlayer.y) < .2 &&
+              previousPlayer.direction === nextPlayer.direction &&
+              previousPlayer.path.length === nextPlayer.path.length
+            ) {
+              return previousPlayer;
+            }
+            return { ...nextPlayer };
+          });
+          if (workersMoved) setWorkersMotion({ ...nextWorkers });
+          setInteraction((current) => {
+            if (
+              current?.type === nearest?.type &&
+              current?.label === nearest?.label &&
+              JSON.stringify(current) === JSON.stringify(nearest)
+            ) return current;
+            return nearest;
+          });
         }
       }
 
@@ -1349,7 +1397,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const selectedHuman = officeMembers.find((member) => member.userId === selectedHumanId) || null;
   const playerWalking = player ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
-  const playerFrame = player ? spriteFrame(playerWalking, player.direction, tick) : null;
+  const playerFrame = player ? spriteFrame(player.direction) : null;
 
   return (
     <div className="gather-office-shell" ref={shellRef}>
@@ -1359,6 +1407,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         onPointerDown={onViewportPointerDown}
         onPointerMove={onViewportPointerMove}
         onPointerUp={onViewportPointerUp}
+        onWheel={(event) => {
+          event.preventDefault();
+          changeZoom(event.deltaY < 0 ? .08 : -.08);
+        }}
       >
         <div
           className="gather-world"
@@ -1427,7 +1479,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               >
                 <img className="desk-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
                 <img className="desk-table" src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" />
-                <img className="desk-pc" src={'/pixel-agents/assets/furniture/PC/PC_FRONT_ON_' + ((pcTick % 2) + 1) + '.png'} alt="" />
+                <img className="desk-pc gather-pc-screen" src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_1.png" alt="" />
               </button>
             );
           })}
@@ -1506,7 +1558,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             if (!motion) return null;
             const state = workerState(tasks, worker.id);
             const walking = motion.path.length > 0;
-            const frame = spriteFrame(walking, motion.direction, tick);
+            const frame = spriteFrame(motion.direction);
             const task = currentTask(tasks, worker.id);
             return (
               <button
@@ -1523,7 +1575,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   className="gather-avatar-sprite"
                   style={{
                     backgroundImage: 'url(/pixel-agents/assets/characters/char_' + worker.palette + '.png)',
-                    backgroundPosition: (-frame.frame * 48) + 'px ' + (-frame.row * 96) + 'px',
+                    backgroundPositionX: walking ? undefined : '-48px',
+                    backgroundPositionY: (-frame.row * 96) + 'px',
                     transform: frame.flip ? 'scaleX(-1)' : undefined,
                   }}
                 />
@@ -1540,7 +1593,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           {remoteHumans.map(({ member, x, y, direction }) => {
             const updatedAt = member.position?.updatedAt ? new Date(member.position.updatedAt).getTime() : 0;
             const moving = updatedAt > 0 && Date.now() - updatedAt < 1800;
-            const frame = spriteFrame(moving, direction, tick);
+            const frame = spriteFrame(direction);
             const humanTask = activeHumanTask(humanTasks, member.userId);
             return (
               <button
@@ -1557,7 +1610,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   className="gather-avatar-sprite"
                   style={{
                     backgroundImage: 'url(/pixel-agents/assets/characters/char_' + member.palette + '.png)',
-                    backgroundPosition: (-frame.frame * 48) + 'px ' + (-frame.row * 96) + 'px',
+                    backgroundPositionX: moving ? undefined : '-48px',
+                    backgroundPositionY: (-frame.row * 96) + 'px',
                     transform: frame.flip ? 'scaleX(-1)' : undefined,
                   }}
                 />
@@ -1583,7 +1637,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 className="gather-avatar-sprite"
                 style={{
                   backgroundImage: 'url(/pixel-agents/assets/characters/char_' + currentMember.palette + '.png)',
-                  backgroundPosition: (-playerFrame.frame * 48) + 'px ' + (-playerFrame.row * 96) + 'px',
+                  backgroundPositionX: playerWalking ? undefined : '-48px',
+                  backgroundPositionY: (-playerFrame.row * 96) + 'px',
                   transform: playerFrame.flip ? 'scaleX(-1)' : undefined,
                 }}
               />
