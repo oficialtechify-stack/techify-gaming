@@ -1703,7 +1703,7 @@
 .pixel-world {
   position: relative;
   width: 1100px;
-  height: 900px;
+  height: 940px;
   margin: 0 auto;
   isolation: isolate;
   overflow: hidden;
@@ -1767,7 +1767,7 @@
   left: 80px;
   top: 340px;
   width: 590px;
-  height: 380px;
+  height: 420px;
   background-color: #6a4a31;
   background-image: url('/pixel-agents/assets/floors/floor_7.png');
   background-size: 48px 48px;
@@ -1787,7 +1787,7 @@
   left: 670px;
   top: 520px;
   width: 360px;
-  height: 360px;
+  height: 400px;
   background-color: #526d8f;
   background-image: url('/pixel-agents/assets/floors/floor_5.png');
   background-size: 48px 48px;
@@ -1795,7 +1795,7 @@
 
 .pixel-room-lab {
   left: 80px;
-  top: 720px;
+  top: 760px;
   width: 300px;
   height: 160px;
   background-color: #344e57;

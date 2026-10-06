@@ -47,9 +47,9 @@ interface PixelOfficeWorldProps {
 
 const NODES: Record<string, OfficeNode> = {
   // Main office / operations
-  'office-center': { x: 410, y: 575, neighbors: ['office-door', 'desk-lumy', 'desk-pixel', 'desk-stack', 'desk-iris', 'desk-scout', 'desk-nova', 'office-left', 'office-right'] },
-  'office-left': { x: 220, y: 575, neighbors: ['office-center', 'lab-door', 'desk-lumy', 'desk-iris'] },
-  'office-right': { x: 620, y: 560, neighbors: ['office-center', 'kitchen-door', 'lounge-door', 'desk-stack', 'desk-nova'] },
+  'office-center': { x: 410, y: 625, neighbors: ['office-door', 'desk-lumy', 'desk-pixel', 'desk-stack', 'desk-iris', 'desk-scout', 'desk-nova', 'office-left', 'office-right'] },
+  'office-left': { x: 220, y: 625, neighbors: ['office-center', 'lab-door', 'desk-lumy', 'desk-iris'] },
+  'office-right': { x: 620, y: 610, neighbors: ['office-center', 'kitchen-door', 'lounge-door', 'desk-stack', 'desk-nova'] },
   'office-door': { x: 555, y: 350, neighbors: ['office-center', 'hall-low'] },
 
   // Hall / meeting connection
@@ -68,24 +68,24 @@ const NODES: Record<string, OfficeNode> = {
   'kitchen-water': { x: 770, y: 425, neighbors: ['kitchen-center'] },
 
   // Lounge / creative room
-  'lounge-door': { x: 690, y: 650, neighbors: ['office-right', 'lounge-center'] },
-  'lounge-center': { x: 835, y: 700, neighbors: ['lounge-door', 'lounge-sofa', 'lounge-window'] },
-  'lounge-sofa': { x: 815, y: 790, neighbors: ['lounge-center'] },
-  'lounge-window': { x: 920, y: 665, neighbors: ['lounge-center'] },
+  'lounge-door': { x: 690, y: 690, neighbors: ['office-right', 'lounge-center'] },
+  'lounge-center': { x: 835, y: 745, neighbors: ['lounge-door', 'lounge-sofa', 'lounge-window'] },
+  'lounge-sofa': { x: 815, y: 835, neighbors: ['lounge-center'] },
+  'lounge-window': { x: 920, y: 710, neighbors: ['lounge-center'] },
 
   // Lab
-  'lab-door': { x: 190, y: 705, neighbors: ['office-left', 'lab-center'] },
-  'lab-center': { x: 175, y: 795, neighbors: ['lab-door', 'lab-terminal', 'lab-board'] },
-  'lab-terminal': { x: 265, y: 815, neighbors: ['lab-center'] },
-  'lab-board': { x: 120, y: 755, neighbors: ['lab-center'] },
+  'lab-door': { x: 190, y: 745, neighbors: ['office-left', 'lab-center'] },
+  'lab-center': { x: 175, y: 835, neighbors: ['lab-door', 'lab-terminal', 'lab-board'] },
+  'lab-terminal': { x: 265, y: 855, neighbors: ['lab-center'] },
+  'lab-board': { x: 120, y: 795, neighbors: ['lab-center'] },
 
   // Desk seats: characters sit below desks and face UP.
-  'desk-lumy': { x: 255, y: 530, neighbors: ['office-center', 'office-left'] },
-  'desk-pixel': { x: 410, y: 530, neighbors: ['office-center'] },
-  'desk-stack': { x: 565, y: 530, neighbors: ['office-center', 'office-right'] },
-  'desk-iris': { x: 255, y: 660, neighbors: ['office-left', 'office-center'] },
-  'desk-scout': { x: 410, y: 660, neighbors: ['office-center'] },
-  'desk-nova': { x: 565, y: 660, neighbors: ['office-right', 'office-center'] },
+  'desk-lumy': { x: 255, y: 585, neighbors: ['office-center', 'office-left'] },
+  'desk-pixel': { x: 410, y: 585, neighbors: ['office-center'] },
+  'desk-stack': { x: 565, y: 585, neighbors: ['office-center', 'office-right'] },
+  'desk-iris': { x: 255, y: 715, neighbors: ['office-left', 'office-center'] },
+  'desk-scout': { x: 410, y: 715, neighbors: ['office-center'] },
+  'desk-nova': { x: 565, y: 715, neighbors: ['office-right', 'office-center'] },
 };
 
 const HOME_NODE: Record<string, string> = {
