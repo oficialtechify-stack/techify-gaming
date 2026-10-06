@@ -23,7 +23,6 @@ import {
 
 interface ComunidadeAfiliadosViewProps {
   userName?: string;
-  onOpenOnboardingTour?: () => void;
   onNavigateToVitrine?: () => void;
 }
 
@@ -31,7 +30,6 @@ const WHATSAPP_COMMUNITY_URL = 'https://chat.whatsapp.com/BcS8hLxACB87gi54t31ipg
 
 export const ComunidadeAfiliadosView: React.FC<ComunidadeAfiliadosViewProps> = ({
   userName = 'Afiliado',
-  onOpenOnboardingTour,
   onNavigateToVitrine
 }) => {
   const [copiedLink, setCopiedLink] = useState(false);
@@ -113,15 +111,7 @@ export const ComunidadeAfiliadosView: React.FC<ComunidadeAfiliadosViewProps> = (
               )}
             </button>
 
-            {onOpenOnboardingTour && (
-              <button
-                onClick={onOpenOnboardingTour}
-                className="px-4 py-3.5 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-bold font-['Syne'] flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <Compass className="w-4 h-4" />
-                <span>Ver Guia da Plataforma</span>
-              </button>
-            )}
+
           </div>
 
           {/* Trust Mini-bar */}
