@@ -329,7 +329,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
     const orderBumpAmountCents = selectedOrderBump ? toCents(orderBumpAmount) : 0;
     const soldItemCount = 1 + (selectedOrderBump ? 1 : 0);
-    const checkoutFeeCents = CHECKOUT_FEE_PER_ITEM_CENTS * soldItemCount;
+    // A taxa LeadsPay é cobrada uma única vez por transação do checkout.
+    // Order Bump faz parte do mesmo pagamento e não cria uma segunda taxa.
+    const checkoutFeeCents = CHECKOUT_FEE_PER_ITEM_CENTS;
     const grossAmountCents = productAmountCents + orderBumpAmountCents + checkoutFeeCents;
     const commissionableAmountCents =
       productAmountCents +
