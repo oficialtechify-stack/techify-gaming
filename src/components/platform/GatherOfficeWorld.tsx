@@ -7,10 +7,13 @@ import {
   ClipboardList,
   LocateFixed,
   Lock,
+  Maximize2,
+  Minimize2,
   MessageCircle,
   Mic,
   MicOff,
   MonitorUp,
+  Smile,
   Users,
   Video,
   X,
@@ -42,6 +45,7 @@ type OfficeMember = {
   palette: number;
   deskId: string;
   position?: { x: number; y: number; direction?: string; updatedAt?: string } | null;
+  emote?: { emoji?: string; updatedAt?: string } | null;
 };
 
 type TaskStatus =
@@ -509,6 +513,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   onOpenTasks,
 }) => {
   const { currentUser } = useAuth();
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const keysRef = useRef(new Set<string>());
   const playerRef = useRef<MotionState | null>(null);
@@ -535,6 +540,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [quietMode, setQuietMode] = useState(false);
   const [lockedAreas, setLockedAreas] = useState<Record<string, boolean>>({});
   const [callNotice, setCallNotice] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [emoteMenuOpen, setEmoteMenuOpen] = useState(false);
+  const [localEmote, setLocalEmote] = useState<{ emoji: string; updatedAt: number } | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -548,6 +556,12 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [callConnecting, setCallConnecting] = useState(false);
 
   const currentMember = officeMembers.find((member) => member.userId === currentUserId) || null;
+
+  useEffect(() => {
+    const sync = () => setIsFullscreen(document.fullscreenElement === shellRef.current);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
 
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
   useEffect(() => { workersRef.current = workers; }, [workers]);
@@ -958,6 +972,24 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     [...peerRefs.current.keys()].forEach(closePeer);
   }, []);
 
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await shellRef.current?.requestFullscreen();
+    } catch {}
+  };
+
+  const sendEmote = async (emoji: string) => {
+    setLocalEmote({ emoji, updatedAt: Date.now() });
+    setEmoteMenuOpen(false);
+    window.setTimeout(() => {
+      setLocalEmote((current) => current?.emoji === emoji ? null : current);
+    }, 4600);
+    try {
+      await sendCallAction({ action: 'office-emote', emoji });
+    } catch {}
+  };
+
   const officeHeaders = async () => {
     if (!currentUser) throw new Error('Sessão do Office não encontrada.');
     return {
@@ -1280,7 +1312,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const playerFrame = player ? spriteFrame(playerWalking, player.direction, tick) : null;
 
   return (
-    <div className="gather-office-shell">
+    <div className="gather-office-shell" ref={shellRef}>
       <div
         className="gather-viewport"
         ref={viewportRef}
@@ -1493,6 +1525,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   <strong>{member.displayName}</strong>
                   <small>{humanTaskText(humanTask) || member.title}</small>
                 </span>
+                {member.emote?.emoji && member.emote.updatedAt && Date.now() - new Date(member.emote.updatedAt).getTime() < 5200 && (
+                  <i className="gather-emote-bubble">{member.emote.emoji}</i>
+                )}
               </button>
             );
           })}
@@ -1516,6 +1551,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 <strong>{currentMember.displayName}</strong>
                 <small>{currentMember.officeRole === 'ceo' ? 'CEO' : currentMember.title}</small>
               </span>
+              {localEmote && <i className="gather-emote-bubble">{localEmote.emoji}</i>}
             </button>
           )}
         </div>
@@ -1650,6 +1686,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             if (current) centerCameraOn(current.x, current.y);
           }} title="Mostrar minha posição"><LocateFixed className="h-4 w-4" /></button>
           <button type="button" onClick={() => setParticipantsOpen((value) => !value)} title="Pessoas"><Users className="h-4 w-4" /></button>
+          <button type="button" onClick={() => void toggleFullscreen()} title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}>
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
         </div>
 
         {participantsOpen && (
@@ -1698,6 +1737,14 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           {player && <b style={{ left: (player.x / WORLD_W * 100) + '%', top: (player.y / WORLD_H * 100) + '%' }} />}
         </div>
 
+        {emoteMenuOpen && (
+          <div className="gather-emote-menu">
+            {['👍', '🎉', '🔥', '💡', '😂', '❤️'].map((emoji) => (
+              <button key={emoji} type="button" onClick={() => void sendEmote(emoji)}>{emoji}</button>
+            ))}
+          </div>
+        )}
+
         <div className="gather-bottom-dock">
           <div className="dock-profile">
             <span>{currentMember?.displayName?.slice(0, 1).toUpperCase() || 'L'}</span>
@@ -1714,6 +1761,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </button>
           <button type="button" onClick={() => onInteract?.({ type: 'meeting', label: 'Chat da equipe' })} title="Chat">
             <MessageCircle className="h-5 w-5" />
+          </button>
+          <button type="button" className={emoteMenuOpen ? 'active' : ''} onClick={() => setEmoteMenuOpen((value) => !value)} title="Reação">
+            <Smile className="h-5 w-5" />
           </button>
           <button type="button" className={quietMode ? 'active quiet' : ''} onClick={() => setQuietMode((value) => !value)} title="Modo foco">
             <BellOff className="h-5 w-5" />

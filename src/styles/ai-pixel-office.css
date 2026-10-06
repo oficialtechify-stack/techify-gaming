@@ -6579,3 +6579,76 @@
   font-size: 8px;
   line-height: 1.45;
 }
+
+
+.gather-office-shell:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: #cfeecf;
+}
+
+.gather-office-shell:fullscreen .gather-viewport {
+  height: 100vh;
+}
+
+.gather-emote-bubble {
+  position: absolute;
+  left: 50%;
+  top: -28px;
+  z-index: 30;
+  transform: translateX(-50%);
+  min-width: 34px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255,255,255,.9);
+  border-radius: 12px 12px 12px 3px;
+  background: rgba(255,255,255,.96);
+  font-size: 18px;
+  font-style: normal;
+  box-shadow: 0 8px 18px rgba(38,46,50,.18);
+  animation: gatherEmotePop .18s ease-out both;
+}
+
+@keyframes gatherEmotePop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 7px) scale(.76);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.gather-emote-menu {
+  position: absolute;
+  left: 50%;
+  bottom: 70px;
+  z-index: 17200;
+  display: flex;
+  gap: 5px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 14px;
+  background: rgba(30,33,35,.94);
+  padding: 6px;
+  box-shadow: 0 12px 28px rgba(40,47,51,.22);
+}
+
+.gather-emote-menu button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.gather-emote-menu button:hover {
+  background: rgba(255,255,255,.10);
+  transform: translateY(-1px);
+}

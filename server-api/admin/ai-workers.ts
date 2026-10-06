@@ -1240,6 +1240,16 @@ export default async function handler(req: Req, res: Res) {
         return res.status(200).json({ success: true });
       }
 
+      if (action === 'office-emote') {
+        const emoji = cleanText(body.emoji, 12);
+        const now = new Date().toISOString();
+        await db.collection('admin_office_members').doc(officeIdentity.uid).set({
+          emote: emoji ? { emoji, updatedAt: now } : null,
+          updatedAt: now,
+        }, { merge: true });
+        return res.status(200).json({ success: true, emote: emoji ? { emoji, updatedAt: now } : null });
+      }
+
       if (action === 'team-message') {
         const text = cleanText(body.message, 3000);
         if (!text) return res.status(400).json({ error: 'Escreva uma mensagem para a equipe.' });
