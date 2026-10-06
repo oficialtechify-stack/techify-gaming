@@ -1377,9 +1377,33 @@ export const DatabaseManagerView: React.FC = () => {
         </section>
       )}
 
-      {/* NAVEGAÇÃO PRINCIPAL (SEPARAÇÃO CLARA ENTRE AFILIADOS, EMPRESAS, LOGO E IMAGENS) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {/* Aba 1: Afiliados */}
+      {/* NAVEGAÇÃO PRINCIPAL — cada assunto em sua própria área */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <button
+          onClick={() => setMainTab('global_overview')}
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+            mainTab === 'global_overview'
+              ? 'bg-[#D9F22A] text-[#060A15] border-[#D9F22A] shadow-[0_0_25px_rgba(217,242,42,0.3)]'
+              : 'bg-[#080d1a] text-white hover:border-white/30 border-white/10'
+          }`}
+        >
+          <div className="flex items-center justify-between w-full mb-2">
+            <div className={`p-2 rounded-xl ${mainTab === 'global_overview' ? 'bg-black/20 text-black' : 'bg-white/5 text-[#D9F22A]'}`}>
+              <TrendingUp className="w-5 h-5" />
+            </div>
+            <span className={`text-[9px] font-black uppercase tracking-wider ${mainTab === 'global_overview' ? 'text-black/65' : 'text-emerald-300'}`}>
+              Master
+            </span>
+          </div>
+          <div>
+            <h3 className="font-['Syne'] font-black text-sm uppercase tracking-tight">Visão Global</h3>
+            <p className={`text-[11px] mt-0.5 ${mainTab === 'global_overview' ? 'text-black/80 font-medium' : 'text-white/50'}`}>
+              Receita, volume e saldos consolidados
+            </p>
+          </div>
+        </button>
+
+        {/* Afiliados */}
         <button
           onClick={() => {
             setMainTab('affiliates_approval');
@@ -1417,7 +1441,7 @@ export const DatabaseManagerView: React.FC = () => {
         <button
           onClick={() => {
             setMainTab('companies_approval');
-            setStatusFilter('pending');
+            setStatusFilter('all');
           }}
           className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
             mainTab === 'companies_approval'
@@ -1439,10 +1463,10 @@ export const DatabaseManagerView: React.FC = () => {
           </div>
           <div>
             <h3 className="font-['Syne'] font-black text-sm uppercase tracking-tight">
-              Aprovação de Empresas
+              Empresas
             </h3>
             <p className={`text-[11px] mt-0.5 ${mainTab === 'companies_approval' ? 'text-black/80 font-medium' : 'text-white/50'}`}>
-              Startups, produtores, CNPJ e liberação de catálogo
+              Contas individuais, financeiro, Stripe e aprovação
             </p>
           </div>
         </button>
@@ -1900,13 +1924,14 @@ export const DatabaseManagerView: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 gap-5">
                   {filteredCompanies.map((comp) => {
                     const currentStatus = getStatusOfCompany(comp);
                     const isPending = currentStatus === 'pending';
                     const isApproved = currentStatus === 'approved';
                     const isRejected = currentStatus === 'rejected';
                     const isBanned = currentStatus === 'banned';
+                    const metrics = companyMetricsById.get(comp.id);
 
                     return (
                       <div
@@ -1976,7 +2001,72 @@ export const DatabaseManagerView: React.FC = () => {
                                 </span>
                               )}
                             </div>
+
+                            <div className="mt-2 flex justify-end">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide ${
+                                metrics?.stripeConnected
+                                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                                  : 'border-white/10 bg-white/5 text-white/35'
+                              }`}>
+                                <CreditCard className="h-3 w-3" />
+                                {metrics?.stripeConnected ? 'Stripe conectada' : 'Stripe não vinculada'}
+                              </span>
+                            </div>
                           </div>
+
+                          {/* RESUMO REAL DESTA EMPRESA */}
+                          <div className="mb-4 rounded-2xl border border-white/8 bg-[#050811] p-4">
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-[9px] font-black uppercase tracking-[0.18em] text-[#D9F22A]">Operação individual</div>
+                                <p className="mt-0.5 text-[10px] text-white/35">Somente registros reais vinculados a esta empresa.</p>
+                              </div>
+                              <span className="text-[9px] font-mono text-white/25">ID: {comp.id.slice(0, 12)}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                              {[
+                                ['Volume vendido', 'R$ ' + Number(metrics?.grossVolume || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })],
+                                ['Vendas pagas', String(metrics?.salesCount || 0)],
+                                ['Líquido da empresa', 'R$ ' + Number(metrics?.netRevenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })],
+                                ['Comissões afiliados', 'R$ ' + Number(metrics?.affiliateCommissions || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })],
+                              ].map(([label, value]) => (
+                                <div key={label} className="rounded-xl border border-white/8 bg-white/[0.025] p-3">
+                                  <div className="text-[8px] font-bold uppercase tracking-wider text-white/30">{label}</div>
+                                  <div className="mt-1.5 text-sm font-black text-white">{value}</div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+                              {[
+                                ['Saldo futuro', 'R$ ' + Number(metrics?.pendingBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })],
+                                ['Disponível', 'R$ ' + Number(metrics?.availableBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })],
+                                ['Produtos', String(metrics?.activeProducts || 0)],
+                                ['Afiliados', String(metrics?.connectedAffiliates || 0)],
+                                ['Checkouts', String(metrics?.checkoutAttempts || 0)],
+                                ['Pagos', String(metrics?.completedCheckouts || 0)],
+                                ['Assinaturas', String(metrics?.activeSubscriptions || 0)],
+                                ['Total sacado', 'R$ ' + Number(metrics?.totalWithdrawn || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })],
+                              ].map(([label, value]) => (
+                                <div key={label} className="rounded-lg border border-white/5 bg-black/10 px-2.5 py-2">
+                                  <div className="text-[7px] font-bold uppercase tracking-wider text-white/25">{label}</div>
+                                  <div className="mt-1 text-xs font-black text-white/85">{value}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Dados cadastrais ficam recolhidos para não poluir a visão operacional */}
+                          <details className="group rounded-2xl border border-white/8 bg-white/[0.02]">
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-black text-white/70">
+                              <span className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-white/35" />
+                                Ver dados cadastrais
+                              </span>
+                              <span className="text-[10px] font-medium text-white/30 group-open:hidden">Expandir</span>
+                              <span className="hidden text-[10px] font-medium text-white/30 group-open:inline">Recolher</span>
+                            </summary>
 
                           {/* Dados da Empresa */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -2072,6 +2162,7 @@ export const DatabaseManagerView: React.FC = () => {
                               </div>
                             )}
                           </div>
+                          </details>
                         </div>
 
                         {isApproved && comp.profileEditRequestStatus === 'pending' && (
