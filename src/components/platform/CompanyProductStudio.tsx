@@ -390,6 +390,21 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
     }
   ] as const;
 
+  const tabIconMotion: Record<StudioTab, string> = {
+    info: 'group-hover:[transform:perspective(220px)_rotateX(-18deg)_translateY(-2px)]',
+    payment: 'group-hover:rotate-[-8deg] group-hover:translate-x-0.5',
+    settings: 'group-hover:rotate-180',
+    offers: 'group-hover:scale-110 group-hover:-translate-y-0.5',
+    order_bump: 'group-hover:translate-x-1 group-hover:scale-105',
+    coupons: 'group-hover:rotate-6 group-hover:scale-110',
+    upsell: 'group-hover:-translate-y-1 group-hover:scale-110',
+    pixel: 'group-hover:scale-125 group-hover:animate-pulse',
+    affiliates: 'group-hover:scale-110 group-hover:rotate-3',
+    coproduction: 'group-hover:scale-110 group-hover:-rotate-3',
+    checkout: 'group-hover:translate-x-0.5 group-hover:scale-110',
+    links: 'group-hover:rotate-12 group-hover:scale-110'
+  };
+
   const titleMap: Record<StudioTab, string> = {
     info: 'Editar informações do produto',
     payment: 'Editar modelo de pagamento',
@@ -474,7 +489,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                     >
                       <span className="flex items-center gap-2.5">
                         <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/5 bg-white/[0.025] transition-all duration-200 group-hover:rotate-3 group-hover:scale-110 group-hover:border-[#D9F22A]/20 group-hover:bg-[#D9F22A]/8">
-                          <Icon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                          <Icon className={`h-4 w-4 transition-all duration-300 ease-out ${tabIconMotion[id]}`} />
                         </span>
                         {label}
                       </span>
