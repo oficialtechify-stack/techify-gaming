@@ -281,7 +281,7 @@ async function resolveOfficeMembers(
       }
     } catch {}
 
-    members.unshift({
+    const ceoMember: OfficeMember = {
       id: identity.uid,
       userId: identity.uid,
       displayName,
@@ -293,8 +293,24 @@ async function resolveOfficeMembers(
       deskId: 'ceo',
       avatar,
       position: null,
-      createdAt: null,
-    });
+      createdAt: new Date().toISOString(),
+    };
+    members.unshift(ceoMember);
+    try {
+      await db.collection('admin_office_members').doc(identity.uid).set({
+        userId: identity.uid,
+        displayName,
+        email: identity.email || '',
+        officeRole: 'ceo',
+        title: 'CEO',
+        palette: 0,
+        active: true,
+        deskId: 'ceo',
+        avatar,
+        createdAt: ceoMember.createdAt,
+        updatedAt: ceoMember.createdAt,
+      }, { merge: true });
+    } catch {}
   }
 
   return members;

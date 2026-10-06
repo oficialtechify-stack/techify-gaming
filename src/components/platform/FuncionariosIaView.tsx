@@ -654,7 +654,9 @@ export const FuncionariosIaView: React.FC = () => {
   const scopedTasks = taskScope === 'selected' ? selectedWorkerTasks : tasks;
   const visibleTasks = scopedTasks.filter((task) => filter === 'all' || task.status === filter);
   const currentOfficeMember = officeMembers.find((member) => member.userId === currentUser?.uid) || null;
-  const selectedHuman = officeMembers.find((member) => member.userId === selectedHumanId) || currentOfficeMember;
+  const selectedHuman = selectedHumanId
+    ? (officeMembers.find((member) => member.userId === selectedHumanId) || null)
+    : (access?.isOfficeAdmin ? null : currentOfficeMember);
   const computerTasks = access?.isOfficeAdmin
     ? (selectedHuman?.userId ? humanTasks.filter((task) => task.assigneeUid === selectedHuman.userId) : humanTasks)
     : humanTasks.filter((task) => task.assigneeUid === currentUser?.uid);
