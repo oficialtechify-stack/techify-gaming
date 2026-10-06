@@ -1,16 +1,15 @@
 import { verifyFirebaseIdentity } from './firebaseAdminServer.js';
 
+export const LEADSPAY_GLOBAL_ADMIN_EMAIL = 'leadspay.oficial@gmail.com';
+
 export const BUILTIN_ADMIN_EMAILS = new Set([
-  'rickmarketing81@gmail.com',
-  'leadspay.oficial@gmail.com',
+  LEADSPAY_GLOBAL_ADMIN_EMAIL,
 ]);
 
 export function configuredAdminEmails(): Set<string> {
-  const extra = String(process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  return new Set([...BUILTIN_ADMIN_EMAILS, ...extra]);
+  // A administração global da LeadsPay é intencionalmente vinculada a uma
+  // única identidade. Variáveis de ambiente não podem promover outras contas.
+  return new Set(BUILTIN_ADMIN_EMAILS);
 }
 
 export async function requireAdminIdentity(
