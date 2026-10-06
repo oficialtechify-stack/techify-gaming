@@ -64,7 +64,10 @@ import {
   BadgeDollarSign,
   ShoppingCart,
   WalletCards,
-  Edit3
+  Edit3,
+  TrendingUp,
+  CreditCard,
+  Repeat
 } from 'lucide-react';
 import { VerificationRequest, CompanyStartup } from '../../types/platform';
 import { useAuth } from '../../context/AuthContext';
