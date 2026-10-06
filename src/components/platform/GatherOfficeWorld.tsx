@@ -202,11 +202,11 @@ const PAUSE_TARGET: Record<string, Cell> = {
 
 const IDLE_TARGETS: Record<string, Cell[]> = {
   'lumy-manager': [{ x: 37, y: 34 }, { x: 38, y: 39 }, { x: 38, y: 18 }],
-  frontend: [{ x: 38, y: 10 }, { x: 42, y: 17 }, { x: 35, y: 38 }],
+  frontend: [{ x: 38, y: 10 }, { x: 42, y: 18 }, { x: 35, y: 38 }],
   backend: [{ x: 61, y: 19 }, { x: 41, y: 18 }, { x: 35, y: 34 }],
   designer: [{ x: 56, y: 36 }, { x: 65, y: 39 }, { x: 39, y: 34 }],
   qa: [{ x: 61, y: 20 }, { x: 43, y: 10 }, { x: 33, y: 37 }],
-  growth: [{ x: 41, y: 32 }, { x: 44, y: 16 }, { x: 38, y: 41 }],
+  growth: [{ x: 41, y: 32 }, { x: 48, y: 16 }, { x: 38, y: 41 }],
 };
 
 const AI_DESKS = [
@@ -241,7 +241,7 @@ const WALL_RECTS: Array<[number, number, number, number]> = [
   // Building exterior
   [2, 2, 68, 1], [2, 45, 68, 1], [2, 2, 1, 44], [69, 2, 1, 44],
   // Right meeting/lab wing
-  [52, 2, 1, 7], [52, 12, 1, 10],
+  [52, 2, 1, 7], [52, 12, 1, 6], [52, 20, 1, 2],
   [52, 15, 18, 1],
   // Bottom wing split from open office, doors at 10-12, 33-36, 57-60
   [2, 23, 8, 1], [13, 23, 20, 1], [37, 23, 20, 1], [61, 23, 9, 1],
