@@ -61,7 +61,6 @@ import { LinksPagamentoView } from './LinksPagamentoView';
 import { SaquesView } from './SaquesView';
 import { PlanosAssinaturasView } from './PlanosAssinaturasView';
 import { ComunidadeAfiliadosView } from './ComunidadeAfiliadosView';
-import { AffiliateOnboardingModal } from './AffiliateOnboardingModal';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
 import { CreatePlanModal } from './CreatePlanModal';
@@ -297,28 +296,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return () => window.removeEventListener('leadspay-theme-change', syncTheme);
   }, []);
 
-  // Modal de Boas-vindas & Onboarding de Primeiro Login do Afiliado
-  const [isAffiliateOnboardingOpen, setIsAffiliateOnboardingOpen] = useState<boolean>(false);
-
-  // Detecta primeiro acesso do afiliado para exibir as boas-vindas e o guia
-  useEffect(() => {
-    if (roleMode === 'afiliado' && currentUser?.uid) {
-      const storageKey = `leadspay_affiliate_onboarding_seen_${currentUser.uid}`;
-      try {
-        const hasSeen = localStorage.getItem(storageKey);
-        if (!hasSeen) {
-          const timer = setTimeout(() => {
-            setIsAffiliateOnboardingOpen(true);
-            localStorage.setItem(storageKey, 'true');
-          }, 800);
-          return () => clearTimeout(timer);
-        }
-      } catch (e) {
-        console.warn('Erro ao verificar status do onboarding do afiliado:', e);
-      }
-    }
-  }, [roleMode, currentUser?.uid]);
-
   // Travar completamente o scroll do fundo quando modais, popups ou drawers estiverem abertos
   const isAnyModalOrDrawerOpen = Boolean(
     isMobileMenuOpen ||
@@ -326,7 +303,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     isRegisterAffiliateModalOpen ||
     isCreateCompanyModalOpen ||
     isCreatePlanModalOpen ||
-    isAffiliateOnboardingOpen ||
     editingPlan ||
     liveCheckoutPlan ||
     selectedDetailProduct ||
@@ -1864,7 +1840,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   userName={userProfile?.name || currentUser?.displayName || 'Marcos Henrique'}
                   userAvatar={userProfile?.avatar || currentUser?.photoURL || undefined}
                   userEmail={userEmail || currentUser?.email || undefined}
-                  onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
                   onBackToHome={onBackToHome}
                   notificationItems={inAppNotifications}
                   onOpenNotifications={markNotificationsAsRead}
@@ -1874,7 +1849,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               {activeTab === 'comunidade' && (
                 <ComunidadeAfiliadosView
                   userName={userProfile?.name || currentUser?.displayName || 'Afiliado'}
-                  onOpenOnboardingTour={() => setIsAffiliateOnboardingOpen(true)}
                   onNavigateToVitrine={() => setActiveTab('vitrine')}
                 />
               )}
@@ -2305,21 +2279,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       <ProductDetailModal
         product={selectedDetailProduct}
         onClose={() => setSelectedDetailProduct(null)}
-      />
-
-      {/* Onboarding & Boas-Vindas da Família LeadsPay para Afiliados */}
-      <AffiliateOnboardingModal
-        isOpen={isAffiliateOnboardingOpen}
-        onClose={() => setIsAffiliateOnboardingOpen(false)}
-        onOpenCommunity={() => {
-          setIsAffiliateOnboardingOpen(false);
-          setActiveTab('comunidade');
-        }}
-        onOpenVitrine={() => {
-          setIsAffiliateOnboardingOpen(false);
-          setActiveTab('vitrine');
-        }}
-        userName={userProfile?.name || currentUser?.displayName || 'Afiliado'}
       />
 
       {/* Global Auth Modal for Company / Google switch flow */}
