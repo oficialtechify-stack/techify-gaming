@@ -4688,3 +4688,311 @@
     width: 90%;
   }
 }
+
+
+/* =========================================================
+   LEADSPAY OFFICE — 2.5D WALLS + DESIGNER ROOM
+   ========================================================= */
+
+.office-room-v3 {
+  border-top-width: 28px;
+  border-left-width: 16px;
+  border-right-width: 12px;
+  border-bottom-width: 14px;
+  overflow: visible;
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.025),
+    inset 0 26px 0 rgba(12,16,24,.66),
+    10px 14px 0 rgba(0,0,0,.13),
+    0 22px 28px rgba(0,0,0,.24);
+}
+
+.office-room-v3::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  right: -12px;
+  top: -28px;
+  height: 28px;
+  z-index: 24;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, #59616e 0%, #3f4754 42%, #252d38 43%, #1b222c 100%);
+  border-top: 3px solid #727b89;
+  border-bottom: 5px solid #080d13;
+  box-shadow:
+    inset 0 -5px 0 rgba(0,0,0,.18),
+    0 5px 0 rgba(0,0,0,.17);
+}
+
+.office-room-v3::after {
+  content: "";
+  position: absolute;
+  left: -16px;
+  right: -12px;
+  bottom: -20px;
+  height: 20px;
+  z-index: 28;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, #252d38 0%, #171d25 54%, #0a0f15 55%, #06090d 100%);
+  border-bottom: 4px solid #030508;
+  box-shadow:
+    inset 0 3px 0 rgba(255,255,255,.04),
+    0 8px 10px rgba(0,0,0,.22);
+}
+
+.office-room-v3 .room-wall.wall-top {
+  left: -2px;
+  right: -2px;
+  top: 0;
+  height: 28px;
+  z-index: 18;
+  border-bottom: 5px solid rgba(5,8,13,.62);
+  background:
+    linear-gradient(180deg, rgba(103,114,129,.88), rgba(51,59,70,.96) 56%, rgba(21,27,35,.98));
+  box-shadow:
+    inset 0 4px 0 rgba(255,255,255,.07),
+    inset 0 -5px 0 rgba(0,0,0,.22);
+}
+
+.office-room-v3 .room-wall.wall-left {
+  left: 0;
+  top: 26px;
+  bottom: 0;
+  width: 16px;
+  z-index: 17;
+  border-right: 5px solid rgba(4,7,11,.43);
+  background:
+    linear-gradient(90deg, #171d25 0%, #323a45 72%, #4b5563 100%);
+  box-shadow: inset 4px 0 0 rgba(255,255,255,.035);
+}
+
+.office-room-v3 .room-wall.wall-right {
+  right: 0;
+  top: 26px;
+  bottom: 0;
+  width: 12px;
+  z-index: 17;
+  border-left: 4px solid rgba(4,7,11,.42);
+  background:
+    linear-gradient(90deg, #4a5360 0%, #28303a 42%, #111720 100%);
+}
+
+.office-room-v3 .room-wall.wall-front {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 17px;
+  z-index: 19;
+  background:
+    linear-gradient(180deg, #4c5663 0%, #2b333e 28%, #131922 29%, #090e14 100%);
+  border-top: 3px solid rgba(255,255,255,.05);
+  box-shadow:
+    inset 0 -4px 0 rgba(0,0,0,.28),
+    0 8px 0 rgba(0,0,0,.14);
+}
+
+.room-ceo,
+.room-meeting,
+.room-office,
+.room-kitchen,
+.room-creative,
+.room-designer,
+.room-lab {
+  outline: 1px solid rgba(255,255,255,.025);
+}
+
+.room-creative {
+  left: 832px;
+  top: 672px;
+  width: 384px;
+  height: 640px;
+  background:
+    linear-gradient(rgba(55,73,103,.08), rgba(55,73,103,.08)),
+    url('/pixel-agents/assets/floors/floor_5.png');
+  background-size: 48px 48px;
+}
+
+.room-designer {
+  left: 1216px;
+  top: 672px;
+  width: 448px;
+  height: 640px;
+  background:
+    linear-gradient(135deg, rgba(124,58,237,.09), rgba(219,39,119,.035)),
+    url('/pixel-agents/assets/floors/floor_5.png');
+  background-size: 48px 48px;
+}
+
+.room-designer > span {
+  color: rgba(233,213,255,.86);
+}
+
+.room-depth-edge {
+  position: absolute;
+  height: 22px;
+  z-index: 2500;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(76,86,99,.96) 0%, rgba(39,47,58,.99) 34%, rgba(14,19,26,1) 35%, rgba(5,8,12,1) 100%);
+  border-top: 2px solid rgba(255,255,255,.055);
+  border-bottom: 4px solid #020406;
+  box-shadow: 0 8px 12px rgba(0,0,0,.24);
+}
+
+.room-depth-edge::before,
+.room-depth-edge::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  width: 12px;
+  height: 29px;
+  background: linear-gradient(90deg, #4e5865, #151b24);
+}
+
+.room-depth-edge::before {
+  left: -12px;
+  clip-path: polygon(100% 0, 100% 100%, 0 76%, 0 18%);
+}
+
+.room-depth-edge::after {
+  right: -12px;
+  transform: scaleX(-1);
+  clip-path: polygon(100% 0, 100% 100%, 0 76%, 0 18%);
+}
+
+.depth-ceo { left: 64px; top: 350px; width: 416px; }
+.depth-meeting { left: 576px; top: 350px; width: 512px; }
+.depth-office { left: 64px; top: 1054px; width: 768px; }
+.depth-kitchen { left: 832px; top: 702px; width: 832px; }
+.depth-creative { left: 832px; top: 1310px; width: 384px; }
+.depth-designer { left: 1216px; top: 1310px; width: 448px; }
+.depth-lab { left: 64px; top: 1310px; width: 448px; }
+
+.door-frame {
+  border-left: 6px solid #0b1017;
+  border-right: 6px solid #0b1017;
+  border-top: 8px solid #222a35;
+  border-bottom: 4px solid #05080c;
+  background:
+    linear-gradient(180deg, #38424f 0 20%, #151b24 21% 100%);
+  box-shadow:
+    inset 0 3px 0 rgba(255,255,255,.08),
+    inset 0 -5px 0 rgba(0,0,0,.26),
+    5px 7px 0 rgba(0,0,0,.18);
+}
+
+.door-frame > i {
+  top: 4px;
+  height: 7px;
+  background: linear-gradient(#778291, #414b58);
+  box-shadow: 0 3px 0 #111720;
+}
+
+.door-designer {
+  left: 1198px;
+  top: 894px;
+  width: 38px;
+  height: 72px;
+  z-index: 80;
+}
+
+.door-designer::before,
+.door-designer::after {
+  width: 6px;
+}
+
+.v3-furniture,
+.v3-chair,
+.v3-desk,
+.v3-pc {
+  filter:
+    drop-shadow(0 5px 0 rgba(0,0,0,.18))
+    drop-shadow(6px 10px 8px rgba(0,0,0,.16));
+}
+
+.designer-workstation {
+  left: 1350px;
+  top: 760px;
+  z-index: 72;
+}
+
+.designer-moodboard {
+  left: 1270px;
+  top: 710px;
+  width: 112px;
+  z-index: 61;
+}
+
+.designer-books {
+  left: 1570px;
+  top: 710px;
+  width: 48px;
+  z-index: 61;
+}
+
+.designer-painting {
+  left: 1435px;
+  top: 716px;
+  width: 80px;
+  z-index: 61;
+}
+
+.designer-sofa {
+  left: 1468px;
+  top: 1050px;
+  width: 128px;
+  z-index: 76;
+}
+
+.designer-plant {
+  left: 1580px;
+  top: 1192px;
+  width: 64px;
+  z-index: 82;
+}
+
+.creative-books-v3.a {
+  left: 866px;
+  top: 714px;
+}
+
+.creative-sofa-v3.a {
+  left: 914px;
+  top: 858px;
+}
+
+.creative-table-v3 {
+  left: 1070px;
+  top: 885px;
+}
+
+.creative-plant-v3.a {
+  left: 884px;
+  top: 1192px;
+}
+
+.creative-books-v3.b,
+.creative-sofa-v3.b,
+.creative-plant-v3.b {
+  display: none;
+}
+
+.human-agent-v3,
+.game-agent-v3 {
+  filter:
+    drop-shadow(0 4px 1px rgba(0,0,0,.20))
+    drop-shadow(5px 9px 4px rgba(0,0,0,.12));
+}
+
+.game-agent-sprite-v3::after,
+.human-agent-v3 .game-agent-sprite-v3::after {
+  content: "";
+}
+
+@media (max-width: 820px) {
+  .room-depth-edge {
+    display: block;
+  }
+}

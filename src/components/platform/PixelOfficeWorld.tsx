@@ -149,11 +149,12 @@ const SOLID_RECTS: Array<[number, number, number, number]> = [
   [2, 14, 4, 2], [20, 14, 4, 2], [2, 29, 2, 2], [22, 29, 2, 2],
   // Kitchen
   [31, 15, 5, 3], [43, 16, 4, 3], [28, 18, 3, 2], [49, 17, 2, 2],
-  // Creative
-  [29, 26, 5, 3], [42, 26, 5, 3], [35, 28, 4, 3],
-  [28, 37, 2, 2], [48, 37, 2, 2], [31, 22, 2, 2], [47, 22, 2, 2],
-  // Human designer workstation
-  [38, 23, 6, 4],
+  // Creative room
+  [29, 26, 5, 3], [34, 28, 4, 3],
+  [28, 37, 2, 2], [31, 22, 2, 2],
+  // Dedicated designer room
+  [40, 22, 3, 2], [49, 22, 2, 2],
+  [42, 23, 6, 4], [46, 33, 4, 3], [50, 37, 2, 2],
   // Lab
   [4, 34, 4, 2], [10, 34, 5, 3], [3, 38, 2, 1], [13, 38, 2, 1],
 ];
@@ -167,13 +168,15 @@ const WALL_RECTS: Array<[number, number, number, number]> = [
   [25, 13, 1, 4], [25, 19, 1, 7], [25, 28, 1, 4],
   // Office bottom / lab door at cols 8-10.
   [2, 32, 6, 1], [11, 32, 14, 1],
-  // Kitchen / creative wall, door at cols 38-40.
+  // Kitchen / creative+designer wall, door at cols 38-40.
   [26, 21, 12, 1], [41, 21, 11, 1],
+  // Creative / designer divider. Door opening at rows 28-29.
+  [38, 21, 1, 7], [38, 30, 1, 11],
 ];
 
 const INTERACTIONS = [
   { type: 'computer' as const, owner: 'ceo', cell: { x: 7, y: 8 }, label: 'Abrir computador do CEO' },
-  { type: 'computer' as const, owner: 'designer-human', cell: { x: 41, y: 28 }, label: 'Abrir computador da designer' },
+  { type: 'computer' as const, owner: 'designer-human', cell: { x: 45, y: 28 }, label: 'Abrir computador da designer' },
   { type: 'meeting' as const, owner: 'meeting', cell: { x: 25, y: 9 }, label: 'Abrir sala de reunião' },
 ];
 
@@ -190,7 +193,9 @@ function isWalkable(cell: Cell) {
   const inMainHall = inRect(cell, 24, 10, 3, 4);
   const inOffice = inRect(cell, 2, 13, 24, 20);
   const inKitchen = inRect(cell, 26, 13, 26, 9);
-  const inCreative = inRect(cell, 26, 21, 26, 20);
+  const inCreative = inRect(cell, 26, 21, 12, 20);
+  const inDesigner = inRect(cell, 38, 21, 14, 20);
+  const inDesignerDoor = inRect(cell, 37, 28, 2, 2);
   const inLab = inRect(cell, 2, 32, 14, 9);
   const inKitchenDoor = inRect(cell, 25, 17, 2, 2);
   const inCreativeDoor = inRect(cell, 25, 26, 2, 2);
@@ -199,7 +204,7 @@ function isWalkable(cell: Cell) {
 
   if (!(
     inCeo || inCeoHall || inMeeting || inMainHall || inOffice || inKitchen ||
-    inCreative || inLab || inKitchenDoor || inCreativeDoor || inLabDoor ||
+    inCreative || inDesigner || inDesignerDoor || inLab || inKitchenDoor || inCreativeDoor || inLabDoor ||
     inKitchenCreativeDoor
   )) return false;
 
@@ -400,7 +405,7 @@ function activityLabel(
 
 function defaultHumanPosition(member: OfficeMember) {
   if (member.officeRole === 'ceo') return centerOf({ x: 7, y: 8 });
-  if (member.officeRole === 'designer') return centerOf({ x: 41, y: 29 });
+  if (member.officeRole === 'designer') return centerOf({ x: 45, y: 29 });
   return centerOf({ x: 21, y: 28 });
 }
 
@@ -737,14 +742,23 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           style={{ width: WORLD_W, height: WORLD_H }}
           onClick={clickWorld}
         >
-          <div className="office-room-v3 room-ceo"><span>SALA DO CEO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /></div>
-          <div className="office-room-v3 room-meeting"><span>SALA DE REUNIÃO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /></div>
+          <div className="office-room-v3 room-ceo"><span>SALA DO CEO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /><i className="room-wall wall-right" /><i className="room-wall wall-front" /></div>
+          <div className="office-room-v3 room-meeting"><span>SALA DE REUNIÃO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /><i className="room-wall wall-right" /><i className="room-wall wall-front" /></div>
           <div className="office-hall-v3 hall-ceo" />
           <div className="office-hall-v3 hall-main" />
-          <div className="office-room-v3 room-office"><span>OPERAÇÃO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /></div>
-          <div className="office-room-v3 room-kitchen"><span>COPA</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /></div>
-          <div className="office-room-v3 room-creative"><span>SALA CRIATIVA</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /></div>
-          <div className="office-room-v3 room-lab"><span>LABORATÓRIO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /></div>
+          <div className="office-room-v3 room-office"><span>OPERAÇÃO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /><i className="room-wall wall-right" /><i className="room-wall wall-front" /></div>
+          <div className="office-room-v3 room-kitchen"><span>COPA</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /><i className="room-wall wall-right" /><i className="room-wall wall-front" /></div>
+          <div className="office-room-v3 room-creative"><span>SALA CRIATIVA</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /><i className="room-wall wall-right" /><i className="room-wall wall-front" /></div>
+          <div className="office-room-v3 room-designer"><span>SALA DA DESIGNER</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /><i className="room-wall wall-right" /><i className="room-wall wall-front" /></div>
+          <div className="office-room-v3 room-lab"><span>LABORATÓRIO</span><i className="room-wall wall-top" /><i className="room-wall wall-left" /><i className="room-wall wall-right" /><i className="room-wall wall-front" /></div>
+
+          <div className="room-depth-edge depth-ceo" />
+          <div className="room-depth-edge depth-meeting" />
+          <div className="room-depth-edge depth-office" />
+          <div className="room-depth-edge depth-kitchen" />
+          <div className="room-depth-edge depth-creative" />
+          <div className="room-depth-edge depth-designer" />
+          <div className="room-depth-edge depth-lab" />
 
           <div className="door-frame door-ceo"><i /></div>
           <div className="door-frame door-meeting"><i /></div>
@@ -752,6 +766,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           <div className="door-frame door-creative"><i /></div>
           <div className="door-frame door-lab"><i /></div>
           <div className="door-frame door-kitchen-creative"><i /></div>
+          <div className="door-frame door-designer"><i /></div>
 
           {/* CEO furniture */}
           <img className="v3-furniture ceo-books" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
@@ -807,17 +822,21 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
 
           {/* Creative */}
           <img className="v3-furniture creative-books-v3 a" src="/pixel-agents/assets/furniture/BOOKSHELF/BOOKSHELF.png" alt="" />
-          <img className="v3-furniture creative-books-v3 b" src="/pixel-agents/assets/furniture/BOOKSHELF/BOOKSHELF.png" alt="" />
           <img className="v3-furniture creative-sofa-v3 a" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
-          <img className="v3-furniture creative-sofa-v3 b" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
           <img className="v3-furniture creative-table-v3" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
+          <img className="v3-furniture creative-plant-v3 a" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
+
+          {/* Designer room */}
+          <img className="v3-furniture designer-moodboard" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+          <img className="v3-furniture designer-books" src="/pixel-agents/assets/furniture/BOOKSHELF/BOOKSHELF.png" alt="" />
+          <img className="v3-furniture designer-painting" src="/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png" alt="" />
           <div className="human-workstation designer-workstation">
             <img className="v3-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
             <img className="v3-desk" src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" />
             <img className="v3-pc" src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_1.png" alt="" />
           </div>
-          <img className="v3-furniture creative-plant-v3 a" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
-          <img className="v3-furniture creative-plant-v3 b" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
+          <img className="v3-furniture designer-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
+          <img className="v3-furniture designer-plant" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
 
           {/* Lab */}
           <img className="v3-furniture lab-board-v3" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
