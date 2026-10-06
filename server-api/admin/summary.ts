@@ -156,7 +156,7 @@ export default async function handler(req: Req, res: Res) {
 
     const availableBalance = profileAvailableBalanceCents / 100;
 
-    const realCompanies = companiesSnap.docs
+    const realCompanies: Array<Record<string, any> & { id: string }> = companiesSnap.docs
       .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
       .filter((item) => {
         const ownerId = String(item.ownerId || item.submittedBy || '').trim();
@@ -209,9 +209,18 @@ export default async function handler(req: Req, res: Res) {
       return item.active === true || status === 'active' || status === 'trialing';
     }).length;
 
-    const plans = plansSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
-    const affiliations = affiliationsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
-    const productSubscriptions = productSubscriptionsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
+    const plans: Array<Record<string, any> & { id: string }> = plansSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Record<string, any>),
+    }));
+    const affiliations: Array<Record<string, any> & { id: string }> = affiliationsSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Record<string, any>),
+    }));
+    const productSubscriptions: Array<Record<string, any> & { id: string }> = productSubscriptionsSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Record<string, any>),
+    }));
 
     const companySummaries = realCompanies.map((company) => {
       const companyId = String(company.id);
