@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
-import { applyVerificationRequest, profileHasRole, profileRoleIsApproved } from '../../lib/profileEligibility.js';
+import { resolveApprovedOwnedCompany } from '../../lib/companyAccess.js';
 
 type Req = {
   method?: string;
@@ -23,34 +23,19 @@ async function getCompanyContext(req: Req) {
   );
 
   const db = getServerAdminFirestore();
-  const [profileSnap, requestSnap] = await Promise.all([
-    db.collection('user_profiles').doc(identity.uid).get(),
-    db.collection('verification_requests').doc(identity.uid).get(),
-  ]);
+  const profileSnap = await db.collection('user_profiles').doc(identity.uid).get();
 
   if (!profileSnap.exists) throw new Error('PROFILE_NOT_FOUND');
 
-  const profile = applyVerificationRequest(
-    profileSnap.data()!,
-    requestSnap.exists ? requestSnap.data()! : null,
-  ) as Record<string, any>;
+  const rawProfile = profileSnap.data() as Record<string, any>;
+  const approvedCompany = await resolveApprovedOwnedCompany(
+    db,
+    identity.uid,
+    clean(rawProfile.companyId, 180),
+  );
+  if (!approvedCompany) throw new Error('COMPANY_NOT_APPROVED');
 
-  if (!profileHasRole(profile, 'empresa') || !profileRoleIsApproved(profile, 'empresa')) {
-    throw new Error('COMPANY_NOT_APPROVED');
-  }
-
-  const companyId = clean(profile.companyId, 180);
-  if (!companyId) throw new Error('COMPANY_NOT_LINKED');
-
-  const companySnap = await db.collection('companies').doc(companyId).get();
-  if (!companySnap.exists) throw new Error('COMPANY_NOT_FOUND');
-
-  const company = companySnap.data()!;
-  if (String(company.ownerId || company.submittedBy || '') !== identity.uid) {
-    throw new Error('COMPANY_OWNERSHIP_MISMATCH');
-  }
-
-  return { identity, db, companyId };
+  return { identity, db, companyId: approvedCompany.companyId };
 }
 
 export default async function handler(req: Req, res: Res) {
