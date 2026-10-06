@@ -416,48 +416,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return totalFilteredSalesAmount / approvedSalesCount;
   }, [approvedSalesCount, totalFilteredSalesAmount]);
 
-  // Payment methods table rows matching screenshot
-  // 1. PIX
-  // 2. Boleto bancário
-  // 3. Cartão de crédito
-  // 4. PIX automático
+  // Meios de pagamento reais suportados no checkout de venda avulsa.
   const paymentMethodRows = useMemo(() => {
-    const approvedTransactions = filteredSales.filter(s => 
-      s.status === 'Aprovado' || s.status === 'Liberado' || (s as any).status === 'RECEIVED' || (s as any).status === 'CONFIRMED'
+    const approvedTransactions = filteredSales.filter(s =>
+      s.status === 'Aprovado' ||
+      s.status === 'Liberado' ||
+      (s as any).status === 'RECEIVED' ||
+      (s as any).status === 'CONFIRMED'
     );
 
     let pixVal = 0, pixCount = 0;
     let boletoVal = 0, boletoCount = 0;
     let cardVal = 0, cardCount = 0;
-    let pixAutoVal = 0, pixAutoCount = 0;
 
     approvedTransactions.forEach(s => {
       const val = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
-      const m = (s.method || '').toLowerCase();
-      if (m.includes('automático') || m.includes('auto')) {
-        pixAutoVal += val;
-        pixAutoCount++;
-      } else if (m.includes('pix')) {
+      const method = (s.method || '').toLowerCase();
+
+      if (method.includes('pix')) {
         pixVal += val;
-        pixCount++;
-      } else if (m.includes('boleto')) {
+        pixCount += 1;
+      } else if (method.includes('boleto')) {
         boletoVal += val;
-        boletoCount++;
-      } else if (m.includes('cartão') || m.includes('cartao') || m.includes('credit')) {
+        boletoCount += 1;
+      } else if (method.includes('cartão') || method.includes('cartao') || method.includes('credit') || method.includes('card')) {
         cardVal += val;
-        cardCount++;
+        cardCount += 1;
       }
     });
 
-    const totalApprovedCount = pixCount + boletoCount + cardCount + pixAutoCount;
+    const totalApprovedCount = pixCount + boletoCount + cardCount;
 
     return [
       {
         id: 'pix',
-        name: 'PIX',
+        name: 'Pix',
         icon: (
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#22d3ee] fill-current" stroke="none">
-            <path d="M12 2L6 8l6 6 6-6-6-6zm0 8l-6 6 6 6 6-6-6-6z" />
+          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#32BCAD]" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M7.1 4.7 4.7 7.1a2.7 2.7 0 0 0 0 3.8l2.4 2.4m9.8-8.6 2.4 2.4a2.7 2.7 0 0 1 0 3.8l-2.4 2.4M13.3 7.1l3.6 3.6a1.8 1.8 0 0 1 0 2.6l-3.6 3.6a1.8 1.8 0 0 1-2.6 0l-3.6-3.6a1.8 1.8 0 0 1 0-2.6l3.6-3.6a1.8 1.8 0 0 1 2.6 0Z" />
           </svg>
         ),
         conversion: totalApprovedCount > 0 ? `${Math.round((pixCount / totalApprovedCount) * 100)}%` : '0%',
@@ -465,13 +461,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       },
       {
         id: 'boleto',
-        name: 'Boleto bancário',
+        name: 'Boleto',
         icon: (
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="4" y="3" width="16" height="18" rx="2" />
-            <line x1="8" y1="8" x2="16" y2="8" />
-            <line x1="8" y1="12" x2="16" y2="12" />
-            <line x1="8" y1="16" x2="12" y2="16" />
+          <svg viewBox="0 0 24 24" className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+            <path d="M5 4v16M8 4v16M11 4v16M15 4v16M18 4v16M20 4v16" />
           </svg>
         ),
         conversion: totalApprovedCount > 0 ? `${Math.round((boletoCount / totalApprovedCount) * 100)}%` : '0%',
@@ -480,20 +473,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {
         id: 'cartao',
         name: 'Cartão de crédito',
-        icon: (
-          <CreditCard className="w-4 h-4 text-amber-400" />
-        ),
+        icon: <CreditCard className="w-4 h-4 text-amber-400" aria-hidden="true" />,
         conversion: totalApprovedCount > 0 ? `${Math.round((cardCount / totalApprovedCount) * 100)}%` : '0%',
         value: cardVal
-      },
-      {
-        id: 'pix_auto',
-        name: 'PIX automático',
-        icon: (
-          <RotateCcw className="w-4 h-4 text-[#22d3ee]" />
-        ),
-        conversion: totalApprovedCount > 0 ? `${Math.round((pixAutoCount / totalApprovedCount) * 100)}%` : '0%',
-        value: pixAutoVal
       }
     ];
   }, [filteredSales, roleMode]);
@@ -516,7 +498,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     chartCeiling, 
     chartLinePath, 
     chartAreaPath,
-    yLabels 
+    yLabels,
+    nowX
   } = useMemo(() => {
     let intervals: { key: string; label: string; fullLabel: string; filterFn: (d: Date) => boolean }[] = [];
     const now = new Date();
@@ -682,13 +665,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         ]
       : ['R$ 20 mil', 'R$ 15 mil', 'R$ 10 mil', 'R$ 5 mil', 'R$ 0'];
 
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowX = selectedTimeframe === '1D'
+      ? 20 + (Math.max(0, Math.min(1439, nowMinutes)) / 1439) * (1000 - 20)
+      : null;
+
     return {
       monthlyChartPoints: calculatedPoints,
       chartHasSales: hasSales,
       chartCeiling: ceiling,
       chartLinePath: linePath,
       chartAreaPath: areaPath,
-      yLabels: labels
+      yLabels: labels,
+      nowX
     };
   }, [selectedTimeframe, filteredSales, roleMode]);
 
@@ -1104,7 +1093,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* --------------------------------------------------------------------- */}
         <div className="lg:col-span-8 flex flex-col gap-2.5 sm:gap-6 min-w-0">
           
-          {/* CARD 1: COMBINED "Visão geral de vendas" + "Desempenho mensal de vendas" */}
+          {/* CARD 1: COMBINED "Visão geral de vendas" + "Evolução das vendas" */}
           <motion.div 
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1193,22 +1182,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-white/40 hidden md:inline">
-                    Evolução ao longo do ano
+                    Acompanhe o período selecionado
                   </span>
 
                   {/* Pills 1D, 1S, 1M, 6M, 1A */}
                   <div className="flex items-center gap-0.5 sm:gap-1 bg-[#040810] border border-white/10 p-0.5 sm:p-1 rounded-lg sm:rounded-xl">
-                    {['1D', '1S', '1M', '6M', '1A'].map((horizon) => (
+                    {[
+                      { value: '1D', label: 'Hoje' },
+                      { value: '1S', label: '7 dias' },
+                      { value: '1M', label: '30 dias' },
+                      { value: '6M', label: '6 meses' },
+                      { value: '1A', label: '1 ano' }
+                    ].map(({ value, label }) => (
                       <button
-                        key={horizon}
-                        onClick={() => setSelectedTimeframe(horizon)}
-                        className={`px-1.5 sm:px-2.5 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer ${
-                          selectedTimeframe === horizon
+                        key={value}
+                        onClick={() => setSelectedTimeframe(value)}
+                        className={`px-2 sm:px-2.5 py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          selectedTimeframe === value
                             ? 'bg-[#D9F22A] text-[#060A15] shadow-sm font-black'
                             : 'text-white/60 hover:text-white'
                         }`}
                       >
-                        {horizon}
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -1252,6 +1247,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <line x1="0" y1="80" x2="1020" y2="80" stroke="rgba(255,255,255,0.05)" strokeDasharray="3 3" />
                       <line x1="0" y1="118" x2="1020" y2="118" stroke="rgba(255,255,255,0.05)" strokeDasharray="3 3" />
                       <line x1="0" y1="155" x2="1020" y2="155" stroke="rgba(255,255,255,0.05)" />
+
+                      {selectedTimeframe === '1D' && nowX !== null && (
+                        <>
+                          <line
+                            x1={nowX}
+                            y1="0"
+                            x2={nowX}
+                            y2="155"
+                            stroke="rgba(217,242,42,0.32)"
+                            strokeWidth="1"
+                            strokeDasharray="4 5"
+                          />
+                          <text
+                            x={nowX}
+                            y="12"
+                            textAnchor="middle"
+                            fontSize="10"
+                            fontWeight="700"
+                            fill="#D9F22A"
+                          >
+                            Agora
+                          </text>
+                        </>
+                      )}
 
                       {/* Area Fill under smooth bezier curve or flat baseline */}
                       <path
