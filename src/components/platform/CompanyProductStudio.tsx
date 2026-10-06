@@ -9,6 +9,7 @@ import {
 } from '../../types/platform';
 import { getCompanyPlanDeliverySettings } from '../../services/firestoreService';
 import {
+  AlertTriangle,
   ArrowLeft,
   BadgePercent,
   Check,
@@ -192,6 +193,8 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
   const [saveError, setSaveError] = useState('');
   const [savedAt, setSavedAt] = useState('');
   const [deliveryLoading, setDeliveryLoading] = useState(true);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://leadspay.com';
   const checkoutUrl = `${origin}?checkout=${plan.checkoutSlug || plan.id}`;
   const inviteUrl = `${origin}?plan=${plan.id}&affiliate=invite`;
@@ -717,12 +720,76 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
             )}
 
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
-              <button onClick={()=>onDelete(plan.id,plan.companyId)} className="flex items-center gap-2 rounded-xl border border-rose-500/25 px-4 py-2.5 text-xs font-bold text-rose-400 hover:bg-rose-500/10"><Trash2 className="h-4 w-4"/>Excluir Produto</button>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="group flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/[0.04] px-4 py-2.5 text-xs font-bold text-rose-300 transition-all duration-200 hover:-translate-y-0.5 hover:border-rose-400/35 hover:bg-rose-500/10 hover:text-rose-200"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 transition-transform duration-200 group-hover:scale-105">
+                  <Trash2 className="h-4 w-4" />
+                </span>
+                Excluir produto
+              </button>
               <div className="ml-auto flex items-center gap-3">{saveError && <span className="max-w-sm text-right text-[11px] font-semibold text-rose-400">{saveError}</span>}{!saveError && savedAt && <span className="text-[11px] text-emerald-400">Salvo às {savedAt}</span>}<button type="button" disabled={isSaving} onClick={saveAll} className="flex items-center gap-2 rounded-xl bg-[#D9F22A] px-5 py-2.5 text-xs font-black uppercase text-[#060A15] disabled:cursor-not-allowed disabled:opacity-60"><Save className="h-4 w-4"/>{isSaving ? 'Salvando...' : 'Salvar Produto'}</button></div>
             </div>
           </div>
         </main>
       </div>
+
+      {deleteConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-product-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isDeleting) setDeleteConfirmOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#0b1019] shadow-[0_30px_100px_rgba(0,0,0,0.55)]">
+            <div className="border-b border-white/10 p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-300">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 id="delete-product-title" className="text-lg font-black text-white">Tem certeza que deseja excluir este produto?</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-white/55">
+                    O produto <span className="font-bold text-white">{name || plan.name}</span> será removido da sua conta. Esta ação não pode ser desfeita.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col-reverse gap-2 p-5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-black text-white/70 transition hover:bg-white/5 hover:text-white disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  setIsDeleting(true);
+                  try {
+                    await Promise.resolve(onDelete(plan.id, plan.companyId));
+                    setDeleteConfirmOpen(false);
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-xs font-black text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 className="h-4 w-4" />
+                {isDeleting ? 'Excluindo...' : 'Excluir produto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
