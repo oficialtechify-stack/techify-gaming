@@ -1,0 +1,1387 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  BellOff,
+  Camera,
+  CameraOff,
+  ChevronRight,
+  LocateFixed,
+  Lock,
+  Map as MapIcon,
+  MessageCircle,
+  Mic,
+  MicOff,
+  MonitorUp,
+  Users,
+  Video,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
+
+type Worker = {
+  id: string;
+  name: string;
+  role: string;
+  palette: number;
+  brain?: {
+    mood?: string;
+    focus?: string;
+    currentIntent?: string;
+    lastThought?: string;
+  } | null;
+};
+
+type OfficeMember = {
+  id?: string;
+  userId: string;
+  displayName: string;
+  email?: string;
+  officeRole: 'ceo' | 'designer' | 'member';
+  title: string;
+  palette: number;
+  deskId: string;
+  position?: { x: number; y: number; direction?: string; updatedAt?: string } | null;
+};
+
+type TaskStatus =
+  | 'queued'
+  | 'working'
+  | 'waiting_approval'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+type TaskLite = {
+  id: string;
+  workerId: string;
+  title: string;
+  status: TaskStatus;
+};
+
+type HumanTaskLite = {
+  id: string;
+  assigneeUid: string;
+  title: string;
+  status: 'todo' | 'working' | 'review' | 'completed' | 'blocked';
+};
+
+type Direction = 'down' | 'up' | 'left' | 'right';
+type Cell = { x: number; y: number };
+
+type MotionState = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  direction: Direction;
+  path: Cell[];
+  targetKey: string;
+  idleIndex: number;
+  nextIdleAt: number;
+};
+
+type OfficeArea = {
+  id: string;
+  name: string;
+  kind: 'open' | 'private' | 'social';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  max?: number;
+  subtitle: string;
+};
+
+type Interaction =
+  | { type: 'computer'; label: string; ownerUid?: string }
+  | { type: 'meeting'; label: string }
+  | { type: 'ai'; label: string; workerId: string }
+  | { type: 'human'; label: string; userId: string }
+  | { type: 'object'; label: string; objectId: 'coffee' | 'creative-board' | 'lab-terminal' | 'designer-board' }
+  | null;
+
+interface GatherOfficeWorldProps {
+  workers: Worker[];
+  tasks: TaskLite[];
+  humanTasks?: HumanTaskLite[];
+  officeMembers?: OfficeMember[];
+  currentUserId?: string | null;
+  selectedWorkerId: string;
+  tick: number;
+  pcTick: number;
+  onSelectWorker: (workerId: string) => void;
+  onSelectHuman?: (userId: string) => void;
+  onPlayerMove?: (position: { x: number; y: number; direction: Direction }) => void;
+  onInteract?: (interaction: Exclude<Interaction, null>) => void;
+  onOpenTasks?: () => void;
+}
+
+const TILE = 32;
+const COLS = 72;
+const ROWS = 48;
+const WORLD_W = COLS * TILE;
+const WORLD_H = ROWS * TILE;
+const PLAYER_SPEED = 138;
+const AI_SPEED = 54;
+const PLAYER_RADIUS_X = 8;
+const PLAYER_RADIUS_Y = 5;
+const FRAME_MS = 28;
+
+const AREAS: OfficeArea[] = [
+  { id: 'operations', name: 'Operação', kind: 'open', x: 3, y: 3, w: 29, h: 19, subtitle: 'Mesas dos funcionários IA e operação diária' },
+  { id: 'team-pods', name: 'Pods da Equipe', kind: 'open', x: 33, y: 3, w: 18, h: 19, subtitle: 'Mesas de coworking da equipe' },
+  { id: 'meeting', name: 'Sala de Reunião', kind: 'private', x: 53, y: 3, w: 16, h: 12, max: 8, subtitle: 'Reuniões privadas e alinhamentos' },
+  { id: 'lab', name: 'Laboratório', kind: 'private', x: 53, y: 16, w: 16, h: 6, max: 4, subtitle: 'Backend, testes e investigações técnicas' },
+  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 3, y: 25, w: 18, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
+  { id: 'lobby', name: 'Lobby', kind: 'social', x: 22, y: 25, w: 24, h: 20, subtitle: 'Ponto central para encontros rápidos' },
+  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 47, y: 25, w: 22, h: 20, max: 4, subtitle: 'Design, referências e produção visual' },
+];
+
+const HOME_TARGET: Record<string, Cell> = {
+  'lumy-manager': { x: 7, y: 9 },
+  frontend: { x: 13, y: 9 },
+  backend: { x: 19, y: 9 },
+  designer: { x: 7, y: 17 },
+  qa: { x: 13, y: 17 },
+  growth: { x: 19, y: 17 },
+};
+
+const MEETING_TARGET: Record<string, Cell> = {
+  'lumy-manager': { x: 57, y: 7 },
+  frontend: { x: 60, y: 7 },
+  backend: { x: 63, y: 7 },
+  designer: { x: 57, y: 11 },
+  qa: { x: 60, y: 11 },
+  growth: { x: 63, y: 11 },
+};
+
+const IDLE_TARGETS: Record<string, Cell[]> = {
+  'lumy-manager': [{ x: 37, y: 32 }, { x: 38, y: 39 }, { x: 36, y: 18 }],
+  frontend: [{ x: 38, y: 10 }, { x: 42, y: 16 }, { x: 35, y: 38 }],
+  backend: [{ x: 58, y: 19 }, { x: 42, y: 18 }, { x: 35, y: 34 }],
+  designer: [{ x: 56, y: 34 }, { x: 61, y: 39 }, { x: 39, y: 34 }],
+  qa: [{ x: 59, y: 19 }, { x: 43, y: 10 }, { x: 33, y: 37 }],
+  growth: [{ x: 41, y: 32 }, { x: 44, y: 16 }, { x: 38, y: 41 }],
+};
+
+const AI_DESKS = [
+  { workerId: 'lumy-manager', col: 5, row: 6 },
+  { workerId: 'frontend', col: 11, row: 6 },
+  { workerId: 'backend', col: 17, row: 6 },
+  { workerId: 'designer', col: 5, row: 14 },
+  { workerId: 'qa', col: 11, row: 14 },
+  { workerId: 'growth', col: 17, row: 14 },
+];
+
+const SOLID_RECTS: Array<[number, number, number, number]> = [
+  // AI desks
+  [4, 5, 5, 4], [10, 5, 5, 4], [16, 5, 5, 4],
+  [4, 13, 5, 4], [10, 13, 5, 4], [16, 13, 5, 4],
+  // Team pods and lounge
+  [35, 5, 5, 3], [42, 5, 5, 3], [35, 13, 5, 3], [42, 13, 5, 3],
+  [34, 18, 4, 3], [43, 18, 4, 3],
+  // Meeting
+  [57, 6, 8, 4],
+  // Lab
+  [56, 18, 4, 3], [63, 18, 3, 3],
+  // CEO
+  [7, 31, 7, 4], [5, 27, 3, 2], [16, 27, 2, 2],
+  // Lobby
+  [28, 31, 6, 4], [36, 31, 4, 3], [28, 39, 4, 3],
+  // Designer
+  [53, 31, 7, 4], [50, 28, 4, 2], [63, 28, 3, 2], [59, 39, 5, 3],
+];
+
+const WALL_RECTS: Array<[number, number, number, number]> = [
+  // Building exterior
+  [2, 2, 68, 1], [2, 45, 68, 1], [2, 2, 1, 44], [69, 2, 1, 44],
+  // Right meeting/lab wing
+  [52, 2, 1, 7], [52, 12, 1, 10],
+  [52, 15, 18, 1],
+  // Bottom wing split from open office, doors at 10-12, 33-36, 57-60
+  [2, 23, 8, 1], [13, 23, 20, 1], [37, 23, 20, 1], [61, 23, 9, 1],
+  // Bottom rooms vertical dividers with doorway gaps
+  [21, 24, 1, 8], [21, 35, 1, 11],
+  [46, 24, 1, 8], [46, 35, 1, 11],
+];
+
+const INTERACTIONS = [
+  { type: 'computer' as const, owner: 'ceo', cell: { x: 10, y: 35 }, label: 'Abrir computador do CEO' },
+  { type: 'computer' as const, owner: 'designer-human', cell: { x: 56, y: 35 }, label: 'Abrir computador da designer' },
+  { type: 'meeting' as const, owner: 'meeting', cell: { x: 61, y: 12 }, label: 'Abrir sala de reunião' },
+  { type: 'object' as const, objectId: 'coffee' as const, cell: { x: 40, y: 18 }, label: 'Pegar um café' },
+  { type: 'object' as const, objectId: 'creative-board' as const, cell: { x: 52, y: 28 }, label: 'Abrir quadro criativo' },
+  { type: 'object' as const, objectId: 'lab-terminal' as const, cell: { x: 58, y: 20 }, label: 'Usar terminal do laboratório' },
+  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 64, y: 28 }, label: 'Abrir moodboard da designer' },
+];
+
+function inRect(cell: Cell, x: number, y: number, w: number, h: number) {
+  return cell.x >= x && cell.x < x + w && cell.y >= y && cell.y < y + h;
+}
+
+function cellKey(cell: Cell) {
+  return cell.x + ':' + cell.y;
+}
+
+function centerOf(cell: Cell) {
+  return { x: cell.x * TILE + TILE / 2, y: cell.y * TILE + TILE / 2 };
+}
+
+function cellAtPixel(x: number, y: number): Cell {
+  return {
+    x: Math.max(0, Math.min(COLS - 1, Math.floor(x / TILE))),
+    y: Math.max(0, Math.min(ROWS - 1, Math.floor(y / TILE))),
+  };
+}
+
+function areaForCell(cell: Cell) {
+  return AREAS.find((area) => inRect(cell, area.x, area.y, area.w, area.h)) || null;
+}
+
+function isWalkable(cell: Cell) {
+  if (cell.x < 0 || cell.y < 0 || cell.x >= COLS || cell.y >= ROWS) return false;
+  if (!inRect(cell, 2, 2, 68, 44)) return false;
+  if (WALL_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
+  if (SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
+  return true;
+}
+
+function canOccupy(x: number, y: number) {
+  const samples = [
+    [0, 0],
+    [-PLAYER_RADIUS_X, 0],
+    [PLAYER_RADIUS_X, 0],
+    [0, PLAYER_RADIUS_Y],
+    [0, -PLAYER_RADIUS_Y],
+  ];
+  return samples.every(([ox, oy]) => isWalkable(cellAtPixel(x + ox, y + oy)));
+}
+
+function nearestWalkableCell(x: number, y: number): Cell {
+  const base = cellAtPixel(x, y);
+  if (isWalkable(base)) return base;
+  for (let radius = 1; radius < 14; radius += 1) {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const candidate = { x: base.x + dx, y: base.y + dy };
+        if (isWalkable(candidate)) return candidate;
+      }
+    }
+  }
+  return { x: 35, y: 34 };
+}
+
+function neighbors(cell: Cell) {
+  const result: Cell[] = [];
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (!dx && !dy) continue;
+      const next = { x: cell.x + dx, y: cell.y + dy };
+      if (!isWalkable(next)) continue;
+      if (dx && dy) {
+        if (!isWalkable({ x: cell.x + dx, y: cell.y }) || !isWalkable({ x: cell.x, y: cell.y + dy })) continue;
+      }
+      result.push(next);
+    }
+  }
+  return result;
+}
+
+function heuristic(a: Cell, b: Cell) {
+  const dx = Math.abs(a.x - b.x);
+  const dy = Math.abs(a.y - b.y);
+  return Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+}
+
+function findPath(start: Cell, goal: Cell) {
+  const safeGoalPoint = centerOf(goal);
+  const safeGoal = isWalkable(goal) ? goal : nearestWalkableCell(safeGoalPoint.x, safeGoalPoint.y);
+  const open = new Map<string, { cell: Cell; f: number }>();
+  const came = new Map<string, string>();
+  const score = new Map<string, number>();
+  const cells = new Map<string, Cell>();
+  const startKey = cellKey(start);
+  open.set(startKey, { cell: start, f: heuristic(start, safeGoal) });
+  score.set(startKey, 0);
+  cells.set(startKey, start);
+
+  while (open.size) {
+    const currentEntry = [...open.entries()].sort((a, b) => a[1].f - b[1].f)[0];
+    const currentKey = currentEntry[0];
+    const current = currentEntry[1].cell;
+    open.delete(currentKey);
+    if (current.x === safeGoal.x && current.y === safeGoal.y) {
+      const path: Cell[] = [current];
+      let walk = currentKey;
+      while (came.has(walk)) {
+        walk = came.get(walk) as string;
+        const previous = cells.get(walk);
+        if (previous) path.unshift(previous);
+      }
+      return path.slice(1);
+    }
+
+    for (const next of neighbors(current)) {
+      const key = cellKey(next);
+      const diagonal = next.x !== current.x && next.y !== current.y;
+      const tentative = (score.get(currentKey) ?? Number.POSITIVE_INFINITY) + (diagonal ? Math.SQRT2 : 1);
+      if (tentative >= (score.get(key) ?? Number.POSITIVE_INFINITY)) continue;
+      came.set(key, currentKey);
+      score.set(key, tentative);
+      cells.set(key, next);
+      open.set(key, { cell: next, f: tentative + heuristic(next, safeGoal) });
+    }
+  }
+  return [];
+}
+
+function clearLine(from: { x: number; y: number }, to: { x: number; y: number }) {
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const steps = Math.max(1, Math.ceil(distance / 8));
+  for (let i = 1; i <= steps; i += 1) {
+    const t = i / steps;
+    if (!canOccupy(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t)) return false;
+  }
+  return true;
+}
+
+function smoothPath(from: { x: number; y: number }, path: Cell[]) {
+  if (path.length < 3) return path;
+  const result: Cell[] = [];
+  let origin = from;
+  let index = 0;
+  while (index < path.length) {
+    let best = index;
+    for (let candidate = path.length - 1; candidate >= index; candidate -= 1) {
+      if (clearLine(origin, centerOf(path[candidate]))) {
+        best = candidate;
+        break;
+      }
+    }
+    result.push(path[best]);
+    origin = centerOf(path[best]);
+    index = best + 1;
+  }
+  return result;
+}
+
+function buildRoute(x: number, y: number, target: Cell) {
+  return smoothPath({ x, y }, findPath(nearestWalkableCell(x, y), target));
+}
+
+function directionFor(dx: number, dy: number, fallback: Direction): Direction {
+  if (Math.abs(dx) < .05 && Math.abs(dy) < .05) return fallback;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? 'right' : 'left';
+  return dy > 0 ? 'down' : 'up';
+}
+
+function approach(current: number, target: number, maxDelta: number) {
+  if (current < target) return Math.min(current + maxDelta, target);
+  if (current > target) return Math.max(current - maxDelta, target);
+  return target;
+}
+
+function currentTask(tasks: TaskLite[], workerId: string) {
+  return tasks.find((task) => task.workerId === workerId && ['queued', 'working', 'waiting_approval', 'paused'].includes(task.status)) || null;
+}
+
+function workerState(tasks: TaskLite[], workerId: string): TaskStatus | 'idle' {
+  return currentTask(tasks, workerId)?.status || 'idle';
+}
+
+function activeHumanTask(tasks: HumanTaskLite[], userId: string) {
+  return tasks.find((task) => task.assigneeUid === userId && task.status === 'working') ||
+    tasks.find((task) => task.assigneeUid === userId && task.status === 'todo') ||
+    tasks.find((task) => task.assigneeUid === userId && task.status === 'review') ||
+    tasks.find((task) => task.assigneeUid === userId && task.status === 'blocked') ||
+    null;
+}
+
+function defaultHumanPosition(member: OfficeMember) {
+  if (member.officeRole === 'ceo') return centerOf({ x: 10, y: 37 });
+  if (member.officeRole === 'designer') return centerOf({ x: 57, y: 37 });
+  return centerOf({ x: 38, y: 36 });
+}
+
+function memberDirection(value?: string): Direction {
+  return value === 'up' || value === 'left' || value === 'right' ? value : 'down';
+}
+
+function spriteFrame(walking: boolean, direction: Direction, tick: number) {
+  const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
+  const frames = [0, 1, 2, 1];
+  const frame = walking ? frames[Math.floor(tick / 2) % frames.length] : 1;
+  return { row, frame, flip: direction === 'left' };
+}
+
+function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motion: MotionState, now: number) {
+  if (state === 'working') return { key: 'desk', cell: HOME_TARGET[workerId] || { x: 8, y: 10 }, idleIndex: motion.idleIndex, nextIdleAt: now + 7000 };
+  if (state === 'waiting_approval') return { key: 'meeting', cell: MEETING_TARGET[workerId] || { x: 60, y: 10 }, idleIndex: motion.idleIndex, nextIdleAt: now + 7000 };
+  if (state === 'queued') return { key: 'queue', cell: { x: 29 + (motion.idleIndex % 6), y: 20 }, idleIndex: motion.idleIndex, nextIdleAt: now + 6000 };
+  if (state === 'paused') return { key: 'lounge', cell: { x: 39, y: 19 }, idleIndex: motion.idleIndex, nextIdleAt: now + 8000 };
+
+  const list = IDLE_TARGETS[workerId] || [{ x: 37, y: 34 }];
+  let idleIndex = motion.idleIndex % list.length;
+  let nextIdleAt = motion.nextIdleAt;
+  const destination = list[idleIndex];
+  const cell = cellAtPixel(motion.x, motion.y);
+  if (cell.x === destination.x && cell.y === destination.y && motion.path.length === 0 && now >= nextIdleAt) {
+    idleIndex = (idleIndex + 1) % list.length;
+    nextIdleAt = now + 8500 + idleIndex * 1200;
+  }
+  return { key: 'idle:' + idleIndex, cell: list[idleIndex], idleIndex, nextIdleAt };
+}
+
+function humanTaskText(task: HumanTaskLite | null) {
+  if (!task) return null;
+  if (task.status === 'working') return 'trabalhando';
+  if (task.status === 'todo') return 'nova demanda';
+  if (task.status === 'review') return 'em revisão';
+  if (task.status === 'blocked') return 'bloqueada';
+  return null;
+}
+
+function areaContains(area: OfficeArea, x: number, y: number) {
+  return inRect(cellAtPixel(x, y), area.x, area.y, area.w, area.h);
+}
+
+function distanceTiles(ax: number, ay: number, bx: number, by: number) {
+  return Math.hypot(ax - bx, ay - by) / TILE;
+}
+
+export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
+  workers,
+  tasks,
+  humanTasks = [],
+  officeMembers = [],
+  currentUserId,
+  selectedWorkerId,
+  tick,
+  pcTick,
+  onSelectWorker,
+  onSelectHuman,
+  onPlayerMove,
+  onInteract,
+  onOpenTasks,
+}) => {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const keysRef = useRef(new Set<string>());
+  const playerRef = useRef<MotionState | null>(null);
+  const pathRef = useRef<Cell[]>([]);
+  const workersMotionRef = useRef<Record<string, MotionState>>({});
+  const tasksRef = useRef(tasks);
+  const workersRef = useRef(workers);
+  const presenceRef = useRef(0);
+  const renderRef = useRef(0);
+  const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+
+  const [player, setPlayer] = useState<MotionState | null>(null);
+  const [workersMotion, setWorkersMotion] = useState<Record<string, MotionState>>({});
+  const [zoom, setZoom] = useState(.72);
+  const [camera, setCamera] = useState({ x: 0, y: 0 });
+  const cameraRef = useRef(camera);
+  const [followPlayer, setFollowPlayer] = useState(true);
+  const [interaction, setInteraction] = useState<Interaction>(null);
+  const [selectedHumanId, setSelectedHumanId] = useState<string | null>(null);
+  const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [micOn, setMicOn] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [screenOn, setScreenOn] = useState(false);
+  const [quietMode, setQuietMode] = useState(false);
+  const [lockedAreas, setLockedAreas] = useState<Record<string, boolean>>({});
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const currentMember = officeMembers.find((member) => member.userId === currentUserId) || null;
+
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+  useEffect(() => { workersRef.current = workers; }, [workers]);
+  useEffect(() => { cameraRef.current = camera; }, [camera]);
+
+  useEffect(() => {
+    if (!currentMember) {
+      playerRef.current = null;
+      setPlayer(null);
+      return;
+    }
+    const fallback = defaultHumanPosition(currentMember);
+    const stored = currentMember.position;
+    const raw = stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)
+      ? { x: stored.x, y: stored.y, direction: memberDirection(stored.direction) }
+      : { ...fallback, direction: 'down' as Direction };
+    const safe = centerOf(nearestWalkableCell(raw.x, raw.y));
+    const initial: MotionState = {
+      x: safe.x,
+      y: safe.y,
+      vx: 0,
+      vy: 0,
+      direction: raw.direction,
+      path: [],
+      targetKey: 'player',
+      idleIndex: 0,
+      nextIdleAt: 0,
+    };
+    playerRef.current = initial;
+    pathRef.current = [];
+    setPlayer(initial);
+  }, [currentMember?.userId]);
+
+  useEffect(() => {
+    const next = { ...workersMotionRef.current };
+    for (const worker of workers) {
+      if (next[worker.id]) continue;
+      const home = centerOf(HOME_TARGET[worker.id] || { x: 8, y: 10 });
+      next[worker.id] = {
+        x: home.x,
+        y: home.y,
+        vx: 0,
+        vy: 0,
+        direction: 'down',
+        path: [],
+        targetKey: '',
+        idleIndex: 0,
+        nextIdleAt: Date.now() + 5000,
+      };
+    }
+    workersMotionRef.current = next;
+    setWorkersMotion(next);
+  }, [workers]);
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      const element = event.target as HTMLElement | null;
+      if (element?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const key = event.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        keysRef.current.add(key);
+        pathRef.current = [];
+        event.preventDefault();
+      }
+      if (key === 'e' && interaction && onInteract) {
+        onInteract(interaction);
+        event.preventDefault();
+      }
+    };
+    const up = (event: KeyboardEvent) => keysRef.current.delete(event.key.toLowerCase());
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
+  }, [interaction, onInteract]);
+
+  const clampCamera = (next: { x: number; y: number }, currentZoom = zoom) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return next;
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+    const scaledW = WORLD_W * currentZoom;
+    const scaledH = WORLD_H * currentZoom;
+    const minX = Math.min(0, width - scaledW);
+    const minY = Math.min(0, height - scaledH);
+    return {
+      x: Math.max(minX, Math.min(0, next.x)),
+      y: Math.max(minY, Math.min(0, next.y)),
+    };
+  };
+
+  const centerCameraOn = (x: number, y: number, currentZoom = zoom) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const next = clampCamera({
+      x: viewport.clientWidth / 2 - x * currentZoom,
+      y: viewport.clientHeight / 2 - y * currentZoom,
+    }, currentZoom);
+    cameraRef.current = next;
+    setCamera(next);
+  };
+
+  useEffect(() => {
+    let frameId = 0;
+    let previous = performance.now();
+
+    const frame = (now: number) => {
+      const dt = Math.min(.035, Math.max(.001, (now - previous) / 1000));
+      previous = now;
+
+      const nextWorkers = { ...workersMotionRef.current };
+      for (const worker of workersRef.current) {
+        const current = nextWorkers[worker.id];
+        if (!current) continue;
+        const state = workerState(tasksRef.current, worker.id);
+        const target = desiredWorkerTarget(worker.id, state, current, Date.now());
+        let route = current.path;
+        const currentCell = nearestWalkableCell(current.x, current.y);
+        const targetPoint = centerOf(target.cell);
+        const safeTarget = isWalkable(target.cell) ? target.cell : nearestWalkableCell(targetPoint.x, targetPoint.y);
+
+        if (current.targetKey !== target.key || (!route.length && (currentCell.x !== safeTarget.x || currentCell.y !== safeTarget.y))) {
+          route = buildRoute(current.x, current.y, safeTarget);
+        }
+
+        let x = current.x;
+        let y = current.y;
+        let direction = current.direction;
+        let vx = 0;
+        let vy = 0;
+        const nextRoute = [...route];
+
+        if (nextRoute.length) {
+          const point = centerOf(nextRoute[0]);
+          const dx = point.x - x;
+          const dy = point.y - y;
+          const distance = Math.hypot(dx, dy);
+          if (distance < 5) {
+            nextRoute.shift();
+          } else if (distance > 0) {
+            vx = dx / distance * AI_SPEED;
+            vy = dy / distance * AI_SPEED;
+            const nx = x + vx * dt;
+            const ny = y + vy * dt;
+            if (canOccupy(nx, y)) x = nx;
+            if (canOccupy(x, ny)) y = ny;
+            direction = directionFor(vx, vy, direction);
+          }
+        }
+
+        nextWorkers[worker.id] = {
+          x, y, vx, vy, direction,
+          path: nextRoute,
+          targetKey: target.key,
+          idleIndex: target.idleIndex,
+          nextIdleAt: target.nextIdleAt,
+        };
+      }
+      workersMotionRef.current = nextWorkers;
+
+      const currentPlayer = playerRef.current;
+      if (currentPlayer) {
+        let x = currentPlayer.x;
+        let y = currentPlayer.y;
+        let vx = currentPlayer.vx;
+        let vy = currentPlayer.vy;
+        let direction = currentPlayer.direction;
+        const keys = keysRef.current;
+        let inputX = 0;
+        let inputY = 0;
+        if (keys.has('w') || keys.has('arrowup')) inputY -= 1;
+        if (keys.has('s') || keys.has('arrowdown')) inputY += 1;
+        if (keys.has('a') || keys.has('arrowleft')) inputX -= 1;
+        if (keys.has('d') || keys.has('arrowright')) inputX += 1;
+
+        let desiredX = 0;
+        let desiredY = 0;
+        let route = [...pathRef.current];
+
+        if (inputX || inputY) {
+          route = [];
+          pathRef.current = [];
+          const length = Math.hypot(inputX, inputY) || 1;
+          desiredX = inputX / length * PLAYER_SPEED;
+          desiredY = inputY / length * PLAYER_SPEED;
+        } else if (route.length) {
+          const point = centerOf(route[0]);
+          const dx = point.x - x;
+          const dy = point.y - y;
+          const distance = Math.hypot(dx, dy);
+          if (distance < 8) {
+            route.shift();
+            pathRef.current = route;
+          } else if (distance > 0) {
+            desiredX = dx / distance * PLAYER_SPEED;
+            desiredY = dy / distance * PLAYER_SPEED;
+          }
+        }
+
+        const accel = (inputX || inputY || route.length) ? 620 : 900;
+        vx = approach(vx, desiredX, accel * dt);
+        vy = approach(vy, desiredY, accel * dt);
+        if (!inputX && !inputY && !route.length) {
+          vx = approach(vx, 0, 980 * dt);
+          vy = approach(vy, 0, 980 * dt);
+        }
+
+        const nx = x + vx * dt;
+        const ny = y + vy * dt;
+        if (canOccupy(nx, y)) x = nx; else vx = 0;
+        if (canOccupy(x, ny)) y = ny; else vy = 0;
+
+        if (Math.abs(vx) + Math.abs(vy) > 4) direction = directionFor(vx, vy, direction);
+
+        const nextPlayer: MotionState = {
+          ...currentPlayer,
+          x, y, vx, vy, direction,
+          path: route,
+        };
+        playerRef.current = nextPlayer;
+
+        const playerCell = cellAtPixel(x, y);
+        let nearest: Interaction = null;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+
+        for (const item of INTERACTIONS) {
+          const distance = heuristic(playerCell, item.cell);
+          if (distance > 2.3 || distance >= nearestDistance) continue;
+          if (item.type === 'computer') {
+            const ownerUid = item.owner === 'ceo'
+              ? officeMembers.find((member) => member.officeRole === 'ceo')?.userId
+              : officeMembers.find((member) => member.officeRole === 'designer')?.userId;
+            nearest = { type: 'computer', label: item.label, ownerUid };
+          } else if (item.type === 'meeting') {
+            nearest = { type: 'meeting', label: item.label };
+          } else {
+            nearest = { type: 'object', label: item.label, objectId: item.objectId };
+          }
+          nearestDistance = distance;
+        }
+
+        for (const worker of workersRef.current) {
+          const motion = workersMotionRef.current[worker.id];
+          if (!motion) continue;
+          const distance = distanceTiles(x, y, motion.x, motion.y);
+          if (distance <= 2.2 && distance < nearestDistance) {
+            nearest = { type: 'ai', label: 'Conversar com ' + worker.name, workerId: worker.id };
+            nearestDistance = distance;
+          }
+        }
+
+        for (const member of officeMembers) {
+          if (member.userId === currentUserId) continue;
+          const fallback = defaultHumanPosition(member);
+          const px = member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x;
+          const py = member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y;
+          const distance = distanceTiles(x, y, px, py);
+          if (distance <= 2.2 && distance < nearestDistance) {
+            nearest = { type: 'human', label: 'Falar com ' + member.displayName, userId: member.userId };
+            nearestDistance = distance;
+          }
+        }
+
+        if (now - presenceRef.current > 620 && onPlayerMove && Math.abs(vx) + Math.abs(vy) > 4) {
+          presenceRef.current = now;
+          onPlayerMove({ x, y, direction });
+        }
+
+        if (followPlayer) {
+          const viewport = viewportRef.current;
+          if (viewport) {
+            const nextCamera = clampCamera({
+              x: viewport.clientWidth / 2 - x * zoom,
+              y: viewport.clientHeight / 2 - y * zoom,
+            });
+            cameraRef.current = nextCamera;
+            setCamera(nextCamera);
+          }
+        }
+
+        if (now - renderRef.current >= FRAME_MS) {
+          renderRef.current = now;
+          setPlayer({ ...nextPlayer });
+          setWorkersMotion({ ...nextWorkers });
+          setInteraction(nearest);
+        }
+      }
+
+      frameId = window.requestAnimationFrame(frame);
+    };
+
+    frameId = window.requestAnimationFrame(frame);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [officeMembers, currentUserId, followPlayer, zoom, onPlayerMove]);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    videoRef.current.srcObject = cameraOn ? localStream : null;
+  }, [cameraOn, localStream]);
+
+  useEffect(() => () => {
+    localStream?.getTracks().forEach((track) => track.stop());
+    screenStream?.getTracks().forEach((track) => track.stop());
+  }, [localStream, screenStream]);
+
+  const ensureLocalStream = async () => {
+    if (localStream) return localStream;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    stream.getAudioTracks().forEach((track) => { track.enabled = false; });
+    stream.getVideoTracks().forEach((track) => { track.enabled = false; });
+    setLocalStream(stream);
+    return stream;
+  };
+
+  const toggleMic = async () => {
+    try {
+      const stream = await ensureLocalStream();
+      const next = !micOn;
+      stream.getAudioTracks().forEach((track) => { track.enabled = next; });
+      setMicOn(next);
+    } catch {
+      setMicOn(false);
+    }
+  };
+
+  const toggleCamera = async () => {
+    try {
+      const stream = await ensureLocalStream();
+      const next = !cameraOn;
+      stream.getVideoTracks().forEach((track) => { track.enabled = next; });
+      setCameraOn(next);
+    } catch {
+      setCameraOn(false);
+    }
+  };
+
+  const toggleScreen = async () => {
+    if (screenOn) {
+      screenStream?.getTracks().forEach((track) => track.stop());
+      setScreenStream(null);
+      setScreenOn(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      stream.getTracks().forEach((track) => {
+        track.addEventListener('ended', () => {
+          setScreenStream(null);
+          setScreenOn(false);
+        }, { once: true });
+      });
+      setScreenStream(stream);
+      setScreenOn(true);
+    } catch {
+      setScreenOn(false);
+    }
+  };
+
+  const worldPointFromEvent = (clientX: number, clientY: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return { x: 0, y: 0 };
+    const rect = viewport.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - cameraRef.current.x) / zoom,
+      y: (clientY - rect.top - cameraRef.current.y) / zoom,
+    };
+  };
+
+  const goToWorldPoint = (x: number, y: number) => {
+    const current = playerRef.current;
+    if (!current) return;
+    const target = nearestWalkableCell(x, y);
+    pathRef.current = buildRoute(current.x, current.y, target);
+  };
+
+  const locatePerson = (member: OfficeMember) => {
+    const fallback = defaultHumanPosition(member);
+    const x = member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x;
+    const y = member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y;
+    setFollowPlayer(false);
+    centerCameraOn(x, y);
+    setSelectedHumanId(member.userId);
+  };
+
+  const changeZoom = (delta: number) => {
+    const next = Math.max(.42, Math.min(1.16, Number((zoom + delta).toFixed(2))));
+    setZoom(next);
+    const current = playerRef.current;
+    if (current && followPlayer) centerCameraOn(current.x, current.y, next);
+    else setCamera((value) => clampCamera(value, next));
+  };
+
+  const onViewportPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    dragRef.current = { x: event.clientX, y: event.clientY, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onViewportPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || !(event.buttons & 1)) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    setFollowPlayer(false);
+    setCamera((value) => {
+      const next = clampCamera({ x: value.x + dx, y: value.y + dy });
+      cameraRef.current = next;
+      return next;
+    });
+  };
+
+  const onViewportPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag?.moved) {
+      const point = worldPointFromEvent(event.clientX, event.clientY);
+      goToWorldPoint(point.x, point.y);
+    }
+  };
+
+  const remoteHumans = officeMembers
+    .filter((member) => member.userId !== currentUserId)
+    .map((member) => {
+      const fallback = defaultHumanPosition(member);
+      return {
+        member,
+        x: member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x,
+        y: member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y,
+        direction: memberDirection(member.position?.direction),
+      };
+    });
+
+  const currentArea = player ? areaForCell(cellAtPixel(player.x, player.y)) : null;
+  const areaParticipants = currentArea
+    ? officeMembers.filter((member) => {
+        if (member.userId === currentUserId && player) return areaContains(currentArea, player.x, player.y);
+        const fallback = defaultHumanPosition(member);
+        const x = member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x;
+        const y = member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y;
+        return areaContains(currentArea, x, y);
+      })
+    : [];
+
+  const nearbyMembers = player
+    ? remoteHumans
+        .map((item) => ({ ...item, distance: distanceTiles(player.x, player.y, item.x, item.y) }))
+        .filter((item) => item.distance <= (quietMode ? 1.25 : 5.25))
+        .sort((a, b) => a.distance - b.distance)
+    : [];
+
+  const selectedHuman = officeMembers.find((member) => member.userId === selectedHumanId) || null;
+  const playerWalking = player ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
+  const playerFrame = player ? spriteFrame(playerWalking, player.direction, tick) : null;
+
+  return (
+    <div className="gather-office-shell">
+      <div
+        className="gather-viewport"
+        ref={viewportRef}
+        onPointerDown={onViewportPointerDown}
+        onPointerMove={onViewportPointerMove}
+        onPointerUp={onViewportPointerUp}
+      >
+        <div
+          className="gather-world"
+          style={{
+            width: WORLD_W,
+            height: WORLD_H,
+            transform: 'translate3d(' + camera.x + 'px,' + camera.y + 'px,0) scale(' + zoom + ')',
+          }}
+        >
+          <div className="gather-grass" />
+          <div className="gather-building-floor" />
+
+          {AREAS.map((area) => (
+            <div
+              key={area.id}
+              className={'gather-room gather-room-' + area.id + ' area-' + area.kind}
+              style={{
+                left: area.x * TILE,
+                top: area.y * TILE,
+                width: area.w * TILE,
+                height: area.h * TILE,
+              }}
+            >
+              <span className="gather-room-name">{area.name}</span>
+            </div>
+          ))}
+
+          <div className="gather-wall wall-meeting-left" />
+          <div className="gather-wall wall-meeting-split" />
+          <div className="gather-wall wall-bottom-a" />
+          <div className="gather-wall wall-bottom-b" />
+          <div className="gather-wall wall-bottom-c" />
+          <div className="gather-wall wall-bottom-d" />
+          <div className="gather-wall wall-ceo-split-a" />
+          <div className="gather-wall wall-ceo-split-b" />
+          <div className="gather-wall wall-designer-split-a" />
+          <div className="gather-wall wall-designer-split-b" />
+
+          <div className="gather-door door-meeting">REUNIÃO</div>
+          <div className="gather-door door-ceo">CEO</div>
+          <div className="gather-door door-lobby">LOBBY</div>
+          <div className="gather-door door-designer">DESIGN</div>
+
+          <div className="gather-lounge">
+            <img src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" className="gather-furniture lounge-sofa-a" />
+            <img src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" className="gather-furniture lounge-sofa-b" />
+            <img src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" className="gather-furniture lounge-table" />
+            <img src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" className="gather-furniture lounge-plant-a" />
+            <img src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" className="gather-furniture lounge-plant-b" />
+            <img src="/pixel-agents/assets/furniture/COFFEE/COFFEE.png" alt="" className="gather-furniture lounge-coffee" />
+          </div>
+
+          {AI_DESKS.map((desk) => {
+            const worker = workers.find((item) => item.id === desk.workerId);
+            return (
+              <button
+                key={desk.workerId}
+                type="button"
+                className={'gather-workstation ' + (selectedWorkerId === desk.workerId ? 'selected' : '')}
+                style={{ left: desk.col * TILE, top: desk.row * TILE }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectWorker(desk.workerId);
+                }}
+                title={worker ? 'Mesa de ' + worker.name : 'Mesa'}
+              >
+                <img className="desk-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+                <img className="desk-table" src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" />
+                <img className="desk-pc" src={'/pixel-agents/assets/furniture/PC/PC_FRONT_ON_' + ((pcTick % 2) + 1) + '.png'} alt="" />
+              </button>
+            );
+          })}
+
+          <div className="gather-team-pods">
+            {[0, 1, 2, 3].map((index) => (
+              <div key={index} className={'team-pod pod-' + index}>
+                <img className="pod-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+                <img className="pod-table" src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" />
+              </div>
+            ))}
+          </div>
+
+          <div className="gather-meeting-furniture">
+            <img className="meeting-table" src="/pixel-agents/assets/furniture/TABLE_FRONT/TABLE_FRONT.png" alt="" />
+            {[0, 1, 2, 3, 4, 5].map((index) => (
+              <img key={index} className={'meeting-chair chair-' + index} src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+            ))}
+            <img className="meeting-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+          </div>
+
+          <div className="gather-lab-furniture">
+            <img className="lab-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+            <img className="lab-pc-a" src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_1.png" alt="" />
+            <img className="lab-pc-b" src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_2.png" alt="" />
+            <img className="lab-books" src="/pixel-agents/assets/furniture/BOOKSHELF/BOOKSHELF.png" alt="" />
+          </div>
+
+          <div className="gather-ceo-furniture">
+            <img className="ceo-books" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
+            <img className="ceo-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+            <div className="ceo-desk">
+              <img src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" className="desk-chair" />
+              <img src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" className="desk-table" />
+              <img src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_1.png" alt="" className="desk-pc" />
+            </div>
+            <img className="ceo-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
+            <img className="ceo-plant" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
+          </div>
+
+          <div className="gather-lobby-furniture">
+            <img className="lobby-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
+            <img className="lobby-table" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
+            <img className="lobby-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+            <img className="lobby-plant-a" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
+            <img className="lobby-plant-b" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
+          </div>
+
+          <div className="gather-designer-furniture">
+            <img className="designer-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+            <img className="designer-painting" src="/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png" alt="" />
+            <div className="designer-desk">
+              <img src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" className="desk-chair" />
+              <img src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" className="desk-table" />
+              <img src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_2.png" alt="" className="desk-pc" />
+            </div>
+            <img className="designer-books" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
+            <img className="designer-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
+            <img className="designer-plant" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
+          </div>
+
+          {currentArea?.kind === 'private' && (
+            <div
+              className="gather-private-focus"
+              style={{
+                left: currentArea.x * TILE,
+                top: currentArea.y * TILE,
+                width: currentArea.w * TILE,
+                height: currentArea.h * TILE,
+              }}
+            />
+          )}
+
+          {workers.map((worker) => {
+            const motion = workersMotion[worker.id];
+            if (!motion) return null;
+            const state = workerState(tasks, worker.id);
+            const walking = motion.path.length > 0;
+            const frame = spriteFrame(walking, motion.direction, tick);
+            const task = currentTask(tasks, worker.id);
+            return (
+              <button
+                key={worker.id}
+                type="button"
+                className={'gather-avatar ai-avatar state-' + state + (walking ? ' walking' : '') + (selectedWorkerId === worker.id ? ' selected' : '')}
+                style={{ left: motion.x, top: motion.y, zIndex: 800 + Math.floor(motion.y) }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectWorker(worker.id);
+                }}
+              >
+                <span
+                  className="gather-avatar-sprite"
+                  style={{
+                    backgroundImage: 'url(/pixel-agents/assets/characters/char_' + worker.palette + '.png)',
+                    backgroundPosition: (-frame.frame * 48) + 'px ' + (-frame.row * 96) + 'px',
+                    transform: frame.flip ? 'scaleX(-1)' : undefined,
+                  }}
+                />
+                <span className="gather-avatar-tag">
+                  <strong>{worker.name}</strong>
+                  <small>{state === 'working' ? 'trabalhando' : state === 'waiting_approval' ? 'aguardando você' : task?.title || worker.role}</small>
+                </span>
+                {state === 'working' && <i className="gather-avatar-status working">•••</i>}
+                {state === 'waiting_approval' && <i className="gather-avatar-status approval">!</i>}
+              </button>
+            );
+          })}
+
+          {remoteHumans.map(({ member, x, y, direction }) => {
+            const updatedAt = member.position?.updatedAt ? new Date(member.position.updatedAt).getTime() : 0;
+            const moving = updatedAt > 0 && Date.now() - updatedAt < 1800;
+            const frame = spriteFrame(moving, direction, tick);
+            const humanTask = activeHumanTask(humanTasks, member.userId);
+            return (
+              <button
+                key={member.userId}
+                type="button"
+                className={'gather-avatar human-avatar remote' + (moving ? ' walking' : '') + (selectedHumanId === member.userId ? ' selected' : '')}
+                style={{ left: x, top: y, zIndex: 950 + Math.floor(y) }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSelectedHumanId(member.userId);
+                  onSelectHuman?.(member.userId);
+                }}
+              >
+                <span
+                  className="gather-avatar-sprite"
+                  style={{
+                    backgroundImage: 'url(/pixel-agents/assets/characters/char_' + member.palette + '.png)',
+                    backgroundPosition: (-frame.frame * 48) + 'px ' + (-frame.row * 96) + 'px',
+                    transform: frame.flip ? 'scaleX(-1)' : undefined,
+                  }}
+                />
+                <span className="gather-avatar-tag human">
+                  <strong>{member.displayName}</strong>
+                  <small>{humanTaskText(humanTask) || member.title}</small>
+                </span>
+              </button>
+            );
+          })}
+
+          {player && currentMember && playerFrame && (
+            <button
+              type="button"
+              className={'gather-avatar human-avatar me' + (playerWalking ? ' walking' : '')}
+              style={{ left: player.x, top: player.y, zIndex: 1100 + Math.floor(player.y) }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <span
+                className="gather-avatar-sprite"
+                style={{
+                  backgroundImage: 'url(/pixel-agents/assets/characters/char_' + currentMember.palette + '.png)',
+                  backgroundPosition: (-playerFrame.frame * 48) + 'px ' + (-playerFrame.row * 96) + 'px',
+                  transform: playerFrame.flip ? 'scaleX(-1)' : undefined,
+                }}
+              />
+              <span className="gather-avatar-tag me">
+                <strong>{currentMember.displayName}</strong>
+                <small>{currentMember.officeRole === 'ceo' ? 'CEO' : currentMember.title}</small>
+              </span>
+            </button>
+          )}
+        </div>
+
+        {cameraOn && (
+          <div className="gather-self-video">
+            <video ref={videoRef} autoPlay muted playsInline />
+            <span>Você</span>
+          </div>
+        )}
+
+        {nearbyMembers.length > 0 && (
+          <div className="gather-nearby-strip">
+            {nearbyMembers.slice(0, 4).map(({ member, distance }) => (
+              <button key={member.userId} type="button" onClick={() => locatePerson(member)}>
+                <span className="nearby-dot" />
+                <strong>{member.displayName}</strong>
+                <small>{distance <= 2.2 ? 'conectado' : 'por perto'}</small>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {interaction && (
+          <button
+            type="button"
+            className="gather-interaction"
+            onClick={(event) => {
+              event.stopPropagation();
+              onInteract?.(interaction);
+            }}
+          >
+            <kbd>E</kbd>
+            <span>{interaction.label}</span>
+          </button>
+        )}
+
+        {(currentArea?.kind === 'private' || selectedHuman) && (
+          <aside className="gather-context-card">
+            <button type="button" className="context-close" onClick={() => setSelectedHumanId(null)}>
+              <X className="h-4 w-4" />
+            </button>
+
+            {selectedHuman ? (
+              <>
+                <div className="context-title">
+                  <span className="context-avatar">{selectedHuman.displayName.slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>{selectedHuman.displayName}</strong>
+                    <small>{selectedHuman.title}</small>
+                  </div>
+                </div>
+                <button type="button" className="context-primary" onClick={() => {
+                  locatePerson(selectedHuman);
+                  const fallback = defaultHumanPosition(selectedHuman);
+                  const x = selectedHuman.position?.x ?? fallback.x;
+                  const y = selectedHuman.position?.y ?? fallback.y;
+                  goToWorldPoint(x, y);
+                }}>
+                  <LocateFixed className="h-4 w-4" />
+                  Ir até essa pessoa
+                </button>
+                <button type="button" className="context-secondary" onClick={() => onSelectHuman?.(selectedHuman.userId)}>
+                  <ChevronRight className="h-4 w-4" />
+                  Abrir estação
+                </button>
+              </>
+            ) : currentArea ? (
+              <>
+                <div className="context-title">
+                  <span className="context-room-icon"><Users className="h-4 w-4" /></span>
+                  <div>
+                    <strong>{currentArea.name}</strong>
+                    <small>{currentArea.subtitle}</small>
+                  </div>
+                </div>
+                <button type="button" className="context-primary" onClick={() => onInteract?.({ type: 'meeting', label: currentArea.name })}>
+                  <Video className="h-4 w-4" />
+                  Iniciar reunião
+                </button>
+                <div className="context-room-actions">
+                  <button type="button" onClick={() => setLockedAreas((value) => ({ ...value, [currentArea.id]: !value[currentArea.id] }))}>
+                    <Lock className="h-3.5 w-3.5" />
+                    {lockedAreas[currentArea.id] ? 'Desbloquear' : 'Bloquear sala'}
+                  </button>
+                </div>
+                <div className="context-participants">
+                  <span>{areaParticipants.length} participante{areaParticipants.length === 1 ? '' : 's'}</span>
+                  {areaParticipants.map((member) => (
+                    <button key={member.userId} type="button" onClick={() => locatePerson(member)}>
+                      <i>{member.displayName.slice(0, 1).toUpperCase()}</i>
+                      <strong>{member.userId === currentUserId ? 'Você' : member.displayName}</strong>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </aside>
+        )}
+
+        <div className="gather-map-controls">
+          <button type="button" onClick={() => changeZoom(.1)} title="Aumentar zoom"><ZoomIn className="h-4 w-4" /></button>
+          <button type="button" onClick={() => changeZoom(-.1)} title="Diminuir zoom"><ZoomOut className="h-4 w-4" /></button>
+          <button type="button" onClick={() => {
+            const current = playerRef.current;
+            setFollowPlayer(true);
+            if (current) centerCameraOn(current.x, current.y);
+          }} title="Mostrar minha posição"><LocateFixed className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setParticipantsOpen((value) => !value)} title="Pessoas"><Users className="h-4 w-4" /></button>
+        </div>
+
+        {participantsOpen && (
+          <aside className="gather-people-panel">
+            <div className="people-head">
+              <div>
+                <strong>Pessoas no Office</strong>
+                <small>{officeMembers.length} membro{officeMembers.length === 1 ? '' : 's'}</small>
+              </div>
+              <button type="button" onClick={() => setParticipantsOpen(false)}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="people-list">
+              {officeMembers.map((member) => (
+                <button key={member.userId} type="button" onClick={() => locatePerson(member)}>
+                  <span>{member.displayName.slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>{member.userId === currentUserId ? 'Você' : member.displayName}</strong>
+                    <small>{member.officeRole === 'ceo' ? 'CEO' : member.title}</small>
+                  </div>
+                  <LocateFixed className="h-3.5 w-3.5" />
+                </button>
+              ))}
+            </div>
+          </aside>
+        )}
+
+        <div className="gather-minimap" onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const x = (event.clientX - rect.left) / rect.width * WORLD_W;
+          const y = (event.clientY - rect.top) / rect.height * WORLD_H;
+          setFollowPlayer(false);
+          centerCameraOn(x, y);
+        }}>
+          {AREAS.map((area) => (
+            <i
+              key={area.id}
+              className={'mini-area ' + area.kind}
+              style={{
+                left: (area.x / COLS * 100) + '%',
+                top: (area.y / ROWS * 100) + '%',
+                width: (area.w / COLS * 100) + '%',
+                height: (area.h / ROWS * 100) + '%',
+              }}
+            />
+          ))}
+          {player && <b style={{ left: (player.x / WORLD_W * 100) + '%', top: (player.y / WORLD_H * 100) + '%' }} />}
+        </div>
+
+        <div className="gather-bottom-dock">
+          <div className="dock-profile">
+            <span>{currentMember?.displayName?.slice(0, 1).toUpperCase() || 'L'}</span>
+            <i />
+          </div>
+          <button type="button" className={micOn ? 'active' : ''} onClick={() => void toggleMic()} title="Microfone">
+            {micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+          </button>
+          <button type="button" className={cameraOn ? 'active' : ''} onClick={() => void toggleCamera()} title="Câmera">
+            {cameraOn ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
+          </button>
+          <button type="button" className={screenOn ? 'active' : ''} onClick={() => void toggleScreen()} title="Compartilhar tela">
+            <MonitorUp className="h-5 w-5" />
+          </button>
+          <button type="button" onClick={() => onInteract?.({ type: 'meeting', label: 'Chat da equipe' })} title="Chat">
+            <MessageCircle className="h-5 w-5" />
+          </button>
+          <button type="button" className={quietMode ? 'active quiet' : ''} onClick={() => setQuietMode((value) => !value)} title="Modo foco">
+            <BellOff className="h-5 w-5" />
+          </button>
+          <button type="button" onClick={onOpenTasks} title="Tarefas">
+            <MapIcon className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="gather-movement-help">
+          <span><kbd>WASD</kbd> mover</span>
+          <span>arraste o mapa para olhar ao redor</span>
+          <span><kbd>E</kbd> interagir</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default GatherOfficeWorld;
