@@ -42,6 +42,23 @@ type ExecutionReport = {
   filesReviewed: string[];
 };
 
+type WorkerProfile = {
+  id: WorkerId;
+  name: string;
+  role: string;
+  specialty: string;
+  palette: number;
+  permissions: readonly string[];
+  repoPrefixes: readonly string[];
+};
+
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  createdAt: string;
+};
+
 const WORKERS = [
   {
     id: 'lumy-manager',
@@ -98,6 +115,48 @@ const WORKERS = [
     repoPrefixes: ['src/components/platform/Comunidade', 'src/components/LeadspayLanding', 'src/styles/'],
   },
 ] as const;
+
+async function resolveWorkers(db: FirebaseFirestore.Firestore): Promise<WorkerProfile[]> {
+  const profiles = await db.collection('admin_ai_worker_profiles').get();
+  const customNames = new Map(
+    profiles.docs.map((doc) => [doc.id, cleanText(doc.data()?.name, 32)] as const),
+  );
+
+  return WORKERS.map((worker) => ({
+    ...worker,
+    permissions: [...worker.permissions],
+    repoPrefixes: [...worker.repoPrefixes],
+    name: customNames.get(worker.id) || worker.name,
+  })) as WorkerProfile[];
+}
+
+function serializeChatMessage(
+  doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot,
+): ChatMessage {
+  const data = (doc.data() || {}) as Record<string, any>;
+  return {
+    id: doc.id,
+    role: data.role === 'assistant' ? 'assistant' : 'user',
+    text: String(data.text || ''),
+    createdAt: String(data.createdAt || ''),
+  };
+}
+
+async function loadWorkerChat(
+  db: FirebaseFirestore.Firestore,
+  workerId: WorkerId,
+  limit = 40,
+): Promise<ChatMessage[]> {
+  const snap = await db
+    .collection('admin_ai_worker_chats')
+    .doc(workerId)
+    .collection('messages')
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get();
+
+  return snap.docs.map(serializeChatMessage).reverse();
+}
 
 const VALID_WORKER_IDS = new Set(WORKERS.map((worker) => worker.id));
 const VALID_STATUS = new Set<TaskStatus>([
@@ -171,7 +230,7 @@ function serializeTask(id: string, data: Record<string, any>) {
   };
 }
 
-function isReadableRepoPath(path: string, worker: (typeof WORKERS)[number]): boolean {
+function isReadableRepoPath(path: string, worker: WorkerProfile): boolean {
   if (!path || path.includes('node_modules/') || path.includes('dist/')) return false;
   if (/(^|\/)(\.env|secrets?|credentials?|service-account)/i.test(path)) return false;
   if (/\.(png|jpg|jpeg|gif|webp|ico|woff2?|ttf|zip|pdf|lock)$/i.test(path)) return false;
@@ -200,7 +259,7 @@ function taskTerms(task: Record<string, any>): string[] {
 
 async function collectRepoContext(
   task: Record<string, any>,
-  worker: (typeof WORKERS)[number],
+  worker: WorkerProfile,
 ): Promise<{ context: string; files: string[] }> {
   if (task.project !== 'LeadsPay' || !worker.repoPrefixes.length) {
     return { context: '', files: [] };
@@ -259,7 +318,7 @@ async function collectRepoContext(
   return { context: parts.join('\n'), files };
 }
 
-function workerPolicy(worker: (typeof WORKERS)[number]): string {
+function workerPolicy(worker: WorkerProfile): string {
   const common = [
     'Você trabalha dentro do Admin da LeadsPay e responde em português do Brasil.',
     'Nunca diga que editou, publicou, fez deploy ou alterou arquivos se a execução atual apenas analisou o repositório.',
@@ -316,12 +375,9 @@ function parseGeminiJson(raw: string): Record<string, unknown> {
   }
 }
 
-async function executeWithGemini(task: Record<string, any>) {
+async function executeWithGemini(task: Record<string, any>, worker: WorkerProfile) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) throw new Error('GEMINI_API_KEY não está configurada neste projeto.');
-
-  const worker = WORKERS.find((item) => item.id === task.workerId);
-  if (!worker) throw new Error('Funcionário IA inválido.');
 
   const model = String(process.env.AI_EMPLOYEE_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
   const repo = await collectRepoContext(task, worker);
@@ -378,6 +434,67 @@ Responda APENAS JSON válido, sem markdown, neste formato:
   };
 }
 
+async function chatWithGemini(
+  db: FirebaseFirestore.Firestore,
+  worker: WorkerProfile,
+  message: string,
+): Promise<{ text: string; model: string }> {
+  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+  if (!apiKey) throw new Error('GEMINI_API_KEY não está configurada neste projeto.');
+
+  const model = String(process.env.AI_EMPLOYEE_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
+  const history = await loadWorkerChat(db, worker.id, 16);
+  const repo = await collectRepoContext(
+    {
+      title: message,
+      description: message,
+      project: 'LeadsPay',
+    },
+    worker,
+  );
+
+  const historyText = history
+    .slice(-12)
+    .map((item) => `${item.role === 'user' ? 'ADMIN' : worker.name.toUpperCase()}: ${item.text}`)
+    .join('\n');
+
+  const prompt = `
+Você é ${worker.name}, funcionário "${worker.role}" da LeadsPay.
+Especialidade: ${worker.specialty}
+Permissões: ${worker.permissions.join(', ')}
+
+REGRAS
+${workerPolicy(worker)}
+- Este é um CHAT de ajuda, explicação e dúvidas. Não diga que executou uma mudança no código.
+- Seja útil, direto e explique como um funcionário que conhece a função dele.
+- Se a pessoa pedir uma execução que deveria virar tarefa, explique o que faria e sugira criar/atribuir a tarefa.
+- Use o contexto do repositório apenas quando ele realmente ajudar a responder.
+
+CONVERSA RECENTE
+${historyText || 'Sem histórico anterior.'}
+
+CONTEXTO RELEVANTE DO REPOSITÓRIO
+${repo.context || 'Nenhum arquivo relevante foi carregado para esta pergunta.'}
+
+MENSAGEM DO ADMIN
+${message}
+`.trim();
+
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+    config: {
+      temperature: 0.35,
+      maxOutputTokens: 2800,
+    },
+  });
+
+  const text = cleanText(response.text, 9000);
+  if (!text) throw new Error('O funcionário não respondeu agora.');
+  return { text, model };
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
 
@@ -386,14 +503,25 @@ export default async function handler(req: Req, res: Res) {
     const db = getServerAdminFirestore();
     const tasks = db.collection('admin_ai_tasks');
     const geminiConnected = Boolean(String(process.env.GEMINI_API_KEY || '').trim());
+    const resolvedWorkers = await resolveWorkers(db);
 
     if (req.method === 'GET') {
+      const requestedWorkerId = cleanText(req.query?.workerId, 80);
+      if (requestedWorkerId && VALID_WORKER_IDS.has(requestedWorkerId as WorkerId)) {
+        const messages = await loadWorkerChat(db, requestedWorkerId as WorkerId);
+        return res.status(200).json({
+          success: true,
+          worker: resolvedWorkers.find((worker) => worker.id === requestedWorkerId) || null,
+          messages,
+        });
+      }
+
       const snap = await tasks.orderBy('createdAt', 'desc').limit(250).get();
       const taskList = snap.docs.map((doc) => serializeTask(doc.id, doc.data() as Record<string, any>));
 
       return res.status(200).json({
         success: true,
-        workers: WORKERS,
+        workers: resolvedWorkers,
         tasks: taskList,
         executionEngine: {
           connected: geminiConnected,
@@ -415,6 +543,89 @@ export default async function handler(req: Req, res: Res) {
 
     if (req.method === 'POST') {
       const action = cleanText(body.action, 40).toLowerCase();
+
+      if (action === 'rename-worker') {
+        const workerId = cleanText(body.workerId, 80) as WorkerId;
+        const name = cleanText(body.name, 32);
+
+        if (!VALID_WORKER_IDS.has(workerId)) {
+          return res.status(400).json({ error: 'Funcionário IA inválido.' });
+        }
+        if (name.length < 2) {
+          return res.status(400).json({ error: 'O nome precisa ter pelo menos 2 caracteres.' });
+        }
+
+        const now = new Date().toISOString();
+        await db.collection('admin_ai_worker_profiles').doc(workerId).set({
+          workerId,
+          name,
+          updatedAt: now,
+          updatedBy: admin.email || admin.uid,
+        }, { merge: true });
+
+        const updatedWorkers = await resolveWorkers(db);
+        return res.status(200).json({
+          success: true,
+          workers: updatedWorkers,
+          worker: updatedWorkers.find((worker) => worker.id === workerId) || null,
+        });
+      }
+
+      if (action === 'chat') {
+        const workerId = cleanText(body.workerId, 80) as WorkerId;
+        const message = cleanText(body.message, 5000);
+        if (!VALID_WORKER_IDS.has(workerId)) {
+          return res.status(400).json({ error: 'Funcionário IA inválido.' });
+        }
+        if (message.length < 1) {
+          return res.status(400).json({ error: 'Escreva uma mensagem.' });
+        }
+        if (!geminiConnected) {
+          return res.status(503).json({ error: 'O cérebro Gemini ainda não está conectado.' });
+        }
+
+        const worker = resolvedWorkers.find((item) => item.id === workerId);
+        if (!worker) return res.status(404).json({ error: 'Funcionário não encontrado.' });
+
+        const messagesRef = db
+          .collection('admin_ai_worker_chats')
+          .doc(workerId)
+          .collection('messages');
+        const now = new Date().toISOString();
+        const userRef = messagesRef.doc('msg_' + Date.now().toString(36) + '_' + randomBytes(4).toString('hex'));
+        await userRef.set({
+          role: 'user',
+          text: message,
+          createdAt: now,
+          createdBy: admin.email || admin.uid,
+        });
+
+        try {
+          const answer = await chatWithGemini(db, worker, message);
+          const answerAt = new Date().toISOString();
+          const assistantRef = messagesRef.doc('msg_' + Date.now().toString(36) + '_' + randomBytes(4).toString('hex'));
+          await assistantRef.set({
+            role: 'assistant',
+            text: answer.text,
+            createdAt: answerAt,
+            provider: 'gemini',
+            model: answer.model,
+          });
+
+          return res.status(200).json({
+            success: true,
+            message: {
+              id: assistantRef.id,
+              role: 'assistant',
+              text: answer.text,
+              createdAt: answerAt,
+            },
+          });
+        } catch (chatError) {
+          const messageText = chatError instanceof Error ? chatError.message : 'Falha no chat.';
+          return res.status(503).json({ error: messageText });
+        }
+      }
 
       if (action === 'run-task') {
         const taskId = cleanText(body.taskId, 180);
@@ -446,7 +657,9 @@ export default async function handler(req: Req, res: Res) {
         }, { merge: true });
 
         try {
-          const { report, model } = await executeWithGemini(task);
+          const worker = resolvedWorkers.find((item) => item.id === task.workerId);
+          if (!worker) throw new Error('Funcionário IA inválido.');
+          const { report, model } = await executeWithGemini(task, worker);
           const now = new Date().toISOString();
           const requiresApproval = task.requiresApproval !== false;
           const nextStatus: TaskStatus = requiresApproval ? 'waiting_approval' : 'completed';
@@ -536,7 +749,65 @@ export default async function handler(req: Req, res: Res) {
         createdBy: admin.email || admin.uid,
       };
 
-      await tasks.doc(id).set(task);
+      const taskRef = tasks.doc(id);
+      await taskRef.set(task);
+
+      if (geminiConnected && body.autoRun !== false) {
+        const worker = resolvedWorkers.find((item) => item.id === workerId);
+        if (worker) {
+          try {
+            await taskRef.set({
+              status: 'working',
+              progress: 15,
+              runtimeStatus: 'ai_analyzing',
+              startedAt: now,
+              updatedAt: now,
+              executorProvider: 'gemini',
+            }, { merge: true });
+
+            const { report, model } = await executeWithGemini(task, worker);
+            const finishedAt = new Date().toISOString();
+            const nextStatus: TaskStatus = requiresApproval ? 'waiting_approval' : 'completed';
+            await taskRef.set({
+              status: nextStatus,
+              progress: requiresApproval ? 85 : 100,
+              runtimeStatus: requiresApproval ? 'ai_waiting_admin' : 'done',
+              resultSummary: report.summary,
+              executionReport: report,
+              executorProvider: 'gemini',
+              executorModel: model,
+              lastRunAt: finishedAt,
+              updatedAt: finishedAt,
+              ...(requiresApproval ? {} : { completedAt: finishedAt }),
+            }, { merge: true });
+
+            const executed = await taskRef.get();
+            return res.status(201).json({
+              success: true,
+              autoExecuted: true,
+              task: serializeTask(id, executed.data() as Record<string, any>),
+            });
+          } catch (executionError) {
+            const detail = executionError instanceof Error ? executionError.message : 'Falha no executor.';
+            const failedAt = new Date().toISOString();
+            await taskRef.set({
+              status: 'failed',
+              runtimeStatus: 'ai_failed',
+              resultSummary: detail,
+              lastRunAt: failedAt,
+              updatedAt: failedAt,
+            }, { merge: true });
+            const failed = await taskRef.get();
+            return res.status(201).json({
+              success: true,
+              autoExecuted: false,
+              warning: detail,
+              task: serializeTask(id, failed.data() as Record<string, any>),
+            });
+          }
+        }
+      }
+
       return res.status(201).json({ success: true, task: serializeTask(id, task) });
     }
 

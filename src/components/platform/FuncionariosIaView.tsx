@@ -9,10 +9,13 @@ import {
   Filter,
   Gamepad2,
   Loader2,
+  MessageCircle,
   Pause,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
+  Send,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -84,6 +87,13 @@ type EngineInfo = {
   repoWriteConnected?: boolean;
 };
 
+type WorkerChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  createdAt: string;
+};
+
 const FALLBACK_WORKERS: Worker[] = [
   { id: 'lumy-manager', name: 'Lumy', role: 'Gerente IA', specialty: 'Coordena o time e divide projetos.', palette: 0 },
   { id: 'frontend', name: 'Pixel', role: 'Frontend', specialty: 'Interface, responsividade e UX.', palette: 1 },
@@ -145,6 +155,14 @@ export const FuncionariosIaView: React.FC = () => {
   const [filter, setFilter] = useState<'all' | TaskStatus>('all');
   const [taskScope, setTaskScope] = useState<'selected' | 'all'>('selected');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<WorkerChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatSending, setChatSending] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const [tick, setTick] = useState(0);
   const [pcTick, setPcTick] = useState(0);
 
@@ -199,7 +217,7 @@ export const FuncionariosIaView: React.FC = () => {
   }, [currentUser?.uid]);
 
   const runTask = async (taskId: string) => {
-    if (!engine.connected || runningTaskId) return;
+    if (runningTaskId) return;
     setRunningTaskId(taskId);
     setError('');
     setTasks((current) => current.map((task) =>
@@ -236,7 +254,7 @@ export const FuncionariosIaView: React.FC = () => {
       const response = await fetch('/api/admin/ai-workers', {
         method: 'POST',
         headers: await authHeaders(),
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, autoRun: false }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Não foi possível criar a tarefa.');
@@ -246,9 +264,7 @@ export const FuncionariosIaView: React.FC = () => {
       setSelectedTaskId(data.task.id);
       setIsTaskModalOpen(false);
       setForm((current) => ({ ...current, title: '', description: '' }));
-      if (engine.connected) {
-        void runTask(data.task.id);
-      }
+      window.setTimeout(() => void runTask(data.task.id), 120);
     } catch (err: any) {
       setError(err?.message || 'Não foi possível criar a tarefa.');
     } finally {
@@ -287,6 +303,105 @@ export const FuncionariosIaView: React.FC = () => {
       if (selectedTaskId === taskId) setSelectedTaskId(null);
     } catch (err: any) {
       setError(err?.message || 'Não foi possível excluir a tarefa.');
+    }
+  };
+
+  const loadChat = async (workerId: string) => {
+    if (!currentUser) return;
+    setChatLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/admin/ai-workers?workerId=${encodeURIComponent(workerId)}`, {
+        headers: await authHeaders(),
+        cache: 'no-store',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível carregar a conversa.');
+      setChatMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível carregar a conversa.');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const openChat = (workerId: string) => {
+    selectWorker(workerId);
+    setIsChatOpen(true);
+    setChatInput('');
+    void loadChat(workerId);
+  };
+
+  const sendChat = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const message = chatInput.trim();
+    if (!message || !selectedWorker || chatSending) return;
+
+    const optimistic: WorkerChatMessage = {
+      id: 'local-' + Date.now(),
+      role: 'user',
+      text: message,
+      createdAt: new Date().toISOString(),
+    };
+    setChatMessages((current) => [...current, optimistic]);
+    setChatInput('');
+    setChatSending(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/admin/ai-workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          action: 'chat',
+          workerId: selectedWorker.id,
+          message,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'O funcionário não conseguiu responder.');
+      if (data.message) {
+        setChatMessages((current) => [...current, data.message]);
+      } else {
+        await loadChat(selectedWorker.id);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'O funcionário não conseguiu responder.');
+      setChatMessages((current) => current.filter((item) => item.id !== optimistic.id));
+      setChatInput(message);
+    } finally {
+      setChatSending(false);
+    }
+  };
+
+  const beginRename = () => {
+    if (!selectedWorker) return;
+    setNameDraft(selectedWorker.name);
+    setEditingName(true);
+  };
+
+  const saveWorkerName = async () => {
+    if (!selectedWorker || nameDraft.trim().length < 2 || savingName) return;
+    setSavingName(true);
+    setError('');
+    try {
+      const response = await fetch('/api/admin/ai-workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          action: 'rename-worker',
+          workerId: selectedWorker.id,
+          name: nameDraft.trim(),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível trocar o nome.');
+      if (Array.isArray(data.workers)) setWorkers(data.workers);
+      setEditingName(false);
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível trocar o nome.');
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -533,7 +648,33 @@ export const FuncionariosIaView: React.FC = () => {
           />
           <div>
             <span className="ai-worker-kicker">FUNCIONÁRIO SELECIONADO</span>
-            <h2>{selectedWorker?.name}</h2>
+            {editingName ? (
+              <div className="ai-worker-rename">
+                <input
+                  value={nameDraft}
+                  onChange={(event) => setNameDraft(event.target.value)}
+                  maxLength={32}
+                  autoFocus
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void saveWorkerName();
+                    if (event.key === 'Escape') setEditingName(false);
+                  }}
+                />
+                <button type="button" onClick={() => void saveWorkerName()} disabled={savingName}>
+                  {savingName ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                </button>
+                <button type="button" onClick={() => setEditingName(false)}>
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="ai-worker-name-line">
+                <h2>{selectedWorker?.name}</h2>
+                <button type="button" onClick={beginRename} title="Trocar nome">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             <strong>{selectedWorker?.role}</strong>
             <p>{selectedWorker?.specialty}</p>
           </div>
@@ -544,6 +685,10 @@ export const FuncionariosIaView: React.FC = () => {
             <small>Tarefas deste funcionário</small>
             <strong>{selectedWorkerTasks.length}</strong>
           </div>
+          <button type="button" className="ai-staff-secondary ai-chat-button" onClick={() => selectedWorker && openChat(selectedWorker.id)}>
+            <MessageCircle className="h-4 w-4" />
+            Conversar
+          </button>
           <button type="button" className="ai-staff-primary" onClick={() => openTaskFor(selectedWorker?.id)}>
             <Plus className="h-4 w-4" />
             Atribuir tarefa
@@ -715,6 +860,85 @@ export const FuncionariosIaView: React.FC = () => {
             </button>
           </div>
         </section>
+      )}
+
+      {isChatOpen && selectedWorker && (
+        <div className="ai-chat-backdrop" onMouseDown={() => setIsChatOpen(false)}>
+          <section className="ai-worker-chat" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+            <header className="ai-worker-chat-head">
+              <div className="ai-worker-chat-person">
+                <span
+                  className="pixel-agent-sprite chat-sprite"
+                  style={{
+                    backgroundImage: `url('/pixel-agents/assets/characters/char_${selectedWorker.palette}.png')`,
+                    backgroundPosition: `${-48}px 0px`,
+                  }}
+                />
+                <div>
+                  <strong>{selectedWorker.name}</strong>
+                  <span>{selectedWorker.role} · disponível para conversar</span>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsChatOpen(false)} aria-label="Fechar conversa">
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+
+            <div className="ai-worker-chat-body">
+              {chatLoading ? (
+                <div className="ai-chat-loading">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Carregando conversa...
+                </div>
+              ) : chatMessages.length === 0 ? (
+                <div className="ai-chat-welcome">
+                  <MessageCircle className="h-7 w-7" />
+                  <strong>Converse com {selectedWorker.name}</strong>
+                  <span>
+                    Tire dúvidas, peça explicações, discuta ideias ou peça ajuda antes de transformar algo em uma tarefa.
+                  </span>
+                </div>
+              ) : (
+                chatMessages.map((message) => (
+                  <div key={message.id} className={`ai-chat-message ${message.role}`}>
+                    <span>{message.role === 'user' ? 'Você' : selectedWorker.name}</span>
+                    <p>{message.text}</p>
+                    <small>{fmtDate(message.createdAt)}</small>
+                  </div>
+                ))
+              )}
+              {chatSending && (
+                <div className="ai-chat-typing">
+                  <span /><span /><span />
+                  {selectedWorker.name} está pensando...
+                </div>
+              )}
+            </div>
+
+            <form className="ai-worker-chat-composer" onSubmit={sendChat}>
+              <textarea
+                rows={2}
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder={`Pergunte algo para ${selectedWorker.name}...`}
+                maxLength={5000}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    if (chatInput.trim()) void sendChat(event as unknown as React.FormEvent);
+                  }
+                }}
+              />
+              <button type="submit" disabled={!chatInput.trim() || chatSending || !engine.connected}>
+                {chatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </form>
+
+            <footer className="ai-worker-chat-foot">
+              O chat serve para conversar e entender. Para execução, use <strong>Atribuir tarefa</strong>.
+            </footer>
+          </section>
+        </div>
       )}
 
       {isTaskModalOpen && (
