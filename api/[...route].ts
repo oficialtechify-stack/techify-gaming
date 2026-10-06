@@ -20,6 +20,7 @@ import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
 import adminEntityActionHandler from '../server-api/admin/entity-action.js';
 import adminExplorerHandler from '../server-api/admin/explorer.js';
 import adminSummaryHandler from '../server-api/admin/summary.js';
+import adminAiWorkersHandler from '../server-api/admin/ai-workers.js';
 import plansHandler from '../server-api/plans.js';
 import subscriptionCheckoutHandler from '../server-api/stripe/subscription-checkout.js';
 import productSubscriptionCheckoutHandler from '../server-api/stripe/product-subscription-checkout.js';
@@ -251,6 +252,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return adminExplorerHandler(req as any, res as any);
     case 'admin/summary':
       return adminSummaryHandler(req as any, res as any);
+    case 'admin/ai-workers':
+      return adminAiWorkersHandler(req as any, res as any);
     case 'admin/entity-action':
     case 'admin/approve-company':
     case 'admin/reject-entity':

@@ -62,6 +62,7 @@ import { LinksPagamentoView } from './LinksPagamentoView';
 import { SaquesView } from './SaquesView';
 import { PlanosAssinaturasView } from './PlanosAssinaturasView';
 import { ComunidadeAfiliadosView } from './ComunidadeAfiliadosView';
+import { FuncionariosIaView } from './FuncionariosIaView';
 import { AffiliateOnboardingModal } from './AffiliateOnboardingModal';
 import { CreateCompanyModal } from './CreateCompanyModal';
 import { RegisterAffiliateModal } from './RegisterAffiliateModal';
@@ -112,6 +113,7 @@ import {
   Tag,
   HeartHandshake,
   MessageCircle,
+  Gamepad2,
   ChevronDown,
   Package,
   CreditCard,
@@ -1287,6 +1289,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const adminNavItems = [
     { id: 'database' as PlatformTab, label: 'Painel Global LeadsPay', icon: Database, badge: 'Master' },
+    { id: 'funcionarios_ia' as PlatformTab, label: 'Funcionários IA', icon: Gamepad2, badge: 'Pixel Office' },
     { id: 'vendas' as PlatformTab, label: 'Todas as Vendas', icon: Receipt },
     { id: 'financeiro' as PlatformTab, label: 'Financeiro Global', icon: Wallet },
     { id: 'saques' as PlatformTab, label: 'Saques da Plataforma', icon: ArrowUpRight },
@@ -1950,6 +1953,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               roleMode={roleMode}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
             />
+          )}
+
+          {activeTab === 'funcionarios_ia' && roleMode === 'admin' && isSuperAdmin && (
+            <FuncionariosIaView />
           )}
 
           {(activeTab === 'minha_empresa' || activeTab === 'produtos') && (

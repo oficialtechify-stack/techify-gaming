@@ -634,4 +634,5 @@ export type PlatformTab =
   | 'planos'
   | 'database'
   | 'modal_backgrounds'
-  | 'assistentes_ia';
+  | 'assistentes_ia'
+  | 'funcionarios_ia';

@@ -28,6 +28,7 @@ import legacyLookupHandler from './server-api/profile/legacy-lookup.js';
 import auditIdentitiesHandler from './server-api/admin/audit-identities.js';
 import adminEntityActionHandler from './server-api/admin/entity-action.js';
 import adminExplorerHandler from './server-api/admin/explorer.js';
+import adminAiWorkersHandler from './server-api/admin/ai-workers.js';
 import partnerApiKeyHandler from './server-api/partner/api-key.js';
 import partnerSettingsHandler from './server-api/partner/settings.js';
 import partnerPaymentsHandler from './server-api/partner/payments.js';
@@ -77,6 +78,7 @@ app.all('/api/profile/legacy-lookup', adapt(legacyLookupHandler));
 app.all('/api/admin/audit-identities', adapt(auditIdentitiesHandler));
 app.all('/api/admin/entity-action', adapt(adminEntityActionHandler));
 app.all('/api/admin/explorer', adapt(adminExplorerHandler));
+app.all('/api/admin/ai-workers', adapt(adminAiWorkersHandler));
 
 for (const action of ['approve-company','reject-entity','ban-entity','unban-entity','purge-entity']) {
   app.all('/api/admin/' + action, (req, res) => {
