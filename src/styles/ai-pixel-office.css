@@ -7050,3 +7050,37 @@
     height: calc(100% - 16px);
   }
 }
+
+
+/* Final performance containment */
+.gather-world {
+  contain: layout paint style;
+}
+
+.gather-building-floor,
+.gather-room,
+.gather-wall,
+.gather-door,
+.gather-lounge {
+  contain: layout paint;
+}
+
+.gather-task-drawer {
+  visibility: hidden;
+  content-visibility: hidden;
+}
+
+.gather-task-drawer.open {
+  visibility: visible;
+  content-visibility: visible;
+}
+
+.office-standalone-page .office-standalone-task-detail {
+  visibility: hidden;
+  content-visibility: hidden;
+}
+
+.office-standalone-page .office-standalone-task-detail.open {
+  visibility: visible;
+  content-visibility: visible;
+}

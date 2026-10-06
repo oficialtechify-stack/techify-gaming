@@ -368,10 +368,21 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
           if (!data || !Array.isArray(data.officeMembers)) return;
           setOfficeMembers((current) => {
             const next = new Map(current.map((member) => [member.userId, member]));
+            let changed = false;
+
             for (const member of data.officeMembers as OfficeMember[]) {
-              next.set(member.userId, { ...(next.get(member.userId) || {}), ...member });
+              const existing = next.get(member.userId);
+              const merged = member.userId === currentUser.uid && existing
+                ? { ...existing, ...member, position: existing.position || member.position }
+                : { ...(existing || {}), ...member };
+
+              if (!existing || JSON.stringify(existing) !== JSON.stringify(merged)) {
+                next.set(member.userId, merged as OfficeMember);
+                changed = true;
+              }
             }
-            return [...next.values()];
+
+            return changed ? [...next.values()] : current;
           });
         })
         .catch(() => undefined);

@@ -977,18 +977,27 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         if (callNotice) setCallNotice('');
 
         const participants = Array.isArray(data.participants) ? data.participants as CallParticipant[] : [];
-        setCallParticipants(participants);
+        setCallParticipants((current) => {
+          const currentKey = current.map((item) => [item.uid, item.audio, item.video, item.screen, item.updatedAt]).join('|');
+          const nextKey = participants.map((item) => [item.uid, item.audio, item.video, item.screen, item.updatedAt]).join('|');
+          return currentKey === nextKey ? current : participants;
+        });
         if (data.room && typeof data.room.locked === 'boolean') {
-          setLockedAreas((current) => ({ ...current, [activeCallRoom]: data.room.locked === true }));
+          setLockedAreas((current) => {
+            const nextLocked = data.room.locked === true;
+            return current[activeCallRoom] === nextLocked ? current : { ...current, [activeCallRoom]: nextLocked };
+          });
         }
 
-        const activePeerIds = new Set(participants.map((item) => item.uid).filter((uid) => uid !== currentUser.uid));
+        const mediaParticipants = participants.filter((item) =>
+          item.uid !== currentUser.uid && (item.audio === true || item.video === true || item.screen === true)
+        );
+        const activePeerIds = new Set(mediaParticipants.map((item) => item.uid));
         for (const uid of [...peerRefs.current.keys()]) {
-          if (!activePeerIds.has(uid)) closePeer(uid);
+          if (!activePeerIds.has(uid) && !micOn && !cameraOn && !screenOn) closePeer(uid);
         }
 
-        for (const participant of participants) {
-          if (participant.uid === currentUser.uid) continue;
+        for (const participant of mediaParticipants) {
           const shouldOffer = currentUser.uid.localeCompare(participant.uid) < 0;
           await ensurePeer(activeCallRoom, participant.uid, shouldOffer);
         }
@@ -1023,7 +1032,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     };
 
     void syncCall();
-    const interval = window.setInterval(() => void syncCall(), 900);
+    const interval = window.setInterval(() => void syncCall(), 1200);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
