@@ -172,14 +172,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (result.kind === 'error') return sendError(res, result.status, result.code, result.error);
     const affiliation = result.affiliation as Record<string, unknown>;
+    const pendingApproval = result.pendingApproval === true;
+    const publicAffiliation = pendingApproval
+      ? {
+          ...affiliation,
+          affiliateCode: '',
+          affiliate_code: '',
+          affiliateLink: '',
+        }
+      : affiliation;
+
     return res.status(200).json({
       success: true,
       alreadyAffiliated: result.alreadyAffiliated,
-      pendingApproval: result.pendingApproval === true,
-      affiliation: result.affiliation,
-      affiliateCode: result.pendingApproval === true ? null : (affiliation.affiliateCode || affiliation.affiliate_code),
-      affiliateLink: result.pendingApproval === true ? null : affiliation.affiliateLink,
-      message: result.pendingApproval === true
+      pendingApproval,
+      affiliation: publicAffiliation,
+      affiliateCode: pendingApproval ? null : (affiliation.affiliateCode || affiliation.affiliate_code),
+      affiliateLink: pendingApproval ? null : affiliation.affiliateLink,
+      message: pendingApproval
         ? 'Solicitação enviada. A empresa precisa aprovar sua afiliação antes da divulgação.'
         : result.alreadyAffiliated
           ? 'Você já está afiliado a esta oferta.'

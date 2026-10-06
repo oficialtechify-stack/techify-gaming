@@ -68,8 +68,8 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
     const now = new Date();
     const companyAmountCents = Number(order.companyAmountCents || 0);
     const affiliateAmountCents = Number(order.affiliateAmountCents || 0);
-    const companyDelayDays = Number(order.companyReleaseDelayDays || 15);
-    const affiliateDelayDays = Number(order.affiliateReleaseDelayDays || 15);
+    const companyDelayDays = Number(order.companyReleaseDelayDays || 10);
+    const affiliateDelayDays = Number(order.affiliateReleaseDelayDays || 10);
     const companyAvailableAt = addDays(now, companyDelayDays);
     const affiliateAvailableAt = affiliateAmountCents > 0 ? addDays(now, affiliateDelayDays) : null;
 
@@ -540,7 +540,7 @@ async function processProductSubscriptionInvoice(
   const configuredProductAmountCents = Number(metadata.product_amount_cents || 0);
   const configuredCheckoutFeeCents = Number(metadata.checkout_fee_cents || 99);
   const companyDelayDays = Number(metadata.company_release_delay_days || 15);
-  const affiliateDelayDays = Number(metadata.affiliate_release_delay_days || 15);
+  const affiliateDelayDays = Number(metadata.affiliate_release_delay_days || 10);
 
   if (!planId || !companyId || !companyOwnerId || !companyAccountId) {
     throw new Error('Assinatura de produto sem metadados financeiros obrigatórios.');

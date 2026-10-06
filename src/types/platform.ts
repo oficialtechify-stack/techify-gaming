@@ -315,9 +315,15 @@ export interface SaleTransaction {
   commissionEarned: number;
   checkoutFee?: number; // R$ 0.99 taxa da plataforma LeadsPay
   netCompanyAmount?: number; // amount - commissionEarned - checkoutFee
-  releaseStatus?: 'pendente' | 'disponivel'; // Regra de liberação LeadsPay: 8/15 dias
+  releaseStatus?: 'pendente' | 'disponivel'; // Regra de liberação LeadsPay: 10 dias
   availableAt?: string; // Data exata prevista para liberação calculada pelo backend
   releasedAt?: string;
+  stripeSubscriptionId?: string;
+  stripeInvoiceId?: string;
+  saleKind?: 'subscription_initial' | 'subscription_renewal' | string;
+  recurring?: boolean;
+  billingCycle?: string;
+  billingReason?: string;
   affiliateId?: string;
   affiliateName?: string;
   affiliateCode?: string;
@@ -328,6 +334,8 @@ export interface SaleTransaction {
   status: 'Aprovado' | 'Pendente' | 'Cancelado' | string;
   sellerId?: string;
   utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
   date: string;
   time: string;
   createdAt?: string;
@@ -346,6 +354,7 @@ export interface SaleTransaction {
 export interface WithdrawalRequest {
   id: string;
   userId?: string;
+  companyId?: string;
   userName?: string;
   amount: number; // Valor total solicitado
   requestedAmount?: number; // Valor solicitado

@@ -1,9 +1,67 @@
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../lib/firebaseAdminServer.js';
 import { resolveApprovedOwnedCompany } from '../lib/companyAccess.js';
+import { applyVerificationRequest, profileRoleIsApproved } from '../lib/profileEligibility.js';
 
 type Req={method?:string;headers:Record<string,string|string[]|undefined>;body?:unknown;query?:Record<string,string|string[]|undefined>};
 type Res={setHeader(name:string,value:string):void;status(code:number):Res;json(body:unknown):unknown};
 const cleanCode=(v:unknown)=>String(v||'').trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,40);
+const activeAffiliation=(value:unknown)=>['ativo','active','approved'].includes(String(value||'').trim().toLowerCase());
+
+async function listAffiliateCoupons(
+  db: FirebaseFirestore.Firestore,
+  identity: { uid: string },
+  rawProfile: Record<string, any>,
+) {
+  const requestSnap = await db.collection('verification_requests').doc(identity.uid).get();
+  const profile = applyVerificationRequest(rawProfile, requestSnap.exists ? requestSnap.data()! : null) as Record<string, any>;
+  if (!profileRoleIsApproved(profile, 'afiliado')) {
+    return { error: 'O perfil de Afiliado precisa estar aprovado para acessar cupons.', status: 403 } as const;
+  }
+
+  const affiliationSnap = await db.collection('affiliations').where('userId','==',identity.uid).limit(300).get();
+  const affiliations = affiliationSnap.docs
+    .map((doc)=>({id:doc.id,...doc.data()} as Record<string,any>))
+    .filter((item)=>activeAffiliation(item.status));
+
+  if (!affiliations.length) return { coupons: [] } as const;
+
+  const couponSnap = await db.collection('coupons').limit(1000).get();
+  const now = Date.now();
+  const coupons = couponSnap.docs.flatMap((doc)=>{
+    const item={id:doc.id,...doc.data()} as Record<string,any>;
+    if(String(item.status||'').toLowerCase()!=='active') return [];
+    const expiresMs=item.expiresAt?Date.parse(String(item.expiresAt)):NaN;
+    if(Number.isFinite(expiresMs)&&expiresMs<=now) return [];
+    const maxUses=Number(item.maxUses||0);
+    const usedCount=Number(item.usedCount||0);
+    if(maxUses>0&&usedCount>=maxUses) return [];
+
+    const planRules=Array.isArray(item.applicablePlans)?item.applicablePlans.map(String):['all'];
+    const affiliateRules=Array.isArray(item.applicableAffiliates)?item.applicableAffiliates.map(String):['all'];
+
+    const eligiblePlans=affiliations.flatMap((aff)=>{
+      const planId=String(aff.planId||aff.plan_id||'');
+      const companyId=String(aff.companyId||'');
+      const affiliateCode=String(aff.affiliateCode||aff.affiliate_code||'');
+      if(!planId||!companyId||!affiliateCode||companyId!==String(item.companyId||'')) return [];
+      if(!planRules.includes('all')&&!planRules.includes(planId)) return [];
+      const affiliateAllowed=
+        affiliateRules.includes('all')||
+        affiliateRules.includes(identity.uid)||
+        affiliateRules.includes(affiliateCode);
+      if(!affiliateAllowed) return [];
+      return [{planId,affiliateCode,companyId}];
+    });
+
+    if(!eligiblePlans.length) return [];
+    return [{
+      ...item,
+      eligiblePlans,
+    }];
+  }).slice(0,200);
+
+  return { coupons } as const;
+}
 
 export default async function handler(req:Req,res:Res){
   res.setHeader('Cache-Control','no-store');
@@ -13,6 +71,14 @@ export default async function handler(req:Req,res:Res){
     const profileSnap=await db.collection('user_profiles').doc(identity.uid).get();
     if(!profileSnap.exists) return res.status(404).json({error:'Perfil não encontrado.'});
     const rawProfile=profileSnap.data() as Record<string,any>;
+
+    const requestedRole=typeof req.query?.role==='string'?String(req.query.role).toLowerCase():'';
+    if(req.method==='GET'&&requestedRole==='afiliado'){
+      const result=await listAffiliateCoupons(db,identity,rawProfile);
+      if('error' in result) return res.status(result.status).json({error:result.error});
+      return res.status(200).json({success:true,coupons:result.coupons});
+    }
+
     const approvedCompany=await resolveApprovedOwnedCompany(
       db,
       identity.uid,

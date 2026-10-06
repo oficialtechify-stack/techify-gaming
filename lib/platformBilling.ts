@@ -35,8 +35,8 @@ export function profileHasPaidPlan(profile: Record<string, any> | null | undefin
   return status === 'active' && paidTiers.has(tier);
 }
 
-export function releaseDelayDays(profile: Record<string, any> | null | undefined): 8 | 15 {
-  return profileHasPaidPlan(profile) ? 8 : 15;
+export function releaseDelayDays(_profile: Record<string, any> | null | undefined): 10 {
+  return 10;
 }
 
 export function roleAvailableCentsField(role: PlatformRole): string {

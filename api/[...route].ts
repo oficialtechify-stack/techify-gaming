@@ -14,6 +14,8 @@ import affiliateJoinHandler from '../server-api/affiliates/join.js';
 import affiliateClickHandler from '../server-api/affiliates/click.js';
 import affiliateLeaveHandler from '../server-api/affiliates/leave.js';
 import affiliateManageHandler from '../server-api/affiliates/manage.js';
+import affiliateSubscriptionsHandler from '../server-api/affiliates/subscriptions.js';
+import affiliateTrafficReportHandler from '../server-api/affiliates/traffic-report.js';
 import auditIdentitiesHandler from '../server-api/admin/audit-identities.js';
 import adminEntityActionHandler from '../server-api/admin/entity-action.js';
 import adminExplorerHandler from '../server-api/admin/explorer.js';
@@ -127,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       status: 'ok',
       gateway: 'Stripe Connect',
-      cron: 'Liberação de saldo 8/15 dias configurada',
+      cron: 'Liberação de saldo em 10 dias configurada',
       time: new Date().toISOString(),
     });
   }
@@ -224,6 +226,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return affiliateLeaveHandler(req as any, res as any);
     case 'affiliates/manage':
       return affiliateManageHandler(req as any, res as any);
+    case 'affiliates/subscriptions':
+      return affiliateSubscriptionsHandler(req as any, res as any);
+    case 'affiliates/traffic-report':
+      return affiliateTrafficReportHandler(req as any, res as any);
     case 'mcp':
       return mcpProtocolHandler(req as any, res as any);
     case 'mcp/v1':

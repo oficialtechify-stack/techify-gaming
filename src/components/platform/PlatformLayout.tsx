@@ -917,10 +917,14 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     try {
       const aff = await createAffiliationInFirebase(plan, userProfile);
+      const affStatus = String(aff.status || '').trim().toLowerCase();
+      const pendingApproval = ['pendente', 'pending', 'requested', 'solicitado'].includes(affStatus);
       setLiveToast({
-        message: 'Afiliação realizada com sucesso!',
-        sub: `Código liberado: ${aff.affiliateCode} (${plan.name})`,
-        amount: `${plan.commissionPercentage}% de comissão`
+        message: pendingApproval ? 'Solicitação enviada para a empresa' : 'Afiliação realizada com sucesso!',
+        sub: pendingApproval
+          ? `Aguarde a aprovação para liberar o código e o link de ${plan.name}.`
+          : `Código liberado: ${aff.affiliateCode} (${plan.name})`,
+        amount: pendingApproval ? 'Aguardando aprovação' : `${plan.commissionPercentage}% de comissão`
       });
       setTimeout(() => setLiveToast(null), 5000);
     } catch (err: any) {
@@ -1236,8 +1240,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'afiliados' as PlatformTab, label: 'Links & Redes Sociais', icon: Share2, badge: 'Links' },
     { id: 'minhas_afiliacoes' as PlatformTab, label: 'Minhas Afiliações', icon: Link2, badge: affiliations.length > 0 ? `${affiliations.length}` : undefined },
     { id: 'vendas' as PlatformTab, label: 'Minhas Vendas', icon: Receipt, badge: userVisibleTransactions.length > 0 ? `${userVisibleTransactions.length}` : undefined },
-    { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
-    { id: 'cupons' as PlatformTab, label: 'Cupons de Desconto', icon: Tag },
+    { id: 'assinaturas' as PlatformTab, label: 'Comissões Recorrentes', icon: Repeat },
+    { id: 'cupons' as PlatformTab, label: 'Meus Cupons', icon: Tag },
     { id: 'saques' as PlatformTab, label: 'Saques & Transferências', icon: ArrowUpRight },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
   ];
@@ -2099,7 +2103,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               onRemoveAffiliate={handleCompanyRemoveAffiliate}
             />
           )}
-          {activeTab === 'relatorios' && <RelatoriosView transactions={userVisibleTransactions} />}
+          {activeTab === 'relatorios' && <RelatoriosView roleMode={roleMode} transactions={userVisibleTransactions} />}
           {activeTab === 'integracoes' && (
             <IntegracoesView 
               plans={myCompanyPlans} 
@@ -2140,17 +2144,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <SaquesView
               userProfile={userProfile}
               roleMode={roleMode}
-              withdrawals={withdrawals}
+              withdrawals={withdrawals.filter((item) => item.role === roleMode)}
               onWithdraw={handleWithdraw}
             />
           )}
           {activeTab === 'assinaturas' && (
-            <AssinaturasView 
-              plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans} 
-              sales={userVisibleTransactions} 
+            <AssinaturasView
+              roleMode={roleMode}
+              plans={roleMode === 'afiliado' ? plans : (roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans)}
+              sales={userVisibleTransactions}
               userProfile={userProfile}
-              onNavigateToProducts={() => setActiveTab('produtos')}
-              onOpenCreatePlan={() => {
+              onNavigateToProducts={roleMode === 'empresa' ? () => setActiveTab('produtos') : undefined}
+              onOpenCreatePlan={roleMode === 'empresa' ? () => {
                 const companyId = activeCompany?.id || canonicalCompanyId;
                 if (!companyId || companyContextLoading) {
                   setLiveToast({
@@ -2165,15 +2170,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 setEditingPlan(null);
                 setIsCreateCompanyModalOpen(false);
                 setIsCreatePlanModalOpen(true);
-              }}
-              onOpenCheckout={(plan) => setLiveCheckoutPlan(plan)}
+              } : undefined}
+              onOpenCheckout={roleMode === 'empresa' ? (plan) => setLiveCheckoutPlan(plan) : undefined}
             />
           )}
           {activeTab === 'cupons' && (
-            <CuponsView 
-              plans={roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans} 
-              affiliations={roleMode === 'admin' && isSuperAdmin ? allAffiliations : myCompanyAffiliations}
-              activeCompanyId={activeCompany?.id}
+            <CuponsView
+              roleMode={roleMode}
+              plans={roleMode === 'afiliado' ? plans : (roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans)}
+              affiliations={roleMode === 'afiliado' ? affiliations : (roleMode === 'admin' && isSuperAdmin ? allAffiliations : myCompanyAffiliations)}
+              activeCompanyId={roleMode === 'afiliado' ? undefined : activeCompany?.id}
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}

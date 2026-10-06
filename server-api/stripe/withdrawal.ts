@@ -55,7 +55,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return fail(res, 403, 'Seu perfil precisa estar aprovado antes de solicitar saques.', 'PROFILE_NOT_APPROVED');
     }
 
-    // Se alguma venda já completou o prazo de 8/15 dias, libera antes de validar o saque.
+    // Se alguma venda já completou o prazo de 10 dias, libera antes de validar o saque.
     // A rotina transacional nunca libera antes do availableAt.
     const dueSnapshot = await db.collection('balance_releases')
       .where('userId', '==', identity.uid)

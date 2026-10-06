@@ -326,7 +326,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
 
     const companyDelayDays = releaseDelayDays(companyProfile);
-    const affiliateDelayDays = affiliateProfile ? releaseDelayDays(affiliateProfile) : 15;
+    const affiliateDelayDays = affiliateProfile ? releaseDelayDays(affiliateProfile) : 10;
     const baseUrl = getLeadspayBaseUrl();
     const checkoutSlug = String(plan.checkoutSlug || plan.slug || planId);
     const planName = String(plan.name || 'Assinatura LeadsPay').slice(0, 160);

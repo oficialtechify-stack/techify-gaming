@@ -1,24 +1,22 @@
 import React, { useMemo, useState } from 'react';
 import { UserAffiliation, CompanyPlan } from '../../types/platform';
 import { formatAffiliatePlanUrl, getAppBaseUrl } from '../../utils/affiliateTracking';
-import { 
-  Link2, 
-  Copy, 
-  Check, 
-  DollarSign, 
-  Share2, 
-  Zap, 
-  ExternalLink, 
-  Percent, 
-  TrendingUp, 
-  ArrowUpRight, 
-  ShoppingBag,
-  Sparkles,
-  Sliders,
-  UserMinus,
+import {
   AlertTriangle,
+  Check,
+  Copy,
+  DollarSign,
+  ExternalLink,
+  Link2,
   Lock,
-  ShieldAlert
+  Percent,
+  Share2,
+  ShieldAlert,
+  ShoppingBag,
+  Sliders,
+  TrendingUp,
+  UserMinus,
+  Zap,
 } from 'lucide-react';
 
 interface MinhasAfiliacoesViewProps {
@@ -31,6 +29,20 @@ interface MinhasAfiliacoesViewProps {
   onDeleteAffiliation: (affiliationId: string, planId?: string, companyId?: string) => void;
 }
 
+const normalizeStatus = (value: unknown) => String(value || '').trim().toLowerCase();
+const isActive = (aff: UserAffiliation) => ['ativo', 'active', 'approved'].includes(normalizeStatus(aff.status));
+const isPending = (aff: UserAffiliation) => ['pendente', 'pending', 'requested', 'solicitado'].includes(normalizeStatus(aff.status));
+const isRejected = (aff: UserAffiliation) => ['recusada', 'rejected'].includes(normalizeStatus(aff.status));
+const isEnded = (aff: UserAffiliation) => ['encerrada', 'ended', 'cancelled'].includes(normalizeStatus(aff.status));
+
+const statusMeta = (aff: UserAffiliation) => {
+  if (isActive(aff)) return { label: 'Ativa', className: 'border-green-500/30 bg-green-500/10 text-green-400' };
+  if (isPending(aff)) return { label: 'Pendente', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' };
+  if (isRejected(aff)) return { label: 'Recusada', className: 'border-red-500/30 bg-red-500/10 text-red-300' };
+  if (isEnded(aff)) return { label: 'Encerrada', className: 'border-white/10 bg-white/5 text-white/45' };
+  return { label: aff.status || 'Indefinida', className: 'border-white/10 bg-white/5 text-white/45' };
+};
+
 export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   affiliations = [],
   plans = [],
@@ -38,7 +50,7 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   verificationStatus = 'unsubmitted',
   onNavigateToVitrine,
   onNavigateToProfile,
-  onDeleteAffiliation
+  onDeleteAffiliation,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedAffiliationForUtm, setSelectedAffiliationForUtm] = useState<UserAffiliation | null>(null);
@@ -48,13 +60,14 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   const [utmCampaign, setUtmCampaign] = useState('lancamento');
   const [copiedUtm, setCopiedUtm] = useState(false);
 
-  const activeAffiliations = useMemo(() => affiliations.filter((aff) => {
-    const status = String(aff.status || '').trim().toLowerCase();
-    return status === 'ativo' || status === 'active' || status === 'approved';
-  }), [affiliations]);
+  const activeAffiliations = useMemo(() => affiliations.filter(isActive), [affiliations]);
+  const orderedAffiliations = useMemo(
+    () => [...affiliations].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))),
+    [affiliations],
+  );
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string, id: string) => {
+    await navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2500);
   };
@@ -62,88 +75,84 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
   const handleConfirmLeaveAffiliation = () => {
     if (!leavingAffiliationModal) return;
     const aff = leavingAffiliationModal;
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(`leadspay_aff_${aff.planId}_${aff.userId}`);
-        localStorage.removeItem(`leadspay_aff_${aff.planId}`);
-        const effectiveUserId = localStorage.getItem('leadspay_user_id');
-        if (effectiveUserId) {
-          localStorage.removeItem(`leadspay_aff_${aff.planId}_${effectiveUserId}`);
-        }
-      }
-    } catch (e) {}
     onDeleteAffiliation(aff.id, aff.planId, aff.companyId);
     setLeavingAffiliationModal(null);
   };
 
-  // Vendas e comissões permanecem históricas mesmo se uma afiliação for encerrada.
   const totalCommissions = affiliations.reduce((acc, a) => acc + Number(a.totalEarned || 0), 0);
   const totalSales = affiliations.reduce((acc, a) => acc + Number(a.salesCount || 0), 0);
-
   const currentOrigin = getAppBaseUrl();
 
+  const baseLinkFor = (aff: UserAffiliation) => {
+    if (!isActive(aff)) return '';
+    const code = String(aff.affiliateCode || aff.affiliate_code || '').trim();
+    const planId = String(aff.planId || aff.plan_id || '').trim();
+    if (!code || !planId) return '';
+    return formatAffiliatePlanUrl(planId, code);
+  };
+
   const generateUtmLink = (baseLink: string) => {
-    const url = new URL(baseLink || `${currentOrigin}`);
+    const url = new URL(baseLink || currentOrigin);
     url.searchParams.set('utm_source', utmSource);
     url.searchParams.set('utm_medium', utmMedium);
     url.searchParams.set('utm_campaign', utmCampaign);
     return url.toString();
   };
 
+  const copyUtmLink = async () => {
+    if (!selectedAffiliationForUtm) return;
+    const base = baseLinkFor(selectedAffiliationForUtm);
+    if (!base) return;
+    await navigator.clipboard.writeText(generateUtmLink(base));
+    setCopiedUtm(true);
+    setTimeout(() => setCopiedUtm(false), 1800);
+  };
+
   return (
     <div className="flex flex-col gap-6" id="leadspay-minhas-afiliacoes-view">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
-            <Link2 className="w-3.5 h-3.5" />
-            Painel do Afiliado
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A]">
+            <Link2 className="h-4 w-4" />
+            Seus vínculos de divulgação
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-            Meus Produtos Afiliados & Links de Venda
-          </h1>
-          <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Gerencie os planos que você divulga, gere links rastreados e acompanhe automaticamente as vendas e comissões atribuídas ao seu código.
-          </p>
+          <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">Minhas Afiliações</h1>
+          <p className="mt-1 text-xs text-white/60">Acompanhe afiliações ativas, pendentes, recusadas e encerradas sem perder o histórico de vendas.</p>
         </div>
-
         <button
           onClick={onNavigateToVitrine}
-          className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(217,242,42,0.3)] transition-all cursor-pointer flex items-center gap-2"
+          className="flex items-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2.5 text-xs font-black text-[#060A15]"
         >
-          <ShoppingBag className="w-4 h-4" />
-          Buscar Novos Produtos
+          <ShoppingBag className="h-4 w-4" />
+          Buscar novos produtos
         </button>
       </div>
 
-      {/* Metric summary banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-[#D9F22A]/10 border border-[#D9F22A]/30 flex items-center justify-center text-[#D9F22A]">
-            <Link2 className="w-6 h-6" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#080d1a] p-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#D9F22A]/30 bg-[#D9F22A]/10 text-[#D9F22A]">
+            <Link2 className="h-6 w-6" />
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase text-white/50 block">Produtos Afiliados Ativos</span>
-            <span className="text-xl font-black text-white font-['Syne']">{activeAffiliations.length} planos</span>
+            <span className="block text-[11px] font-bold uppercase text-white/50">Afiliações ativas</span>
+            <span className="text-xl font-black text-white font-['Syne']">{activeAffiliations.length}</span>
           </div>
         </div>
-
-        <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-            <Zap className="w-6 h-6" />
+        <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#080d1a] p-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-400">
+            <Zap className="h-6 w-6" />
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase text-white/50 block">Vendas Fechadas</span>
-            <span className="text-xl font-black text-white font-['Syne']">{totalSales} contratos</span>
+            <span className="block text-[11px] font-bold uppercase text-white/50">Vendas fechadas</span>
+            <span className="text-xl font-black text-white font-['Syne']">{totalSales}</span>
           </div>
         </div>
-
-        <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-center text-green-400">
-            <DollarSign className="w-6 h-6" />
+        <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#080d1a] p-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-green-500/30 bg-green-500/10 text-green-400">
+            <DollarSign className="h-6 w-6" />
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase text-green-400 block">Comissões Recebidas</span>
+            <span className="block text-[11px] font-bold uppercase text-green-400">Comissões geradas</span>
             <span className="text-xl font-black text-white font-['Syne']">
               R$ {totalCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
@@ -151,341 +160,171 @@ export const MinhasAfiliacoesView: React.FC<MinhasAfiliacoesViewProps> = ({
         </div>
       </div>
 
-      {/* Affiliations List */}
       {!isVerified ? (
-        <div className="bg-[#080d1a] border-2 border-amber-500/30 rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 shadow-xl">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-            <ShieldAlert className="w-8 h-8" />
+        <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border-2 border-amber-500/30 bg-[#080d1a] p-10 text-center shadow-xl">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-500/40 bg-amber-500/20 text-amber-400">
+            <ShieldAlert className="h-8 w-8" />
           </div>
           <div className="max-w-md">
-            <h3 className="text-lg font-bold text-white font-['Syne'] mb-1">
-              Verificação Obrigatória para Afiliações
-            </h3>
-            <p className="text-xs text-white/70 mb-5 leading-relaxed">
+            <h3 className="mb-1 text-lg font-bold text-white font-['Syne']">Verificação obrigatória para afiliações</h3>
+            <p className="mb-5 text-xs leading-relaxed text-white/70">
               {verificationStatus === 'pending' || verificationStatus === 'submitted'
-                ? 'Sua conta está em análise pela administração. Assim que aprovada, você poderá se afiliar aos produtos e gerar links comissionados.'
-                : 'Nenhum usuário pode se afiliar a planos sem verificação prévia. Complete seus dados cadastrais, CPF/CNPJ e chave PIX no seu perfil para liberar a afiliação.'}
+                ? 'Sua conta está em análise pela administração. Assim que aprovada, você poderá ativar afiliações e gerar links comissionados.'
+                : 'Conclua sua Stripe Connect e seus dados de perfil LeadsPay para enviar o cadastro à validação da administração.'}
             </p>
             {onNavigateToProfile && (
               <button
                 onClick={onNavigateToProfile}
-                className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2 shadow-[0_0_20px_rgba(217,242,42,0.3)]"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#D9F22A] px-5 py-3 text-xs font-black uppercase tracking-wider text-[#060A15]"
               >
-                <Lock className="w-4 h-4" />
-                <span>{verificationStatus === 'pending' || verificationStatus === 'submitted' ? 'Ver Status no Perfil' : 'Completar Verificação do Perfil'}</span>
+                <Lock className="h-4 w-4" />
+                {verificationStatus === 'pending' || verificationStatus === 'submitted' ? 'Ver status no perfil' : 'Completar verificação'}
               </button>
             )}
           </div>
         </div>
-      ) : activeAffiliations.length === 0 ? (
-        <div className="bg-[#080d1a] border-2 border-dashed border-[#D9F22A]/30 rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4">
-          <ShoppingBag className="w-12 h-12 text-[#D9F22A]/50" />
+      ) : orderedAffiliations.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-[#D9F22A]/30 bg-[#080d1a] p-10 text-center">
+          <ShoppingBag className="h-12 w-12 text-[#D9F22A]/50" />
           <div className="max-w-md">
-            <h3 className="text-lg font-bold text-white font-['Syne'] mb-1">
-              Você ainda não se afiliou a nenhum produto
-            </h3>
-            <p className="text-xs text-white/60 mb-5 leading-relaxed">
-              Acesse o Marketplace de Startups & Planos, escolha as empresas parceiras e clique em "Afiliar-se com 1 Clique" para começar a divulgar e lucrar comissões.
-            </p>
-            <button
-              onClick={onNavigateToVitrine}
-              className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              Explorar Marketplace de Startups
+            <h3 className="mb-1 text-lg font-bold text-white font-['Syne']">Você ainda não se afiliou a nenhum produto</h3>
+            <p className="mb-5 text-xs leading-relaxed text-white/60">Acesse o Marketplace, escolha um produto e solicite sua afiliação.</p>
+            <button onClick={onNavigateToVitrine} className="inline-flex items-center gap-2 rounded-xl bg-[#D9F22A] px-5 py-3 text-xs font-black uppercase text-[#060A15]">
+              <ShoppingBag className="h-4 w-4" />
+              Explorar Marketplace
             </button>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {activeAffiliations.map((aff) => {
-            const plan = plans.find(p => p.id === aff.planId);
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {orderedAffiliations.map((aff) => {
+            const meta = statusMeta(aff);
+            const plan = plans.find((p) => p.id === (aff.planId || aff.plan_id));
+            const link = baseLinkFor(aff);
+            const active = isActive(aff);
+
             return (
-              <div
-                key={aff.id}
-                className="bg-[#080d1a] border border-white/10 hover:border-[#D9F22A]/40 rounded-2xl p-5 shadow-xl transition-all duration-300 flex flex-col justify-between gap-4 relative"
-              >
-                {/* Header: Company + Plan info */}
+              <article key={aff.id} className="relative flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-[#080d1a] p-5 shadow-xl">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={aff.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=100&q=80'}
-                      alt={aff.companyName}
-                      className="w-12 h-12 rounded-xl object-cover border border-[#D9F22A]/30 bg-[#050811] flex-shrink-0"
-                    />
+                    {aff.companyLogo ? (
+                      <img src={aff.companyLogo} alt={aff.companyName} className="h-12 w-12 flex-shrink-0 rounded-xl border border-[#D9F22A]/30 bg-[#050811] object-cover" />
+                    ) : (
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#050811] text-sm font-black text-[#D9F22A]">
+                        {(aff.companyName || 'LP').slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
                     <div>
-                      <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider block">
-                        {aff.companyName}
-                      </span>
-                      <h4 className="text-base font-bold text-white font-['Syne']">
-                        {aff.planName}
-                      </h4>
-                      <span className="text-[10px] font-mono text-[#D9F22A] bg-[#D9F22A]/10 px-2 py-0.5 rounded">
-                        Código: {aff.affiliateCode}
-                      </span>
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-white/50">{aff.companyName}</span>
+                      <h4 className="text-base font-bold text-white font-['Syne']">{aff.planName || plan?.name}</h4>
+                      {active ? (
+                        <span className="rounded bg-[#D9F22A]/10 px-2 py-0.5 font-mono text-[10px] text-[#D9F22A]">
+                          Código: {aff.affiliateCode || aff.affiliate_code}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-bold text-white/40">Código bloqueado</span>
+                      )}
                     </div>
                   </div>
-
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-green-500/10 text-green-400 border border-green-500/30 flex-shrink-0">
-                    {aff.status || 'Ativo'}
-                  </span>
+                  <span className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black ${meta.className}`}>{meta.label}</span>
                 </div>
 
-                {/* Price & Commission Box */}
-                <div className="grid grid-cols-2 gap-2 p-3 bg-[#050811] border border-white/5 rounded-xl text-xs">
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-[#050811] p-3 text-xs">
                   <div>
-                    <span className="text-[10px] uppercase text-white/50 block font-bold">Preço de Venda</span>
-                    <span className="font-bold text-white">
-                      R$ {aff.priceSetup.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
+                    <span className="block text-[10px] font-bold uppercase text-white/50">Preço de venda</span>
+                    <span className="font-bold text-white">R$ {Number(aff.priceSetup || plan?.priceSetup || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] uppercase text-[#D9F22A] block font-bold">Sua Comissão ({aff.commissionPercentage}%)</span>
-                    <span className="font-black text-[#D9F22A]">
-                      R$ {aff.commissionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
+                    <span className="block text-[10px] font-bold uppercase text-[#D9F22A]">Sua comissão ({Number(aff.commissionPercentage || 0)}%)</span>
+                    <span className="font-black text-[#D9F22A]">R$ {Number(aff.commissionValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
 
-                {/* Affiliate Link with Quick Copy */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1">
-                    Seu Link Direto do Checkout com Código de Afiliado:
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={formatAffiliatePlanUrl(aff.planId || aff.plan_id || '', aff.affiliateCode || aff.affiliate_code || '')}
-                      className="flex-1 bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-mono truncate select-all focus:outline-none"
-                    />
-                    <button
-                      onClick={() => handleCopy(formatAffiliatePlanUrl(aff.planId || aff.plan_id || '', aff.affiliateCode || aff.affiliate_code || ''), aff.id)}
-                      className="bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
-                      title="Copiar Link de Divulgação"
-                    >
-                      {copiedId === aff.id ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          <span className="text-[10px]">Copiado!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span className="text-[10px]">Copiar</span>
-                        </>
-                      )}
-                    </button>
-                    <a
-                      href={formatAffiliatePlanUrl(aff.planId || aff.plan_id || '', aff.affiliateCode || aff.affiliate_code || '')}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center flex-shrink-0"
-                      title="Abrir Checkout ao vivo"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3"><TrendingUp className="mx-auto mb-1 h-4 w-4 text-white/35" /><div className="text-sm font-black text-white">{Number(aff.clicks || aff.clicksCount || 0)}</div><div className="text-[9px] uppercase text-white/35">Cliques</div></div>
+                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3"><Zap className="mx-auto mb-1 h-4 w-4 text-white/35" /><div className="text-sm font-black text-white">{Number(aff.salesCount || 0)}</div><div className="text-[9px] uppercase text-white/35">Vendas</div></div>
+                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3"><DollarSign className="mx-auto mb-1 h-4 w-4 text-[#D9F22A]" /><div className="text-sm font-black text-[#D9F22A]">R$ {Number(aff.totalEarned || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div><div className="text-[9px] uppercase text-white/35">Comissão</div></div>
                 </div>
 
-                {/* Bottom Actions */}
-                <div className="flex flex-wrap items-center justify-between pt-3 border-t border-white/10 gap-2">
-                  <button
-                    onClick={() => setSelectedAffiliationForUtm(aff)}
-                    className="text-[11px] font-bold text-white/70 hover:text-white flex items-center gap-1 cursor-pointer"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-[#D9F22A]" />
-                    Gerar Link com UTM
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setLeavingAffiliationModal(aff)}
-                      className="text-[11px] font-bold text-red-400/80 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                      title="Sair da afiliação deste plano"
-                    >
-                      <UserMinus className="w-3.5 h-3.5" />
-                      <span>Sair da Afiliação</span>
-                    </button>
+                {isPending(aff) && (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    Aguardando aprovação da empresa. Nenhum link ou código pode ser usado antes da aprovação.
                   </div>
-                </div>
-              </div>
+                )}
+                {isRejected(aff) && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
+                    A empresa recusou esta solicitação. Você pode voltar ao Marketplace e solicitar novamente quando permitido.
+                  </div>
+                )}
+                {isEnded(aff) && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/50">
+                    Esta afiliação foi encerrada. O histórico de vendas e comissões permanece registrado.
+                  </div>
+                )}
+
+                {active && link && (
+                  <>
+                    <div className="break-all rounded-xl border border-white/5 bg-[#050811] p-3 font-mono text-[10px] text-white/55">{link}</div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <button onClick={() => void handleCopy(link, aff.id)} className="flex items-center justify-center gap-1.5 rounded-lg bg-[#D9F22A] px-3 py-2.5 text-[10px] font-black text-[#060A15]">
+                        {copiedId === aff.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copiedId === aff.id ? 'Copiado' : 'Copiar'}
+                      </button>
+                      <button onClick={() => setSelectedAffiliationForUtm(aff)} className="flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-[10px] font-bold text-white/70">
+                        <Sliders className="h-3.5 w-3.5" />
+                        UTM
+                      </button>
+                      <a href={link} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-[10px] font-bold text-white/70">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Abrir
+                      </a>
+                      <button onClick={() => setLeavingAffiliationModal(aff)} className="flex items-center justify-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-[10px] font-bold text-red-300">
+                        <UserMinus className="h-3.5 w-3.5" />
+                        Sair
+                      </button>
+                    </div>
+                  </>
+                )}
+              </article>
             );
           })}
         </div>
       )}
 
-      {/* Modal de Confirmação: Sair da Afiliação */}
-      {leavingAffiliationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-[#080d1a] border border-red-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col gap-4">
-            <button
-              onClick={() => setLeavingAffiliationModal(null)}
-              className="absolute top-5 right-5 text-white/50 hover:text-white cursor-pointer text-sm"
-            >
-              ✕
+      {selectedAffiliationForUtm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-[#080d1a] p-6">
+            <button onClick={() => setSelectedAffiliationForUtm(null)} className="absolute right-4 top-4 text-white/45">✕</button>
+            <div className="mb-1 flex items-center gap-2 text-xs font-black uppercase text-[#D9F22A]"><Share2 className="h-4 w-4" /> Link com UTM</div>
+            <h3 className="text-lg font-bold text-white">{selectedAffiliationForUtm.planName}</h3>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <input value={utmSource} onChange={(e) => setUtmSource(e.target.value)} placeholder="utm_source" className="rounded-xl border border-white/10 bg-[#050811] p-3 text-xs text-white" />
+              <input value={utmMedium} onChange={(e) => setUtmMedium(e.target.value)} placeholder="utm_medium" className="rounded-xl border border-white/10 bg-[#050811] p-3 text-xs text-white" />
+              <input value={utmCampaign} onChange={(e) => setUtmCampaign(e.target.value)} placeholder="utm_campaign" className="rounded-xl border border-white/10 bg-[#050811] p-3 text-xs text-white" />
+            </div>
+            <div className="mt-4 break-all rounded-xl border border-white/5 bg-[#050811] p-3 font-mono text-[10px] text-white/55">
+              {generateUtmLink(baseLinkFor(selectedAffiliationForUtm))}
+            </div>
+            <button onClick={() => void copyUtmLink()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#D9F22A] py-3 text-xs font-black text-[#060A15]">
+              {copiedUtm ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copiedUtm ? 'Link copiado' : 'Copiar link com UTM'}
             </button>
-
-            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">
-                Ação do Afiliado
-              </span>
-              <h3 className="text-xl font-black text-white font-['Syne'] mt-1">
-                Sair da Afiliação?
-              </h3>
-              <p className="text-xs text-white/70 mt-2 leading-relaxed">
-                Você está prestes a encerrar sua afiliação com o plano <strong className="text-white">{leavingAffiliationModal.planName}</strong> da empresa <strong className="text-white">{leavingAffiliationModal.companyName}</strong>.
-              </p>
-            </div>
-
-            <div className="bg-[#050811] border border-white/10 rounded-2xl p-3.5 space-y-1.5 text-xs text-white/60">
-              <div className="flex items-center justify-between text-[11px]">
-                <span>Código Atual:</span>
-                <span className="font-mono text-[#D9F22A] font-bold">{leavingAffiliationModal.affiliateCode}</span>
-              </div>
-              <p className="text-[11px] text-amber-300/80">
-                • Seu link exclusivo não gerará mais comissões a partir de agora.
-              </p>
-              <p className="text-[11px] text-white/50">
-                • Você poderá se afiliar novamente a este produto na Vitrine sempre que desejar.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setLeavingAffiliationModal(null)}
-                className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
-              >
-                Continuar Afiliado
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmLeaveAffiliation}
-                className="w-full bg-red-500 hover:bg-red-600 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer shadow-lg shadow-red-500/20"
-              >
-                Confirmar e Sair
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* UTM Generator Modal */}
-      {selectedAffiliationForUtm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-[#080d1a] border border-[#D9F22A]/40 rounded-3xl p-6 sm:p-8 shadow-2xl">
-            <button
-              onClick={() => setSelectedAffiliationForUtm(null)}
-              className="absolute top-5 right-5 text-white/50 hover:text-white cursor-pointer"
-            >
-              ✕
-            </button>
-
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
-              <Sliders className="w-3.5 h-3.5" />
-              Gerador de Parâmetros UTM
-            </div>
-            <h3 className="text-xl font-black text-white font-['Syne'] mb-2">
-              Rastreamento de Campanhas
-            </h3>
-            <p className="text-xs text-white/60 mb-5">
-              Personalize o link para identificar a origem das suas vendas (ex: WhatsApp, Instagram, TikTok, Tráfego Pago).
+      {leavingAffiliationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/20 bg-[#080d1a] p-6">
+            <AlertTriangle className="mb-3 h-6 w-6 text-red-400" />
+            <h3 className="text-lg font-bold text-white">Encerrar afiliação?</h3>
+            <p className="mt-2 text-xs leading-5 text-white/60">
+              Seu link deixará de ficar ativo para novas vendas. O histórico e as comissões já geradas continuarão registrados.
             </p>
-
-            <div className="space-y-3 mb-5">
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-white/70 mb-1">
-                  Origem (utm_source)
-                </label>
-                <div className="grid grid-cols-4 gap-1.5 mb-2">
-                  {['instagram', 'whatsapp', 'tiktok', 'google_ads'].map((src) => (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => setUtmSource(src)}
-                      className={`text-[10px] py-1.5 rounded-lg border font-bold capitalize cursor-pointer ${
-                        utmSource === src
-                          ? 'border-[#D9F22A] bg-[#D9F22A]/15 text-[#D9F22A]'
-                          : 'border-white/10 text-white/60 hover:text-white'
-                      }`}
-                    >
-                      {src.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="text"
-                  value={utmSource}
-                  onChange={(e) => setUtmSource(e.target.value)}
-                  className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-white/70 mb-1">
-                  Mídia / Formato (utm_medium)
-                </label>
-                <input
-                  type="text"
-                  value={utmMedium}
-                  onChange={(e) => setUtmMedium(e.target.value)}
-                  placeholder="Ex: bio_link, stories, direct, feed"
-                  className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-white/70 mb-1">
-                  Campanha (utm_campaign)
-                </label>
-                <input
-                  type="text"
-                  value={utmCampaign}
-                  onChange={(e) => setUtmCampaign(e.target.value)}
-                  placeholder="Ex: lancamento_marzo, trafego_frio"
-                  className="w-full bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
+            <div className="mt-5 flex gap-2">
+              <button onClick={() => setLeavingAffiliationModal(null)} className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-bold text-white">Cancelar</button>
+              <button onClick={handleConfirmLeaveAffiliation} className="flex-1 rounded-xl bg-red-500 py-3 text-xs font-black text-white">Encerrar</button>
             </div>
-
-            {/* Result link */}
-            <div className="p-3.5 bg-[#050811] border border-[#D9F22A]/30 rounded-2xl mb-4">
-              <span className="text-[10px] font-bold uppercase text-white/50 block mb-1">
-                Link Parametrizado Gerado:
-              </span>
-              <p className="text-xs font-mono text-[#D9F22A] break-all">
-                {generateUtmLink(
-                  selectedAffiliationForUtm.affiliateLink ||
-                  formatAffiliatePlanUrl(
-                    selectedAffiliationForUtm.planId || selectedAffiliationForUtm.plan_id || '',
-                    selectedAffiliationForUtm.affiliateCode || selectedAffiliationForUtm.affiliate_code || ''
-                  )
-                )}
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(generateUtmLink(
-                  selectedAffiliationForUtm.affiliateLink ||
-                  formatAffiliatePlanUrl(
-                    selectedAffiliationForUtm.planId || selectedAffiliationForUtm.plan_id || '',
-                    selectedAffiliationForUtm.affiliateCode || selectedAffiliationForUtm.affiliate_code || ''
-                  )
-                ));
-                setCopiedUtm(true);
-                setTimeout(() => setCopiedUtm(false), 2000);
-              }}
-              className="w-full bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
-            >
-              {copiedUtm ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copiedUtm ? 'Link Parametrizado Copiado!' : 'Copiar Link com UTM'}
-            </button>
           </div>
         </div>
       )}

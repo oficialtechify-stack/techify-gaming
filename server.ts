@@ -20,6 +20,8 @@ import couponsHandler from './server-api/coupons.js';
 import companiesHandler from './server-api/companies.js';
 import enableAffiliateHandler from './server-api/profile/enable-affiliate.js';
 import affiliateJoinHandler from './server-api/affiliates/join.js';
+import affiliateSubscriptionsHandler from './server-api/affiliates/subscriptions.js';
+import affiliateTrafficReportHandler from './server-api/affiliates/traffic-report.js';
 import checkDocumentHandler from './server-api/profile/check-document.js';
 import submitVerificationHandler from './server-api/profile/submit-verification.js';
 import legacyLookupHandler from './server-api/profile/legacy-lookup.js';
@@ -46,7 +48,7 @@ app.get('/api/health', (_req, res) => {
   res.status(200).json({
     status: 'ok',
     gateway: 'Stripe Connect',
-    walletRelease: '8 dias com plano pago / 15 dias sem plano pago',
+    walletRelease: '10 dias para liberação do saldo',
     time: new Date().toISOString(),
   });
 });
@@ -67,6 +69,8 @@ app.all('/api/coupons', adapt(couponsHandler));
 app.all('/api/companies', adapt(companiesHandler));
 app.all('/api/profile/enable-affiliate', adapt(enableAffiliateHandler));
 app.all('/api/affiliates/join', adapt(affiliateJoinHandler));
+app.all('/api/affiliates/subscriptions', adapt(affiliateSubscriptionsHandler));
+app.all('/api/affiliates/traffic-report', adapt(affiliateTrafficReportHandler));
 app.all('/api/profile/check-document', adapt(checkDocumentHandler));
 app.all('/api/profile/submit-verification', adapt(submitVerificationHandler));
 app.all('/api/profile/legacy-lookup', adapt(legacyLookupHandler));

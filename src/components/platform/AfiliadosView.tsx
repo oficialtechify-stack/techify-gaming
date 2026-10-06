@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import QRCode from 'qrcode';
 import { CompanyPlan, UserSellerProfile, UserAffiliation } from '../../types/platform';
 import {
   Copy,
@@ -163,6 +164,7 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
   const [isQrCodeOpen, setIsQrCodeOpen] = useState(false);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
 
   useEffect(() => {
     if (!promotablePlatforms.length) {
@@ -178,13 +180,18 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
     [promotablePlatforms, selectedProductId]
   );
 
-  const userAffiliation = useMemo(() => {
+  const selectedAffiliation = useMemo(() => {
     if (!selectedProduct) return null;
     return affiliations.find((aff) =>
-      (aff.planId === selectedProduct.id || aff.plan_id === selectedProduct.id) &&
-      isActiveAffiliation(aff)
+      aff.planId === selectedProduct.id || aff.plan_id === selectedProduct.id
     ) || null;
   }, [affiliations, selectedProduct]);
+
+  const selectedAffiliationStatus = String(selectedAffiliation?.status || '').trim().toLowerCase();
+  const isPendingSelected = ['pendente', 'pending', 'requested', 'solicitado'].includes(selectedAffiliationStatus);
+  const isRejectedSelected = ['recusada', 'rejected'].includes(selectedAffiliationStatus);
+  const isEndedSelected = ['encerrada', 'ended', 'cancelled'].includes(selectedAffiliationStatus);
+  const userAffiliation = selectedAffiliation && isActiveAffiliation(selectedAffiliation) ? selectedAffiliation : null;
 
   const activeAffiliateCode = String(
     userAffiliation?.affiliateCode || userAffiliation?.affiliate_code || ''
@@ -212,6 +219,31 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
     selectedNetwork,
     selectedChannel
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!generatedAffiliateUrl) {
+      setQrCodeDataUrl('');
+      return;
+    }
+
+    QRCode.toDataURL(generatedAffiliateUrl, {
+      width: 600,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+      .then((dataUrl) => {
+        if (!cancelled) setQrCodeDataUrl(dataUrl);
+      })
+      .catch((error) => {
+        console.warn('[Affiliate QR Code]', error);
+        if (!cancelled) setQrCodeDataUrl('');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedAffiliateUrl]);
 
   const currentPreset = SOCIAL_PRESETS.find((preset) => preset.id === selectedNetwork) || SOCIAL_PRESETS[0];
 
@@ -389,20 +421,32 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
                       Código de divulgação protegido
                     </h4>
                     <p className="text-xs mt-1 max-w-md affiliate-links-muted">
-                      Você ainda não possui uma afiliação ativa para {selectedProduct.name}. A afiliação é criada no backend e o código é exclusivo da sua conta.
+                      {isPendingSelected
+                        ? 'Sua solicitação está aguardando aprovação da empresa. O código e o link permanecem bloqueados até a aprovação.'
+                        : isRejectedSelected
+                          ? 'A empresa recusou esta afiliação. Você pode solicitar novamente quando a oferta permitir.'
+                          : isEndedSelected
+                            ? 'Esta afiliação foi encerrada. Solicite uma nova afiliação para voltar a divulgar.'
+                            : `Você ainda não possui uma afiliação ativa para ${selectedProduct.name}. A afiliação é criada no backend e o código é exclusivo da sua conta.`}
                     </p>
                   </div>
                 </div>
 
-                {onJoinAffiliate && (
+                {onJoinAffiliate && !isPendingSelected && (
                   <button
                     type="button"
                     onClick={() => onJoinAffiliate(selectedProduct)}
                     className="affiliate-primary-button w-full sm:w-auto px-6 py-3.5 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2"
                   >
                     <Zap className="w-4 h-4" />
-                    Quero me afiliar
+                    {isRejectedSelected || isEndedSelected ? 'Solicitar nova afiliação' : 'Quero me afiliar'}
                   </button>
+                )}
+                {isPendingSelected && (
+                  <div className="affiliate-secondary-button w-full sm:w-auto px-6 py-3.5 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 cursor-default">
+                    <Lock className="w-4 h-4" />
+                    Aguardando aprovação
+                  </div>
                 )}
               </div>
             )}
@@ -419,29 +463,33 @@ export const AfiliadosView: React.FC<AfiliadosViewProps> = ({
                 {isQrCodeOpen && (
                   <div className="p-4 affiliate-collapsible-body flex flex-col sm:flex-row items-center gap-5">
                     {generatedAffiliateUrl ? (
-                      <>
-                        <div className="bg-white p-3 rounded-xl shadow-sm">
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(generatedAffiliateUrl)}`}
-                            alt="QR Code do link de afiliado"
-                            className="w-32 h-32"
-                          />
-                        </div>
-                        <div className="space-y-2 text-center sm:text-left">
-                          <h4 className="text-xs font-bold uppercase">QR Code direto do seu link</h4>
-                          <p className="text-xs affiliate-links-muted">
-                            O QR aponta para a mesma URL rastreada, incluindo seu código de afiliado e UTMs.
-                          </p>
-                          <a
-                            href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(generatedAffiliateUrl)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="affiliate-secondary-button inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold"
-                          >
-                            Abrir QR em alta resolução
-                          </a>
-                        </div>
-                      </>
+                      qrCodeDataUrl ? (
+                        <>
+                          <div className="bg-white p-3 rounded-xl shadow-sm">
+                            <img
+                              src={qrCodeDataUrl}
+                              alt="QR Code do link de afiliado"
+                              className="w-32 h-32"
+                            />
+                          </div>
+                          <div className="space-y-2 text-center sm:text-left">
+                            <h4 className="text-xs font-bold uppercase">QR Code direto do seu link</h4>
+                            <p className="text-xs affiliate-links-muted">
+                              O QR é gerado dentro da LeadsPay e aponta para a mesma URL rastreada, incluindo seu código e UTMs.
+                            </p>
+                            <a
+                              href={qrCodeDataUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="affiliate-secondary-button inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold"
+                            >
+                              Abrir QR em alta resolução
+                            </a>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-xs affiliate-links-muted">Gerando QR Code seguro...</p>
+                      )
                     ) : (
                       <p className="text-xs affiliate-links-muted">Ative a afiliação acima para gerar o QR Code.</p>
                     )}
