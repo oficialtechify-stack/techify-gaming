@@ -1843,6 +1843,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   onBackToHome={onBackToHome}
                   notificationItems={inAppNotifications}
                   onOpenNotifications={markNotificationsAsRead}
+                  isDarkMode={isDarkMode}
+                  onToggleTheme={() => setIsDarkMode((current) => !current)}
                 />
               )}
 
