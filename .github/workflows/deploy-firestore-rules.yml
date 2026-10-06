@@ -1,0 +1,101 @@
+name: Deploy Firestore rules
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/deploy-firestore-rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_ORG_ID: team_NbEe7FyvVyYANMVHDoJVfaAL
+      VERCEL_PROJECT_ID: prj_1gaBGjVLeja0aMLkzYz7oXMO8qQq
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Vercel token
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN_NOT_CONFIGURED"
+            exit 1
+          fi
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Pull protected production environment
+        run: npx --yes vercel@50.10.0 env pull .env.firebase --environment=production --yes --token="$VERCEL_TOKEN"
+
+      - name: Prepare Firebase credentials
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const raw = fs.readFileSync('.env.firebase', 'utf8');
+          const env = {};
+
+          for (const line of raw.split(/\r?\n/)) {
+            if (!line || line.trim().startsWith('#')) continue;
+            const index = line.indexOf('=');
+            if (index < 0) continue;
+            const key = line.slice(0, index).trim();
+            let value = line.slice(index + 1).trim();
+
+            if (
+              (value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'"))
+            ) {
+              value = value.slice(1, -1);
+            }
+
+            value = value
+              .replace(/\\n/g, '\n')
+              .replace(/\\r/g, '\r')
+              .replace(/\\\"/g, '"');
+
+            env[key] = value;
+          }
+
+          if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+            throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON não veio da Vercel Production.');
+          }
+          if (!env.FIREBASE_PROJECT_ID) {
+            throw new Error('FIREBASE_PROJECT_ID não veio da Vercel Production.');
+          }
+
+          const credentialsPath = path.join(process.env.RUNNER_TEMP, 'firebase-service-account.json');
+          fs.writeFileSync(credentialsPath, env.FIREBASE_SERVICE_ACCOUNT_JSON, { mode: 0o600 });
+
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `GOOGLE_APPLICATION_CREDENTIALS=${credentialsPath}\nFIREBASE_PROJECT_ID=${env.FIREBASE_PROJECT_ID}\n`
+          );
+          NODE
+
+      - name: Validate Firebase rules
+        run: npx --yes firebase-tools@14.18.0 firestore:rules --help >/dev/null
+
+      - name: Deploy Firestore rules
+        run: npx --yes firebase-tools@14.18.0 deploy --only firestore:rules --project "$FIREBASE_PROJECT_ID" --non-interactive
+
+      - name: Remove temporary credentials
+        if: always()
+        run: |
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS" .env.firebase
