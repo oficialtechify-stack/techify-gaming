@@ -119,8 +119,8 @@ const IDLE_TARGETS: Record<string, Cell[]> = {
   'lumy-manager': [{ x: 23, y: 17 }, { x: 24, y: 12 }, { x: 39, y: 28 }],
   frontend: [{ x: 21, y: 18 }, { x: 35, y: 27 }, { x: 39, y: 17 }],
   backend: [{ x: 10, y: 37 }, { x: 21, y: 24 }, { x: 42, y: 17 }],
-  designer: [{ x: 34, y: 30 }, { x: 42, y: 34 }, { x: 21, y: 26 }],
-  qa: [{ x: 12, y: 36 }, { x: 21, y: 23 }, { x: 20, y: 18 }],
+  designer: [{ x: 33, y: 31 }, { x: 42, y: 34 }, { x: 21, y: 26 }],
+  qa: [{ x: 9, y: 37 }, { x: 21, y: 23 }, { x: 20, y: 18 }],
   growth: [{ x: 38, y: 29 }, { x: 42, y: 18 }, { x: 33, y: 34 }],
 };
 
@@ -613,16 +613,20 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
 
         const state = visualState(tasksRef.current, worker.id);
         const target = desiredTarget(worker.id, state, existing, Date.now());
+        const targetPoint = centerOf(target.cell);
+        const safeTarget = isWalkable(target.cell)
+          ? target.cell
+          : nearestWalkableCell(targetPoint.x, targetPoint.y);
         let path = existing.path;
         let lastPathAt = existing.lastPathAt || 0;
         const currentCell = nearestWalkableCell(existing.x, existing.y);
-        const reachedCell = currentCell.x === target.cell.x && currentCell.y === target.cell.y;
+        const reachedCell = currentCell.x === safeTarget.x && currentCell.y === safeTarget.y;
 
         if (existing.targetKey !== target.key) {
-          path = buildRoute(existing.x, existing.y, target.cell);
+          path = buildRoute(existing.x, existing.y, safeTarget);
           lastPathAt = now;
         } else if (!path.length && !reachedCell && now - lastPathAt > 900) {
-          path = buildRoute(existing.x, existing.y, target.cell);
+          path = buildRoute(existing.x, existing.y, safeTarget);
           lastPathAt = now;
         }
 
