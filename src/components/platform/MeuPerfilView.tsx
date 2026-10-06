@@ -138,15 +138,16 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const isPending = verificationStatus === 'pending' || verificationStatus === 'submitted';
   const isApproved = verificationStatus === 'approved' || (roleMode !== 'empresa' && userProfile.verified === true);
   const isRejected = verificationStatus === 'rejected';
-  const stripeReady = roleMode !== 'empresa' || stripeStatus === 'connected';
+  // Empresa e Afiliado seguem o mesmo onboarding financeiro: Stripe primeiro.
+  const stripeReady = stripeStatus === 'connected';
   const companyEditUnlocked = roleMode === 'empresa' && userProfile.companyProfileEditUnlocked === true;
   const companyEditRequestStatus = roleMode === 'empresa' ? userProfile.companyEditRequestStatus : null;
 
-  // Company fields unlock only after Stripe verification. Approved profiles stay locked
-  // until administration explicitly approves an edit request.
+  // Os campos cadastrais só liberam após a Stripe estar pronta.
+  // Depois do envio/aprovação, o perfil permanece protegido.
   const isLocked = roleMode === 'empresa'
     ? (!stripeReady || isPending || (isApproved && !companyEditUnlocked) || (isRejected && !isEditingRejected))
-    : (isPending || isApproved || (isRejected && !isEditingRejected));
+    : (!stripeReady || isPending || isApproved || (isRejected && !isEditingRejected));
 
   // Synchronize when userProfile or company changes
   useEffect(() => {
@@ -800,7 +801,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 <h3 className="text-base font-black text-white font-['Syne']">
                   {roleMode === 'empresa'
                     ? (stripeReady ? 'Complete o Perfil da Empresa na LeadsPay' : 'Primeiro, conclua sua validação na Stripe')
-                    : 'Preencha seus Dados para Validação da Conta'}
+                    : (stripeReady ? 'Complete seu Perfil de Afiliado na LeadsPay' : 'Primeiro, conclua sua validação na Stripe')}
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#D9F22A]/20 text-[#D9F22A] border border-[#D9F22A]/30">
                   {roleMode === 'empresa' ? 'Obrigatório para Cadastrar Produtos' : 'Etapa Obrigatória'}
@@ -811,31 +812,36 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   ? (stripeReady
                     ? 'Sua Stripe já está pronta. Agora complete os dados da empresa e envie para análise da administração.'
                     : 'O formulário da LeadsPay ficará bloqueado até a Stripe confirmar sua conta. Conclua a etapa financeira primeiro.')
-                  : 'Preencha todos os campos obrigatórios abaixo (Nome, Sobrenome, E-mail, CPF, Celular e Endereço). Assim que tudo estiver preenchido, clique no botão "Enviar para Validação". Após o envio, os campos serão trancados para a verificação do Administrador.'}
+                  : (stripeReady
+                    ? 'Sua Stripe já está pronta. Agora complete Nome, Sobrenome, E-mail, CPF, Celular e Endereço e envie para análise da administração.'
+                    : 'O perfil do afiliado ficará bloqueado até a Stripe confirmar seus dados de recebimento. Conclua a etapa financeira primeiro.')}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {roleMode === 'empresa' && (
+      {(roleMode === 'empresa' || roleMode === 'afiliado') && (
         <div className="mb-6">
           <StripeConnectCompanyPanel
-            companyId={company?.id || userProfile.companyId}
+            companyId={roleMode === 'empresa' ? (company?.id || userProfile.companyId) : undefined}
+            role={roleMode}
             onboardingMode={!isApproved}
             onStatusChange={setStripeStatus}
           />
         </div>
       )}
 
-      {roleMode === 'empresa' && !stripeReady ? (
+      {(roleMode === 'empresa' || roleMode === 'afiliado') && !stripeReady ? (
         <div className="rounded-[28px] border border-white/10 bg-[#09111e] p-8 sm:p-10 text-center shadow-xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/35">
             <Lock className="h-6 w-6" />
           </div>
           <h3 className="mt-4 text-lg font-black text-white">Perfil LeadsPay bloqueado por enquanto</h3>
           <p className="mx-auto mt-2 max-w-xl text-xs leading-6 text-white/50">
-            Conclua a verificação da Stripe acima. Assim que a conta estiver pronta, os dados da empresa serão liberados automaticamente.
+            {roleMode === 'empresa'
+              ? 'Conclua a verificação da Stripe acima. Assim que a conta estiver pronta, os dados da empresa serão liberados automaticamente.'
+              : 'Conclua a verificação da Stripe acima. Assim que a conta estiver pronta, seus dados de afiliado serão liberados automaticamente.'}
           </p>
           <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#D9F22A]/20 bg-[#D9F22A]/5 px-4 py-2 text-[11px] font-bold text-[#D9F22A]">
             Stripe primeiro
