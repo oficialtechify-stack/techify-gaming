@@ -226,10 +226,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
   useEffect(() => {
     if (paymentType === 'Único') return;
     setPaymentMethods((current) => {
-      const recurringMethods = current.filter((method) =>
-        method === 'CARD' || method === 'APPLE_PAY' || method === 'GOOGLE_PAY'
-      );
-      return recurringMethods.length ? recurringMethods : ['CARD'];
+      return current.includes('CARD') ? ['CARD'] : ['CARD'];
     });
     if (defaultPaymentMethod === 'PIX' || defaultPaymentMethod === 'BOLETO') {
       setDefaultPaymentMethod('CARD');
@@ -566,7 +563,7 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                 <Section>
                   <h3 className="text-lg font-black">Métodos de pagamento</h3>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    {([['PIX','PIX'],['CARD','Cartão'],['BOLETO','Boleto'],['APPLE_PAY','Apple Pay'],['GOOGLE_PAY','Google Pay']] as const).map(([value,label]) => {
+                    {([['PIX','PIX'],['CARD','Cartão'],['BOLETO','Boleto']] as const).map(([value,label]) => {
                       const recurringBlocked = paymentType !== 'Único' && (value === 'PIX' || value === 'BOLETO');
                       return (
                         <button
@@ -582,9 +579,14 @@ export const CompanyProductStudio: React.FC<CompanyProductStudioProps> = ({
                       );
                     })}
                   </div>
+                  <p className="mt-3 text-[11px] leading-relaxed text-white/40">
+                    Apple Pay e Google Pay ficam disponíveis pelo Cartão quando a Stripe, o navegador e o dispositivo do comprador oferecerem suporte.
+                  </p>
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div><label className={labelClass}>Método padrão</label><select className={inputClass} value={defaultPaymentMethod} onChange={(e) => setDefaultPaymentMethod(e.target.value as any)}>{paymentMethods.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
-                    <div><label className={labelClass}>Parcelamento máximo</label><select className={inputClass} value={maxInstallments} onChange={(e) => setMaxInstallments(Number(e.target.value))}>{Array.from({length:12},(_,i)=>i+1).map((n)=><option key={n} value={n}>{n}x</option>)}</select></div>
+                    <div><label className={labelClass}>Método padrão</label><select className={inputClass} value={defaultPaymentMethod} onChange={(e) => setDefaultPaymentMethod(e.target.value as any)}>{paymentMethods.map((m) => <option key={m} value={m}>{m === 'CARD' ? 'Cartão' : m === 'PIX' ? 'Pix' : m === 'BOLETO' ? 'Boleto' : m}</option>)}</select></div>
+                    {paymentMethods.includes('CARD') && (
+                      <div><label className={labelClass}>Parcelamento máximo no cartão</label><select className={inputClass} value={maxInstallments} onChange={(e) => setMaxInstallments(Number(e.target.value))}>{Array.from({length:12},(_,i)=>i+1).map((n)=><option key={n} value={n}>{n}x</option>)}</select></div>
+                    )}
                   </div>
                 </Section>
               </div>
