@@ -964,13 +964,6 @@ export default async function handler(req: Req, res: Res) {
         if (!geminiConnected) return res.status(503).json({ error: 'O cérebro Gemini ainda não está conectado.' });
         const worker = resolvedWorkers.find((item) => item.id === workerId);
         if (!worker) return res.status(404).json({ error: 'Funcionário não encontrado.' });
-        await writeWorkerBrain(db, workerId, {
-          mood: 'atento',
-          focus: message.slice(0, 120),
-          currentIntent: 'Responder e ajudar na conversa',
-          lastThought: 'Estou entendendo a pergunta antes de responder.',
-        });
-
         const recent = await tasks.where('workerId', '==', workerId).limit(12).get();
         const recentText = recent.docs
           .map((doc) => {
@@ -1050,6 +1043,13 @@ Responda APENAS JSON:
 
         const worker = resolvedWorkers.find((item) => item.id === workerId);
         if (!worker) return res.status(404).json({ error: 'Funcionário não encontrado.' });
+
+        await writeWorkerBrain(db, workerId, {
+          mood: 'atento',
+          focus: message.slice(0, 120),
+          currentIntent: 'Responder e ajudar na conversa',
+          lastThought: 'Estou entendendo a pergunta antes de responder.',
+        });
 
         const messagesRef = db
           .collection('admin_ai_worker_chats')
