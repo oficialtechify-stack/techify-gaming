@@ -1192,23 +1192,40 @@ export const DatabaseManagerView: React.FC = () => {
         </div>
       )}
 
-      {/* RESUMO FINANCEIRO REAL DA LEADSPAY */}
-      <section className="rounded-2xl border border-white/10 bg-[#070c17] p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      {/* PAINEL MASTER GLOBAL DA LEADSPAY */}
+      <section className="rounded-[28px] border border-white/10 bg-gradient-to-br from-[#08101d] via-[#060b14] to-[#050811] p-4 shadow-2xl sm:p-5">
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#D9F22A]">Financeiro global da plataforma</div>
-            <h2 className="mt-1 text-lg font-black text-white">Dados reais da LeadsPay</h2>
-            <p className="mt-1 text-[11px] text-white/45">Somente vendas e movimentações reais; registros de teste/sandbox são ignorados.</p>
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D9F22A]">Conta global da LeadsPay</div>
+            <h2 className="mt-1 text-xl font-black text-white">Visão financeira da plataforma</h2>
+            <p className="mt-1 max-w-3xl text-[11px] leading-5 text-white/45">
+              Valores globais da LeadsPay, separados entre receita da plataforma, dinheiro pertencente a empresas/afiliados e operação.
+              Registros marcados como teste, sandbox ou desenvolvimento não entram neste resumo.
+            </p>
           </div>
-          {adminSummary?.lastUpdated && (
-            <span className="text-[10px] text-white/35">
-              Atualizado em {new Date(adminSummary.lastUpdated).toLocaleString('pt-BR')}
-            </span>
-          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {adminSummary?.stripeConfig?.liveSecretConfigured && adminSummary?.stripeConfig?.webhookConfigured ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-300">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Stripe produção ativa
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-rose-300">
+                <AlertOctagon className="h-3.5 w-3.5" />
+                Stripe incompleta
+              </span>
+            )}
+            {adminSummary?.lastUpdated && (
+              <span className="text-[10px] text-white/30">
+                Atualizado {new Date(adminSummary.lastUpdated).toLocaleString('pt-BR')}
+              </span>
+            )}
+          </div>
         </div>
 
         {adminSummary && (!adminSummary.stripeConfig?.liveSecretConfigured || !adminSummary.stripeConfig?.webhookConfigured) && (
-          <div className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3.5 text-xs text-rose-300">
+          <div className="mb-5 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-xs text-rose-300">
             <div className="flex items-center gap-2 font-black">
               <AlertOctagon className="h-4 w-4" />
               Stripe de produção incompleta
@@ -1216,55 +1233,210 @@ export const DatabaseManagerView: React.FC = () => {
             <p className="mt-1.5 leading-5 text-rose-200/75">
               {!adminSummary.stripeConfig?.liveSecretConfigured && 'Falta STRIPE_SECRET_KEY live na Vercel Production. '}
               {!adminSummary.stripeConfig?.webhookConfigured && 'Falta STRIPE_WEBHOOK_SECRET na Vercel Production. '}
-              Enquanto isso, a LeadsPay bloqueia onboarding e cobranças reais para não usar chaves de teste.
+              A LeadsPay mantém cobranças reais bloqueadas até a configuração ficar completa.
             </p>
           </div>
         )}
 
         {adminSummaryLoading && !adminSummary ? (
-          <div className="flex items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] py-8 text-xs text-white/45">
+          <div className="flex items-center justify-center gap-2 rounded-2xl border border-white/5 bg-white/[0.02] py-10 text-xs text-white/45">
             <RefreshCw className="h-4 w-4 animate-spin text-[#D9F22A]" />
-            Carregando dados financeiros...
+            Carregando visão global...
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-7">
-            {[
-              { label: 'Vendas confirmadas', value: String(adminSummary?.salesCount || 0), icon: ShoppingCart },
-              { label: 'Volume bruto', value: `R$ ${Number(adminSummary?.grossVolume || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign },
-              { label: 'Ticket médio', value: `R$ ${Number(adminSummary?.averageTicket || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingUp },
-              { label: 'Receita LeadsPay', value: `R$ ${Number(adminSummary?.platformRevenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: BadgeDollarSign },
-              { label: 'Taxas checkout', value: `R$ ${Number(adminSummary?.checkoutFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: HandCoins },
-              { label: 'Taxas de saque', value: `R$ ${Number(adminSummary?.withdrawalFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: WalletCards },
-              { label: 'Saldo futuro usuários', value: `R$ ${Number(adminSummary?.pendingBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Clock },
-              { label: 'Saldo disponível usuários', value: `R$ ${Number(adminSummary?.availableBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: WalletCards },
-              { label: 'Comissões afiliados', value: `R$ ${Number(adminSummary?.affiliateCommissions || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Users },
-              { label: 'Líquido empresas', value: `R$ ${Number(adminSummary?.companyNet || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Building2 },
-              { label: 'Empresas aprovadas', value: String(adminSummary?.approvedCompanies || 0), icon: Building2 },
-              { label: 'Afiliados aprovados', value: String(adminSummary?.approvedAffiliates || 0), icon: UserCheck },
-              { label: 'Produtos ativos', value: String(adminSummary?.activeProducts || 0), icon: Layers },
-              { label: 'Checkouts iniciados', value: String(adminSummary?.checkoutAttempts || 0), icon: CreditCard },
-              { label: 'Checkouts concluídos', value: String(adminSummary?.completedCheckouts || 0), icon: CheckCircle2 },
-              { label: 'Assinaturas de produtos', value: String(adminSummary?.activeProductSubscriptions || 0), icon: Repeat },
-              { label: 'Planos LeadsPay ativos', value: String(adminSummary?.activePlanSubscribers || 0), icon: Zap },
-              { label: 'MRR planos LeadsPay', value: `R$ ${Number(adminSummary?.platformPlanMrr || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: BadgeDollarSign },
-              { label: 'Saques em andamento', value: String(adminSummary?.withdrawalsInFlight || 0), icon: Send },
-              { label: 'Saques concluídos', value: String(adminSummary?.completedWithdrawals || 0), icon: CheckCircle },
-              { label: 'Total sacado', value: `R$ ${Number(adminSummary?.totalWithdrawn || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign },
-            ].map(({ label, value, icon: Icon }) => (
-              <article key={label} className="rounded-xl border border-white/8 bg-[#050811] p-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/35">{label}</span>
-                  <Icon className="h-3.5 w-3.5 text-[#D9F22A]" />
+          <div className="space-y-5">
+            {/* RESULTADO DA LEADSPAY */}
+            <div>
+              <div className="mb-2.5 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-[0.18em] text-[#D9F22A]">Resultado da plataforma</div>
+                  <p className="mt-0.5 text-[10px] text-white/35">O que pertence à LeadsPay e o volume processado pela plataforma.</p>
                 </div>
-                <div className="mt-2 text-base font-black text-white sm:text-lg">{value}</div>
-              </article>
-            ))}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <article className="rounded-2xl border border-[#D9F22A]/20 bg-[#D9F22A]/[0.06] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-[#D9F22A]/70">Receita LeadsPay</div>
+                      <div className="mt-2 text-2xl font-black text-white">
+                        R$ {Number(adminSummary?.platformRevenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                      <p className="mt-1 text-[10px] leading-4 text-white/35">Taxas de checkout + taxas de saque.</p>
+                    </div>
+                    <BadgeDollarSign className="h-5 w-5 text-[#D9F22A]" />
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[#D9F22A]/10 pt-3">
+                    <div>
+                      <div className="text-[9px] uppercase tracking-wide text-white/30">Checkout</div>
+                      <div className="mt-1 text-sm font-black text-white">
+                        R$ {Number(adminSummary?.checkoutFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] uppercase tracking-wide text-white/30">Saques</div>
+                      <div className="mt-1 text-sm font-black text-white">
+                        R$ {Number(adminSummary?.withdrawalFees || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                {[
+                  {
+                    label: 'Volume processado',
+                    value: `R$ ${Number(adminSummary?.grossVolume || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    sub: 'Total pago pelos compradores',
+                    icon: DollarSign,
+                  },
+                  {
+                    label: 'Vendas confirmadas',
+                    value: String(adminSummary?.salesCount || 0),
+                    sub: 'Pagamentos realmente aprovados',
+                    icon: ShoppingCart,
+                  },
+                  {
+                    label: 'Ticket médio',
+                    value: `R$ ${Number(adminSummary?.averageTicket || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    sub: 'Média das vendas confirmadas',
+                    icon: TrendingUp,
+                  },
+                ].map(({ label, value, sub, icon: Icon }) => (
+                  <article key={label} className="rounded-2xl border border-white/8 bg-[#050811] p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-white/35">{label}</span>
+                      <Icon className="h-4 w-4 text-[#D9F22A]" />
+                    </div>
+                    <div className="mt-2 text-xl font-black text-white">{value}</div>
+                    <p className="mt-1 text-[10px] text-white/30">{sub}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            {/* DINHEIRO DOS USUÁRIOS */}
+            <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-4">
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-[0.18em] text-sky-300">Dinheiro de empresas e afiliados</div>
+                  <p className="mt-0.5 text-[10px] text-white/35">Estes valores não são receita da LeadsPay.</p>
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-white/25">Separado da receita da plataforma</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  {
+                    label: 'Saldo futuro',
+                    value: `R$ ${Number(adminSummary?.pendingBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    icon: Clock,
+                  },
+                  {
+                    label: 'Saldo disponível',
+                    value: `R$ ${Number(adminSummary?.availableBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    icon: WalletCards,
+                  },
+                  {
+                    label: 'Comissões de afiliados',
+                    value: `R$ ${Number(adminSummary?.affiliateCommissions || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    icon: Users,
+                  },
+                  {
+                    label: 'Líquido das empresas',
+                    value: `R$ ${Number(adminSummary?.companyNet || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    icon: Building2,
+                  },
+                ].map(({ label, value, icon: Icon }) => (
+                  <article key={label} className="rounded-xl border border-white/8 bg-[#050811] p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/35">{label}</span>
+                      <Icon className="h-3.5 w-3.5 text-sky-300" />
+                    </div>
+                    <div className="mt-2 text-base font-black text-white sm:text-lg">{value}</div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            {/* OPERAÇÃO */}
+            <div>
+              <div className="mb-2.5">
+                <div className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-300">Operação da plataforma</div>
+                <p className="mt-0.5 text-[10px] text-white/35">Contas, catálogo, checkouts e assinaturas em produção.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                {[
+                  { label: 'Empresas aprovadas', value: String(adminSummary?.approvedCompanies || 0), icon: Building2 },
+                  { label: 'Afiliados aprovados', value: String(adminSummary?.approvedAffiliates || 0), icon: UserCheck },
+                  { label: 'Produtos ativos', value: String(adminSummary?.activeProducts || 0), icon: Layers },
+                  { label: 'Checkouts iniciados', value: String(adminSummary?.checkoutAttempts || 0), icon: CreditCard },
+                  { label: 'Checkouts pagos', value: String(adminSummary?.completedCheckouts || 0), icon: CheckCircle2 },
+                  { label: 'Assinaturas de produtos', value: String(adminSummary?.activeProductSubscriptions || 0), icon: Repeat },
+                ].map(({ label, value, icon: Icon }) => (
+                  <article key={label} className="rounded-xl border border-white/8 bg-[#050811] p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/35">{label}</span>
+                      <Icon className="h-3.5 w-3.5 text-emerald-300" />
+                    </div>
+                    <div className="mt-2 text-base font-black text-white sm:text-lg">{value}</div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            {/* SAQUES E RECEITA RECORRENTE LEADSPAY */}
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Send className="h-4 w-4 text-violet-300" />
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.18em] text-violet-300">Saques</div>
+                    <p className="text-[10px] text-white/35">Movimentações de saída já solicitadas.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Em andamento', value: String(adminSummary?.withdrawalsInFlight || 0) },
+                    { label: 'Concluídos', value: String(adminSummary?.completedWithdrawals || 0) },
+                    { label: 'Total sacado', value: `R$ ${Number(adminSummary?.totalWithdrawn || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-xl border border-white/8 bg-[#050811] p-3">
+                      <div className="text-[8px] font-bold uppercase tracking-wider text-white/30">{label}</div>
+                      <div className="mt-1.5 text-sm font-black text-white">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Repeat className="h-4 w-4 text-amber-300" />
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-300">Planos da própria LeadsPay</div>
+                    <p className="text-[10px] text-white/35">Assinaturas cobradas pela plataforma dos seus próprios clientes.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-white/8 bg-[#050811] p-3">
+                    <div className="text-[8px] font-bold uppercase tracking-wider text-white/30">Assinantes ativos</div>
+                    <div className="mt-1.5 text-sm font-black text-white">{String(adminSummary?.activePlanSubscribers || 0)}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-[#050811] p-3">
+                    <div className="text-[8px] font-bold uppercase tracking-wider text-white/30">MRR LeadsPay</div>
+                    <div className="mt-1.5 text-sm font-black text-white">
+                      R$ {Number(adminSummary?.platformPlanMrr || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         {adminSummary?.truncated && (
-          <p className="mt-3 text-[10px] text-amber-300/80">
-            Há mais de 5.000 registros em pelo menos uma coleção; o resumo exibido é parcial e o contador persistente continua sendo mantido pelo backend.
+          <p className="mt-4 text-[10px] text-amber-300/80">
+            Há mais de 5.000 registros em pelo menos uma coleção. Este resumo pode ser parcial, embora os contadores persistentes continuem sendo mantidos pelo backend.
           </p>
         )}
       </section>
