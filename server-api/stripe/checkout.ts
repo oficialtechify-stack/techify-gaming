@@ -482,6 +482,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     try {
       await orderRef.set({
         stripePaymentIntentId: paymentIntent.id,
+        is_test: !paymentIntent.livemode,
+        environment: paymentIntent.livemode ? 'production' : 'development',
         updatedAt: new Date().toISOString(),
       }, { merge: true });
     } catch {
