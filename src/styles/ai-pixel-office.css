@@ -4327,3 +4327,364 @@
   color: #17211b !important;
   border-color: #cad5cc !important;
 }
+
+
+/* =========================================================
+   LEADSPAY OFFICE — EXECUÇÃO APROVADA + CHAT DA EQUIPE
+   ========================================================= */
+
+.office-code-proposal {
+  margin: 12px 0 2px;
+  border: 1px solid rgba(96,165,250,.13);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(96,165,250,.035), transparent 48%),
+    #070d17;
+  padding: 12px;
+}
+
+.office-code-proposal.status-branch_ready {
+  border-color: rgba(251,191,36,.16);
+  background:
+    linear-gradient(135deg, rgba(251,191,36,.035), transparent 48%),
+    #070d17;
+}
+
+.office-code-proposal.status-published {
+  border-color: rgba(52,211,153,.16);
+  background:
+    linear-gradient(135deg, rgba(52,211,153,.035), transparent 48%),
+    #070d17;
+}
+
+.office-code-proposal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.office-code-proposal-head > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #93c5fd;
+}
+
+.office-code-proposal-head strong {
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.office-code-proposal-head > span {
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 999px;
+  background: rgba(255,255,255,.025);
+  color: rgba(255,255,255,.38);
+  padding: 4px 8px;
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.office-code-critical {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 9px;
+  border: 1px solid rgba(248,113,113,.13);
+  border-radius: 10px;
+  background: rgba(248,113,113,.045);
+  padding: 8px 9px;
+  color: #fca5a5;
+}
+
+.office-code-critical span {
+  color: rgba(252,165,165,.78);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.office-code-files {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.office-code-files article {
+  border: 1px solid rgba(255,255,255,.055);
+  border-radius: 10px;
+  background: #050a12;
+  padding: 8px 9px;
+}
+
+.office-code-files article > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.office-code-files code,
+.office-code-branch code {
+  color: #d9f22a;
+  font-family: "DM Mono", monospace;
+  font-size: 8px;
+}
+
+.office-code-files article > div > span {
+  margin-left: auto;
+  color: rgba(255,255,255,.26);
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.office-code-files article p {
+  margin: 5px 0 0;
+  color: rgba(255,255,255,.40);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.office-code-branch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  border: 1px solid rgba(251,191,36,.10);
+  border-radius: 10px;
+  background: rgba(251,191,36,.025);
+  padding: 8px 9px;
+}
+
+.office-code-branch > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.office-code-branch small {
+  color: rgba(255,255,255,.28);
+  font-size: 7px;
+}
+
+.office-code-branch code {
+  overflow: hidden;
+  color: #fcd34d;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.office-code-branch a {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,.035);
+  color: rgba(255,255,255,.68);
+  padding: 6px 8px;
+  font-size: 7px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.office-code-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.office-code-actions > small {
+  max-width: 500px;
+  color: rgba(255,255,255,.30);
+  font-size: 7px;
+  line-height: 1.45;
+}
+
+.office-code-actions.production {
+  justify-content: space-between;
+  border-top: 1px solid rgba(255,255,255,.06);
+  padding-top: 10px;
+}
+
+.office-code-actions.production > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.office-code-actions.production strong {
+  color: #fcd34d;
+  font-size: 9px;
+}
+
+.office-code-actions.production span {
+  color: rgba(255,255,255,.31);
+  font-size: 7px;
+}
+
+.office-code-published {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  border: 1px solid rgba(52,211,153,.12);
+  border-radius: 10px;
+  background: rgba(52,211,153,.04);
+  padding: 8px 9px;
+  color: #6ee7b7;
+}
+
+.office-code-published span {
+  color: rgba(110,231,183,.74);
+  font-size: 8px;
+}
+
+.office-team-chat-modal {
+  width: min(94vw, 760px);
+  height: min(82vh, 720px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 22px;
+  background: #070d18;
+  box-shadow: 0 30px 100px rgba(0,0,0,.48);
+}
+
+.office-team-chat-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(217,242,42,.022), transparent 36%),
+    #060b13;
+}
+
+.office-team-message {
+  width: min(78%, 520px);
+  margin-bottom: 8px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 4px 13px 13px 13px;
+  background: #0a111d;
+  padding: 8px 10px;
+}
+
+.office-team-message.mine {
+  margin-left: auto;
+  border-color: rgba(217,242,42,.14);
+  border-radius: 13px 4px 13px 13px;
+  background: rgba(217,242,42,.055);
+}
+
+.office-team-message > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.office-team-message strong {
+  color: #d9f22a;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.office-team-message small {
+  color: rgba(255,255,255,.22);
+  font-size: 7px;
+}
+
+.office-team-message p {
+  margin: 5px 0 0;
+  color: rgba(255,255,255,.68);
+  font-size: 9px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.office-team-chat-composer {
+  display: grid;
+  grid-template-columns: 1fr 42px;
+  align-items: end;
+  gap: 8px;
+  border-top: 1px solid rgba(255,255,255,.075);
+  background: #08101b;
+  padding: 10px;
+}
+
+.office-team-chat-composer textarea {
+  width: 100%;
+  min-height: 46px;
+  max-height: 130px;
+  resize: vertical;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 11px;
+  outline: none;
+  background: #050a12;
+  color: #fff;
+  padding: 9px 10px;
+  font-family: inherit;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.office-team-chat-composer textarea:focus {
+  border-color: rgba(217,242,42,.34);
+  box-shadow: 0 0 0 3px rgba(217,242,42,.045);
+}
+
+.office-team-chat-composer button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(217,242,42,.24);
+  border-radius: 11px;
+  background: #d9f22a;
+  color: #07100a;
+  cursor: pointer;
+}
+
+.office-team-chat-composer button:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+.leadspay-platform[data-theme="light"] .office-code-proposal,
+.leadspay-platform[data-theme="light"] .office-code-files article,
+.leadspay-platform[data-theme="light"] .office-team-chat-modal,
+.leadspay-platform[data-theme="light"] .office-team-chat-body,
+.leadspay-platform[data-theme="light"] .office-team-chat-composer,
+.leadspay-platform[data-theme="light"] .office-team-message {
+  border-color: #dce5dc;
+  background: #fff;
+}
+
+.leadspay-platform[data-theme="light"] .office-code-proposal-head strong,
+.leadspay-platform[data-theme="light"] .office-team-message p {
+  color: #17211b;
+}
+
+.leadspay-platform[data-theme="light"] .office-team-chat-composer textarea {
+  border-color: #cad5cc;
+  background: #f7f9f6;
+  color: #17211b;
+}
+
+@media (max-width: 720px) {
+  .office-code-proposal-head,
+  .office-code-actions,
+  .office-code-actions.production,
+  .office-code-branch {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .office-team-message {
+    width: 90%;
+  }
+}

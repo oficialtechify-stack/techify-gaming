@@ -43,6 +43,35 @@ type ExecutionReport = {
   filesReviewed: string[];
 };
 
+type CodePatch = {
+  operation: 'replace' | 'create';
+  path: string;
+  search: string;
+  replace: string;
+  reason: string;
+};
+
+type CodeProposal = {
+  status: 'draft' | 'branch_ready' | 'published' | 'blocked';
+  patches: CodePatch[];
+  critical: boolean;
+  criticalReasons: string[];
+  baseSha: string | null;
+  preparedAt: string;
+  branch?: string | null;
+  commitSha?: string | null;
+  appliedAt?: string | null;
+  publishedAt?: string | null;
+};
+
+type TeamMessage = {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  createdAt: string;
+};
+
 type WorkerProfile = {
   id: WorkerId;
   name: string;
@@ -217,6 +246,9 @@ const REPO_FULL_NAME = 'oficialtechify-stack/techify-gaming';
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const MAX_CONTEXT_FILES = 6;
 const MAX_FILE_CHARS = 22000;
+const MAX_CODE_PATCHES = 6;
+const MAX_PATCH_SEARCH_CHARS = 12000;
+const MAX_PATCH_REPLACE_CHARS = 18000;
 
 function cleanText(value: unknown, max: number): string {
   return String(value || '').trim().slice(0, max);
@@ -395,6 +427,276 @@ async function writeWorkerBrain(
   }, { merge: true });
 }
 
+function codeWorkerCanEdit(worker: WorkerProfile): boolean {
+  return ['frontend', 'backend', 'designer'].includes(worker.id);
+}
+
+function isSafeRepoPath(path: string): boolean {
+  if (!path || path.startsWith('/') || path.includes('..') || path.includes('\\')) return false;
+  if (/(^|\/)(\.env|secrets?|credentials?|service-account)/i.test(path)) return false;
+  if (/\.(png|jpg|jpeg|gif|webp|ico|woff2?|ttf|zip|pdf|lock)$/i.test(path)) return false;
+  return /\.(tsx?|jsx?|css|json|md|rules|mjs|cjs)$/i.test(path) || ['server.ts', 'package.json'].includes(path);
+}
+
+function workerCanWritePath(path: string, worker: WorkerProfile): boolean {
+  if (!codeWorkerCanEdit(worker) || !isSafeRepoPath(path)) return false;
+  return worker.repoPrefixes.some((prefix) => path === prefix || path.startsWith(prefix));
+}
+
+function criticalPathReason(path: string): string | null {
+  if (/^firestore\.rules$/i.test(path)) return 'Regras de segurança do Firestore';
+  if (/^lib\/(?:adminAccess|officeAccess|firebaseAdminServer)/i.test(path)) return 'Autorização administrativa';
+  if (/^server-api\/(?:stripe|withdrawals?|balance|profile)\//i.test(path)) return 'Pagamentos, saldo ou identidade';
+  if (/^api\//i.test(path)) return 'Gateway principal da API';
+  if (/auth|permission|security|stripe|withdraw|balance|payout/i.test(path)) return 'Área sensível';
+  return null;
+}
+
+async function publicMainHeadSha(): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${REPO_FULL_NAME}/git/ref/heads/main`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'LeadsPay-Office',
+      },
+    });
+    if (!response.ok) return null;
+    const data = await response.json() as { object?: { sha?: string } };
+    return data.object?.sha ? String(data.object.sha) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeCodeProposal(
+  value: unknown,
+  worker: WorkerProfile,
+  baseSha: string | null,
+): CodeProposal {
+  const data = value && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : {};
+  const rawPatches = Array.isArray(data.patches) ? data.patches : [];
+  const patches: CodePatch[] = [];
+
+  for (const raw of rawPatches.slice(0, MAX_CODE_PATCHES)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const patch = raw as Record<string, unknown>;
+    const operation = cleanText(patch.operation, 20).toLowerCase() === 'create' ? 'create' : 'replace';
+    const path = cleanText(patch.path, 320).replace(/^\.\//, '');
+    if (!workerCanWritePath(path, worker)) continue;
+
+    const search = operation === 'replace'
+      ? String(patch.search || '').slice(0, MAX_PATCH_SEARCH_CHARS)
+      : '';
+    const replace = String(patch.replace || '').slice(0, MAX_PATCH_REPLACE_CHARS);
+    const reason = cleanText(patch.reason, 600);
+
+    if (operation === 'replace' && search.length < 3) continue;
+    if (!replace.trim()) continue;
+    patches.push({ operation, path, search, replace, reason });
+  }
+
+  const criticalReasons = [...new Set(
+    patches
+      .map((patch) => criticalPathReason(patch.path))
+      .filter(Boolean) as string[]
+  )];
+
+  return {
+    status: patches.length ? 'draft' : 'blocked',
+    patches,
+    critical: criticalReasons.length > 0,
+    criticalReasons,
+    baseSha,
+    preparedAt: new Date().toISOString(),
+  };
+}
+
+function githubWriteToken(): string {
+  return String(process.env.LEADSPAY_GITHUB_TOKEN || process.env.GITHUB_TOKEN || '').trim();
+}
+
+async function githubWriteApi<T>(
+  path: string,
+  token: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(`https://api.github.com/repos/${REPO_FULL_NAME}${path}`, {
+    ...init,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'LeadsPay-Office',
+      ...(init.headers || {}),
+    },
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    const detail = typeof data?.message === 'string' ? data.message : `GitHub HTTP ${response.status}`;
+    throw Object.assign(new Error(detail), { statusCode: response.status });
+  }
+  return data as T;
+}
+
+async function readGithubTextFile(path: string, ref: string, token: string): Promise<string> {
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const data = await githubWriteApi<{ content?: string; encoding?: string }>(
+    `/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`,
+    token,
+  );
+  if (!data.content) throw new Error(`Não foi possível ler ${path} no GitHub.`);
+  if (data.encoding === 'base64') {
+    return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8');
+  }
+  return String(data.content);
+}
+
+function applyCodePatches(original: string, patches: CodePatch[], path: string): string {
+  let content = original;
+  for (const patch of patches) {
+    if (patch.operation === 'create') {
+      if (content.trim()) throw new Error(`A proposta tentou criar ${path}, mas o arquivo já existe.`);
+      content = patch.replace;
+      continue;
+    }
+
+    const first = content.indexOf(patch.search);
+    const last = content.lastIndexOf(patch.search);
+    if (first < 0) {
+      throw new Error(`O trecho proposto para ${path} não existe mais. Execute uma nova análise antes de aplicar.`);
+    }
+    if (first !== last) {
+      throw new Error(`O trecho proposto para ${path} aparece mais de uma vez. A IA precisa gerar uma alteração mais específica.`);
+    }
+    content = content.slice(0, first) + patch.replace + content.slice(first + patch.search.length);
+  }
+  return content;
+}
+
+async function applyProposalToBranch(
+  taskId: string,
+  proposal: CodeProposal,
+  worker: WorkerProfile,
+): Promise<{ branch: string; commitSha: string; baseSha: string }> {
+  const token = githubWriteToken();
+  if (!token) throw Object.assign(new Error('Conecte LEADSPAY_GITHUB_TOKEN na Vercel para liberar a escrita aprovada no GitHub.'), { statusCode: 503 });
+  if (!proposal.patches.length) throw Object.assign(new Error('Esta tarefa não tem alterações de código preparadas.'), { statusCode: 409 });
+
+  const mainRef = await githubWriteApi<{ object: { sha: string } }>('/git/ref/heads/main', token);
+  const baseSha = String(mainRef.object.sha || '');
+  if (!baseSha) throw new Error('Não foi possível identificar o commit atual da main.');
+  if (proposal.baseSha && proposal.baseSha !== baseSha) {
+    throw Object.assign(new Error('A main mudou depois da análise. Peça uma nova análise antes de aplicar para evitar sobrescrever trabalho recente.'), { statusCode: 409 });
+  }
+
+  const grouped = new Map<string, CodePatch[]>();
+  for (const patch of proposal.patches) {
+    if (!workerCanWritePath(patch.path, worker)) {
+      throw Object.assign(new Error(`O funcionário não tem permissão para alterar ${patch.path}.`), { statusCode: 403 });
+    }
+    grouped.set(patch.path, [...(grouped.get(patch.path) || []), patch]);
+  }
+
+  const commit = await githubWriteApi<{ tree: { sha: string } }>(`/git/commits/${baseSha}`, token);
+  const treeEntries: Array<{ path: string; mode: string; type: string; sha: string }> = [];
+
+  for (const [path, pathPatches] of grouped) {
+    let original = '';
+    const creates = pathPatches.filter((patch) => patch.operation === 'create');
+    if (!creates.length) {
+      original = await readGithubTextFile(path, baseSha, token);
+    } else {
+      try {
+        original = await readGithubTextFile(path, baseSha, token);
+      } catch (error: any) {
+        if (Number(error?.statusCode) !== 404) throw error;
+        original = '';
+      }
+    }
+
+    const finalContent = applyCodePatches(original, pathPatches, path);
+    const blob = await githubWriteApi<{ sha: string }>('/git/blobs', token, {
+      method: 'POST',
+      body: JSON.stringify({ content: finalContent, encoding: 'utf-8' }),
+    });
+    treeEntries.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
+  }
+
+  const tree = await githubWriteApi<{ sha: string }>('/git/trees', token, {
+    method: 'POST',
+    body: JSON.stringify({ base_tree: commit.tree.sha, tree: treeEntries }),
+  });
+
+  const codeCommit = await githubWriteApi<{ sha: string }>('/git/commits', token, {
+    method: 'POST',
+    body: JSON.stringify({
+      message: `LeadsPay Office: ${taskId}`,
+      tree: tree.sha,
+      parents: [baseSha],
+    }),
+  });
+
+  const branch = `office/${taskId.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 70)}-${Date.now().toString(36)}`;
+  await githubWriteApi('/git/refs', token, {
+    method: 'POST',
+    body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: codeCommit.sha }),
+  });
+
+  return { branch, commitSha: codeCommit.sha, baseSha };
+}
+
+async function publishProposalToMain(
+  proposal: CodeProposal,
+  confirmProduction: boolean,
+): Promise<{ commitSha: string }> {
+  if (!confirmProduction) {
+    throw Object.assign(new Error('Confirme explicitamente que o preview foi revisado antes de publicar em produção.'), { statusCode: 400 });
+  }
+  const token = githubWriteToken();
+  if (!token) throw Object.assign(new Error('LEADSPAY_GITHUB_TOKEN ainda não está conectado.'), { statusCode: 503 });
+  if (!proposal.commitSha || !proposal.baseSha || proposal.status !== 'branch_ready') {
+    throw Object.assign(new Error('Primeiro aplique a proposta em uma branch de revisão.'), { statusCode: 409 });
+  }
+
+  const mainRef = await githubWriteApi<{ object: { sha: string } }>('/git/ref/heads/main', token);
+  if (String(mainRef.object.sha || '') !== proposal.baseSha) {
+    throw Object.assign(new Error('A main mudou depois da criação do preview. Gere uma nova proposta antes de publicar.'), { statusCode: 409 });
+  }
+
+  await githubWriteApi('/git/refs/heads/main', token, {
+    method: 'PATCH',
+    body: JSON.stringify({ sha: proposal.commitSha, force: false }),
+  });
+  return { commitSha: proposal.commitSha };
+}
+
+function serializeTeamMessage(
+  doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot,
+): TeamMessage {
+  const data = (doc.data() || {}) as Record<string, any>;
+  return {
+    id: doc.id,
+    userId: String(data.userId || ''),
+    userName: String(data.userName || 'Equipe'),
+    text: String(data.text || ''),
+    createdAt: String(data.createdAt || ''),
+  };
+}
+
+async function loadTeamMessages(
+  db: FirebaseFirestore.Firestore,
+  limit = 80,
+): Promise<TeamMessage[]> {
+  const snap = await db.collection('admin_office_team_chat')
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get();
+  return snap.docs.map(serializeTeamMessage).reverse();
+}
+
 function safeReport(value: unknown, filesReviewed: string[]): ExecutionReport {
   const data = value && typeof value === 'object'
     ? value as Record<string, unknown>
@@ -435,6 +737,8 @@ function serializeTask(id: string, data: Record<string, any>) {
     startedAt: data.startedAt || null,
     completedAt: data.completedAt || null,
     createdBy: data.createdBy || null,
+    createdByUid: data.createdByUid || null,
+    codeProposal: data.codeProposal || null,
   };
 }
 
@@ -608,7 +912,15 @@ ${task.description}
 CONTEXTO DO REPOSITÓRIO
 ${repo.context || 'Nenhum arquivo do repositório foi anexado nesta execução. Analise a tarefa sem alegar que inspecionou arquivos.'}
 
-Entregue trabalho real de análise e preparação. Quando houver código, descreva exatamente os arquivos e mudanças propostas, mas NÃO afirme que os arquivos foram editados.
+Entregue trabalho real de análise e preparação. Quando houver código, além de explicar as mudanças, prepare alterações executáveis usando patches de busca/substituição.
+- "search" precisa ser um trecho EXATO e suficientemente específico copiado do arquivo fornecido.
+- "replace" deve conter o trecho final completo que substituirá "search".
+- Para arquivo novo, use operation "create", search vazio e replace com o conteúdo integral.
+- Não use reticências, placeholders ou comentários do tipo "restante igual".
+- Gere no máximo ${MAX_CODE_PATCHES} patches e somente em caminhos permitidos ao seu cargo.
+- Se não for uma tarefa de código, retorne patches [].
+- Você está preparando uma proposta; NÃO afirme que editou, publicou ou fez deploy.
+
 Responda APENAS JSON válido, sem markdown, neste formato:
 {
   "summary": "resumo objetivo do trabalho realizado",
@@ -617,7 +929,16 @@ Responda APENAS JSON válido, sem markdown, neste formato:
   "validation": ["teste ou verificação que deve ser feita"],
   "risks": ["risco relevante"],
   "nextStep": "próximo passo recomendado",
-  "filesReviewed": ["caminho/do/arquivo"]
+  "filesReviewed": ["caminho/do/arquivo"],
+  "patches": [
+    {
+      "operation": "replace",
+      "path": "src/caminho/arquivo.tsx",
+      "search": "trecho exato atual",
+      "replace": "trecho final",
+      "reason": "por que essa alteração resolve a tarefa"
+    }
+  ]
 }
 `.trim();
 
@@ -636,8 +957,10 @@ Responda APENAS JSON válido, sem markdown, neste formato:
   if (!raw) throw new Error('O executor Gemini não retornou conteúdo.');
 
   const parsed = parseGeminiJson(raw);
+  const baseSha = await publicMainHeadSha();
   return {
     report: safeReport(parsed, repo.files),
+    proposal: safeCodeProposal(parsed, worker, baseSha),
     model,
   };
 }
@@ -747,10 +1070,11 @@ export default async function handler(req: Req, res: Res) {
 
       const snap = await tasks.orderBy('createdAt', 'desc').limit(250).get();
       const taskList = snap.docs.map((doc) => serializeTask(doc.id, doc.data() as Record<string, any>));
-      const [officeMembers, humanTasks, workerBrains] = await Promise.all([
+      const [officeMembers, humanTasks, workerBrains, teamMessages] = await Promise.all([
         resolveOfficeMembers(db, officeIdentity),
         resolveHumanTasks(db, officeIdentity),
         resolveWorkerBrains(db, resolvedWorkers, taskList),
+        loadTeamMessages(db),
       ]);
 
       return res.status(200).json({
@@ -768,6 +1092,7 @@ export default async function handler(req: Req, res: Res) {
         brains: workerBrains,
         officeMembers,
         humanTasks,
+        teamMessages,
         tasks: taskList,
         executionEngine: {
           connected: geminiConnected,
@@ -775,9 +1100,11 @@ export default async function handler(req: Req, res: Res) {
           provider: geminiConnected ? 'Gemini' : null,
           model: geminiConnected ? String(process.env.AI_EMPLOYEE_MODEL || DEFAULT_MODEL) : null,
           repoReadConnected: true,
-          repoWriteConnected: false,
+          repoWriteConnected: Boolean(githubWriteToken()),
           message: geminiConnected
-            ? 'Cérebro Gemini conectado. Os funcionários já analisam tarefas e o repositório. Escrita automática no GitHub continua bloqueada até a etapa de aprovação/credencial de execução.'
+            ? (githubWriteToken()
+                ? 'Cérebro Gemini e execução aprovada no GitHub conectados. Mudanças passam por branch de revisão antes da produção.'
+                : 'Cérebro Gemini conectado. Os funcionários preparam mudanças executáveis; falta LEADSPAY_GITHUB_TOKEN para aplicar uma proposta aprovada.')
             : 'Fila real criada. Configure GEMINI_API_KEY para os funcionários executarem análises automaticamente.',
         },
       });
@@ -789,6 +1116,23 @@ export default async function handler(req: Req, res: Res) {
 
     if (req.method === 'POST') {
       const action = cleanText(body.action, 40).toLowerCase();
+
+      if (action === 'team-message') {
+        const text = cleanText(body.message, 3000);
+        if (!text) return res.status(400).json({ error: 'Escreva uma mensagem para a equipe.' });
+        const now = new Date().toISOString();
+        const id = 'offmsg_' + Date.now().toString(36) + '_' + randomBytes(4).toString('hex');
+        const memberSnap = await db.collection('admin_office_members').doc(officeIdentity.uid).get();
+        const memberData = memberSnap.exists ? memberSnap.data() as Record<string, any> : {};
+        const data = {
+          userId: officeIdentity.uid,
+          userName: cleanText(memberData.displayName || officeIdentity.displayName || officeIdentity.email || 'Equipe', 80),
+          text,
+          createdAt: now,
+        };
+        await db.collection('admin_office_team_chat').doc(id).set(data);
+        return res.status(201).json({ success: true, message: { id, ...data } });
+      }
 
       if (action === 'add-office-member') {
         assertOfficeAdmin(officeIdentity);
@@ -947,6 +1291,9 @@ export default async function handler(req: Req, res: Res) {
           return res.status(403).json({ error: 'Essa demanda pertence a outro membro.' });
         }
 
+        if (!officeIdentity.isOfficeAdmin && status === 'completed') {
+          return res.status(403).json({ error: 'Somente o CEO/Admin pode concluir definitivamente uma demanda.' });
+        }
         const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
         if (VALID_HUMAN_TASK_STATUS.has(status)) update.status = status;
         if (responseText) update.response = responseText;
@@ -1097,6 +1444,95 @@ Responda APENAS JSON:
         }
       }
 
+      if (action === 'apply-code-proposal') {
+        assertOfficeAdmin(officeIdentity);
+        const taskId = cleanText(body.taskId, 180);
+        if (!taskId || !/^aitask_[A-Za-z0-9_]+$/.test(taskId)) {
+          return res.status(400).json({ error: 'Tarefa inválida.' });
+        }
+        const ref = tasks.doc(taskId);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Tarefa não encontrada.' });
+        const task = snap.data() as Record<string, any>;
+        const worker = resolvedWorkers.find((item) => item.id === task.workerId);
+        if (!worker) return res.status(404).json({ error: 'Funcionário não encontrado.' });
+
+        const proposal = task.codeProposal as CodeProposal | undefined;
+        if (!proposal || !Array.isArray(proposal.patches) || !proposal.patches.length) {
+          return res.status(409).json({ error: 'A IA ainda não preparou alterações executáveis para esta tarefa.' });
+        }
+        if (proposal.critical && body.criticalConfirmed !== true) {
+          return res.status(409).json({
+            error: 'Essa proposta toca uma área sensível. Confirme a revisão crítica antes de criar a branch.',
+            criticalReasons: proposal.criticalReasons || [],
+          });
+        }
+
+        const applied = await applyProposalToBranch(taskId, proposal, worker);
+        const now = new Date().toISOString();
+        const updatedProposal: CodeProposal = {
+          ...proposal,
+          status: 'branch_ready',
+          baseSha: applied.baseSha,
+          branch: applied.branch,
+          commitSha: applied.commitSha,
+          appliedAt: now,
+        };
+        await ref.set({
+          codeProposal: updatedProposal,
+          runtimeStatus: 'code_branch_ready',
+          progress: Math.max(92, Number(task.progress || 0)),
+          updatedAt: now,
+        }, { merge: true });
+        const after = await ref.get();
+        return res.status(200).json({
+          success: true,
+          task: serializeTask(taskId, after.data() as Record<string, any>),
+          branch: applied.branch,
+          commitSha: applied.commitSha,
+        });
+      }
+
+      if (action === 'publish-code-proposal') {
+        assertOfficeAdmin(officeIdentity);
+        const taskId = cleanText(body.taskId, 180);
+        if (!taskId || !/^aitask_[A-Za-z0-9_]+$/.test(taskId)) {
+          return res.status(400).json({ error: 'Tarefa inválida.' });
+        }
+        const ref = tasks.doc(taskId);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Tarefa não encontrada.' });
+        const task = snap.data() as Record<string, any>;
+        const proposal = task.codeProposal as CodeProposal | undefined;
+        if (!proposal) return res.status(409).json({ error: 'Proposta de código não encontrada.' });
+        if (proposal.critical && body.criticalConfirmed !== true) {
+          return res.status(409).json({ error: 'Confirme novamente a publicação da alteração sensível.' });
+        }
+
+        const published = await publishProposalToMain(proposal, body.confirmProduction === true);
+        const now = new Date().toISOString();
+        const updatedProposal: CodeProposal = {
+          ...proposal,
+          status: 'published',
+          commitSha: published.commitSha,
+          publishedAt: now,
+        };
+        await ref.set({
+          codeProposal: updatedProposal,
+          status: 'completed',
+          progress: 100,
+          runtimeStatus: 'published_to_main',
+          completedAt: now,
+          updatedAt: now,
+        }, { merge: true });
+        const after = await ref.get();
+        return res.status(200).json({
+          success: true,
+          task: serializeTask(taskId, after.data() as Record<string, any>),
+          commitSha: published.commitSha,
+        });
+      }
+
       if (action === 'run-task') {
         const taskId = cleanText(body.taskId, 180);
         if (!taskId || !/^aitask_[A-Za-z0-9_]+$/.test(taskId)) {
@@ -1136,7 +1572,7 @@ Responda APENAS JSON:
         try {
           const worker = resolvedWorkers.find((item) => item.id === task.workerId);
           if (!worker) throw new Error('Funcionário IA inválido.');
-          const { report, model } = await executeWithGemini(task, worker);
+          const { report, proposal, model } = await executeWithGemini(task, worker);
           const now = new Date().toISOString();
           const requiresApproval = task.requiresApproval !== false;
           const nextStatus: TaskStatus = requiresApproval ? 'waiting_approval' : 'completed';
@@ -1148,6 +1584,7 @@ Responda APENAS JSON:
             runtimeStatus: requiresApproval ? 'ai_waiting_admin' : 'done',
             resultSummary: report.summary,
             executionReport: report,
+            codeProposal: proposal,
             executorProvider: 'gemini',
             executorModel: model,
             lastRunAt: now,
@@ -1223,6 +1660,7 @@ Responda APENAS JSON:
         runtimeStatus: geminiConnected ? 'ready_for_ai' : 'awaiting_executor',
         resultSummary: null,
         executionReport: null,
+        codeProposal: null,
         executorProvider: geminiConnected ? 'gemini' : null,
         executorModel: null,
         lastRunAt: null,
@@ -1231,6 +1669,7 @@ Responda APENAS JSON:
         startedAt: null,
         completedAt: null,
         createdBy: officeIdentity.email || officeIdentity.uid,
+        createdByUid: officeIdentity.uid,
       };
 
       const taskRef = tasks.doc(id);
@@ -1249,7 +1688,7 @@ Responda APENAS JSON:
               executorProvider: 'gemini',
             }, { merge: true });
 
-            const { report, model } = await executeWithGemini(task, worker);
+            const { report, proposal, model } = await executeWithGemini(task, worker);
             const finishedAt = new Date().toISOString();
             const nextStatus: TaskStatus = requiresApproval ? 'waiting_approval' : 'completed';
             await taskRef.set({
@@ -1258,6 +1697,7 @@ Responda APENAS JSON:
               runtimeStatus: requiresApproval ? 'ai_waiting_admin' : 'done',
               resultSummary: report.summary,
               executionReport: report,
+              codeProposal: proposal,
               executorProvider: 'gemini',
               executorModel: model,
               lastRunAt: finishedAt,
@@ -1311,6 +1751,13 @@ Responda APENAS JSON:
       const ref = tasks.doc(taskId);
       const snap = await ref.get();
       if (!snap.exists) return res.status(404).json({ error: 'Tarefa não encontrada.' });
+      const currentTaskData = snap.data() as Record<string, any>;
+      if (!officeIdentity.isOfficeAdmin) {
+        const ownerUid = String(currentTaskData.createdByUid || '');
+        if (!ownerUid || ownerUid !== officeIdentity.uid) {
+          return res.status(403).json({ error: 'Você só pode alterar tarefas IA que criou.' });
+        }
+      }
 
       const now = new Date().toISOString();
       const update: Record<string, unknown> = {

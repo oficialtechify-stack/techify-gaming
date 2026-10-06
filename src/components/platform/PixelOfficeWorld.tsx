@@ -57,6 +57,8 @@ type MotionState = {
 type Interaction =
   | { type: 'computer'; label: string; ownerUid?: string }
   | { type: 'meeting'; label: string }
+  | { type: 'ai'; label: string; workerId: string }
+  | { type: 'human'; label: string; userId: string }
   | null;
 
 interface PixelOfficeWorldProps {
@@ -373,6 +375,29 @@ function spriteFrame(
   return { row, frame: 1, flip };
 }
 
+function activityLabel(
+  state: TaskStatus | 'idle',
+  agent: MotionState,
+  worker: Worker,
+  task: TaskLite | null,
+) {
+  if (agent.path.length > 0) {
+    if (state === 'working') return 'indo para o computador';
+    if (state === 'waiting_approval') return 'indo para a reunião';
+    if (state === 'paused') return 'indo descansar';
+    if (state === 'queued') return 'indo organizar a fila';
+    return 'andando pelo escritório';
+  }
+  if (state === 'working') return 'trabalhando no computador';
+  if (state === 'waiting_approval') return 'na sala de reunião';
+  if (state === 'paused') return 'fazendo uma pausa';
+  if (state === 'queued') return task?.title ? 'organizando a demanda' : 'organizando a fila';
+  if (agent.targetKey === 'idle:0') return worker.id === 'backend' ? 'no laboratório' : 'circulando';
+  if (agent.targetKey === 'idle:1') return worker.id === 'designer' ? 'buscando referência' : 'checando o escritório';
+  if (agent.targetKey === 'idle:2') return worker.id === 'growth' ? 'planejando conteúdo' : 'tomando um café';
+  return worker.brain?.mood || 'livre';
+}
+
 function defaultHumanPosition(member: OfficeMember) {
   if (member.officeRole === 'ceo') return centerOf({ x: 7, y: 8 });
   if (member.officeRole === 'designer') return centerOf({ x: 41, y: 29 });
@@ -397,6 +422,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
   onInteract,
 }) => {
   const [motion, setMotion] = useState<Record<string, MotionState>>({});
+  const motionRef = useRef<Record<string, MotionState>>({});
   const [player, setPlayer] = useState<MotionState | null>(null);
   const [playerPath, setPlayerPath] = useState<Cell[]>([]);
   const [interaction, setInteraction] = useState<Interaction>(null);
@@ -430,6 +456,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
           nextIdleAt: Date.now() + 6000,
         };
       }
+      motionRef.current = next;
       return next;
     });
   }, [workers]);
@@ -548,6 +575,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
             nextIdleAt: target.nextIdleAt,
           };
         }
+        motionRef.current = next;
         return next;
       });
 
@@ -620,6 +648,33 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
             bestDistance = distance;
           }
         }
+
+        for (const worker of workersRef.current) {
+          const agent = motionRef.current[worker.id];
+          if (!agent) continue;
+          const distance = heuristic(playerCell, cellAtPixel(agent.x, agent.y));
+          if (distance <= 2 && distance < bestDistance) {
+            nextInteraction = { type: 'ai', label: `Conversar com ${worker.name}`, workerId: worker.id };
+            bestDistance = distance;
+          }
+        }
+
+        for (const member of officeMembers) {
+          if (member.userId === currentUserId) continue;
+          const fallback = defaultHumanPosition(member);
+          const px = member.position && Number.isFinite(member.position.x) ? member.position.x : fallback.x;
+          const py = member.position && Number.isFinite(member.position.y) ? member.position.y : fallback.y;
+          const distance = heuristic(playerCell, cellAtPixel(px, py));
+          if (distance <= 2 && distance < bestDistance) {
+            nextInteraction = {
+              type: 'human',
+              label: member.officeRole === 'ceo' ? `Falar com ${member.displayName}` : `Abrir estação de ${member.displayName}`,
+              userId: member.userId,
+            };
+            bestDistance = distance;
+          }
+        }
+
         setInteraction(nextInteraction);
 
         if (walking && onPlayerMove && now - presenceRef.current > 850) {
@@ -802,7 +857,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
                 />
                 <span className="game-agent-label-v3">
                   <strong>{worker.name}</strong>
-                  <small>{walking ? 'andando' : state === 'idle' ? (worker.brain?.mood || 'livre') : task?.title || worker.role}</small>
+                  <small>{activityLabel(state, agent, worker, task)}</small>
                 </span>
                 {state === 'working' && <i className="game-agent-bubble-v3 working">•••</i>}
                 {state === 'waiting_approval' && <i className="game-agent-bubble-v3 approval">!</i>}

@@ -5,8 +5,10 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
+  Code2,
   Cpu,
   Filter,
+  GitBranch,
   Gamepad2,
   Brain,
   Laptop,
@@ -107,6 +109,35 @@ type AiExecutionReport = {
   filesReviewed?: string[];
 };
 
+type CodePatch = {
+  operation: 'replace' | 'create';
+  path: string;
+  search: string;
+  replace: string;
+  reason: string;
+};
+
+type CodeProposal = {
+  status: 'draft' | 'branch_ready' | 'published' | 'blocked';
+  patches: CodePatch[];
+  critical: boolean;
+  criticalReasons: string[];
+  baseSha?: string | null;
+  preparedAt?: string | null;
+  branch?: string | null;
+  commitSha?: string | null;
+  appliedAt?: string | null;
+  publishedAt?: string | null;
+};
+
+type TeamMessage = {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  createdAt: string;
+};
+
 type AiTask = {
   id: string;
   workerId: string;
@@ -128,6 +159,8 @@ type AiTask = {
   updatedAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
+  createdByUid?: string | null;
+  codeProposal?: CodeProposal | null;
 };
 
 type EngineInfo = {
@@ -197,6 +230,12 @@ export const FuncionariosIaView: React.FC = () => {
   const [access, setAccess] = useState<OfficeAccess | null>(null);
   const [officeMembers, setOfficeMembers] = useState<OfficeMember[]>([]);
   const [humanTasks, setHumanTasks] = useState<HumanTask[]>([]);
+  const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
+  const [isTeamChatOpen, setIsTeamChatOpen] = useState(false);
+  const [teamChatInput, setTeamChatInput] = useState('');
+  const [teamChatSending, setTeamChatSending] = useState(false);
+  const teamChatBodyRef = useRef<HTMLDivElement | null>(null);
+  const [codeActionTaskId, setCodeActionTaskId] = useState<string | null>(null);
   const [engine, setEngine] = useState<EngineInfo>({
     connected: false,
     mode: 'supervised',
@@ -268,6 +307,15 @@ export const FuncionariosIaView: React.FC = () => {
     });
   }, [chatMessages, chatSending, isChatOpen]);
 
+  useEffect(() => {
+    if (!isTeamChatOpen) return;
+    const node = teamChatBodyRef.current;
+    if (!node) return;
+    window.requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+  }, [teamMessages, teamChatSending, isTeamChatOpen]);
+
   const authHeaders = async () => {
     if (!currentUser) throw new Error('Sessão do LeadsPay Office não encontrada.');
     return {
@@ -293,6 +341,7 @@ export const FuncionariosIaView: React.FC = () => {
       setTasks(Array.isArray(data.tasks) ? data.tasks : []);
       setOfficeMembers(Array.isArray(data.officeMembers) ? data.officeMembers : []);
       setHumanTasks(Array.isArray(data.humanTasks) ? data.humanTasks : []);
+      setTeamMessages(Array.isArray(data.teamMessages) ? data.teamMessages : []);
       if (data.access) setAccess(data.access);
       if (data.executionEngine) setEngine(data.executionEngine);
     } catch (err: any) {
@@ -502,6 +551,98 @@ export const FuncionariosIaView: React.FC = () => {
     }
   };
 
+  const sendTeamMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const message = teamChatInput.trim();
+    if (!message || teamChatSending) return;
+    setTeamChatSending(true);
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'team-message', message }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível enviar a mensagem.');
+      if (data.message) setTeamMessages((current) => [...current, data.message]);
+      setTeamChatInput('');
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível enviar a mensagem.');
+    } finally {
+      setTeamChatSending(false);
+    }
+  };
+
+  const applyCodeProposal = async (task: AiTask) => {
+    const proposal = task.codeProposal;
+    if (!proposal?.patches?.length || codeActionTaskId) return;
+    const criticalConfirmed = !proposal.critical || window.confirm(
+      `Essa proposta altera uma área sensível: ${(proposal.criticalReasons || []).join(', ')}. Você revisou os patches e quer criar uma branch de teste?`
+    );
+    if (!criticalConfirmed) return;
+
+    setCodeActionTaskId(task.id);
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          action: 'apply-code-proposal',
+          taskId: task.id,
+          criticalConfirmed,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível criar a branch de revisão.');
+      if (data.task) {
+        setTasks((current) => current.map((item) => item.id === task.id ? data.task : item));
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível criar a branch de revisão.');
+    } finally {
+      setCodeActionTaskId(null);
+    }
+  };
+
+  const publishCodeProposal = async (task: AiTask) => {
+    const proposal = task.codeProposal;
+    if (!proposal || codeActionTaskId) return;
+    const previewConfirmed = window.confirm(
+      'Confirme somente se você já revisou/testou a branch de revisão. Publicar vai mover essa alteração para a main e disparar o deploy de produção.'
+    );
+    if (!previewConfirmed) return;
+    const criticalConfirmed = !proposal.critical || window.confirm(
+      `Confirma novamente a publicação da alteração sensível: ${(proposal.criticalReasons || []).join(', ')}?`
+    );
+    if (!criticalConfirmed) return;
+
+    setCodeActionTaskId(task.id);
+    setError('');
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          action: 'publish-code-proposal',
+          taskId: task.id,
+          confirmProduction: true,
+          criticalConfirmed,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível publicar a alteração.');
+      if (data.task) {
+        setTasks((current) => current.map((item) => item.id === task.id ? data.task : item));
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível publicar a alteração.');
+    } finally {
+      setCodeActionTaskId(null);
+    }
+  };
+
   const askWorkerToThink = async (workerId: string) => {
     if (thinkingWorkerId || !engine.connected) return;
     setThinkingWorkerId(workerId);
@@ -697,6 +838,10 @@ export const FuncionariosIaView: React.FC = () => {
             <span className="ai-engine-dot" />
             {engine.connected ? 'Executor conectado' : 'Modo supervisionado'}
           </div>
+          <button type="button" className="ai-staff-secondary" onClick={() => setIsTeamChatOpen(true)}>
+            <MessageCircle className="h-4 w-4" />
+            Chat da equipe
+          </button>
           <button type="button" className="ai-staff-secondary" onClick={() => setIsComputerOpen(true)}>
             <Laptop className="h-4 w-4" />
             Meu computador
@@ -732,7 +877,9 @@ export const FuncionariosIaView: React.FC = () => {
           <div>
             <strong>{engine.provider || 'IA'} conectado · {engine.model || 'modelo ativo'}</strong>
             <span>
-              Os funcionários já analisam tarefas e o repositório. A escrita automática no GitHub continua bloqueada até conectarmos a etapa de execução aprovada.
+              {engine.repoWriteConnected
+                ? 'Os funcionários podem preparar patches e, após sua aprovação, criar uma branch de revisão antes de qualquer publicação.'
+                : 'Os funcionários já preparam patches executáveis. Falta conectar LEADSPAY_GITHUB_TOKEN para o botão de aplicar no GitHub funcionar.'}
             </span>
           </div>
         </div>
@@ -795,7 +942,13 @@ export const FuncionariosIaView: React.FC = () => {
             onPlayerMove={sendPresence}
             onInteract={(interaction) => {
               if (interaction.type === 'computer') openMyComputer(interaction.ownerUid);
-              if (interaction.type === 'meeting') setIsTeamModalOpen(access?.isOfficeAdmin === true);
+              if (interaction.type === 'meeting') setIsTeamChatOpen(true);
+              if (interaction.type === 'ai') openChat(interaction.workerId);
+              if (interaction.type === 'human') {
+                setSelectedHumanId(interaction.userId);
+                if (access?.isOfficeAdmin) setIsComputerOpen(true);
+                else setIsTeamChatOpen(true);
+              }
             }}
           />
         </div>
@@ -1064,6 +1217,109 @@ export const FuncionariosIaView: React.FC = () => {
             )}
           </div>
 
+          {selectedTask.codeProposal && (
+            <div className={`office-code-proposal status-${selectedTask.codeProposal.status}`}>
+              <div className="office-code-proposal-head">
+                <div>
+                  <Code2 className="h-4 w-4" />
+                  <strong>Execução de código preparada</strong>
+                </div>
+                <span>
+                  {selectedTask.codeProposal.status === 'draft'
+                    ? 'aguardando aprovação'
+                    : selectedTask.codeProposal.status === 'branch_ready'
+                      ? 'branch de revisão criada'
+                      : selectedTask.codeProposal.status === 'published'
+                        ? 'publicado'
+                        : 'sem patch aplicável'}
+                </span>
+              </div>
+
+              {selectedTask.codeProposal.critical && (
+                <div className="office-code-critical">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>
+                    Alteração sensível: {(selectedTask.codeProposal.criticalReasons || []).join(', ')}.
+                    Ela exige confirmação extra antes da branch e antes da produção.
+                  </span>
+                </div>
+              )}
+
+              {!!selectedTask.codeProposal.patches?.length && (
+                <div className="office-code-files">
+                  {selectedTask.codeProposal.patches.map((patch, index) => (
+                    <article key={`${patch.path}-${index}`}>
+                      <div>
+                        <GitBranch className="h-3.5 w-3.5" />
+                        <code>{patch.path}</code>
+                        <span>{patch.operation === 'create' ? 'novo arquivo' : 'alteração'}</span>
+                      </div>
+                      <p>{patch.reason || 'Patch preparado pela IA para esta tarefa.'}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              {selectedTask.codeProposal.branch && (
+                <div className="office-code-branch">
+                  <div>
+                    <small>Branch de revisão</small>
+                    <code>{selectedTask.codeProposal.branch}</code>
+                  </div>
+                  <a
+                    href={`https://github.com/oficialtechify-stack/techify-gaming/tree/${encodeURIComponent(selectedTask.codeProposal.branch)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Abrir no GitHub
+                  </a>
+                </div>
+              )}
+
+              {selectedTask.codeProposal.status === 'draft' && selectedTask.codeProposal.patches.length > 0 && access?.isOfficeAdmin && (
+                <div className="office-code-actions">
+                  <button
+                    type="button"
+                    className="run-ai-task"
+                    disabled={!engine.repoWriteConnected || codeActionTaskId === selectedTask.id}
+                    onClick={() => void applyCodeProposal(selectedTask)}
+                  >
+                    {codeActionTaskId === selectedTask.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
+                    {engine.repoWriteConnected ? 'Criar branch de revisão' : 'GitHub ainda não conectado'}
+                  </button>
+                  {!engine.repoWriteConnected && (
+                    <small>Adicione LEADSPAY_GITHUB_TOKEN na Vercel com acesso apenas a este repositório e Contents: Read and write.</small>
+                  )}
+                </div>
+              )}
+
+              {selectedTask.codeProposal.status === 'branch_ready' && access?.isOfficeAdmin && (
+                <div className="office-code-actions production">
+                  <div>
+                    <strong>Teste a branch antes da produção.</strong>
+                    <span>O projeto Vercel conectado ao GitHub pode gerar um Preview automaticamente para essa branch.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="approve-task"
+                    disabled={codeActionTaskId === selectedTask.id}
+                    onClick={() => void publishCodeProposal(selectedTask)}
+                  >
+                    {codeActionTaskId === selectedTask.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Publicar em produção
+                  </button>
+                </div>
+              )}
+
+              {selectedTask.codeProposal.status === 'published' && (
+                <div className="office-code-published">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Mudança aprovada e enviada para a main. O deploy de produção segue o Git conectado.</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="ai-selected-task-actions">
             {selectedTask.status === 'queued' && engine.connected && (
               <button
@@ -1143,6 +1399,65 @@ export const FuncionariosIaView: React.FC = () => {
             )}
           </div>
         </section>
+      )}
+
+      {isTeamChatOpen && (
+        <div className="ai-chat-backdrop" onMouseDown={() => setIsTeamChatOpen(false)}>
+          <section className="office-team-chat-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+            <header className="office-modal-head">
+              <div>
+                <span><MessageCircle className="h-4 w-4" /></span>
+                <div>
+                  <small>SALA DE REUNIÃO</small>
+                  <h2>Chat da equipe LeadsPay</h2>
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsTeamChatOpen(false)}><X className="h-4 w-4" /></button>
+            </header>
+
+            <div className="office-team-chat-body" ref={teamChatBodyRef}>
+              {teamMessages.length === 0 ? (
+                <div className="office-computer-empty">
+                  <MessageCircle className="h-6 w-6" />
+                  <strong>A sala está quieta</strong>
+                  <span>Use este chat para você e sua designer alinharem demandas sem sair da LeadsPay.</span>
+                </div>
+              ) : (
+                teamMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    className={`office-team-message ${message.userId === currentUser?.uid ? 'mine' : ''}`}
+                  >
+                    <div>
+                      <strong>{message.userId === currentUser?.uid ? 'Você' : message.userName}</strong>
+                      <small>{fmtDate(message.createdAt)}</small>
+                    </div>
+                    <p>{message.text}</p>
+                  </article>
+                ))
+              )}
+            </div>
+
+            <form className="office-team-chat-composer" onSubmit={sendTeamMessage}>
+              <textarea
+                rows={2}
+                value={teamChatInput}
+                onChange={(event) => setTeamChatInput(event.target.value)}
+                placeholder="Escreva para a equipe..."
+                maxLength={3000}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
+              />
+              <button type="submit" disabled={!teamChatInput.trim() || teamChatSending}>
+                {teamChatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </form>
+          </section>
+        </div>
       )}
 
       {isTeamModalOpen && access?.isOfficeAdmin && (
