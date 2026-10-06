@@ -157,7 +157,10 @@ export default async function handler(req: Req, res: Res) {
     const availableBalance = profileAvailableBalanceCents / 100;
 
     const realCompanies: Array<Record<string, any> & { id: string }> = companiesSnap.docs
-      .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
+      .map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Record<string, any>),
+      } as Record<string, any> & { id: string }))
       .filter((item) => {
         const ownerId = String(item.ownerId || item.submittedBy || '').trim();
         const ownerEmail = String(item.submittedByEmail || item.email || '').trim().toLowerCase();
