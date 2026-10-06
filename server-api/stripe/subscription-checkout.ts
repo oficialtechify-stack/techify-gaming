@@ -116,6 +116,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       role: plan.role,
       amountCents: plan.priceCents,
       status: 'pending',
+      is_test: !session.livemode,
+      environment: session.livemode ? 'production' : 'development',
       createdAt: new Date().toISOString(),
     }, { merge: true });
 
