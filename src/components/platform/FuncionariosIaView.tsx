@@ -21,6 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { PixelOfficeWorld } from './PixelOfficeWorld';
 import '../../styles/ai-pixel-office.css';
 
 type Worker = {
@@ -92,43 +93,6 @@ const FALLBACK_WORKERS: Worker[] = [
   { id: 'growth', name: 'Nova', role: 'Marketing & Comunidade', specialty: 'Campanhas e comunidade.', palette: 5 },
 ];
 
-type OfficeRoomId = 'office' | 'meeting' | 'creative' | 'lab';
-
-const STATIONS = [
-  { left: '24%', top: '48%' },
-  { left: '50%', top: '48%' },
-  { left: '76%', top: '48%' },
-  { left: '24%', top: '79%' },
-  { left: '50%', top: '79%' },
-  { left: '76%', top: '79%' },
-];
-
-const ROOM_INFO: Record<OfficeRoomId, { name: string; description: string }> = {
-  office: {
-    name: 'Escritório',
-    description: 'Mesas individuais e fila de trabalho diária.',
-  },
-  meeting: {
-    name: 'Sala de reunião',
-    description: 'Planejamento, revisão e decisões do time.',
-  },
-  creative: {
-    name: 'Sala criativa',
-    description: 'Frontend, Design e Marketing trabalhando juntos.',
-  },
-  lab: {
-    name: 'Laboratório',
-    description: 'Backend, QA e validações técnicas.',
-  },
-};
-
-const ROOM_WORKERS: Record<OfficeRoomId, string[]> = {
-  office: ['lumy-manager', 'frontend', 'backend', 'designer', 'qa', 'growth'],
-  meeting: ['lumy-manager', 'frontend', 'backend', 'designer', 'qa', 'growth'],
-  creative: ['frontend', 'designer', 'growth'],
-  lab: ['backend', 'qa', 'lumy-manager'],
-};
-
 const STATUS_LABEL: Record<TaskStatus, string> = {
   queued: 'Na fila',
   working: 'Trabalhando',
@@ -151,27 +115,6 @@ const fmtDate = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-};
-
-const workerVisualState = (tasks: AiTask[], workerId: string) => {
-  const current = tasks.find((task) =>
-    task.workerId === workerId &&
-    ['working', 'waiting_approval', 'paused'].includes(task.status),
-  );
-  if (current) return current.status;
-  if (tasks.some((task) => task.workerId === workerId && task.status === 'queued')) return 'queued';
-  return 'idle';
-};
-
-const characterFrameFor = (
-  state: ReturnType<typeof workerVisualState>,
-  tick: number,
-): { row: number; frame: number } => {
-  if (state === 'working') return { row: 0, frame: tick % 2 === 0 ? 3 : 4 };
-  if (state === 'waiting_approval') return { row: 0, frame: 5 + (tick % 2) };
-  if (state === 'paused') return { row: 0, frame: 1 };
-  if (state === 'queued') return { row: 0, frame: tick % 4 === 0 ? 0 : 1 };
-  return { row: 0, frame: 1 };
 };
 
 const statusTone = (status: TaskStatus) => {
@@ -201,7 +144,6 @@ export const FuncionariosIaView: React.FC = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | TaskStatus>('all');
   const [taskScope, setTaskScope] = useState<'selected' | 'all'>('selected');
-  const [activeRoom, setActiveRoom] = useState<OfficeRoomId>('office');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const [pcTick, setPcTick] = useState(0);
@@ -461,11 +403,11 @@ export const FuncionariosIaView: React.FC = () => {
       </section>
 
       <section className="ai-staff-workspace">
-        <div className="ai-office-panel">
+        <div className="ai-office-panel ai-office-panel-world">
           <div className="ai-office-toolbar">
             <div>
-              <strong>{ROOM_INFO[activeRoom].name}</strong>
-              <span>{ROOM_INFO[activeRoom].description}</span>
+              <strong>Escritório LeadsPay</strong>
+              <span>Uma planta única: os funcionários andam entre operação, reunião, copa, criação e laboratório.</span>
             </div>
             <div className="ai-office-legend">
               <span><i className="legend-dot working" /> trabalhando</span>
@@ -474,156 +416,14 @@ export const FuncionariosIaView: React.FC = () => {
             </div>
           </div>
 
-          <div className="ai-office-room-tabs" role="tablist" aria-label="Salas do escritório">
-            {(Object.keys(ROOM_INFO) as OfficeRoomId[]).map((roomId) => (
-              <button
-                key={roomId}
-                type="button"
-                className={activeRoom === roomId ? 'active' : ''}
-                onClick={() => setActiveRoom(roomId)}
-              >
-                {ROOM_INFO[roomId].name}
-              </button>
-            ))}
-          </div>
-
-          <div className="ai-office-scroll">
-            <div className={`pixel-office-room room-${activeRoom}`} aria-label={ROOM_INFO[activeRoom].name}>
-              <div className="pixel-office-wall">
-                <img className="pixel-furniture wall-books left" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
-                <img className="pixel-furniture wall-clock" src="/pixel-agents/assets/furniture/CLOCK/CLOCK.png" alt="" />
-                <img className="pixel-furniture wall-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
-                <img className="pixel-furniture wall-painting" src="/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png" alt="" />
-                <img className="pixel-furniture wall-books right" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
-              </div>
-
-              <div className="pixel-office-floor" />
-
-              {activeRoom === 'office' && (
-                <>
-                  <img className="pixel-furniture office-plant p1" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
-                  <img className="pixel-furniture office-plant p2" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
-                  <img className="pixel-furniture office-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
-                  <img className="pixel-furniture office-coffee-table" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
-                </>
-              )}
-
-              {activeRoom === 'meeting' && (
-                <>
-                  <img className="pixel-furniture meeting-whiteboard" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
-                  <img className="pixel-furniture meeting-table" src="/pixel-agents/assets/furniture/TABLE_FRONT/TABLE_FRONT.png" alt="" />
-                  <img className="pixel-furniture meeting-chair c1" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
-                  <img className="pixel-furniture meeting-chair c2" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
-                  <img className="pixel-furniture meeting-chair c3" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
-                  <img className="pixel-furniture meeting-chair c4" src="/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png" alt="" />
-                </>
-              )}
-
-              {activeRoom === 'creative' && (
-                <>
-                  <img className="pixel-furniture creative-painting p1" src="/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png" alt="" />
-                  <img className="pixel-furniture creative-painting p2" src="/pixel-agents/assets/furniture/SMALL_PAINTING_2/SMALL_PAINTING_2.png" alt="" />
-                  <img className="pixel-furniture creative-bench" src="/pixel-agents/assets/furniture/CUSHIONED_BENCH/CUSHIONED_BENCH.png" alt="" />
-                  <img className="pixel-furniture creative-plant" src="/pixel-agents/assets/furniture/HANGING_PLANT/HANGING_PLANT.png" alt="" />
-                </>
-              )}
-
-              {activeRoom === 'lab' && (
-                <>
-                  <img className="pixel-furniture lab-books" src="/pixel-agents/assets/furniture/BOOKSHELF/BOOKSHELF.png" alt="" />
-                  <img className="pixel-furniture lab-bin" src="/pixel-agents/assets/furniture/BIN/BIN.png" alt="" />
-                  <img className="pixel-furniture lab-cactus" src="/pixel-agents/assets/furniture/CACTUS/CACTUS.png" alt="" />
-                </>
-              )}
-
-              {workers
-                .filter((worker) => ROOM_WORKERS[activeRoom].includes(worker.id))
-                .map((worker, roomIndex) => {
-                  const workerIndex = workers.findIndex((item) => item.id === worker.id);
-                  const state = workerVisualState(tasks, worker.id);
-                  const frame = characterFrameFor(state, tick);
-                  const task = activeTaskForWorker(worker.id);
-                  const roomStations = activeRoom === 'meeting'
-                    ? [
-                        { left: '28%', top: '52%' },
-                        { left: '50%', top: '46%' },
-                        { left: '72%', top: '52%' },
-                        { left: '28%', top: '78%' },
-                        { left: '50%', top: '82%' },
-                        { left: '72%', top: '78%' },
-                      ]
-                    : activeRoom === 'creative'
-                      ? [
-                          { left: '28%', top: '58%' },
-                          { left: '50%', top: '72%' },
-                          { left: '72%', top: '58%' },
-                        ]
-                      : activeRoom === 'lab'
-                        ? [
-                            { left: '27%', top: '62%' },
-                            { left: '50%', top: '62%' },
-                            { left: '73%', top: '62%' },
-                          ]
-                        : STATIONS;
-                  const station = roomStations[roomIndex] || STATIONS[workerIndex] || STATIONS[0];
-                  const pcFrame = state === 'working'
-                    ? `/pixel-agents/assets/furniture/PC/PC_FRONT_ON_${pcTick + 1}.png`
-                    : '/pixel-agents/assets/furniture/PC/PC_FRONT_OFF.png';
-
-                  return (
-                    <button
-                      key={`${activeRoom}-${worker.id}`}
-                      type="button"
-                      className={`pixel-worker-station ${selectedWorkerId === worker.id ? 'selected' : ''} state-${state} ${activeRoom === 'meeting' ? 'meeting-station' : ''}`}
-                      style={{ left: station.left, top: station.top }}
-                      onClick={() => selectWorker(worker.id)}
-                    >
-                      <span className="pixel-worker-status-bubble">
-                        {state === 'working' ? '...' : state === 'waiting_approval' ? '!' : state === 'queued' ? '⌛' : '✓'}
-                      </span>
-
-                      {activeRoom !== 'meeting' && (
-                        <>
-                          <img
-                            className="pixel-furniture station-chair"
-                            src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png"
-                            alt=""
-                          />
-                          <span
-                            className="pixel-agent-sprite"
-                            style={{
-                              backgroundImage: `url('/pixel-agents/assets/characters/char_${worker.palette}.png')`,
-                              backgroundPosition: `${-frame.frame * 48}px ${-frame.row * 96}px`,
-                            }}
-                          />
-                          <img
-                            className="pixel-furniture station-desk"
-                            src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png"
-                            alt=""
-                          />
-                          <img className="pixel-furniture station-pc" src={pcFrame} alt="" />
-                        </>
-                      )}
-
-                      {activeRoom === 'meeting' && (
-                        <span
-                          className="pixel-agent-sprite meeting-agent"
-                          style={{
-                            backgroundImage: `url('/pixel-agents/assets/characters/char_${worker.palette}.png')`,
-                            backgroundPosition: `${-frame.frame * 48}px ${-frame.row * 96}px`,
-                          }}
-                        />
-                      )}
-
-                      <span className="pixel-worker-nameplate">
-                        <strong>{worker.name}</strong>
-                        <small>{task ? task.title : worker.role}</small>
-                      </span>
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
+          <PixelOfficeWorld
+            workers={workers}
+            tasks={tasks}
+            selectedWorkerId={selectedWorkerId}
+            tick={tick}
+            pcTick={pcTick}
+            onSelectWorker={selectWorker}
+          />
         </div>
 
         <aside className="ai-task-panel">
