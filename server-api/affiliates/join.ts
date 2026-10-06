@@ -78,12 +78,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (!companyId || !ownerId) return { kind: 'error' as const, status: 409, code: 'COMPANY_NOT_READY', error: 'A empresa responsável por esta oferta não está configurada corretamente.' };
 
       const companyRef = db.collection('companies').doc(companyId);
-      const companyProfileRef = db.collection('user_profiles').doc(ownerId);
-      const companyRequestRef = db.collection('verification_requests').doc(ownerId);
-      const [companySnapshot, companyProfileSnapshot, companyRequestSnapshot, affiliationSnapshot] = await Promise.all([
+      const [companySnapshot, affiliationSnapshot] = await Promise.all([
         transaction.get(companyRef),
-        transaction.get(companyProfileRef),
-        transaction.get(companyRequestRef),
         transaction.get(affiliationRef),
       ]);
       if (!companySnapshot.exists) return { kind: 'error' as const, status: 409, code: 'COMPANY_NOT_FOUND', error: 'A empresa responsável por esta oferta não foi encontrada.' };
@@ -91,15 +87,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (company.ownerId !== ownerId || company.verified !== true || company.status !== 'approved' || company.archived === true || company.isArchived === true) {
         return { kind: 'error' as const, status: 409, code: 'COMPANY_NOT_APPROVED', error: 'A empresa responsável ainda não foi aprovada para vender.' };
       }
-      if (!companyProfileSnapshot.exists) return { kind: 'error' as const, status: 409, code: 'COMPANY_PROFILE_NOT_APPROVED', error: 'O perfil da empresa responsável ainda não foi aprovado.' };
-      const companyProfile = applyVerificationRequest(
-        companyProfileSnapshot.data()!,
-        companyRequestSnapshot.exists ? companyRequestSnapshot.data()! : null,
-      ) as Record<string, unknown>;
-      if (!profileHasRole(companyProfile, 'empresa') || !profileRoleIsApproved(companyProfile, 'empresa')) {
-        return { kind: 'error' as const, status: 409, code: 'COMPANY_PROFILE_NOT_APPROVED', error: 'O perfil da empresa responsável ainda não foi aprovado.' };
-      }
-
       if (affiliationSnapshot.exists) {
         const existing = affiliationSnapshot.data()!;
         const state = String(existing.status || '').toLowerCase();
