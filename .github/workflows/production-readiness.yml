@@ -32,4 +32,5 @@ jobs:
         run: node --import tsx --test lib/*.test.ts
 
       - name: Production build
+        if: always()
         run: npm run build
