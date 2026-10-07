@@ -2805,7 +2805,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               const worker = item.workerId ? workers.find((entry) => entry.id === item.workerId) : null;
               const selected = selectedFurnitureId === item.id;
               const seatedHere = seated?.furnitureId === item.id;
-              const activeSeatPoint = seatedHere ? furnitureSeatPoint(item, seated.seatIndex) : null;
+              const activeSeatPoint = seatedHere && seated ? furnitureSeatPoint(item, seated.seatIndex) : null;
+              const depthFootprint = furnitureFootprint(item);
               const commonProps = {
                 left: item.x * TILE,
                 top: item.y * TILE,
@@ -2815,7 +2816,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   ? 210
                   : seatedHere && activeSeatPoint
                     ? worldDepth(activeSeatPoint.y) - 1
-                    : worldDepth((item.y + item.h) * TILE),
+                    : worldDepth((depthFootprint.y + depthFootprint.h) * TILE),
               };
 
               return (
