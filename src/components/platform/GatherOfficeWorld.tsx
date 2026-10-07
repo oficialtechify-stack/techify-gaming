@@ -2048,7 +2048,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               <button
                 key={member.userId}
                 type="button"
-                className={'gather-avatar human-avatar remote' + (moving ? ' walking' : '') + (selectedHumanId === member.userId ? ' selected' : '')}
+                className={'gather-avatar human-avatar remote' + (member.officeRole === 'ceo' ? ' ceo-avatar' : '') + (moving ? ' walking' : '') + (selectedHumanId === member.userId ? ' selected' : '')}
                 style={{ left: x, top: y, zIndex: 950 + Math.floor(y) }}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -2078,7 +2078,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           {player && currentMember && playerFrame && (
             <button
               type="button"
-              className={'gather-avatar human-avatar me' + (playerWalking ? ' walking' : '')}
+              className={'gather-avatar human-avatar me' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '')}
               style={{ left: player.x, top: player.y, zIndex: 1100 + Math.floor(player.y) }}
               onClick={(event) => {
                 event.stopPropagation();
