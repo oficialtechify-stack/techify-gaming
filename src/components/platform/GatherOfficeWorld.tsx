@@ -944,20 +944,9 @@ function ceoMotionFrame(
   }
 
   if (!walking) {
-    // Parado = quadro fixo. Mantém a última direção sem reproduzir ciclo de caminhada.
-    if (direction === 'up') {
-      return { row: 1, column: logicalColumns[0], flip: false, bob: 0, lean: 0 };
-    }
-    if (direction === 'left' || direction === 'right') {
-      return {
-        row: 2,
-        column: logicalColumns[0],
-        flip: direction === 'right',
-        bob: 0,
-        lean: 0,
-      };
-    }
-    return { row: 3, column: logicalColumns[0], flip: false, bob: 0, lean: 0 };
+    // Parado = primeiro quadro frontal fixo. Não roda nenhuma animação.
+    // Usamos o quadro frontal comprovadamente visível do atlas para nunca sumir em idle.
+    return { row: 0, column: logicalColumns[0], flip: false, bob: 0, lean: 0 };
   }
 
   const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
@@ -1698,22 +1687,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               }
             }
           } else {
-            vx = approach(vx, 0, PLAYER_DECEL * dt);
-            vy = approach(vy, 0, PLAYER_DECEL * dt);
-
-            if (Math.abs(vx) < 3) vx = 0;
-            if (Math.abs(vy) < 3) vy = 0;
-
-            if (vx || vy) {
-              const nx = x + vx * dt;
-              const ny = y + vy * dt;
-
-              if (canOccupy(nx, y)) x = nx;
-              else vx = 0;
-
-              if (canOccupy(x, ny)) y = ny;
-              else vy = 0;
-            }
+            // Sem tecla e sem rota = totalmente parado.
+            // Evita velocidade residual mantendo o personagem em animação depois de soltar a tecla.
+            vx = 0;
+            vy = 0;
           }
         }
 
@@ -2694,7 +2671,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     ? CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleOf(currentMember)) || CEO_AVATAR_STYLES[1]
     : CEO_AVATAR_STYLES[1];
   const draftCeoStyle = CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleDraft) || CEO_AVATAR_STYLES[1];
-  const playerWalking = player && !seated ? Math.hypot(player.vx, player.vy) > 8 : false;
+  const playerHasMovementIntent = pressedMovementRef.current.size > 0 || Boolean(player?.path?.length);
+  const playerWalking = player && !seated
+    ? playerHasMovementIntent && Math.hypot(player.vx, player.vy) > 1
+    : false;
   const playerFrame = player ? spriteFrame(player.direction, playerWalking) : null;
   const ceoPlayerFrame = player && currentMember?.officeRole === 'ceo'
     ? ceoMotionFrame(
@@ -2978,19 +2958,34 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 openSelfProfile();
               }}
             >
-              <span
-                className={'gather-avatar-sprite' + (ceoPlayerFrame ? ' ceo-motion-sprite' : '')}
-                style={ceoPlayerFrame ? {
-                  backgroundImage: 'url(' + CEO_RICK_MOTION_SPRITE + ')',
-                  backgroundSize: '512px 480px',
-                  backgroundPosition: (-ceoPlayerFrame.column * 64) + 'px ' + (-ceoPlayerFrame.row * 96) + 'px',
-                  transform: 'translateY(' + ceoPlayerFrame.bob + 'px) rotate(' + ceoPlayerFrame.lean + 'deg) scaleX(' + (ceoPlayerFrame.flip ? -1 : 1) + ')',
-                } : {
-                  backgroundImage: 'url(' + spriteForMember(currentMember) + ')',
-                  backgroundPosition: (-playerFrame.column * 48) + 'px ' + (-playerFrame.row * 96) + 'px',
-                  transform: 'translateY(' + playerFrame.bob + 'px) rotate(' + playerFrame.lean + 'deg) scaleX(' + (playerFrame.flip ? -1 : 1) + ')',
-                }}
-              />
+              {ceoPlayerFrame ? (
+                <span
+                  className="gather-avatar-sprite ceo-motion-sprite"
+                  style={{
+                    transform: 'translateY(' + ceoPlayerFrame.bob + 'px) rotate(' + ceoPlayerFrame.lean + 'deg) scaleX(' + (ceoPlayerFrame.flip ? -1 : 1) + ')',
+                  }}
+                >
+                  <img
+                    src={CEO_RICK_MOTION_SPRITE}
+                    alt=""
+                    draggable={false}
+                    aria-hidden="true"
+                    style={{
+                      left: (-ceoPlayerFrame.column * 64) + 'px',
+                      top: (-ceoPlayerFrame.row * 96) + 'px',
+                    }}
+                  />
+                </span>
+              ) : (
+                <span
+                  className="gather-avatar-sprite"
+                  style={{
+                    backgroundImage: 'url(' + spriteForMember(currentMember) + ')',
+                    backgroundPosition: (-playerFrame.column * 48) + 'px ' + (-playerFrame.row * 96) + 'px',
+                    transform: 'translateY(' + playerFrame.bob + 'px) rotate(' + playerFrame.lean + 'deg) scaleX(' + (playerFrame.flip ? -1 : 1) + ')',
+                  }}
+                />
+              )}
               <span className="gather-avatar-tag me">
                 <strong>{currentMember.displayName}</strong>
                 <small>{currentMember.officeRole === 'ceo' ? 'CEO' : currentMember.title}</small>
