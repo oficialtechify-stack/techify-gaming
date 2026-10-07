@@ -89,6 +89,16 @@ type ChatMessage = {
   createdAt: string;
 };
 
+type OfficeAvatarStyle = 'social' | 'all-black' | 'old-money' | 'wine';
+
+type OfficeAvatarConfig = {
+  style: OfficeAvatarStyle;
+  skinTone: number;
+  hair: number;
+  facialHair: number;
+  accessory: number;
+};
+
 type OfficeMember = {
   id: string;
   userId: string;
@@ -100,6 +110,7 @@ type OfficeMember = {
   active: boolean;
   deskId: string;
   avatar?: string | null;
+  avatarConfig?: OfficeAvatarConfig | null;
   position?: { x: number; y: number; direction?: string; updatedAt?: string; mapVersion?: string } | null;
   emote?: { emoji?: string; updatedAt?: string } | null;
   createdAt?: string | null;
@@ -240,6 +251,7 @@ const VALID_STATUS = new Set<TaskStatus>([
 ]);
 const VALID_PRIORITY = new Set(['low', 'normal', 'high', 'urgent']);
 const VALID_HUMAN_TASK_STATUS = new Set<HumanTaskStatus>(['todo', 'working', 'review', 'completed', 'blocked']);
+const VALID_OFFICE_AVATAR_STYLES = new Set<OfficeAvatarStyle>(['social', 'all-black', 'old-money', 'wine']);
 const DEFAULT_MEMBER_PALETTE = 3;
 
 
@@ -253,6 +265,23 @@ const MAX_PATCH_REPLACE_CHARS = 18000;
 
 function cleanText(value: unknown, max: number): string {
   return String(value || '').trim().slice(0, max);
+}
+
+function cleanOfficeAvatarConfig(value: unknown, fallbackStyle: OfficeAvatarStyle = 'all-black'): OfficeAvatarConfig {
+  const data = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const styleRaw = cleanText(data.style, 40) as OfficeAvatarStyle;
+  const bounded = (input: unknown, max: number) => {
+    const parsed = Number(input);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(max, Math.round(parsed))) : 0;
+  };
+
+  return {
+    style: VALID_OFFICE_AVATAR_STYLES.has(styleRaw) ? styleRaw : fallbackStyle,
+    skinTone: bounded(data.skinTone, 4),
+    hair: bounded(data.hair, 5),
+    facialHair: bounded(data.facialHair, 4),
+    accessory: bounded(data.accessory, 5),
+  };
 }
 
 function cleanList(value: unknown, maxItems = 12, maxChars = 700): string[] {
@@ -280,6 +309,9 @@ function serializeOfficeMember(id: string, data: Record<string, any>): OfficeMem
     active: data.active !== false,
     deskId: String(data.deskId || (officeRole === 'designer' ? 'designer-human' : 'team')),
     avatar: data.avatar ? String(data.avatar) : null,
+    avatarConfig: data.avatarConfig && typeof data.avatarConfig === 'object'
+      ? cleanOfficeAvatarConfig(data.avatarConfig, officeRole === 'ceo' ? 'all-black' : 'social')
+      : null,
     position: data.position && typeof data.position === 'object'
       ? {
           x: Number(data.position.x || 0),
@@ -332,6 +364,7 @@ async function resolveOfficeMembers(
       active: true,
       deskId: 'ceo',
       avatar,
+      avatarConfig: cleanOfficeAvatarConfig(null, 'all-black'),
       position: null,
       createdAt: new Date().toISOString(),
     };
@@ -347,6 +380,7 @@ async function resolveOfficeMembers(
         active: true,
         deskId: 'ceo',
         avatar,
+        avatarConfig: ceoMember.avatarConfig,
         createdAt: ceoMember.createdAt,
         updatedAt: ceoMember.createdAt,
       }, { merge: true });
@@ -1352,6 +1386,52 @@ export default async function handler(req: Req, res: Res) {
         await db.collection('admin_office_members').doc(authUser.uid).set(memberData, { merge: true });
         const members = await resolveOfficeMembers(db, officeIdentity);
         return res.status(200).json({ success: true, members });
+      }
+
+      if (action === 'update-own-office-profile') {
+        const memberRef = db.collection('admin_office_members').doc(officeIdentity.uid);
+        const memberSnap = await memberRef.get();
+        if (!memberSnap.exists && !officeIdentity.isOfficeAdmin) {
+          return res.status(404).json({ error: 'Seu perfil do LeadsPay Office ainda não está ativo.' });
+        }
+
+        const displayName = cleanText(body.displayName, 80);
+        const update: Record<string, unknown> = {
+          updatedAt: new Date().toISOString(),
+          updatedBy: officeIdentity.email || officeIdentity.uid,
+        };
+
+        if (displayName) {
+          if (displayName.length < 2) {
+            return res.status(400).json({ error: 'O nome precisa ter pelo menos 2 caracteres.' });
+          }
+          update.displayName = displayName;
+        }
+
+        if (body.avatarConfig && typeof body.avatarConfig === 'object') {
+          update.avatarConfig = cleanOfficeAvatarConfig(
+            body.avatarConfig,
+            officeIdentity.isOfficeAdmin ? 'all-black' : 'social',
+          );
+        }
+
+        if (officeIdentity.isOfficeAdmin && !memberSnap.exists) {
+          update.userId = officeIdentity.uid;
+          update.email = officeIdentity.email || '';
+          update.officeRole = 'ceo';
+          update.title = 'CEO';
+          update.palette = 0;
+          update.active = true;
+          update.deskId = 'ceo';
+          update.createdAt = new Date().toISOString();
+        }
+
+        await memberRef.set(update, { merge: true });
+        const after = await memberRef.get();
+        return res.status(200).json({
+          success: true,
+          member: serializeOfficeMember(after.id, after.data() as Record<string, any>),
+        });
       }
 
       if (action === 'update-office-member') {
