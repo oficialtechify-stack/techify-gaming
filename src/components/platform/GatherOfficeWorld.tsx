@@ -178,7 +178,7 @@ type FurnitureItem = {
   footprint?: FurnitureFootprint;
 };
 
-type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'decor';
+type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage';
 
 type FurnitureCatalogItem = {
   templateId: string;
@@ -548,18 +548,6 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     seats:[{dx:2.35,dy:2.1,direction:'down'},{dx:4.85,dy:2.1,direction:'down'}],
   },
   {
-    templateId:'sofa-red',
-    label:'Sofá',
-    category:'seat',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png',
-    w:5.0,
-    h:2.75,
-    solid:true,
-    footprint:{x:.55,y:1.68,w:3.9,h:.86},
-    seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}],
-  },
-  {
     templateId:'side-table',
     label:'Mesa lateral',
     category:'table',
@@ -602,47 +590,6 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     h:3.0,
     solid:true,
     footprint:{x:.45,y:2.18,w:4.7,h:.68},
-  },
-  {
-    templateId:'plant',
-    label:'Planta grande',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png',
-    w:2.25,
-    h:3.2,
-    solid:true,
-    footprint:{x:.66,y:2.28,w:.95,h:.72},
-  },
-  {
-    templateId:'whiteboard',
-    label:'Quadro branco',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png',
-    w:5.2,
-    h:2.0,
-    solid:false,
-  },
-  {
-    templateId:'painting',
-    label:'Quadro',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/SMALL_PAINTING/SMALL_PAINTING.png',
-    w:2.0,
-    h:1.55,
-    solid:false,
-  },
-  {
-    templateId:'coffee',
-    label:'Cafeteira',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/COFFEE/COFFEE.png',
-    w:1.4,
-    h:1.4,
-    solid:false,
   },
 ];
 
@@ -3395,7 +3342,6 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 ['seat','Assentos'],
                 ['table','Mesas'],
                 ['storage','Estantes'],
-                ['decor','Decoração'],
               ].map(([id,label]) => (
                 <button
                   key={id}
