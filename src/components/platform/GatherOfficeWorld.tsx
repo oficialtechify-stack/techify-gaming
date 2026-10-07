@@ -3060,13 +3060,30 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               <div className="gather-city-road road-vertical-east" aria-hidden="true" />
               <div className="gather-city-sidewalk sidewalk-horizontal-top" aria-hidden="true" />
               <div className="gather-city-sidewalk sidewalk-horizontal-bottom" aria-hidden="true" />
+              <div className="gather-city-sidewalk sidewalk-main-left" aria-hidden="true" />
+              <div className="gather-city-sidewalk sidewalk-main-right" aria-hidden="true" />
+              <div className="gather-city-sidewalk sidewalk-east-left" aria-hidden="true" />
+              <div className="gather-city-sidewalk sidewalk-east-right" aria-hidden="true" />
               <div className="gather-city-crosswalk crosswalk-main" aria-hidden="true" />
               <div className="gather-city-crosswalk crosswalk-east" aria-hidden="true" />
 
               <div className="gather-city-plaza" aria-hidden="true">
                 <span className="gather-city-fountain"><i /></span>
+                <span className="gather-city-bench bench-a" />
+                <span className="gather-city-bench bench-b" />
+                <span className="gather-city-planter planter-a"><i /></span>
+                <span className="gather-city-planter planter-b"><i /></span>
                 <strong>Praça LeadsPay</strong>
                 <small>Centro da cidade</small>
+              </div>
+
+              <div className="gather-city-parking parking-market" aria-hidden="true">
+                <span /><span /><span /><span /><span />
+                <b>ESTACIONAMENTO</b>
+              </div>
+              <div className="gather-city-parking parking-garage" aria-hidden="true">
+                <span /><span /><span /><span />
+                <b>PARK</b>
               </div>
 
               <div className="gather-city-park" aria-hidden="true">
@@ -3124,7 +3141,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   <div className="gather-city-window-row">
                     <i /><i /><i /><i />
                   </div>
-                  {building.id === 'office' && (
+                  {building.id === 'office' ? (
                     <button
                       type="button"
                       data-no-pan="true"
@@ -3134,15 +3151,25 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                         goToScene('/office');
                       }}
                     >
-                      <span>Entrar</span>
+                      <span>Entrar no escritório</span>
                     </button>
+                  ) : (
+                    <span className="gather-city-building-door" aria-hidden="true">
+                      <i />
+                    </span>
                   )}
+                  <span className="gather-city-rooftop-unit rooftop-a" aria-hidden="true" />
+                  <span className="gather-city-rooftop-unit rooftop-b" aria-hidden="true" />
                 </div>
               ))}
 
               <div className="gather-city-bus-stop" aria-hidden="true">
                 <b>LP</b><span>Ponto</span>
               </div>
+              <div className="gather-city-bike-rack" aria-hidden="true">
+                <i /><i /><i />
+              </div>
+              <div className="gather-city-mailbox" aria-hidden="true">LP</div>
               <div className="gather-city-lamp lamp-a" aria-hidden="true" />
               <div className="gather-city-lamp lamp-b" aria-hidden="true" />
               <div className="gather-city-lamp lamp-c" aria-hidden="true" />
