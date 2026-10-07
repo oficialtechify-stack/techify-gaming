@@ -23,6 +23,8 @@ function MainApp() {
 
   const isOfficePath = appPath === '/office' || appPath === '/leadspay-office';
   const isCityPath = appPath === '/cidade' || appPath === '/leadspay-city' || appPath === '/mundo';
+  const officePanelMatch = appPath.match(/^\/office-panel\/(tasks|chat|computer|team|ai|decorator)$/);
+  const officeEmbeddedPanel = officePanelMatch?.[1] as 'tasks' | 'chat' | 'computer' | 'team' | 'ai' | 'decorator' | undefined;
 
   // Direct checkout link state
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -247,7 +249,24 @@ function MainApp() {
     }
   };
 
-  // O Office e a Cidade são cenas independentes, cada uma com sua própria URL.
+  if (officeEmbeddedPanel) {
+    if (!isAuthenticated || !currentUser) {
+      return (
+        <div className="min-h-[100dvh] bg-[#080d14] text-white flex items-center justify-center p-5">
+          <div className="max-w-sm text-center">
+            <p className="text-sm text-white/60">Sua sessão do LeadsPay é necessária para abrir este painel do Office.</p>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <ErrorBoundary fallbackTitle="Erro ao carregar painel do LeadsPay Office">
+        <LeadspayOfficeView embeddedPanel={officeEmbeddedPanel} />
+      </ErrorBoundary>
+    );
+  }
+
+  // Rotas diretas antigas continuam como atalhos do mesmo LeadsPay Office.
   if (isOfficePath || isCityPath) {
     if (!isAuthenticated || !currentUser) {
       return (
