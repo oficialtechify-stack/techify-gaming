@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BellOff,
   Camera,
+  Check,
   CameraOff,
   ChevronRight,
   ClipboardList,
@@ -14,7 +15,10 @@ import {
   Mic,
   MicOff,
   MonitorUp,
+  Pencil,
+  Shirt,
   Smile,
+  UserRound,
   Users,
   Video,
   X,
@@ -36,6 +40,16 @@ type Worker = {
   } | null;
 };
 
+type OfficeAvatarStyle = 'social' | 'all-black' | 'old-money' | 'wine';
+
+type OfficeAvatarConfig = {
+  style: OfficeAvatarStyle;
+  skinTone: number;
+  hair: number;
+  facialHair: number;
+  accessory: number;
+};
+
 type OfficeMember = {
   id?: string;
   userId: string;
@@ -45,6 +59,7 @@ type OfficeMember = {
   title: string;
   palette: number;
   deskId: string;
+  avatarConfig?: OfficeAvatarConfig | null;
   position?: { x: number; y: number; direction?: string; updatedAt?: string; mapVersion?: string } | null;
   emote?: { emoji?: string; updatedAt?: string } | null;
 };
@@ -142,6 +157,10 @@ interface GatherOfficeWorldProps {
   areaNames?: Record<string, string>;
   canManageAreas?: boolean;
   onRenameArea?: (areaId: string, name: string) => Promise<void> | void;
+  onUpdateSelfProfile?: (patch: {
+    displayName?: string;
+    avatarConfig?: OfficeAvatarConfig;
+  }) => Promise<void> | void;
 }
 
 const TILE = 32;
@@ -150,11 +169,43 @@ const ROWS = 48;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
 const PLAYER_SPEED = 176;
-const AI_SPEED = 54;
+const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
-const FRAME_MS = 72;
+const FRAME_MS = 84;
 const OFFICE_MAP_VERSION = 'gather-v2';
+
+const CEO_AVATAR_STYLES: Array<{
+  id: OfficeAvatarStyle;
+  name: string;
+  subtitle: string;
+  sprite: string;
+}> = [
+  { id: 'social', name: 'Rick', subtitle: 'Social clássico', sprite: '/pixel-agents/assets/characters/ceo_social.svg' },
+  { id: 'all-black', name: 'All Black', subtitle: 'Moderno', sprite: '/pixel-agents/assets/characters/ceo_all_black.svg' },
+  { id: 'old-money', name: 'Old Money', subtitle: 'Sofisticado', sprite: '/pixel-agents/assets/characters/ceo_old_money.svg' },
+  { id: 'wine', name: 'Vinho / Preto', subtitle: 'Personalidade', sprite: '/pixel-agents/assets/characters/ceo_wine.svg' },
+];
+
+const DEFAULT_CEO_AVATAR_CONFIG: OfficeAvatarConfig = {
+  style: 'all-black',
+  skinTone: 0,
+  hair: 0,
+  facialHair: 0,
+  accessory: 0,
+};
+
+function avatarStyleOf(member?: OfficeMember | null): OfficeAvatarStyle {
+  const value = member?.avatarConfig?.style;
+  return CEO_AVATAR_STYLES.some((style) => style.id === value) ? value as OfficeAvatarStyle : 'all-black';
+}
+
+function spriteForMember(member: OfficeMember) {
+  if (member.officeRole === 'ceo') {
+    return CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleOf(member))?.sprite || CEO_AVATAR_STYLES[1].sprite;
+  }
+  return '/pixel-agents/assets/characters/char_' + member.palette + '.png';
+}
 
 const AREAS: OfficeArea[] = [
   { id: 'operations', name: 'Operação', kind: 'open', x: 3, y: 3, w: 29, h: 19, subtitle: 'Mesas dos funcionários IA e operação diária' },
@@ -347,42 +398,42 @@ function heuristic(a: Cell, b: Cell) {
 function findPath(start: Cell, goal: Cell) {
   const safeGoalPoint = centerOf(goal);
   const safeGoal = isWalkable(goal) ? goal : nearestWalkableCell(safeGoalPoint.x, safeGoalPoint.y);
-  const open = new Map<string, { cell: Cell; f: number }>();
-  const came = new Map<string, string>();
-  const score = new Map<string, number>();
-  const cells = new Map<string, Cell>();
   const startKey = cellKey(start);
-  open.set(startKey, { cell: start, f: heuristic(start, safeGoal) });
-  score.set(startKey, 0);
-  cells.set(startKey, start);
+  const goalKey = cellKey(safeGoal);
+  if (startKey === goalKey) return [];
 
-  while (open.size) {
-    const currentEntry = [...open.entries()].sort((a, b) => a[1].f - b[1].f)[0];
-    const currentKey = currentEntry[0];
-    const current = currentEntry[1].cell;
-    open.delete(currentKey);
-    if (current.x === safeGoal.x && current.y === safeGoal.y) {
-      const path: Cell[] = [current];
-      let walk = currentKey;
-      while (came.has(walk)) {
-        walk = came.get(walk) as string;
-        const previous = cells.get(walk);
-        if (previous) path.unshift(previous);
-      }
-      return path.slice(1);
-    }
+  const queue: Cell[] = [start];
+  let cursor = 0;
+  const visited = new Set<string>([startKey]);
+  const came = new Map<string, string>();
+  const cells = new Map<string, Cell>([[startKey, start]]);
+
+  while (cursor < queue.length) {
+    const current = queue[cursor++];
+    const currentKey = cellKey(current);
 
     for (const next of neighbors(current)) {
       const key = cellKey(next);
-      const diagonal = next.x !== current.x && next.y !== current.y;
-      const tentative = (score.get(currentKey) ?? Number.POSITIVE_INFINITY) + (diagonal ? Math.SQRT2 : 1);
-      if (tentative >= (score.get(key) ?? Number.POSITIVE_INFINITY)) continue;
+      if (visited.has(key)) continue;
+      visited.add(key);
       came.set(key, currentKey);
-      score.set(key, tentative);
       cells.set(key, next);
-      open.set(key, { cell: next, f: tentative + heuristic(next, safeGoal) });
+
+      if (key === goalKey) {
+        const path: Cell[] = [next];
+        let walk = key;
+        while (came.has(walk)) {
+          walk = came.get(walk) as string;
+          const previous = cells.get(walk);
+          if (previous) path.unshift(previous);
+        }
+        return path.slice(1);
+      }
+
+      queue.push(next);
     }
   }
+
   return [];
 }
 
@@ -417,7 +468,7 @@ function smoothPath(from: { x: number; y: number }, path: Cell[]) {
 }
 
 function buildRoute(x: number, y: number, target: Cell) {
-  return findPath(nearestWalkableCell(x, y), target);
+  return smoothPath({ x, y }, findPath(nearestWalkableCell(x, y), target));
 }
 
 function directionFor(dx: number, dy: number, fallback: Direction): Direction {
@@ -506,7 +557,7 @@ function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motio
       key: 'break:' + idleIndex,
       cell: list[idleIndex],
       idleIndex,
-      nextIdleAt: now + 10000 + idleIndex * 1800,
+      nextIdleAt: now + 18000 + idleIndex * 2500,
     };
   }
 
@@ -517,7 +568,7 @@ function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motio
       key: 'home',
       cell: home,
       idleIndex: motion.idleIndex,
-      nextIdleAt: now + 45000 + motion.idleIndex * 7000,
+      nextIdleAt: now + 78000 + motion.idleIndex * 9000,
     };
   }
 
@@ -583,6 +634,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   areaNames = {},
   canManageAreas = false,
   onRenameArea,
+  onUpdateSelfProfile,
 }) => {
   const { currentUser } = useAuth();
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -685,7 +737,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         path: [],
         targetKey: '',
         idleIndex: 0,
-        nextIdleAt: Date.now() + 26000 + index * 9000,
+        nextIdleAt: Date.now() + 52000 + index * 11000,
       };
     }
     workersMotionRef.current = next;
@@ -758,11 +810,16 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     const height = viewport.clientHeight;
     const scaledW = WORLD_W * currentZoom;
     const scaledH = WORLD_H * currentZoom;
-    const minX = Math.min(0, width - scaledW);
-    const minY = Math.min(0, height - scaledH);
+
+    const clampAxis = (value: number, viewportSize: number, scaledSize: number) => {
+      if (scaledSize <= viewportSize) return (viewportSize - scaledSize) / 2;
+      const min = viewportSize - scaledSize;
+      return Math.max(min, Math.min(0, value));
+    };
+
     return {
-      x: Math.max(minX, Math.min(0, next.x)),
-      y: Math.max(minY, Math.min(0, next.y)),
+      x: clampAxis(next.x, width, scaledW),
+      y: clampAxis(next.y, height, scaledH),
     };
   };
 
@@ -1478,7 +1535,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
     drag.x = event.clientX;
     drag.y = event.clientY;
-    setFollowPlayer(false);
+    if (followPlayer) setFollowPlayer(false);
     const next = clampCamera({
       x: cameraRef.current.x + dx,
       y: cameraRef.current.y + dy,
