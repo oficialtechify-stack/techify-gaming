@@ -9257,38 +9257,27 @@
    and Rick multi-frame motion sourced from the supplied frames.
    ========================================================= */
 
-/* Planta completa fornecida pelo usuário no Google Drive. A arte mantém
-   exatamente a proporção do mundo (4:3); avatares, salas e controles ficam
-   em camadas separadas e continuam interativos. */
+/* A imagem completa da planta fica apenas como referência de design.
+   O runtime usa salas, pisos e paredes reais para manter visual e colisão alinhados. */
 .gather-drive-map {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-image: url('/pixel-agents/assets/maps/leadspay-office-drive-map.png');
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
-  image-rendering: auto;
+  display: none !important;
 }
 
 .gather-grass,
 .gather-building-floor {
-  display: none !important;
+  display: block !important;
 }
 
-/* A planta do Drive já contém pisos, paredes e móveis. As antigas áreas do
-   simulador eram opacas e continuavam cobrindo a arte mesmo com o piso oculto. */
 .gather-drive-map ~ .gather-room {
-  background: transparent !important;
-  box-shadow: none !important;
-  border-color: transparent !important;
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .gather-drive-map ~ .gather-room::before,
 .gather-drive-map ~ .gather-room::after,
 .gather-drive-map ~ .gather-wall.gather-reference-wall {
-  display: none !important;
+  display: block !important;
 }
 
 .gather-decorator-panel {
