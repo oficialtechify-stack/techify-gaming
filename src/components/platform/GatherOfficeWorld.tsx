@@ -330,7 +330,7 @@ const AREAS: OfficeArea[] = [
   { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 50, y: 31, w: 19, h: 20, max: 5, subtitle: 'Design, referências e produção visual' },
 ];
 
-const AREA_ENTRY_TARGETconst AREA_ENTRY_TARGET: Record<string, Cell> = {
+const AREA_ENTRY_TARGET: Record<string, Cell> = {
   operations: { x: 24, y: 20 },
   'team-pods': { x: 37, y: 20 },
   meeting: { x: 52, y: 14 },
@@ -340,7 +340,7 @@ const AREA_ENTRY_TARGETconst AREA_ENTRY_TARGET: Record<string, Cell> = {
   designer: { x: 52, y: 33 },
 };
 
-const HOME_TARGETconst HOME_TARGET: Record<string, Cell> = {
+const HOME_TARGET: Record<string, Cell> = {
   'lumy-manager': { x: 8, y: 12 },
   frontend: { x: 15, y: 12 },
   backend: { x: 23, y: 12 },
@@ -349,7 +349,7 @@ const HOME_TARGETconst HOME_TARGET: Record<string, Cell> = {
   growth: { x: 23, y: 20 },
 };
 
-const MEETING_TARGETconst MEETING_TARGET: Record<string, Cell> = {
+const MEETING_TARGET: Record<string, Cell> = {
   'lumy-manager': { x: 55, y: 12 },
   frontend: { x: 57, y: 12 },
   backend: { x: 59, y: 12 },
@@ -483,7 +483,7 @@ const DEFAULT_FURNITURE: FurnitureItem[] = [
   { id:'ref-design-plant', label:'Planta designer', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.0, y:44.7, w:2.2, h:3.2, solid:true },
 ];
 
-let ACTIVE_FURNITURE_RECTSlet ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
+let ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
 
 function furnitureCollisionRects(items: FurnitureItem[]) {
   return items
@@ -510,7 +510,7 @@ const WALL_RECTS: Array<[number, number, number, number]> = [
   [49, 30, 1, 4], [49, 37, 1, 15],
 ];
 
-const INTERACTIONSconst INTERACTIONS = [
+const INTERACTIONS = [
   { type: 'computer' as const, owner: 'ceo', cell: { x: 11, y: 39 }, label: 'Abrir computador do CEO' },
   { type: 'computer' as const, owner: 'designer-human', cell: { x: 59, y: 39 }, label: 'Abrir computador da designer' },
   { type: 'meeting' as const, owner: 'meeting', cell: { x: 59, y: 13 }, label: 'Abrir sala de reunião' },
@@ -520,7 +520,7 @@ const INTERACTIONSconst INTERACTIONS = [
   { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 64, y: 33 }, label: 'Abrir moodboard da designer' },
 ];
 
-function inRectfunction inRect(cell: Cell, x: number, y: number, w: number, h: number) {
+function inRect(cell: Cell, x: number, y: number, w: number, h: number) {
   return cell.x >= x && cell.x < x + w && cell.y >= y && cell.y < y + h;
 }
 
