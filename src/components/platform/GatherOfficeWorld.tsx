@@ -7,6 +7,7 @@ import {
   ClipboardList,
   LocateFixed,
   Lock,
+  MapPinned,
   Maximize2,
   Minimize2,
   MessageCircle,
@@ -157,7 +158,7 @@ const OFFICE_MAP_VERSION = 'gather-v2';
 
 const AREAS: OfficeArea[] = [
   { id: 'operations', name: 'Operação', kind: 'open', x: 3, y: 3, w: 29, h: 19, subtitle: 'Mesas dos funcionários IA e operação diária' },
-  { id: 'team-pods', name: 'Pods da Equipe', kind: 'open', x: 33, y: 3, w: 18, h: 19, subtitle: 'Mesas de coworking da equipe' },
+  { id: 'team-pods', name: 'Team', kind: 'open', x: 33, y: 3, w: 18, h: 19, subtitle: 'Área da equipe' },
   { id: 'meeting', name: 'Sala de Reunião', kind: 'private', x: 53, y: 3, w: 16, h: 12, max: 8, subtitle: 'Reuniões privadas e alinhamentos' },
   { id: 'lab', name: 'Laboratório', kind: 'private', x: 53, y: 16, w: 16, h: 6, max: 4, subtitle: 'Backend, testes e investigações técnicas' },
   { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 3, y: 25, w: 18, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
@@ -234,8 +235,9 @@ const SOLID_RECTS: Array<[number, number, number, number]> = [
   [5, 5, 5, 4], [11, 5, 5, 4], [17, 5, 5, 4],
   [5, 13, 5, 4], [11, 13, 5, 4], [17, 13, 5, 4],
   [3, 3, 4, 3], [26, 3, 4, 3], [3, 18, 2, 3], [28, 18, 3, 3],
-  // Team pods and lounge
-  [35, 6, 5, 4], [42, 6, 5, 4], [35, 14, 5, 4], [42, 14, 5, 4],
+  // Team area: 6 clean desks aligned to the 32px grid + lounge
+  [34, 6, 5, 4], [40, 6, 5, 4], [46, 6, 5, 4],
+  [34, 14, 5, 4], [40, 14, 5, 4], [46, 14, 5, 4],
   [34, 18, 4, 3], [43, 18, 4, 3],
   // Meeting table + chairs
   [57, 6, 8, 4], [55, 6, 2, 4], [65, 6, 2, 4], [58, 10, 2, 2], [62, 10, 2, 2],
@@ -609,6 +611,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [areaEditing, setAreaEditing] = useState(false);
   const [areaNameDraft, setAreaNameDraft] = useState('');
   const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [areasOpen, setAreasOpen] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [screenOn, setScreenOn] = useState(false);
@@ -1370,11 +1373,26 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const locatePerson = (member: OfficeMember) => {
     const resolved = resolvedMemberPosition(member);
-    const x = resolved.x;
-    const y = resolved.y;
+    const viewport = viewportRef.current;
+    const nextZoom = Math.max(1.38, Math.min(1.72, zoom < 1.38 ? 1.5 : zoom));
+
     setFollowPlayer(false);
-    centerCameraOn(x, y);
     setSelectedHumanId(member.userId);
+    setSelectedAreaId(null);
+
+    if (!viewport) {
+      centerCameraOn(resolved.x, resolved.y);
+      return;
+    }
+
+    const nextCamera = clampCamera({
+      x: viewport.clientWidth / 2 - resolved.x * nextZoom,
+      y: viewport.clientHeight / 2 - resolved.y * nextZoom,
+    }, nextZoom);
+    cameraRef.current = nextCamera;
+    setZoom(nextZoom);
+    setCamera(nextCamera);
+    requestAnimationFrame(() => applyWorldTransform(nextCamera, nextZoom));
   };
 
   const applyWorldTransform = (nextCamera = cameraRef.current, nextZoom = zoom) => {
@@ -1470,9 +1488,26 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   };
 
   const onViewportPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
     dragRef.current = null;
     setIsPanning(false);
     setCamera({ ...cameraRef.current });
+
+    if (drag && !drag.moved) {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('button, input, textarea, select, [data-no-pan="true"]')) {
+        const point = worldPointFromEvent(event.clientX, event.clientY);
+        const area = areaForCell(cellAtPixel(point.x, point.y));
+        if (area) {
+          setSelectedHumanId(null);
+          setSelectedAreaId(area.id);
+          setAreaEditing(false);
+        } else {
+          setSelectedAreaId(null);
+        }
+      }
+    }
+
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
   };
 
@@ -1494,6 +1529,41 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const areaDisplayName = (area: OfficeArea) => areaNames[area.id] || area.name;
 
+  const focusArea = (area: OfficeArea, preferredZoom?: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const areaWidth = area.w * TILE;
+    const areaHeight = area.h * TILE;
+    const paddingX = Math.min(300, viewport.clientWidth * .28);
+    const paddingY = Math.min(220, viewport.clientHeight * .28);
+    const fitZoom = Math.min(
+      (viewport.clientWidth - paddingX) / areaWidth,
+      (viewport.clientHeight - paddingY) / areaHeight,
+    );
+    const nextZoom = Math.max(.52, Math.min(1.72, preferredZoom || fitZoom));
+    const centerX = (area.x + area.w / 2) * TILE;
+    const centerY = (area.y + area.h / 2) * TILE;
+    const nextCamera = clampCamera({
+      x: viewport.clientWidth / 2 - centerX * nextZoom,
+      y: viewport.clientHeight / 2 - centerY * nextZoom,
+    }, nextZoom);
+
+    setFollowPlayer(false);
+    cameraRef.current = nextCamera;
+    setZoom(nextZoom);
+    setCamera(nextCamera);
+    requestAnimationFrame(() => applyWorldTransform(nextCamera, nextZoom));
+  };
+
+  const selectAndFocusArea = (area: OfficeArea) => {
+    setSelectedHumanId(null);
+    setSelectedAreaId(area.id);
+    setAreaEditing(false);
+    setAreasOpen(false);
+    focusArea(area);
+  };
+
   const goToArea = (area: OfficeArea) => {
     const target = AREA_ENTRY_TARGET[area.id] || nearestWalkableCell(
       (area.x + area.w / 2) * TILE,
@@ -1502,6 +1572,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     const point = centerOf(target);
     goToWorldPoint(point.x, point.y);
     setSelectedAreaId(area.id);
+    setAreasOpen(false);
+    focusArea(area, 1.12);
   };
 
   const saveAreaName = async (area: OfficeArea) => {
@@ -1611,6 +1683,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   setSelectedHumanId(null);
                   setSelectedAreaId(area.id);
                   setAreaEditing(false);
+                  focusArea(area);
                 }}
               >
                 {areaDisplayName(area)}
@@ -1685,7 +1758,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </div>
 
           <div className="gather-team-pods">
-            {[0, 1, 2, 3].map((index) => (
+            {[0, 1, 2, 3, 4, 5].map((index) => (
               <div key={index} className={'team-pod pod-' + index}>
                 <span className="pod-divider" />
                 <img className="pod-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
@@ -1980,6 +2053,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                     </div>
                   ) : (
                     <div className="context-room-actions">
+                      <button type="button" onClick={() => focusArea(area)}>
+                        <ZoomIn className="h-3.5 w-3.5" />
+                        Aproximar
+                      </button>
                       <button type="button" onClick={() => goToArea(area)}>
                         <LocateFixed className="h-3.5 w-3.5" />
                         Ir para
@@ -2042,11 +2119,53 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             setFollowPlayer(true);
             if (current) centerCameraOn(current.x, current.y);
           }} title="Mostrar minha posição"><LocateFixed className="h-4 w-4" /></button>
-          <button type="button" onClick={() => setParticipantsOpen((value) => !value)} title="Pessoas"><Users className="h-4 w-4" /></button>
+          <button type="button" className={areasOpen ? 'active' : ''} onClick={() => {
+            setAreasOpen((value) => !value);
+            setParticipantsOpen(false);
+          }} title="Áreas e salas"><MapPinned className="h-4 w-4" /></button>
+          <button type="button" onClick={() => {
+            setParticipantsOpen((value) => !value);
+            setAreasOpen(false);
+          }} title="Pessoas"><Users className="h-4 w-4" /></button>
           <button type="button" onClick={() => void toggleFullscreen()} title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}>
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
         </div>
+
+        {areasOpen && (
+          <aside className="gather-areas-panel">
+            <div className="people-head">
+              <div>
+                <strong>Áreas do Office</strong>
+                <small>Clique para aproximar ou caminhe até a área.</small>
+              </div>
+              <button type="button" onClick={() => setAreasOpen(false)}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="gather-areas-list">
+              {AREAS.map((area) => {
+                const count = officeMembers.filter((member) => {
+                  if (member.userId === currentUserId && player) return areaContains(area, player.x, player.y);
+                  const resolved = resolvedMemberPosition(member);
+                  return areaContains(area, resolved.x, resolved.y);
+                }).length;
+                return (
+                  <article key={area.id} className={selectedAreaId === area.id ? 'selected' : ''}>
+                    <button type="button" className="area-main" onClick={() => selectAndFocusArea(area)}>
+                      <span className={'area-kind ' + area.kind}>{area.kind === 'private' ? 'P' : area.kind === 'social' ? 'S' : 'T'}</span>
+                      <div>
+                        <strong>{areaDisplayName(area)}</strong>
+                        <small>{area.subtitle} · {count} pessoa{count === 1 ? '' : 's'}</small>
+                      </div>
+                    </button>
+                    <button type="button" className="area-go" onClick={() => goToArea(area)} title={'Ir para ' + areaDisplayName(area)}>
+                      <LocateFixed className="h-3.5 w-3.5" />
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          </aside>
+        )}
 
         {participantsOpen && (
           <aside className="gather-people-panel">
@@ -2076,13 +2195,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           const rect = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width * WORLD_W;
           const y = (event.clientY - rect.top) / rect.height * WORLD_H;
-          setFollowPlayer(false);
-          centerCameraOn(x, y);
+          const area = areaForCell(cellAtPixel(x, y));
+          if (area) {
+            selectAndFocusArea(area);
+          } else {
+            setFollowPlayer(false);
+            centerCameraOn(x, y);
+          }
         }}>
           {AREAS.map((area) => (
             <i
               key={area.id}
-              className={'mini-area ' + area.kind}
+              className={'mini-area ' + area.kind + (selectedAreaId === area.id ? ' selected' : '')}
               style={{
                 left: (area.x / COLS * 100) + '%',
                 top: (area.y / ROWS * 100) + '%',
