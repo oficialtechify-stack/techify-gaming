@@ -340,7 +340,7 @@ const CITY_WATER_RECTS: Array<[number, number, number, number]> = [
 
 const CITY_PARK_TREES = [
   { x: 8, y: 67 }, { x: 14, y: 71 }, { x: 20, y: 67 },
-  { x: 26, y: 72 }, { x: 32, y: 68 }, { x: 72, y: 70 },
+  { x: 26, y: 72 }, { x: 32, y: 68 },
 ];
 
 const CITY_CARS = [
