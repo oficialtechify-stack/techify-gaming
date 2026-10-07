@@ -340,7 +340,7 @@ const CITY_WATER_RECTS: Array<[number, number, number, number]> = [
 
 const CITY_PARK_TREES = [
   { x: 8, y: 67 }, { x: 14, y: 71 }, { x: 20, y: 67 },
-  { x: 26, y: 72 }, { x: 32, y: 68 }, { x: 72, y: 70 },
+  { x: 26, y: 72 }, { x: 32, y: 68 },
 ];
 
 const CITY_CARS = [
@@ -3747,11 +3747,6 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             })() : null}
           </aside>
         )}
-
-        <div className="gather-scene-switcher" data-no-pan="true">
-          <button type="button" className={!isCityScene ? 'active' : ''} onClick={() => goToScene('/office')}>Escritório</button>
-          <button type="button" className={isCityScene ? 'active' : ''} onClick={() => goToScene('/cidade')}>Cidade</button>
-        </div>
 
         <div className="gather-map-controls">
           <button type="button" onClick={() => changeZoom(.16)} title="Aumentar zoom"><ZoomIn className="h-4 w-4" /></button>
