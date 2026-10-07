@@ -225,7 +225,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 84;
-const OFFICE_MAP_VERSION = 'leadspay-reference-v2';
+const OFFICE_MAP_VERSION = 'leadspay-single-room-v1';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -365,167 +365,79 @@ function spriteForMember(member: OfficeMember) {
 }
 
 const AREAS: OfficeArea[] = [
-  { id: 'operations', name: 'Equipe LeadsPay', kind: 'open', x: 3, y: 3, w: 24, h: 20, subtitle: 'Time principal e estações de trabalho' },
-  { id: 'team-pods', name: 'Operação', kind: 'open', x: 28, y: 3, w: 21, h: 20, subtitle: 'Operação, tecnologia e suporte' },
-  { id: 'meeting', name: 'Sala de Reunião', kind: 'private', x: 50, y: 3, w: 19, h: 13, max: 10, subtitle: 'Reuniões privadas e alinhamentos' },
-  { id: 'lab', name: 'Café & Copa', kind: 'social', x: 50, y: 17, w: 19, h: 13, max: 10, subtitle: 'Café, refeições e conversas rápidas' },
-  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 3, y: 31, w: 17, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
-  { id: 'lobby', name: 'Lounge', kind: 'social', x: 21, y: 24, w: 28, h: 27, subtitle: 'Área central para encontros e descanso' },
-  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 50, y: 31, w: 19, h: 20, max: 5, subtitle: 'Design, referências e produção visual' },
+  {
+    id: 'office',
+    name: 'LeadsPay Office',
+    kind: 'open',
+    x: 3,
+    y: 3,
+    w: 66,
+    h: 48,
+    subtitle: 'Uma única sala para toda a equipe',
+  },
 ];
 
 const AREA_ENTRY_TARGET: Record<string, Cell> = {
-  operations: { x: 24, y: 20 },
-  'team-pods': { x: 37, y: 20 },
-  meeting: { x: 52, y: 14 },
-  lab: { x: 52, y: 28 },
-  ceo: { x: 17, y: 33 },
-  lobby: { x: 35, y: 27 },
-  designer: { x: 52, y: 33 },
+  office: { x: 35, y: 27 },
 };
 
 const HOME_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 8, y: 12 },
-  frontend: { x: 15, y: 12 },
-  backend: { x: 23, y: 12 },
-  designer: { x: 8, y: 20 },
-  qa: { x: 15, y: 20 },
-  growth: { x: 23, y: 20 },
+  'lumy-manager': { x: 20, y: 16 },
+  frontend: { x: 28, y: 16 },
+  backend: { x: 36, y: 16 },
+  designer: { x: 44, y: 16 },
+  qa: { x: 28, y: 26 },
+  growth: { x: 40, y: 26 },
 };
 
 const MEETING_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 55, y: 12 },
-  frontend: { x: 57, y: 12 },
-  backend: { x: 59, y: 12 },
-  designer: { x: 62, y: 12 },
-  qa: { x: 64, y: 12 },
-  growth: { x: 66, y: 12 },
+  'lumy-manager': { x: 30, y: 22 },
+  frontend: { x: 33, y: 22 },
+  backend: { x: 36, y: 22 },
+  designer: { x: 39, y: 22 },
+  qa: { x: 33, y: 25 },
+  growth: { x: 39, y: 25 },
 };
 
 const QUEUE_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 26, y: 20 },
-  frontend: { x: 28, y: 20 },
-  backend: { x: 30, y: 20 },
-  designer: { x: 32, y: 20 },
-  qa: { x: 40, y: 20 },
-  growth: { x: 42, y: 20 },
+  'lumy-manager': { x: 24, y: 34 },
+  frontend: { x: 28, y: 34 },
+  backend: { x: 32, y: 34 },
+  designer: { x: 36, y: 34 },
+  qa: { x: 40, y: 34 },
+  growth: { x: 44, y: 34 },
 };
 
 const PAUSE_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 39, y: 18 },
-  frontend: { x: 40, y: 18 },
-  backend: { x: 41, y: 18 },
-  designer: { x: 39, y: 20 },
-  qa: { x: 40, y: 20 },
-  growth: { x: 41, y: 20 },
+  'lumy-manager': { x: 31, y: 40 },
+  frontend: { x: 34, y: 40 },
+  backend: { x: 37, y: 40 },
+  designer: { x: 40, y: 40 },
+  qa: { x: 34, y: 43 },
+  growth: { x: 40, y: 43 },
 };
 
 const IDLE_TARGETS: Record<string, Cell[]> = {
-  'lumy-manager': [{ x: 37, y: 34 }, { x: 38, y: 39 }, { x: 38, y: 18 }],
-  frontend: [{ x: 38, y: 10 }, { x: 42, y: 18 }, { x: 35, y: 38 }],
-  backend: [{ x: 61, y: 19 }, { x: 41, y: 18 }, { x: 35, y: 34 }],
-  designer: [{ x: 56, y: 36 }, { x: 65, y: 39 }, { x: 39, y: 34 }],
-  qa: [{ x: 61, y: 20 }, { x: 43, y: 10 }, { x: 33, y: 37 }],
-  growth: [{ x: 41, y: 32 }, { x: 48, y: 16 }, { x: 38, y: 41 }],
+  'lumy-manager': [{ x: 20, y: 16 }, { x: 26, y: 21 }, { x: 32, y: 29 }],
+  frontend: [{ x: 28, y: 16 }, { x: 34, y: 20 }, { x: 24, y: 30 }],
+  backend: [{ x: 36, y: 16 }, { x: 42, y: 21 }, { x: 36, y: 30 }],
+  designer: [{ x: 44, y: 16 }, { x: 48, y: 24 }, { x: 44, y: 31 }],
+  qa: [{ x: 28, y: 26 }, { x: 32, y: 36 }, { x: 24, y: 40 }],
+  growth: [{ x: 40, y: 26 }, { x: 44, y: 36 }, { x: 48, y: 40 }],
 };
 
 const AI_DESKS = [
-  { workerId: 'lumy-manager', col: 5, row: 6 },
-  { workerId: 'frontend', col: 11, row: 6 },
-  { workerId: 'backend', col: 17, row: 6 },
-  { workerId: 'designer', col: 5, row: 14 },
-  { workerId: 'qa', col: 11, row: 14 },
-  { workerId: 'growth', col: 17, row: 14 },
+  { workerId: 'lumy-manager', col: 20, row: 16 },
+  { workerId: 'frontend', col: 28, row: 16 },
+  { workerId: 'backend', col: 36, row: 16 },
+  { workerId: 'designer', col: 44, row: 16 },
+  { workerId: 'qa', col: 28, row: 26 },
+  { workerId: 'growth', col: 40, row: 26 },
 ];
 
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:reference-v2';
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:single-room-v1';
 
-const DEFAULT_FURNITURE: FurnitureItem[] = [
-  // Topo esquerdo — Equipe LeadsPay
-  { id:'ref-brand-leadspay', label:'Logo LeadsPay', kind:'brand', x:4.4, y:3.35, w:7.3, h:1.55, solid:false },
-  { id:'ref-ops-plant-left', label:'Planta superior esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:3.25, y:4.2, w:2.25, h:3.2, solid:true },
-  { id:'ref-ops-paint-1', label:'Quadro 1', kind:'image', src:'/pixel-agents/assets/furniture/SMALL_PAINTING/SMALL_PAINTING.png', x:12.0, y:3.55, w:2.0, h:1.55, solid:false },
-  { id:'ref-ops-paint-2', label:'Quadro 2', kind:'image', src:'/pixel-agents/assets/furniture/SMALL_PAINTING_2/SMALL_PAINTING_2.png', x:14.6, y:3.55, w:2.0, h:1.55, solid:false },
-  { id:'ref-ops-books', label:'Estante superior', kind:'image', asset:'bookshelf', x:18.2, y:3.35, w:5.6, h:3.0, solid:true },
-
-  { id:'ref-work-lumy', label:'Estação Lumy', kind:'image', asset:'workstation', x:4.8, y:6.0, w:5.9, h:5.1, solid:true, workerId:'lumy-manager', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-front', label:'Estação Front-end', kind:'image', asset:'workstation', x:12.0, y:6.0, w:5.9, h:5.1, solid:true, workerId:'frontend', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-back', label:'Estação Back-end', kind:'image', asset:'workstation', x:19.2, y:6.0, w:5.9, h:5.1, solid:true, workerId:'backend', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-design', label:'Estação Design IA', kind:'image', asset:'workstation', x:4.8, y:14.0, w:5.9, h:5.1, solid:true, workerId:'designer', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-qa', label:'Estação QA', kind:'image', asset:'workstation', x:12.0, y:14.0, w:5.9, h:5.1, solid:true, workerId:'qa', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-growth', label:'Estação Growth', kind:'image', asset:'workstation', x:19.2, y:14.0, w:5.9, h:5.1, solid:true, workerId:'growth', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-ops-plant-right', label:'Planta equipe direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:24.1, y:18.7, w:2.3, h:3.2, solid:true },
-
-  // Topo centro — seis estações
-  { id:'ref-team-work-1', label:'Estação Operação 1', kind:'image', asset:'workstation', x:29.0, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-2', label:'Estação Operação 2', kind:'image', asset:'workstation', x:35.7, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-3', label:'Estação Operação 3', kind:'image', asset:'workstation', x:42.4, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-4', label:'Estação Operação 4', kind:'image', asset:'workstation', x:29.0, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-5', label:'Estação Operação 5', kind:'image', asset:'workstation', x:35.7, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-6', label:'Estação Operação 6', kind:'image', asset:'workstation', x:42.4, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-sofa-left', label:'Sofá operação esquerdo', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:29.0, y:19.0, w:5.0, h:2.75, solid:true, seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}] },
-  { id:'ref-team-side-table', label:'Mesa operação', kind:'image', asset:'side-table', x:36.6, y:18.9, w:3.6, h:2.9, solid:true },
-  { id:'ref-team-sofa-right', label:'Sofá operação direito', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:43.0, y:19.0, w:5.0, h:2.75, solid:true, seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}] },
-
-  // Topo direito — sala de reunião
-  { id:'ref-meeting-whiteboard', label:'Quadro da reunião', kind:'image', src:'/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png', x:57.0, y:3.45, w:5.2, h:2.0, solid:false },
-  { id:'ref-meeting-plant-l', label:'Planta reunião esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:50.4, y:3.6, w:2.2, h:3.1, solid:true },
-  { id:'ref-meeting-plant-r', label:'Planta reunião direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.2, y:3.6, w:2.2, h:3.1, solid:true },
-  { id:'ref-meeting-table', label:'Mesa longa de reunião', kind:'image', asset:'long-table', x:53.0, y:7.1, w:13.2, h:4.7, solid:true },
-  { id:'ref-meeting-chair-t1', label:'Cadeira superior 1', kind:'image', asset:'chair-green', x:53.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
-  { id:'ref-meeting-chair-t2', label:'Cadeira superior 2', kind:'image', asset:'chair-green', x:57.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
-  { id:'ref-meeting-chair-t3', label:'Cadeira superior 3', kind:'image', asset:'chair-green', x:61.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
-  { id:'ref-meeting-chair-b1', label:'Cadeira inferior 1', kind:'image', asset:'chair-green', rotation:180, x:53.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
-  { id:'ref-meeting-chair-b2', label:'Cadeira inferior 2', kind:'image', asset:'chair-green', rotation:180, x:57.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
-  { id:'ref-meeting-chair-b3', label:'Cadeira inferior 3', kind:'image', asset:'chair-green', rotation:180, x:61.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
-  { id:'ref-meeting-chair-l', label:'Cadeira lateral esquerda', kind:'image', asset:'chair-green', rotation:90, x:51.2, y:8.1, w:2.5, h:3.0, solid:true, seats:[{dx:1.25,dy:1.5,direction:'right'}] },
-  { id:'ref-meeting-chair-r', label:'Cadeira lateral direita', kind:'image', asset:'chair-green', rotation:270, x:65.5, y:8.1, w:2.5, h:3.0, solid:true, seats:[{dx:1.25,dy:1.5,direction:'left'}] },
-
-  // Direita meio — copa/café
-  { id:'ref-cafe-counter', label:'Bancada da copa', kind:'image', asset:'long-table', x:52.1, y:17.8, w:14.8, h:3.6, solid:true },
-  { id:'ref-cafe-fridge', label:'Geladeira', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:50.5, y:17.4, w:2.5, h:4.3, solid:true, className:'reference-fridge' },
-  { id:'ref-cafe-machine', label:'Cafeteira', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE/COFFEE.png', x:58.3, y:18.0, w:1.3, h:1.3, solid:false },
-  { id:'ref-cafe-table-1', label:'Mesa redonda café 1', kind:'image', asset:'round-table', x:52.7, y:23.0, w:5.0, h:4.7, solid:true },
-  { id:'ref-cafe-chair-1t', label:'Cadeira café 1 superior', kind:'image', asset:'chair-green', x:54.1, y:21.5, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'down'}] },
-  { id:'ref-cafe-chair-1b', label:'Cadeira café 1 inferior', kind:'image', asset:'chair-green', rotation:180, x:54.1, y:26.0, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'up'}] },
-  { id:'ref-cafe-table-2', label:'Mesa redonda café 2', kind:'image', asset:'round-table', x:61.0, y:23.0, w:5.0, h:4.7, solid:true },
-  { id:'ref-cafe-chair-2t', label:'Cadeira café 2 superior', kind:'image', asset:'chair-green', x:62.4, y:21.5, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'down'}] },
-  { id:'ref-cafe-chair-2b', label:'Cadeira café 2 inferior', kind:'image', asset:'chair-green', rotation:180, x:62.4, y:26.0, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'up'}] },
-  { id:'ref-cafe-plant', label:'Planta da copa', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.4, y:26.0, w:2.2, h:3.1, solid:true },
-
-  // Centro inferior — lounge principal
-  { id:'ref-lounge-rug', label:'Tapete lounge', kind:'rug', x:24.0, y:29.0, w:22.0, h:17.0, solid:false, className:'reference-lounge-rug' },
-  { id:'ref-lounge-books-l', label:'Estante lounge esquerda', kind:'image', asset:'bookshelf', x:23.0, y:25.3, w:5.6, h:3.0, solid:true },
-  { id:'ref-lounge-paint', label:'Quadro lounge', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png', x:33.0, y:25.45, w:4.5, h:2.7, solid:false },
-  { id:'ref-lounge-books-r', label:'Estante lounge direita', kind:'image', asset:'bookshelf', x:40.6, y:25.3, w:5.6, h:3.0, solid:true },
-  { id:'ref-lounge-arm-l', label:'Poltrona laranja esquerda', kind:'image', asset:'armchair-orange', x:25.7, y:30.0, w:4.5, h:5.1, solid:true, seats:[{dx:2.25,dy:2.65,direction:'down'}] },
-  { id:'ref-lounge-arm-r', label:'Poltrona laranja direita', kind:'image', asset:'armchair-orange', x:40.0, y:30.0, w:4.5, h:5.1, solid:true, seats:[{dx:2.25,dy:2.65,direction:'down'}] },
-  { id:'ref-lounge-sofa-l', label:'Sofá verde esquerdo', kind:'image', asset:'sofa-green', rotation:90, x:27.2, y:35.3, w:4.8, h:7.2, solid:true, seats:[{dx:2.4,dy:2.5,direction:'right'},{dx:2.4,dy:4.75,direction:'right'}] },
-  { id:'ref-lounge-sofa-r', label:'Sofá verde direito', kind:'image', asset:'sofa-green', rotation:270, x:39.0, y:35.3, w:4.8, h:7.2, solid:true, seats:[{dx:2.4,dy:2.5,direction:'left'},{dx:2.4,dy:4.75,direction:'left'}] },
-  { id:'ref-lounge-table', label:'Mesa central lounge', kind:'image', asset:'side-table', x:33.6, y:36.2, w:3.8, h:4.0, solid:true },
-  { id:'ref-lounge-plant-l', label:'Planta lounge esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:22.4, y:40.5, w:2.4, h:3.4, solid:true },
-  { id:'ref-lounge-plant-r', label:'Planta lounge direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:45.1, y:40.5, w:2.4, h:3.4, solid:true },
-  { id:'ref-lounge-bench', label:'Banco inferior lounge', kind:'image', src:'/pixel-agents/assets/furniture/WOODEN_BENCH/WOODEN_BENCH_FRONT.png', x:31.5, y:46.2, w:7.0, h:2.4, solid:true, seats:[{dx:2.2,dy:1.35,direction:'up'},{dx:4.8,dy:1.35,direction:'up'}] },
-
-  // Inferior esquerdo — sala do CEO
-  { id:'ref-ceo-books', label:'Estante CEO', kind:'image', asset:'bookshelf', x:3.8, y:32.0, w:5.5, h:3.0, solid:true },
-  { id:'ref-ceo-rug', label:'Tapete CEO', kind:'rug', x:5.0, y:35.0, w:12.8, h:12.1, solid:false },
-  { id:'ref-ceo-chair', label:'Cadeira do CEO', kind:'image', asset:'chair-black', x:9.7, y:33.9, w:3.2, h:4.0, solid:true, seats:[{dx:1.6,dy:2.0,direction:'down'}] },
-  { id:'ref-ceo-desk', label:'Mesa executiva do CEO', kind:'image', asset:'desk-executive', x:5.8, y:36.0, w:10.5, h:5.3, solid:true },
-  { id:'ref-ceo-visitor-l', label:'Cadeira visitante CEO esquerda', kind:'image', asset:'chair-green', rotation:180, x:5.9, y:42.1, w:3.0, h:3.7, solid:true, seats:[{dx:1.5,dy:1.9,direction:'up'}] },
-  { id:'ref-ceo-visitor-r', label:'Cadeira visitante CEO direita', kind:'image', asset:'chair-green', rotation:180, x:14.0, y:42.1, w:3.0, h:3.7, solid:true, seats:[{dx:1.5,dy:1.9,direction:'up'}] },
-  { id:'ref-ceo-side', label:'Mesa lateral CEO', kind:'image', asset:'side-table', x:9.7, y:43.1, w:3.6, h:3.0, solid:true },
-  { id:'ref-ceo-plant', label:'Planta CEO', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:3.25, y:46.8, w:2.3, h:3.2, solid:true },
-
-  // Inferior direito — sala executiva/design
-  { id:'ref-design-books', label:'Estante designer', kind:'image', asset:'bookshelf', x:62.1, y:32.0, w:5.5, h:3.0, solid:true },
-  { id:'ref-design-rug', label:'Tapete designer', kind:'rug', x:52.0, y:35.0, w:15.2, h:12.1, solid:false },
-  { id:'ref-design-chair', label:'Cadeira da designer', kind:'image', asset:'chair-black', x:57.3, y:33.9, w:3.2, h:4.0, solid:true, seats:[{dx:1.6,dy:2.0,direction:'down'}] },
-  { id:'ref-design-desk', label:'Mesa executiva designer', kind:'image', asset:'desk-executive', x:53.4, y:36.0, w:10.5, h:5.3, solid:true },
-  { id:'ref-design-sofa', label:'Sofá verde designer', kind:'image', asset:'sofa-green', x:54.7, y:43.2, w:7.2, h:4.2, solid:true, seats:[{dx:2.4,dy:2.0,direction:'up'},{dx:4.8,dy:2.0,direction:'up'}] },
-  { id:'ref-design-round', label:'Mesa redonda designer', kind:'image', asset:'round-table', x:62.3, y:43.2, w:4.2, h:4.0, solid:true },
-  { id:'ref-design-plant', label:'Planta designer', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.0, y:44.7, w:2.2, h:3.2, solid:true },
-];
+const DEFAULT_FURNITURE: FurnitureItem[] = [];
 
 let ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
 
@@ -543,26 +455,13 @@ function furnitureCollisionRects(items: FurnitureItem[]) {
 const SOLID_RECTS: Array<[number, number, number, number]> = [];
 
 const WALL_RECTS: Array<[number, number, number, number]> = [
-  [2, 2, 68, 1], [2, 51, 68, 1], [2, 2, 1, 50], [69, 2, 1, 50],
-  [27, 2, 1, 18], [27, 23, 1, 1],
-  [49, 2, 1, 12], [49, 17, 1, 13],
-  [49, 16, 16, 1], [68, 16, 2, 1],
-  [2, 23, 14, 1], [19, 23, 14, 1], [38, 23, 11, 1],
-  [2, 30, 14, 1], [19, 30, 2, 1],
-  [49, 30, 4, 1], [56, 30, 14, 1],
-  [20, 30, 1, 4], [20, 37, 1, 15],
-  [49, 30, 1, 4], [49, 37, 1, 15],
+  [2, 2, 68, 1],
+  [2, 51, 68, 1],
+  [2, 2, 1, 50],
+  [69, 2, 1, 50],
 ];
 
-const INTERACTIONS = [
-  { type: 'computer' as const, owner: 'ceo', cell: { x: 11, y: 39 }, label: 'Abrir computador do CEO' },
-  { type: 'computer' as const, owner: 'designer-human', cell: { x: 59, y: 39 }, label: 'Abrir computador da designer' },
-  { type: 'meeting' as const, owner: 'meeting', cell: { x: 59, y: 13 }, label: 'Abrir sala de reunião' },
-  { type: 'object' as const, objectId: 'coffee' as const, cell: { x: 59, y: 19 }, label: 'Pegar um café' },
-  { type: 'object' as const, objectId: 'creative-board' as const, cell: { x: 35, y: 27 }, label: 'Abrir quadro criativo' },
-  { type: 'object' as const, objectId: 'lab-terminal' as const, cell: { x: 64, y: 19 }, label: 'Usar a copa' },
-  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 64, y: 33 }, label: 'Abrir moodboard da designer' },
-];
+const INTERACTIONS = [];
 
 function inRect(cell: Cell, x: number, y: number, w: number, h: number) {
   return cell.x >= x && cell.x < x + w && cell.y >= y && cell.y < y + h;
