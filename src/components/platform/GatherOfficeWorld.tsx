@@ -1776,6 +1776,13 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     .filter((item) => activeCallRoom !== 'open-office' || item.volume > 0);
 
   const selectedHuman = officeMembers.find((member) => member.userId === selectedHumanId) || null;
+  const selfProfileSelected = Boolean(
+    selectedHuman && currentMember && selectedHuman.userId === currentMember.userId,
+  );
+  const activeCeoStyle = currentMember
+    ? CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleOf(currentMember)) || CEO_AVATAR_STYLES[1]
+    : CEO_AVATAR_STYLES[1];
+  const draftCeoStyle = CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleDraft) || CEO_AVATAR_STYLES[1];
   const playerWalking = player ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
   const playerFrame = player ? spriteFrame(player.direction) : null;
 
@@ -2051,7 +2058,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 <span
                   className="gather-avatar-sprite"
                   style={{
-                    backgroundImage: 'url(/pixel-agents/assets/characters/char_' + member.palette + '.png)',
+                    backgroundImage: 'url(' + spriteForMember(member) + ')',
                     backgroundPositionX: moving ? undefined : '-48px',
                     backgroundPositionY: (-frame.row * 96) + 'px',
                     transform: frame.flip ? 'scaleX(-1)' : undefined,
@@ -2073,12 +2080,15 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               type="button"
               className={'gather-avatar human-avatar me' + (playerWalking ? ' walking' : '')}
               style={{ left: player.x, top: player.y, zIndex: 1100 + Math.floor(player.y) }}
-              onClick={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                openSelfProfile();
+              }}
             >
               <span
                 className="gather-avatar-sprite"
                 style={{
-                  backgroundImage: 'url(/pixel-agents/assets/characters/char_' + currentMember.palette + '.png)',
+                  backgroundImage: 'url(' + spriteForMember(currentMember) + ')',
                   backgroundPositionX: playerWalking ? undefined : '-48px',
                   backgroundPositionY: (-playerFrame.row * 96) + 'px',
                   transform: playerFrame.flip ? 'scaleX(-1)' : undefined,
