@@ -687,6 +687,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const tasksRef = useRef(tasks);
   const workersRef = useRef(workers);
   const presenceRef = useRef(0);
+  const localPositionSaveRef = useRef(0);
   const renderRef = useRef(0);
   const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
 
@@ -733,7 +734,32 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
 
-  const currentMember = officeMembers.find((member) => member.userId === currentUserId) || null;
+  const fallbackCurrentMember = useMemo<OfficeMember | null>(() => {
+    if (!currentUserId) return null;
+    const displayName =
+      currentUser?.displayName?.trim() ||
+      currentUser?.email?.split('@')[0]?.trim() ||
+      'Você';
+
+    return {
+      userId: currentUserId,
+      displayName,
+      email: currentUser?.email || '',
+      officeRole: 'ceo',
+      title: 'CEO',
+      palette: 0,
+      deskId: 'ceo-local',
+      avatarConfig: DEFAULT_CEO_AVATAR_CONFIG,
+      position: null,
+    };
+  }, [currentUserId, currentUser?.displayName, currentUser?.email]);
+
+  // O jogador local nunca depende do Firestore para existir.
+  // Mesmo com quota esgotada, o CEO continua visível e controlável.
+  const currentMember =
+    officeMembers.find((member) => member.userId === currentUserId) ||
+    fallbackCurrentMember;
+
   const profileTimeZone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Recife',
     [],
@@ -830,7 +856,35 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       setPlayer(null);
       return;
     }
-    const raw = resolvedMemberPosition(currentMember);
+
+    let raw = resolvedMemberPosition(currentMember);
+
+    // A posição do CEO é local-first: ele é um jogador manual, não um agente IA.
+    // O servidor recebe presença só para os outros usuários enxergarem onde ele está.
+    try {
+      const saved = window.localStorage.getItem('leadspay-office-player:' + currentMember.userId);
+      if (saved) {
+        const parsed = JSON.parse(saved) as {
+          x?: number;
+          y?: number;
+          direction?: Direction;
+          mapVersion?: string;
+        };
+        if (
+          parsed.mapVersion === OFFICE_MAP_VERSION &&
+          Number.isFinite(parsed.x) &&
+          Number.isFinite(parsed.y) &&
+          canOccupy(Number(parsed.x), Number(parsed.y))
+        ) {
+          raw = {
+            x: Number(parsed.x),
+            y: Number(parsed.y),
+            direction: memberDirection(parsed.direction),
+          };
+        }
+      }
+    } catch {}
+
     const safe = centerOf(nearestWalkableCell(raw.x, raw.y));
     const initial: MotionState = {
       x: safe.x,
@@ -839,12 +893,15 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       vy: 0,
       direction: raw.direction,
       path: [],
-      targetKey: 'player',
+      targetKey: 'manual-player',
       idleIndex: 0,
       nextIdleAt: 0,
     };
+
     playerRef.current = initial;
     pathRef.current = [];
+    keyboardQueueRef.current = null;
+    setWalkTarget(null);
     setPlayer(initial);
   }, [currentMember?.userId]);
 
@@ -1051,6 +1108,12 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             if (!route.length) {
               keyboardQueueRef.current = null;
               setWalkTarget(null);
+              try {
+                window.localStorage.setItem(
+                  'leadspay-office-player:' + currentMember.userId,
+                  JSON.stringify({ x, y, direction, mapVersion: OFFICE_MAP_VERSION }),
+                );
+              } catch {}
             }
           } else {
             const stepDistance = Math.min(distance, PLAYER_SPEED * dt);
@@ -1126,7 +1189,19 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           }
         }
 
-        if (now - presenceRef.current > 1300 && onPlayerMove && Math.abs(vx) + Math.abs(vy) > 4) {
+        const isManualPlayerMoving = Math.abs(vx) + Math.abs(vy) > 4;
+
+        if (isManualPlayerMoving && now - localPositionSaveRef.current > 700) {
+          localPositionSaveRef.current = now;
+          try {
+            window.localStorage.setItem(
+              'leadspay-office-player:' + currentMember.userId,
+              JSON.stringify({ x, y, direction, mapVersion: OFFICE_MAP_VERSION }),
+            );
+          } catch {}
+        }
+
+        if (now - presenceRef.current > 1300 && onPlayerMove && isManualPlayerMoving) {
           presenceRef.current = now;
           onPlayerMove({ x, y, direction });
         }
@@ -2128,7 +2203,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           {player && currentMember && playerFrame && (
             <button
               type="button"
-              className={'gather-avatar human-avatar me' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '')}
+              className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '')}
               style={{ left: player.x, top: player.y, zIndex: 1100 + Math.floor(player.y) }}
               onClick={(event) => {
                 event.stopPropagation();

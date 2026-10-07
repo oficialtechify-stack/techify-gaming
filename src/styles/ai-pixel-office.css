@@ -8691,3 +8691,30 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* CEO local: sempre distinguível dos agentes IA e controlado só pelo usuário */
+.gather-avatar.manual-player {
+  z-index: 1800;
+}
+
+.gather-avatar.manual-player::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 72px;
+  width: 34px;
+  height: 15px;
+  transform: translateX(-50%);
+  border: 2px solid rgba(74, 144, 255, .88);
+  border-radius: 50%;
+  background: rgba(74, 144, 255, .08);
+  box-shadow: 0 0 0 3px rgba(74, 144, 255, .08);
+  pointer-events: none;
+}
+
+.gather-avatar.manual-player .gather-avatar-tag.me::after {
+  content: " · VOCÊ";
+  opacity: .76;
+  font-size: 6px;
+}
