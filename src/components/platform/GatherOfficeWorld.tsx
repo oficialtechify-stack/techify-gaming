@@ -343,10 +343,21 @@ const CITY_PARK_TREES = [
   { x: 26, y: 72 }, { x: 32, y: 68 }, { x: 72, y: 70 },
 ];
 
+const CITY_CARS = [
+  { x: 31, y: 35, direction:'horizontal', tone:'violet' },
+  { x: 67, y: 36, direction:'horizontal', tone:'cream' },
+  { x: 106, y: 36, direction:'vertical', tone:'green' },
+  { x: 32, y: 49, direction:'vertical', tone:'red' },
+  { x: 69, y: 48, direction:'vertical', tone:'blue' },
+] as const;
+
 const CITY_SOLID_RECTS: Array<[number, number, number, number]> = [
   ...CITY_BUILDINGS.map((building) => [building.x, building.y, building.w, building.h] as [number, number, number, number]),
   ...CITY_WATER_RECTS,
   ...CITY_PARK_TREES.map((tree) => [tree.x + .3, tree.y + 1.05, 1.4, .85] as [number, number, number, number]),
+  ...CITY_CARS.map((car) => car.direction === 'horizontal'
+    ? [car.x, car.y, 3.4, 1.5] as [number, number, number, number]
+    : [car.x, car.y, 1.5, 3.4] as [number, number, number, number]),
 ];
 
 let ACTIVE_WORLD_SCENE: WorldScene = 'office';
@@ -2558,7 +2569,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       observer?.disconnect();
       window.removeEventListener('resize', refit);
     };
-  }, []);
+  }, [scene]);
 
   const onViewportPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -3080,6 +3091,17 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 >
                   <span />
                   <i />
+                </div>
+              ))}
+
+              {CITY_CARS.map((car, index) => (
+                <div
+                  key={'city-car-' + index}
+                  className={'gather-city-car ' + car.direction + ' tone-' + car.tone}
+                  aria-hidden="true"
+                  style={{ left: car.x * TILE, top: car.y * TILE }}
+                >
+                  <i /><i />
                 </div>
               ))}
 
