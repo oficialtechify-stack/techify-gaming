@@ -1036,3 +1036,110 @@
     display: none;
   }
 }
+
+
+/* LeadsPay Office native mode: one official WorkAdventure instance, no custom scene switcher. */
+.lp-office-native {
+  position: relative;
+  width: 100%;
+  height: calc(100dvh - 118px);
+  min-height: 680px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 18px;
+  background: #0b1420;
+  box-shadow: 0 18px 60px rgba(0,0,0,.24);
+}
+
+.lp-office-native.is-standalone {
+  height: 100dvh;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+.lp-office-native-frame {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  background: #1d3048;
+}
+
+.lp-office-native-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #0b1420;
+  color: rgba(255,255,255,.82);
+  text-align: center;
+  pointer-events: none;
+}
+
+.lp-office-native-loading svg {
+  width: 28px;
+  height: 28px;
+  color: #7c6cff;
+}
+
+.lp-office-native-loading strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.lp-office-native-loading span {
+  color: rgba(255,255,255,.45);
+  font-size: 9px;
+}
+
+.lp-office-native-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 8;
+  display: flex;
+  gap: 6px;
+  opacity: .28;
+  transition: opacity .18s ease;
+}
+
+.lp-office-native:hover .lp-office-native-actions,
+.lp-office-native:focus-within .lp-office-native-actions {
+  opacity: 1;
+}
+
+.lp-office-native-actions button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 9px;
+  background: rgba(6,12,19,.82);
+  color: rgba(255,255,255,.82);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.lp-office-native-actions button:hover {
+  background: rgba(18,27,40,.96);
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .lp-office-native {
+    height: calc(100dvh - 78px);
+    min-height: 620px;
+    border-radius: 12px;
+  }
+
+  .lp-office-native-actions {
+    right: 8px;
+    bottom: 8px;
+  }
+}
