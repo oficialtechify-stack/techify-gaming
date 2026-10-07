@@ -181,7 +181,7 @@ type FurnitureItem = {
   footprint?: FurnitureFootprint;
 };
 
-type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'custom';
+type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'decor' | 'other' | 'custom';
 
 type FurnitureCatalogItem = {
   templateId: string;
