@@ -50,6 +50,19 @@ type OfficeAvatarConfig = {
   accessory: number;
 };
 
+type AvatarCategory =
+  | 'skin'
+  | 'hair'
+  | 'facial'
+  | 'top'
+  | 'jacket'
+  | 'bottom'
+  | 'shoes'
+  | 'hat'
+  | 'glasses'
+  | 'other'
+  | 'costume';
+
 type OfficeMember = {
   id?: string;
   userId: string;
@@ -181,10 +194,10 @@ const CEO_AVATAR_STYLES: Array<{
   subtitle: string;
   sprite: string;
 }> = [
-  { id: 'social', name: 'Rick', subtitle: 'Social clássico', sprite: '/pixel-agents/assets/characters/ceo_social.svg' },
-  { id: 'all-black', name: 'All Black', subtitle: 'Moderno', sprite: '/pixel-agents/assets/characters/ceo_all_black.svg' },
-  { id: 'old-money', name: 'Old Money', subtitle: 'Sofisticado', sprite: '/pixel-agents/assets/characters/ceo_old_money.svg' },
-  { id: 'wine', name: 'Vinho / Preto', subtitle: 'Personalidade', sprite: '/pixel-agents/assets/characters/ceo_wine.svg' },
+  { id: 'social', name: 'Rick', subtitle: 'Social clássico', sprite: '/pixel-agents/assets/characters/ceo_social.png' },
+  { id: 'all-black', name: 'All Black', subtitle: 'Moderno', sprite: '/pixel-agents/assets/characters/ceo_all_black.png' },
+  { id: 'old-money', name: 'Old Money', subtitle: 'Sofisticado', sprite: '/pixel-agents/assets/characters/ceo_old_money.png' },
+  { id: 'wine', name: 'Vinho / Preto', subtitle: 'Personalidade', sprite: '/pixel-agents/assets/characters/ceo_wine.png' },
 ];
 
 const DEFAULT_CEO_AVATAR_CONFIG: OfficeAvatarConfig = {
@@ -194,6 +207,32 @@ const DEFAULT_CEO_AVATAR_CONFIG: OfficeAvatarConfig = {
   facialHair: 0,
   accessory: 0,
 };
+
+const CEO_AVATAR_CATEGORIES: Array<{
+  id: AvatarCategory;
+  label: string;
+  kind: 'identity' | 'clothing' | 'accessory';
+}> = [
+  { id: 'skin', label: 'Tom da pele', kind: 'identity' },
+  { id: 'hair', label: 'Cabelo', kind: 'identity' },
+  { id: 'facial', label: 'Pelos faciais', kind: 'identity' },
+  { id: 'top', label: 'Parte de cima', kind: 'clothing' },
+  { id: 'jacket', label: 'Jaqueta', kind: 'clothing' },
+  { id: 'bottom', label: 'Parte de baixo', kind: 'clothing' },
+  { id: 'shoes', label: 'Sapatos', kind: 'clothing' },
+  { id: 'hat', label: 'Chapéu', kind: 'accessory' },
+  { id: 'glasses', label: 'Óculos', kind: 'accessory' },
+  { id: 'other', label: 'Outro', kind: 'accessory' },
+  { id: 'costume', label: 'Fantasia', kind: 'clothing' },
+];
+
+function avatarCategoryMeta(category: AvatarCategory) {
+  return CEO_AVATAR_CATEGORIES.find((item) => item.id === category) || CEO_AVATAR_CATEGORIES[3];
+}
+
+function isClothingCategory(category: AvatarCategory) {
+  return avatarCategoryMeta(category).kind === 'clothing';
+}
 
 function avatarStyleOf(member?: OfficeMember | null): OfficeAvatarStyle {
   const value = member?.avatarConfig?.style;
@@ -690,7 +729,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
   const [profileNameDraft, setProfileNameDraft] = useState('');
   const [avatarStyleDraft, setAvatarStyleDraft] = useState<OfficeAvatarStyle>('all-black');
-  const [avatarCategory, setAvatarCategory] = useState<'skin' | 'hair' | 'facial' | 'outfit' | 'accessory'>('outfit');
+  const [avatarCategory, setAvatarCategory] = useState<AvatarCategory>('top');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
 
@@ -718,7 +757,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const openAvatarEditor = () => {
     if (!currentMember) return;
     setAvatarStyleDraft(avatarStyleOf(currentMember));
-    setAvatarCategory('outfit');
+    setAvatarCategory('top');
     setProfileError('');
     setAvatarEditorOpen(true);
   };
@@ -769,6 +808,17 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     document.addEventListener('fullscreenchange', sync);
     return () => document.removeEventListener('fullscreenchange', sync);
   }, []);
+
+  useEffect(() => {
+    if (!profileEditorOpen && !avatarEditorOpen) return;
+    const closeEditor = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (avatarEditorOpen) setAvatarEditorOpen(false);
+      else setProfileEditorOpen(false);
+    };
+    window.addEventListener('keydown', closeEditor);
+    return () => window.removeEventListener('keydown', closeEditor);
+  }, [profileEditorOpen, avatarEditorOpen]);
 
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
   useEffect(() => { workersRef.current = workers; }, [workers]);
@@ -1675,7 +1725,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     const target = event.target as HTMLElement | null;
     if (target?.closest('button, input, textarea, select, [data-no-pan="true"]')) return;
     const point = worldPointFromEvent(event.clientX, event.clientY);
-    goToWorldPoint(point.x, point.y);
+    window.requestAnimationFrame(() => goToWorldPoint(point.x, point.y));
   };
 
   const selectedArea = selectedAreaId
@@ -2550,33 +2600,30 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
               <div className="gather-avatar-editor-body">
                 <nav className="gather-avatar-categories">
-                  {[
-                    ['skin', 'Tom da pele'],
-                    ['hair', 'Cabelo'],
-                    ['facial', 'Pelos faciais'],
-                    ['outfit', 'Parte de cima'],
-                    ['outfit', 'Jaqueta'],
-                    ['outfit', 'Parte de baixo'],
-                    ['outfit', 'Sapatos'],
-                    ['accessory', 'Chapéu'],
-                    ['accessory', 'Óculos'],
-                    ['accessory', 'Outro'],
-                    ['outfit', 'Fantasia'],
-                  ].map(([id, label], index) => (
+                  {CEO_AVATAR_CATEGORIES.map((category) => (
                     <button
-                      key={label + index}
+                      key={category.id}
                       type="button"
-                      className={avatarCategory === id || (avatarCategory === 'outfit' && id === 'outfit') ? 'active' : ''}
-                      onClick={() => setAvatarCategory(id as typeof avatarCategory)}
+                      className={avatarCategory === category.id ? 'active' : ''}
+                      onClick={() => setAvatarCategory(category.id)}
                     >
-                      {id === 'outfit' ? <Shirt className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
-                      <span>{label}</span>
+                      {category.kind === 'clothing' ? <Shirt className="h-4 w-4" /> : category.kind === 'accessory' ? <Pencil className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+                      <span>{category.label}</span>
                     </button>
                   ))}
                 </nav>
 
                 <div className="gather-avatar-options">
-                  {avatarCategory === 'outfit' ? (
+                  <div className="gather-avatar-options-head">
+                    <strong>{avatarCategoryMeta(avatarCategory).label}</strong>
+                    <small>
+                      {isClothingCategory(avatarCategory)
+                        ? 'Escolha um dos looks completos do seu personagem CEO.'
+                        : 'Esta parte faz parte da identidade fixa do seu personagem CEO.'}
+                    </small>
+                  </div>
+
+                  {isClothingCategory(avatarCategory) ? (
                     <>
                       <div className="gather-avatar-style-grid">
                         {CEO_AVATAR_STYLES.map((style) => (
@@ -2599,18 +2646,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                           </button>
                         ))}
                       </div>
-                      <div className="gather-avatar-palette">
+                      <div className="gather-avatar-palette" aria-hidden="true">
                         {['#171717', '#3b2a22', '#ece2ce', '#5b1d2b', '#ffffff', '#6b7280', '#9ca3af'].map((color) => (
-                          <button key={color} type="button" style={{ background: color }} aria-label={'Cor ' + color} />
+                          <span key={color} style={{ background: color }} />
                         ))}
                       </div>
                     </>
                   ) : (
                     <div className="gather-avatar-simple-options">
-                      <div className="gather-avatar-simple-icon"><UserRound className="h-8 w-8" /></div>
-                      <strong>Visual base do CEO</strong>
-                      <p>O cabelo, pele e traços do seu personagem ficam preservados; as roupas completas mudam pelos quatro looks acima.</p>
-                      <button type="button" onClick={() => setAvatarCategory('outfit')}>
+                      <div className="gather-avatar-simple-icon"><Lock className="h-7 w-7" /></div>
+                      <strong>Identidade do CEO preservada</strong>
+                      <p>Rosto, tom da pele, cabelo e detalhes principais ficam fixos para o seu avatar continuar sendo o mesmo personagem em todos os looks e animações.</p>
+                      <button type="button" onClick={() => setAvatarCategory('top')}>
                         <Shirt className="h-4 w-4" />
                         Ver roupas
                       </button>

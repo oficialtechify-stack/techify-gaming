@@ -8611,3 +8611,83 @@
     min-height: 154px;
   }
 }
+
+
+/* =========================================================
+   LeadsPay Office final Gather polish
+   ========================================================= */
+
+.gather-world {
+  contain: layout paint style;
+  backface-visibility: hidden;
+}
+
+.gather-room-name {
+  pointer-events: auto;
+}
+
+.gather-avatar-sprite,
+.gather-self-profile-sprite,
+.gather-profile-avatar-preview,
+.gather-profile-avatar-large > span,
+.gather-avatar-style-sprite,
+.gather-avatar-preview-sprite,
+.dock-profile-sprite {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.gather-avatar-options-head {
+  margin-bottom: 14px;
+  border-bottom: 1px solid #e7ebed;
+  padding: 0 2px 12px;
+}
+
+.gather-avatar-options-head strong {
+  display: block;
+  color: #313b40;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.gather-avatar-options-head small {
+  display: block;
+  margin-top: 4px;
+  color: #899399;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.gather-avatar-palette span {
+  width: 22px;
+  height: 22px;
+  display: block;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #dce1e4;
+}
+
+.gather-avatar-editor-body,
+.gather-profile-modal-body {
+  overscroll-behavior: contain;
+}
+
+.gather-avatar-categories,
+.gather-avatar-options {
+  scrollbar-width: thin;
+}
+
+.gather-profile-modal-backdrop {
+  touch-action: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gather-avatar,
+  .gather-avatar.remote,
+  .gather-avatar-sprite,
+  .gather-avatar.ceo-avatar.walking .gather-avatar-sprite,
+  .gather-pc-screen {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
