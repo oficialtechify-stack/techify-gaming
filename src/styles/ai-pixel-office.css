@@ -9473,3 +9473,36 @@
     max-height: 260px;
   }
 }
+
+
+/* Rick runtime atlas rendering — clipped IMG, independent from legacy background-position keyframes */
+.gather-avatar.manual-player .gather-avatar-sprite.ceo-motion-sprite {
+  overflow: hidden !important;
+  contain: none !important;
+  background: none !important;
+  background-image: none !important;
+  width: 64px !important;
+  height: 96px !important;
+  left: 4px !important;
+  top: 0 !important;
+  animation: none !important;
+  margin-top: 0 !important;
+}
+
+.gather-avatar.manual-player .gather-avatar-sprite.ceo-motion-sprite > img {
+  position: absolute !important;
+  width: 512px !important;
+  height: 480px !important;
+  max-width: none !important;
+  max-height: none !important;
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  pointer-events: none;
+  user-select: none;
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+}
