@@ -18,7 +18,7 @@ interface LeadspayOfficeViewProps {
 }
 
 const LEADSPAY_WORKADVENTURE_WORLD =
-  'https://play.workadventu.re/@/leadspay/leadspay/great-place-to-work';
+  'https://play.workadventu.re/@/leadspay/leadspay/leadspay-startup';
 
 const RICK_AUTOLOGIN_STORAGE_KEY = 'leadspay-office-rick-autologin-url-v1';
 
@@ -33,6 +33,30 @@ function isWorkAdventureAccessUrl(value: string) {
     return parsed.protocol === 'https:' && parsed.hostname.endsWith('workadventu.re');
   } catch {
     return false;
+  }
+}
+
+function retargetRickAccessUrl(value: string, roomUrl: string) {
+  try {
+    const access = new URL(value);
+    const room = new URL(roomUrl);
+
+    if (access.searchParams.has('playUri')) {
+      access.searchParams.set('playUri', roomUrl);
+      return access.toString();
+    }
+
+    if (
+      access.hostname === 'play.workadventu.re' &&
+      access.pathname.startsWith('/@/leadspay/leadspay/')
+    ) {
+      access.pathname = room.pathname;
+      return access.toString();
+    }
+
+    return value;
+  } catch {
+    return value;
   }
 }
 
@@ -55,13 +79,17 @@ export const LeadspayOfficeView: React.FC<LeadspayOfficeViewProps> = ({
     try {
       const stored = window.localStorage.getItem(RICK_AUTOLOGIN_STORAGE_KEY)?.trim() || '';
       if (stored && isWorkAdventureAccessUrl(stored)) {
-        setRickAccessUrl(stored);
-        setDraftRickAccessUrl(stored);
+        const retargeted = retargetRickAccessUrl(stored, baseWorldUrl);
+        setRickAccessUrl(retargeted);
+        setDraftRickAccessUrl(retargeted);
+        if (retargeted !== stored) {
+          window.localStorage.setItem(RICK_AUTOLOGIN_STORAGE_KEY, retargeted);
+        }
       }
     } catch {
       // Sem storage persistente, o usuário ainda pode usar o World como anônimo.
     }
-  }, []);
+  }, [baseWorldUrl]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -91,7 +119,7 @@ export const LeadspayOfficeView: React.FC<LeadspayOfficeViewProps> = ({
   };
 
   const saveRickAccess = () => {
-    const value = draftRickAccessUrl.trim();
+    const value = retargetRickAccessUrl(draftRickAccessUrl.trim(), baseWorldUrl);
 
     if (!isWorkAdventureAccessUrl(value)) {
       setLoginSetupError('Cole a URL de Token access / autologin gerada pelo WorkAdventure para o membro rick.');
