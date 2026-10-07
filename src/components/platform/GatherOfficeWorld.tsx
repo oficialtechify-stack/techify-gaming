@@ -130,12 +130,30 @@ type OfficeArea = {
 };
 
 type FurnitureKind = 'image' | 'brand' | 'rug';
+type ExactFurnitureAsset =
+  | 'chair-green'
+  | 'chair-black'
+  | 'desk-executive'
+  | 'bookshelf'
+  | 'armchair-orange'
+  | 'sofa-green'
+  | 'side-table'
+  | 'round-table'
+  | 'long-table'
+  | 'workstation';
+
+type FurnitureSeat = {
+  dx: number;
+  dy: number;
+  direction: Direction;
+};
 
 type FurnitureItem = {
   id: string;
   label: string;
   kind: FurnitureKind;
   src?: string;
+  asset?: ExactFurnitureAsset;
   x: number;
   y: number;
   w: number;
@@ -143,6 +161,8 @@ type FurnitureItem = {
   solid?: boolean;
   workerId?: string;
   className?: string;
+  rotation?: 0 | 90 | 180 | 270;
+  seats?: FurnitureSeat[];
 };
 
 type CallParticipant = {
@@ -171,6 +191,7 @@ type Interaction =
   | { type: 'ai'; label: string; workerId: string }
   | { type: 'human'; label: string; userId: string }
   | { type: 'object'; label: string; objectId: 'coffee' | 'creative-board' | 'lab-terminal' | 'designer-board' }
+  | { type: 'seat'; label: string; furnitureId: string; seatIndex: number }
   | null;
 
 interface GatherOfficeWorldProps {
@@ -196,7 +217,7 @@ interface GatherOfficeWorldProps {
 
 const TILE = 32;
 const COLS = 72;
-const ROWS = 48;
+const ROWS = 54;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
 const PLAYER_SPEED = 176;
@@ -204,7 +225,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 84;
-const OFFICE_MAP_VERSION = 'gather-v4-local-ceo';
+const OFFICE_MAP_VERSION = 'leadspay-reference-v1';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -225,6 +246,41 @@ const DEFAULT_CEO_AVATAR_CONFIG: OfficeAvatarConfig = {
   facialHair: 0,
   accessory: 0,
 };
+
+const EXACT_FURNITURE_SHEET = '/pixel-agents/assets/furniture/leadspay-furniture-sheet.png';
+const EXACT_FURNITURE_CELLS: Record<ExactFurnitureAsset, [number, number]> = {
+  'chair-green': [0, 0],
+  'chair-black': [1, 0],
+  'desk-executive': [2, 0],
+  'bookshelf': [3, 0],
+  'armchair-orange': [0, 1],
+  'sofa-green': [1, 1],
+  'side-table': [2, 1],
+  'round-table': [3, 1],
+  'long-table': [0, 2],
+  'workstation': [1, 2],
+};
+
+function exactFurnitureStyle(asset: ExactFurnitureAsset, rotation: 0 | 90 | 180 | 270 = 0): React.CSSProperties {
+  const [col, row] = EXACT_FURNITURE_CELLS[asset];
+  return {
+    backgroundImage: 'url(' + EXACT_FURNITURE_SHEET + ')',
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: '400% 300%',
+    backgroundPosition: (col * (100 / 3)) + '% ' + (row * 50) + '%',
+    transform: 'rotate(' + rotation + 'deg)',
+  };
+}
+
+function furnitureSeatPoint(item: FurnitureItem, seatIndex: number) {
+  const seat = item.seats?.[seatIndex];
+  if (!seat) return null;
+  return {
+    x: (item.x + seat.dx) * TILE,
+    y: (item.y + seat.dy) * TILE,
+    direction: seat.direction,
+  };
+}
 
 const CEO_AVATAR_CATEGORIES: Array<{
   id: AvatarCategory;
@@ -265,35 +321,35 @@ function spriteForMember(member: OfficeMember) {
 }
 
 const AREAS: OfficeArea[] = [
-  { id: 'operations', name: 'Equipe LeadsPay', kind: 'open', x: 3, y: 3, w: 29, h: 19, subtitle: 'Time principal e estações de trabalho' },
-  { id: 'team-pods', name: 'Operação', kind: 'open', x: 33, y: 3, w: 18, h: 19, subtitle: 'Operação, tecnologia e suporte' },
-  { id: 'meeting', name: 'Sala de Reunião', kind: 'private', x: 53, y: 3, w: 16, h: 12, max: 8, subtitle: 'Reuniões privadas e alinhamentos' },
-  { id: 'lab', name: 'Café & Copa', kind: 'social', x: 53, y: 16, w: 16, h: 6, max: 6, subtitle: 'Café, pausa e conversas rápidas' },
-  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 3, y: 25, w: 18, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
-  { id: 'lobby', name: 'Lounge', kind: 'social', x: 22, y: 25, w: 24, h: 20, subtitle: 'Área central para encontros e descanso' },
-  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 47, y: 25, w: 22, h: 20, max: 4, subtitle: 'Design, referências e produção visual' },
+  { id: 'operations', name: 'Equipe LeadsPay', kind: 'open', x: 3, y: 3, w: 24, h: 20, subtitle: 'Time principal e estações de trabalho' },
+  { id: 'team-pods', name: 'Operação', kind: 'open', x: 28, y: 3, w: 21, h: 20, subtitle: 'Operação, tecnologia e suporte' },
+  { id: 'meeting', name: 'Sala de Reunião', kind: 'private', x: 50, y: 3, w: 19, h: 13, max: 10, subtitle: 'Reuniões privadas e alinhamentos' },
+  { id: 'lab', name: 'Café & Copa', kind: 'social', x: 50, y: 17, w: 19, h: 13, max: 10, subtitle: 'Café, refeições e conversas rápidas' },
+  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 3, y: 31, w: 17, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
+  { id: 'lobby', name: 'Lounge', kind: 'social', x: 21, y: 24, w: 28, h: 27, subtitle: 'Área central para encontros e descanso' },
+  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 50, y: 31, w: 19, h: 20, max: 5, subtitle: 'Design, referências e produção visual' },
 ];
 
-const AREA_ENTRY_TARGET: Record<string, Cell> = {
-  operations: { x: 27, y: 11 },
-  'team-pods': { x: 49, y: 11 },
-  meeting: { x: 55, y: 12 },
-  lab: { x: 55, y: 19 },
-  ceo: { x: 12, y: 27 },
-  lobby: { x: 34, y: 27 },
-  designer: { x: 50, y: 27 },
+const AREA_ENTRY_TARGETconst AREA_ENTRY_TARGET: Record<string, Cell> = {
+  operations: { x: 24, y: 20 },
+  'team-pods': { x: 37, y: 20 },
+  meeting: { x: 52, y: 14 },
+  lab: { x: 52, y: 28 },
+  ceo: { x: 17, y: 33 },
+  lobby: { x: 35, y: 27 },
+  designer: { x: 52, y: 33 },
 };
 
-const HOME_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 7, y: 9 },
-  frontend: { x: 13, y: 9 },
-  backend: { x: 19, y: 9 },
-  designer: { x: 7, y: 17 },
-  qa: { x: 13, y: 17 },
-  growth: { x: 19, y: 17 },
+const HOME_TARGETconst HOME_TARGET: Record<string, Cell> = {
+  'lumy-manager': { x: 8, y: 12 },
+  frontend: { x: 15, y: 12 },
+  backend: { x: 23, y: 12 },
+  designer: { x: 8, y: 20 },
+  qa: { x: 15, y: 20 },
+  growth: { x: 23, y: 20 },
 };
 
-const MEETING_TARGET: Record<string, Cell> = {
+const MEETING_TARGETconst MEETING_TARGET: Record<string, Cell> = {
   'lumy-manager': { x: 55, y: 12 },
   frontend: { x: 57, y: 12 },
   backend: { x: 59, y: 12 },
@@ -338,79 +394,96 @@ const AI_DESKS = [
   { workerId: 'growth', col: 17, row: 14 },
 ];
 
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:gather-v3';
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:reference-v1';
 
 const DEFAULT_FURNITURE: FurnitureItem[] = [
-  // Equipe LeadsPay
-  { id:'brand-leadspay', label:'Logo LeadsPay', kind:'brand', x:4.1, y:3.4, w:7.2, h:1.5, solid:false },
-  { id:'ai-desk-lumy', label:'Mesa Lumy', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:5, y:6, w:5, h:4, solid:true, workerId:'lumy-manager' },
-  { id:'ai-desk-frontend', label:'Mesa Front-end', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:12, y:6, w:5, h:4, solid:true, workerId:'frontend' },
-  { id:'ai-desk-backend', label:'Mesa Back-end', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:19, y:6, w:5, h:4, solid:true, workerId:'backend' },
-  { id:'ai-desk-designer', label:'Mesa Design IA', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:5, y:14, w:5, h:4, solid:true, workerId:'designer' },
-  { id:'ai-desk-qa', label:'Mesa QA', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:12, y:14, w:5, h:4, solid:true, workerId:'qa' },
-  { id:'ai-desk-growth', label:'Mesa Growth', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:19, y:14, w:5, h:4, solid:true, workerId:'growth' },
-  { id:'operations-books', label:'Estante da equipe', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:25.5, y:3.3, w:4.8, h:2.5, solid:true },
-  { id:'operations-plant-a', label:'Planta da equipe 1', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:3.4, y:18.2, w:2.2, h:3, solid:true },
-  { id:'operations-plant-b', label:'Planta da equipe 2', kind:'image', src:'/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png', x:28.5, y:17.4, w:2, h:3, solid:true },
+  // Topo esquerdo — Equipe LeadsPay
+  { id:'ref-brand-leadspay', label:'Logo LeadsPay', kind:'brand', x:4.4, y:3.35, w:7.3, h:1.55, solid:false },
+  { id:'ref-ops-plant-left', label:'Planta superior esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:3.25, y:4.2, w:2.25, h:3.2, solid:true },
+  { id:'ref-ops-paint-1', label:'Quadro 1', kind:'image', src:'/pixel-agents/assets/furniture/SMALL_PAINTING/SMALL_PAINTING.png', x:12.0, y:3.55, w:2.0, h:1.55, solid:false },
+  { id:'ref-ops-paint-2', label:'Quadro 2', kind:'image', src:'/pixel-agents/assets/furniture/SMALL_PAINTING_2/SMALL_PAINTING_2.png', x:14.6, y:3.55, w:2.0, h:1.55, solid:false },
+  { id:'ref-ops-books', label:'Estante superior', kind:'image', asset:'bookshelf', x:18.2, y:3.35, w:5.6, h:3.0, solid:true },
 
-  // Operação
-  { id:'team-desk-1', label:'Estação Operação 1', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:34, y:6, w:5, h:4, solid:true },
-  { id:'team-desk-2', label:'Estação Operação 2', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:40, y:6, w:5, h:4, solid:true },
-  { id:'team-desk-3', label:'Estação Operação 3', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:46, y:6, w:5, h:4, solid:true },
-  { id:'team-desk-4', label:'Estação Operação 4', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:34, y:13, w:5, h:4, solid:true },
-  { id:'team-desk-5', label:'Estação Operação 5', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:40, y:13, w:5, h:4, solid:true },
-  { id:'team-desk-6', label:'Estação Operação 6', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:46, y:13, w:5, h:4, solid:true },
-  { id:'team-sofa-a', label:'Sofá Operação 1', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:34.2, y:18.1, w:4.8, h:2.7, solid:true },
-  { id:'team-coffee-table', label:'Mesa de centro Operação', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png', x:40.3, y:18.3, w:3.5, h:2.5, solid:true },
-  { id:'team-sofa-b', label:'Sofá Operação 2', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:45, y:18.1, w:4.8, h:2.7, solid:true },
+  { id:'ref-work-lumy', label:'Estação Lumy', kind:'image', asset:'workstation', x:4.8, y:6.0, w:5.9, h:5.1, solid:true, workerId:'lumy-manager', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
+  { id:'ref-work-front', label:'Estação Front-end', kind:'image', asset:'workstation', x:12.0, y:6.0, w:5.9, h:5.1, solid:true, workerId:'frontend', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
+  { id:'ref-work-back', label:'Estação Back-end', kind:'image', asset:'workstation', x:19.2, y:6.0, w:5.9, h:5.1, solid:true, workerId:'backend', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
+  { id:'ref-work-design', label:'Estação Design IA', kind:'image', asset:'workstation', x:4.8, y:14.0, w:5.9, h:5.1, solid:true, workerId:'designer', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
+  { id:'ref-work-qa', label:'Estação QA', kind:'image', asset:'workstation', x:12.0, y:14.0, w:5.9, h:5.1, solid:true, workerId:'qa', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
+  { id:'ref-work-growth', label:'Estação Growth', kind:'image', asset:'workstation', x:19.2, y:14.0, w:5.9, h:5.1, solid:true, workerId:'growth', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
+  { id:'ref-ops-plant-right', label:'Planta equipe direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:24.1, y:18.7, w:2.3, h:3.2, solid:true },
 
-  // Sala de reunião
-  { id:'meeting-board', label:'Quadro da reunião', kind:'image', src:'/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png', x:58.5, y:3.6, w:5.2, h:2, solid:true },
-  { id:'meeting-table', label:'Mesa de reunião', kind:'image', src:'/pixel-agents/assets/furniture/TABLE_FRONT/TABLE_FRONT.png', x:56, y:6.3, w:10, h:4.2, solid:true },
-  { id:'meeting-chair-1', label:'Cadeira reunião 1', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:56.2, y:10.2, w:2.2, h:2.6, solid:true },
-  { id:'meeting-chair-2', label:'Cadeira reunião 2', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:59.5, y:10.2, w:2.2, h:2.6, solid:true },
-  { id:'meeting-chair-3', label:'Cadeira reunião 3', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:62.8, y:10.2, w:2.2, h:2.6, solid:true },
-  { id:'meeting-plant-a', label:'Planta reunião 1', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:53.4, y:3.7, w:2.2, h:3, solid:true },
-  { id:'meeting-plant-b', label:'Planta reunião 2', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.3, y:3.7, w:2.2, h:3, solid:true },
+  // Topo centro — seis estações
+  { id:'ref-team-work-1', label:'Estação Operação 1', kind:'image', asset:'workstation', x:29.0, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
+  { id:'ref-team-work-2', label:'Estação Operação 2', kind:'image', asset:'workstation', x:35.7, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
+  { id:'ref-team-work-3', label:'Estação Operação 3', kind:'image', asset:'workstation', x:42.4, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
+  { id:'ref-team-work-4', label:'Estação Operação 4', kind:'image', asset:'workstation', x:29.0, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
+  { id:'ref-team-work-5', label:'Estação Operação 5', kind:'image', asset:'workstation', x:35.7, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
+  { id:'ref-team-work-6', label:'Estação Operação 6', kind:'image', asset:'workstation', x:42.4, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
+  { id:'ref-team-sofa-left', label:'Sofá operação esquerdo', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:29.0, y:19.0, w:5.0, h:2.75, solid:true, seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}] },
+  { id:'ref-team-side-table', label:'Mesa operação', kind:'image', asset:'side-table', x:36.6, y:18.9, w:3.6, h:2.9, solid:true },
+  { id:'ref-team-sofa-right', label:'Sofá operação direito', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:43.0, y:19.0, w:5.0, h:2.75, solid:true, seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}] },
 
-  // Café & copa
-  { id:'cafe-counter', label:'Bancada da copa', kind:'image', src:'/pixel-agents/assets/furniture/TABLE_FRONT/TABLE_FRONT.png', x:54, y:16.4, w:8.5, h:2.8, solid:true },
-  { id:'cafe-round-a', label:'Mesa café 1', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png', x:55, y:19, w:3.2, h:2.4, solid:true },
-  { id:'cafe-round-b', label:'Mesa café 2', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png', x:62, y:19, w:3.2, h:2.4, solid:true },
-  { id:'cafe-plant', label:'Planta da copa', kind:'image', src:'/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png', x:66.6, y:18.2, w:1.8, h:2.7, solid:true },
+  // Topo direito — sala de reunião
+  { id:'ref-meeting-whiteboard', label:'Quadro da reunião', kind:'image', src:'/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png', x:57.0, y:3.45, w:5.2, h:2.0, solid:false },
+  { id:'ref-meeting-plant-l', label:'Planta reunião esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:50.4, y:3.6, w:2.2, h:3.1, solid:true },
+  { id:'ref-meeting-plant-r', label:'Planta reunião direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.2, y:3.6, w:2.2, h:3.1, solid:true },
+  { id:'ref-meeting-table', label:'Mesa longa de reunião', kind:'image', asset:'long-table', x:53.0, y:7.1, w:13.2, h:4.7, solid:true },
+  { id:'ref-meeting-chair-t1', label:'Cadeira superior 1', kind:'image', asset:'chair-green', x:53.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
+  { id:'ref-meeting-chair-t2', label:'Cadeira superior 2', kind:'image', asset:'chair-green', x:57.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
+  { id:'ref-meeting-chair-t3', label:'Cadeira superior 3', kind:'image', asset:'chair-green', x:61.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
+  { id:'ref-meeting-chair-b1', label:'Cadeira inferior 1', kind:'image', asset:'chair-green', rotation:180, x:53.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
+  { id:'ref-meeting-chair-b2', label:'Cadeira inferior 2', kind:'image', asset:'chair-green', rotation:180, x:57.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
+  { id:'ref-meeting-chair-b3', label:'Cadeira inferior 3', kind:'image', asset:'chair-green', rotation:180, x:61.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
+  { id:'ref-meeting-chair-l', label:'Cadeira lateral esquerda', kind:'image', asset:'chair-green', rotation:90, x:51.2, y:8.1, w:2.5, h:3.0, solid:true, seats:[{dx:1.25,dy:1.5,direction:'right'}] },
+  { id:'ref-meeting-chair-r', label:'Cadeira lateral direita', kind:'image', asset:'chair-green', rotation:270, x:65.5, y:8.1, w:2.5, h:3.0, solid:true, seats:[{dx:1.25,dy:1.5,direction:'left'}] },
 
-  // Sala CEO
-  { id:'ceo-bookshelf', label:'Estante do CEO', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:4, y:26.2, w:5, h:2.8, solid:true },
-  { id:'ceo-desk', label:'Mesa executiva do CEO', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:7, y:31, w:8, h:4.6, solid:true },
-  { id:'ceo-chair', label:'Cadeira do CEO', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:10, y:35.2, w:2.6, h:3, solid:true },
-  { id:'ceo-visitor-a', label:'Poltrona visitante CEO 1', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:5, y:39, w:2.6, h:3, solid:true },
-  { id:'ceo-visitor-b', label:'Poltrona visitante CEO 2', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:14, y:39, w:2.6, h:3, solid:true },
-  { id:'ceo-coffee', label:'Mesa de apoio CEO', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png', x:9.3, y:39.3, w:3.2, h:2.4, solid:true },
-  { id:'ceo-rug', label:'Tapete CEO', kind:'rug', x:4.4, y:29.5, w:13.5, h:12.5, solid:false },
+  // Direita meio — copa/café
+  { id:'ref-cafe-counter', label:'Bancada da copa', kind:'image', asset:'long-table', x:52.1, y:17.8, w:14.8, h:3.6, solid:true },
+  { id:'ref-cafe-fridge', label:'Geladeira', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:50.5, y:17.4, w:2.5, h:4.3, solid:true, className:'reference-fridge' },
+  { id:'ref-cafe-machine', label:'Cafeteira', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE/COFFEE.png', x:58.3, y:18.0, w:1.3, h:1.3, solid:false },
+  { id:'ref-cafe-table-1', label:'Mesa redonda café 1', kind:'image', asset:'round-table', x:52.7, y:23.0, w:5.0, h:4.7, solid:true },
+  { id:'ref-cafe-chair-1t', label:'Cadeira café 1 superior', kind:'image', asset:'chair-green', x:54.1, y:21.5, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'down'}] },
+  { id:'ref-cafe-chair-1b', label:'Cadeira café 1 inferior', kind:'image', asset:'chair-green', rotation:180, x:54.1, y:26.0, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'up'}] },
+  { id:'ref-cafe-table-2', label:'Mesa redonda café 2', kind:'image', asset:'round-table', x:61.0, y:23.0, w:5.0, h:4.7, solid:true },
+  { id:'ref-cafe-chair-2t', label:'Cadeira café 2 superior', kind:'image', asset:'chair-green', x:62.4, y:21.5, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'down'}] },
+  { id:'ref-cafe-chair-2b', label:'Cadeira café 2 inferior', kind:'image', asset:'chair-green', rotation:180, x:62.4, y:26.0, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'up'}] },
+  { id:'ref-cafe-plant', label:'Planta da copa', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.4, y:26.0, w:2.2, h:3.1, solid:true },
 
-  // Lounge central
-  { id:'lounge-rug', label:'Tapete Lounge', kind:'rug', x:24.2, y:28.7, w:18.8, h:12.2, solid:false },
-  { id:'lounge-books-a', label:'Estante Lounge 1', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:24.5, y:26.4, w:5, h:2.8, solid:true },
-  { id:'lounge-books-b', label:'Estante Lounge 2', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:38.5, y:26.4, w:5, h:2.8, solid:true },
-  { id:'lounge-sofa-a', label:'Sofá Lounge 1', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:27, y:33, w:5.2, h:3, solid:true },
-  { id:'lounge-sofa-b', label:'Sofá Lounge 2', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:36, y:33, w:5.2, h:3, solid:true },
-  { id:'lounge-table', label:'Mesa central Lounge', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png', x:33, y:34, w:3.6, h:2.6, solid:true },
-  { id:'lounge-armchair-a', label:'Poltrona Lounge 1', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:25, y:30, w:2.8, h:3.2, solid:true },
-  { id:'lounge-armchair-b', label:'Poltrona Lounge 2', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:41, y:30, w:2.8, h:3.2, solid:true },
-  { id:'lounge-plant-a', label:'Planta Lounge 1', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:23.5, y:37.8, w:2.4, h:3.2, solid:true },
-  { id:'lounge-plant-b', label:'Planta Lounge 2', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:42.2, y:37.8, w:2.4, h:3.2, solid:true },
+  // Centro inferior — lounge principal
+  { id:'ref-lounge-rug', label:'Tapete lounge', kind:'rug', x:24.0, y:29.0, w:22.0, h:17.0, solid:false, className:'reference-lounge-rug' },
+  { id:'ref-lounge-books-l', label:'Estante lounge esquerda', kind:'image', asset:'bookshelf', x:23.0, y:25.3, w:5.6, h:3.0, solid:true },
+  { id:'ref-lounge-paint', label:'Quadro lounge', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png', x:33.0, y:25.45, w:4.5, h:2.7, solid:false },
+  { id:'ref-lounge-books-r', label:'Estante lounge direita', kind:'image', asset:'bookshelf', x:40.6, y:25.3, w:5.6, h:3.0, solid:true },
+  { id:'ref-lounge-arm-l', label:'Poltrona laranja esquerda', kind:'image', asset:'armchair-orange', x:25.7, y:30.0, w:4.5, h:5.1, solid:true, seats:[{dx:2.25,dy:2.65,direction:'down'}] },
+  { id:'ref-lounge-arm-r', label:'Poltrona laranja direita', kind:'image', asset:'armchair-orange', x:40.0, y:30.0, w:4.5, h:5.1, solid:true, seats:[{dx:2.25,dy:2.65,direction:'down'}] },
+  { id:'ref-lounge-sofa-l', label:'Sofá verde esquerdo', kind:'image', asset:'sofa-green', rotation:90, x:27.2, y:35.3, w:4.8, h:7.2, solid:true, seats:[{dx:2.4,dy:2.5,direction:'right'},{dx:2.4,dy:4.75,direction:'right'}] },
+  { id:'ref-lounge-sofa-r', label:'Sofá verde direito', kind:'image', asset:'sofa-green', rotation:270, x:39.0, y:35.3, w:4.8, h:7.2, solid:true, seats:[{dx:2.4,dy:2.5,direction:'left'},{dx:2.4,dy:4.75,direction:'left'}] },
+  { id:'ref-lounge-table', label:'Mesa central lounge', kind:'image', asset:'side-table', x:33.6, y:36.2, w:3.8, h:4.0, solid:true },
+  { id:'ref-lounge-plant-l', label:'Planta lounge esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:22.4, y:40.5, w:2.4, h:3.4, solid:true },
+  { id:'ref-lounge-plant-r', label:'Planta lounge direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:45.1, y:40.5, w:2.4, h:3.4, solid:true },
+  { id:'ref-lounge-bench', label:'Banco inferior lounge', kind:'image', src:'/pixel-agents/assets/furniture/WOODEN_BENCH/WOODEN_BENCH_FRONT.png', x:31.5, y:46.2, w:7.0, h:2.4, solid:true, seats:[{dx:2.2,dy:1.35,direction:'up'},{dx:4.8,dy:1.35,direction:'up'}] },
 
-  // Sala da Designer
-  { id:'designer-books', label:'Estante Design', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:62.5, y:26.2, w:5, h:2.8, solid:true },
-  { id:'designer-desk', label:'Mesa da Designer', kind:'image', src:'/pixel-agents/assets/furniture/DESK/DESK_FRONT.png', x:53, y:31, w:8, h:4.6, solid:true },
-  { id:'designer-chair', label:'Cadeira da Designer', kind:'image', src:'/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png', x:56, y:35.2, w:2.6, h:3, solid:true },
-  { id:'designer-sofa', label:'Sofá Design', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:50, y:39, w:5.2, h:3, solid:true },
-  { id:'designer-table', label:'Mesa de apoio Design', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png', x:57, y:39.2, w:3.5, h:2.5, solid:true },
-  { id:'designer-plant', label:'Planta Design', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:65, y:38.5, w:2.4, h:3.2, solid:true },
-  { id:'designer-rug', label:'Tapete Design', kind:'rug', x:49, y:29.5, w:17.5, h:12.5, solid:false },
+  // Inferior esquerdo — sala do CEO
+  { id:'ref-ceo-books', label:'Estante CEO', kind:'image', asset:'bookshelf', x:3.8, y:32.0, w:5.5, h:3.0, solid:true },
+  { id:'ref-ceo-rug', label:'Tapete CEO', kind:'rug', x:5.0, y:35.0, w:12.8, h:12.1, solid:false },
+  { id:'ref-ceo-chair', label:'Cadeira do CEO', kind:'image', asset:'chair-black', x:9.7, y:33.9, w:3.2, h:4.0, solid:true, seats:[{dx:1.6,dy:2.0,direction:'down'}] },
+  { id:'ref-ceo-desk', label:'Mesa executiva do CEO', kind:'image', asset:'desk-executive', x:5.8, y:36.0, w:10.5, h:5.3, solid:true },
+  { id:'ref-ceo-visitor-l', label:'Cadeira visitante CEO esquerda', kind:'image', asset:'chair-green', rotation:180, x:5.9, y:42.1, w:3.0, h:3.7, solid:true, seats:[{dx:1.5,dy:1.9,direction:'up'}] },
+  { id:'ref-ceo-visitor-r', label:'Cadeira visitante CEO direita', kind:'image', asset:'chair-green', rotation:180, x:14.0, y:42.1, w:3.0, h:3.7, solid:true, seats:[{dx:1.5,dy:1.9,direction:'up'}] },
+  { id:'ref-ceo-side', label:'Mesa lateral CEO', kind:'image', asset:'side-table', x:9.7, y:43.1, w:3.6, h:3.0, solid:true },
+  { id:'ref-ceo-plant', label:'Planta CEO', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:3.25, y:46.8, w:2.3, h:3.2, solid:true },
+
+  // Inferior direito — sala executiva/design
+  { id:'ref-design-books', label:'Estante designer', kind:'image', asset:'bookshelf', x:62.1, y:32.0, w:5.5, h:3.0, solid:true },
+  { id:'ref-design-rug', label:'Tapete designer', kind:'rug', x:52.0, y:35.0, w:15.2, h:12.1, solid:false },
+  { id:'ref-design-chair', label:'Cadeira da designer', kind:'image', asset:'chair-black', x:57.3, y:33.9, w:3.2, h:4.0, solid:true, seats:[{dx:1.6,dy:2.0,direction:'down'}] },
+  { id:'ref-design-desk', label:'Mesa executiva designer', kind:'image', asset:'desk-executive', x:53.4, y:36.0, w:10.5, h:5.3, solid:true },
+  { id:'ref-design-sofa', label:'Sofá verde designer', kind:'image', asset:'sofa-green', x:54.7, y:43.2, w:7.2, h:4.2, solid:true, seats:[{dx:2.4,dy:2.0,direction:'up'},{dx:4.8,dy:2.0,direction:'up'}] },
+  { id:'ref-design-round', label:'Mesa redonda designer', kind:'image', asset:'round-table', x:62.3, y:43.2, w:4.2, h:4.0, solid:true },
+  { id:'ref-design-plant', label:'Planta designer', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.0, y:44.7, w:2.2, h:3.2, solid:true },
 ];
 
-let ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
+let ACTIVE_FURNITURE_RECTSlet ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
 
 function furnitureCollisionRects(items: FurnitureItem[]) {
   return items
@@ -426,29 +499,28 @@ function furnitureCollisionRects(items: FurnitureItem[]) {
 const SOLID_RECTS: Array<[number, number, number, number]> = [];
 
 const WALL_RECTS: Array<[number, number, number, number]> = [
-  // Building exterior
-  [2, 2, 68, 1], [2, 45, 68, 1], [2, 2, 1, 44], [69, 2, 1, 44],
-  // Right meeting/lab wing
-  [52, 2, 1, 7], [52, 12, 1, 6], [52, 20, 1, 2],
-  [52, 15, 18, 1],
-  // Bottom wing split from open office, doors at 10-12, 33-36, 57-60
-  [2, 23, 8, 1], [13, 23, 20, 1], [37, 23, 20, 1], [61, 23, 9, 1],
-  // Bottom rooms vertical dividers with doorway gaps
-  [21, 24, 1, 8], [21, 35, 1, 11],
-  [46, 24, 1, 8], [46, 35, 1, 11],
+  [2, 2, 68, 1], [2, 51, 68, 1], [2, 2, 1, 50], [69, 2, 1, 50],
+  [27, 2, 1, 18], [27, 23, 1, 1],
+  [49, 2, 1, 12], [49, 17, 1, 13],
+  [49, 16, 16, 1], [68, 16, 2, 1],
+  [2, 23, 14, 1], [19, 23, 14, 1], [38, 23, 11, 1],
+  [2, 30, 14, 1], [19, 30, 2, 1],
+  [49, 30, 4, 1], [56, 30, 14, 1],
+  [20, 30, 1, 4], [20, 37, 1, 15],
+  [49, 30, 1, 4], [49, 37, 1, 15],
 ];
 
-const INTERACTIONS = [
-  { type: 'computer' as const, owner: 'ceo', cell: { x: 10, y: 35 }, label: 'Abrir computador do CEO' },
-  { type: 'computer' as const, owner: 'designer-human', cell: { x: 56, y: 35 }, label: 'Abrir computador da designer' },
-  { type: 'meeting' as const, owner: 'meeting', cell: { x: 61, y: 12 }, label: 'Abrir sala de reunião' },
-  { type: 'object' as const, objectId: 'coffee' as const, cell: { x: 40, y: 18 }, label: 'Pegar um café' },
-  { type: 'object' as const, objectId: 'creative-board' as const, cell: { x: 52, y: 28 }, label: 'Abrir quadro criativo' },
-  { type: 'object' as const, objectId: 'lab-terminal' as const, cell: { x: 58, y: 20 }, label: 'Usar terminal do laboratório' },
-  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 64, y: 28 }, label: 'Abrir moodboard da designer' },
+const INTERACTIONSconst INTERACTIONS = [
+  { type: 'computer' as const, owner: 'ceo', cell: { x: 11, y: 39 }, label: 'Abrir computador do CEO' },
+  { type: 'computer' as const, owner: 'designer-human', cell: { x: 59, y: 39 }, label: 'Abrir computador da designer' },
+  { type: 'meeting' as const, owner: 'meeting', cell: { x: 59, y: 13 }, label: 'Abrir sala de reunião' },
+  { type: 'object' as const, objectId: 'coffee' as const, cell: { x: 59, y: 19 }, label: 'Pegar um café' },
+  { type: 'object' as const, objectId: 'creative-board' as const, cell: { x: 35, y: 27 }, label: 'Abrir quadro criativo' },
+  { type: 'object' as const, objectId: 'lab-terminal' as const, cell: { x: 64, y: 19 }, label: 'Usar a copa' },
+  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 64, y: 33 }, label: 'Abrir moodboard da designer' },
 ];
 
-function inRect(cell: Cell, x: number, y: number, w: number, h: number) {
+function inRectfunction inRect(cell: Cell, x: number, y: number, w: number, h: number) {
   return cell.x >= x && cell.x < x + w && cell.y >= y && cell.y < y + h;
 }
 
@@ -473,7 +545,7 @@ function areaForCell(cell: Cell) {
 
 function isWalkable(cell: Cell) {
   if (cell.x < 0 || cell.y < 0 || cell.x >= COLS || cell.y >= ROWS) return false;
-  if (!inRect(cell, 2, 2, 68, 44)) return false;
+  if (!inRect(cell, 2, 2, 68, 50)) return false;
   if (WALL_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
   if (SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
   if (ACTIVE_FURNITURE_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
@@ -623,9 +695,9 @@ function activeHumanTask(tasks: HumanTaskLite[], userId: string) {
 }
 
 function defaultHumanPosition(member: OfficeMember) {
-  if (member.officeRole === 'ceo') return centerOf({ x: 10, y: 37 });
-  if (member.officeRole === 'designer') return centerOf({ x: 57, y: 37 });
-  return centerOf({ x: 38, y: 36 });
+  if (member.officeRole === 'ceo') return centerOf({ x: 35, y: 49 });
+  if (member.officeRole === 'designer') return centerOf({ x: 59, y: 48 });
+  return centerOf({ x: 35, y: 28 });
 }
 
 function memberDirection(value?: string): Direction {
@@ -802,6 +874,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const cameraRef = useRef(camera);
   const [followPlayer, setFollowPlayer] = useState(true);
   const [interaction, setInteraction] = useState<Interaction>(null);
+  const [seated, setSeated] = useState<{ furnitureId: string; seatIndex: number } | null>(null);
   const [selectedHumanId, setSelectedHumanId] = useState<string | null>(null);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   const [areaEditing, setAreaEditing] = useState(false);
@@ -945,14 +1018,19 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(FURNITURE_STORAGE_KEY);
-      if (!saved) return;
+      if (!saved) {
+        setFurnitureLayout(DEFAULT_FURNITURE.map((item) => ({ ...item })));
+        return;
+      }
       const positions = JSON.parse(saved) as Record<string, { x?: number; y?: number }>;
       setFurnitureLayout(DEFAULT_FURNITURE.map((item) => {
         const position = positions[item.id];
-        if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return item;
+        if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return { ...item };
         return { ...item, x: Number(position.x), y: Number(position.y) };
       }));
-    } catch {}
+    } catch {
+      setFurnitureLayout(DEFAULT_FURNITURE.map((item) => ({ ...item })));
+    }
   }, []);
 
   useEffect(() => {
@@ -1057,11 +1135,87 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setWorkersMotion(next);
   }, [workers]);
 
+  const standUp = () => {
+    const current = playerRef.current;
+    if (!current) {
+      setSeated(null);
+      return;
+    }
+    const candidates = [
+      { x: current.x, y: current.y + TILE * 1.8 },
+      { x: current.x + TILE * 1.8, y: current.y },
+      { x: current.x - TILE * 1.8, y: current.y },
+      { x: current.x, y: current.y - TILE * 1.8 },
+    ];
+    const open = candidates.find((point) => canOccupy(point.x, point.y));
+    const safe = open || centerOf(nearestWalkableCell(current.x, current.y + TILE * 2));
+    const next: MotionState = {
+      ...current,
+      x: safe.x,
+      y: safe.y,
+      vx: 0,
+      vy: 0,
+      path: [],
+      targetKey: 'manual-player',
+    };
+    pathRef.current = [];
+    keyboardQueueRef.current = null;
+    playerRef.current = next;
+    setPlayer(next);
+    setWalkTarget(null);
+    setSeated(null);
+    setInteraction(null);
+  };
+
+  const sitOnFurniture = (furnitureId: string, seatIndex: number) => {
+    const item = furnitureLayout.find((entry) => entry.id === furnitureId);
+    const point = item ? furnitureSeatPoint(item, seatIndex) : null;
+    const current = playerRef.current;
+    if (!item || !point || !current) return;
+    const next: MotionState = {
+      ...current,
+      x: point.x,
+      y: point.y,
+      vx: 0,
+      vy: 0,
+      direction: point.direction,
+      path: [],
+      targetKey: 'seat:' + furnitureId + ':' + seatIndex,
+    };
+    pathRef.current = [];
+    keyboardQueueRef.current = null;
+    playerRef.current = next;
+    setPlayer(next);
+    setWalkTarget(null);
+    setFollowPlayer(true);
+    setSeated({ furnitureId, seatIndex });
+    setInteraction({ type: 'seat', label: 'Levantar', furnitureId, seatIndex });
+  };
+
+  const handleWorldInteraction = (nextInteraction: Exclude<Interaction, null>) => {
+    if (nextInteraction.type === 'seat') {
+      if (seated) standUp();
+      else sitOnFurniture(nextInteraction.furnitureId, nextInteraction.seatIndex);
+      return;
+    }
+    onInteract?.(nextInteraction);
+  };
+
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       const element = event.target as HTMLElement | null;
       if (element?.closest('input, textarea, select, [contenteditable="true"]')) return;
       const key = event.key.toLowerCase();
+
+      if (seated && (
+        key === 'e' || key === 'w' || key === 'a' || key === 's' || key === 'd' ||
+        key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright'
+      )) {
+        standUp();
+        event.preventDefault();
+        return;
+      }
+
       const movement: Record<string, Cell> = {
         w: { x: 0, y: -1 },
         arrowup: { x: 0, y: -1 },
@@ -1106,15 +1260,15 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         return;
       }
 
-      if (key === 'e' && interaction && onInteract) {
-        onInteract(interaction);
+      if (key === 'e' && interaction) {
+        handleWorldInteraction(interaction);
         event.preventDefault();
       }
     };
 
     window.addEventListener('keydown', down);
     return () => window.removeEventListener('keydown', down);
-  }, [interaction, onInteract]);
+  }, [interaction, onInteract, seated, furnitureLayout]);
 
   const clampCamera = (next: { x: number; y: number }, currentZoom = zoom) => {
     const viewport = viewportRef.current;
@@ -1223,9 +1377,20 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         let vx = 0;
         let vy = 0;
         let direction = currentPlayer.direction;
-        const route = [...pathRef.current];
+        const route = seated ? [] : [...pathRef.current];
 
-        if (route.length) {
+        if (seated) {
+          const seatItem = furnitureLayout.find((entry) => entry.id === seated.furnitureId);
+          const seatPoint = seatItem ? furnitureSeatPoint(seatItem, seated.seatIndex) : null;
+          if (seatPoint) {
+            x = seatPoint.x;
+            y = seatPoint.y;
+            direction = seatPoint.direction;
+            pathRef.current = [];
+          } else {
+            setSeated(null);
+          }
+        } else if (route.length) {
           const point = centerOf(route[0]);
           const dx = point.x - x;
           const dy = point.y - y;
@@ -1296,6 +1461,29 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             nearest = { type: 'object', label: item.label, objectId: item.objectId };
           }
           nearestDistance = distance;
+        }
+
+        if (seated) {
+          nearest = { type: 'seat', label: 'Levantar', furnitureId: seated.furnitureId, seatIndex: seated.seatIndex };
+          nearestDistance = 0;
+        } else {
+          for (const item of furnitureLayout) {
+            if (!item.seats?.length) continue;
+            for (let seatIndex = 0; seatIndex < item.seats.length; seatIndex += 1) {
+              const point = furnitureSeatPoint(item, seatIndex);
+              if (!point) continue;
+              const distance = distanceTiles(x, y, point.x, point.y);
+              if (distance <= 2.65 && distance < nearestDistance) {
+                nearest = {
+                  type: 'seat',
+                  label: item.label.toLowerCase().includes('sofá') ? 'Sentar no sofá' : 'Sentar',
+                  furnitureId: item.id,
+                  seatIndex,
+                };
+                nearestDistance = distance;
+              }
+            }
+          }
         }
 
         for (const worker of workersRef.current) {
@@ -1381,7 +1569,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
     frameId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(frameId);
-  }, [officeMembers, currentUserId, followPlayer, zoom, onPlayerMove]);
+  }, [officeMembers, currentUserId, followPlayer, zoom, onPlayerMove, furnitureLayout, seated]);
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -2093,7 +2281,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     ? CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleOf(currentMember)) || CEO_AVATAR_STYLES[1]
     : CEO_AVATAR_STYLES[1];
   const draftCeoStyle = CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleDraft) || CEO_AVATAR_STYLES[1];
-  const playerWalking = player ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
+  const playerWalking = player && !seated ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
   const playerFrame = player ? spriteFrame(player.direction, playerWalking) : null;
 
   return (
@@ -2175,21 +2363,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             />
           )}
 
-          <div className="gather-wall wall-meeting-left" />
-          <div className="gather-wall wall-meeting-split" />
-          <div className="gather-wall wall-bottom-a" />
-          <div className="gather-wall wall-bottom-b" />
-          <div className="gather-wall wall-bottom-c" />
-          <div className="gather-wall wall-bottom-d" />
-          <div className="gather-wall wall-ceo-split-a" />
-          <div className="gather-wall wall-ceo-split-b" />
-          <div className="gather-wall wall-designer-split-a" />
-          <div className="gather-wall wall-designer-split-b" />
-
-          <div className="gather-door door-meeting">REUNIÃO</div>
-          <div className="gather-door door-ceo">CEO</div>
-          <div className="gather-door door-lobby">LOBBY</div>
-          <div className="gather-door door-designer">DESIGN</div>
+          {WALL_RECTS.map(([x, y, width, height], index) => (
+            <div
+              key={'reference-wall-' + index}
+              className="gather-wall gather-reference-wall"
+              style={{
+                left: x * TILE,
+                top: y * TILE,
+                width: width * TILE,
+                height: height * TILE,
+              }}
+            />
+          ))}
 
           <div className={'gather-furniture-layer' + (furnitureEditMode ? ' editing' : '')}>
             {furnitureLayout.map((item) => {
@@ -2227,15 +2412,42 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                       setSelectedFurnitureId(item.id);
                       return;
                     }
-                    if (worker) onSelectWorker(worker.id);
+                    if (worker) {
+                      onSelectWorker(worker.id);
+                      return;
+                    }
+                    if (item.seats?.length && playerRef.current) {
+                      let bestIndex = 0;
+                      let bestDistance = Number.POSITIVE_INFINITY;
+                      item.seats.forEach((_, index) => {
+                        const point = furnitureSeatPoint(item, index);
+                        if (!point || !playerRef.current) return;
+                        const distance = distanceTiles(playerRef.current.x, playerRef.current.y, point.x, point.y);
+                        if (distance < bestDistance) {
+                          bestDistance = distance;
+                          bestIndex = index;
+                        }
+                      });
+                      if (bestDistance <= 2.8) sitOnFurniture(item.id, bestIndex);
+                    }
                   }}
                 >
                   {item.kind === 'brand' ? (
                     <span className="leadspay-pixel-sign"><b>✣</b> LeadsPay</span>
                   ) : item.kind === 'rug' ? (
                     <span className="gather-mapped-rug" />
+                  ) : item.asset ? (
+                    <span
+                      className="gather-exact-furniture-sprite"
+                      style={exactFurnitureStyle(item.asset, item.rotation || 0)}
+                    />
                   ) : (
-                    <img src={item.src} alt="" draggable={false} />
+                    <img
+                      src={item.src}
+                      alt=""
+                      draggable={false}
+                      style={item.rotation ? { transform: 'rotate(' + item.rotation + 'deg)' } : undefined}
+                    />
                   )}
                   {furnitureEditMode && (
                     <span className="gather-furniture-label">{item.label}</span>
@@ -2332,8 +2544,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             <button
               type="button"
               data-no-pan="true"
-              className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '')}
-              style={{ left: player.x, top: player.y, zIndex: 1100 + Math.floor(player.y) }}
+              className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '') + (seated ? ' seated' : '')}
+              style={{ left: player.x, top: player.y, zIndex: (seated ? 1500 : 1100) + Math.floor(player.y) }}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}
@@ -2348,7 +2560,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 style={{
                   backgroundImage: 'url(' + spriteForMember(currentMember) + ')',
                   backgroundPosition: (-playerFrame.column * 48) + 'px ' + (-playerFrame.row * 96) + 'px',
-                  transform: 'translateY(' + playerFrame.bob + 'px) rotate(' + playerFrame.lean + 'deg) scaleX(' + (playerFrame.flip ? -1 : 1) + ')',
+                  transform: 'translateY(' + (playerFrame.bob + (seated ? 12 : 0)) + 'px) rotate(' + (seated ? 0 : playerFrame.lean) + 'deg) scaleX(' + (playerFrame.flip ? -1 : 1) + ')',
                 }}
               />
               <span className="gather-avatar-tag me">
@@ -2401,7 +2613,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             className="gather-interaction"
             onClick={(event) => {
               event.stopPropagation();
-              onInteract?.(interaction);
+              handleWorldInteraction(interaction);
             }}
           >
             <kbd>E</kbd>

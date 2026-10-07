@@ -9111,3 +9111,123 @@
   from { opacity: 1; }
   to { opacity: 1; }
 }
+
+
+/* =========================================================
+   LeadsPay Office — room reference rebuilt from supplied art
+   ========================================================= */
+.gather-grass {
+  background:
+    radial-gradient(circle at 6% 7%, rgba(31,107,45,.42) 0 25px, transparent 26px),
+    radial-gradient(circle at 95% 9%, rgba(34,121,50,.40) 0 29px, transparent 30px),
+    radial-gradient(circle at 8% 92%, rgba(31,107,45,.35) 0 31px, transparent 32px),
+    radial-gradient(circle at 93% 89%, rgba(43,128,55,.34) 0 28px, transparent 29px),
+    linear-gradient(135deg, #6baa5d, #8bc77b 48%, #64a557) !important;
+}
+
+.gather-building-floor {
+  left: 64px !important;
+  top: 64px !important;
+  width: 2176px !important;
+  height: 1600px !important;
+  border: 14px solid #243843 !important;
+  border-top-width: 18px !important;
+  border-bottom-width: 18px !important;
+  background:
+    repeating-linear-gradient(0deg, rgba(133,78,34,.055) 0 2px, transparent 2px 23px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 1px, transparent 1px 72px),
+    #e6b77d !important;
+  box-shadow:
+    0 18px 0 #192c35,
+    0 28px 38px rgba(29,52,39,.3),
+    inset 0 0 0 4px rgba(255,244,222,.28) !important;
+}
+
+.gather-room { overflow: visible !important; }
+.gather-room::before {
+  opacity: 1 !important;
+  box-shadow: inset 0 0 0 1px rgba(105,71,43,.08);
+}
+.gather-room-operations::before {
+  background:
+    repeating-linear-gradient(0deg, rgba(118,73,37,.05) 0 2px, transparent 2px 24px),
+    #c99664 !important;
+}
+.gather-room-team-pods::before {
+  background:
+    repeating-linear-gradient(0deg, rgba(124,78,40,.045) 0 2px, transparent 2px 24px),
+    #d6a66e !important;
+}
+.gather-room-meeting::before {
+  background: linear-gradient(rgba(255,255,255,.12),rgba(255,255,255,.12)), #ddd0c0 !important;
+}
+.gather-room-lab::before {
+  background:
+    repeating-linear-gradient(90deg, rgba(101,83,68,.04) 0 2px, transparent 2px 24px),
+    #dac8ae !important;
+}
+.gather-room-ceo::before,
+.gather-room-designer::before {
+  background:
+    repeating-linear-gradient(0deg, rgba(132,82,39,.04) 0 2px, transparent 2px 24px),
+    #ebc28b !important;
+}
+.gather-room-lobby::before {
+  background:
+    repeating-linear-gradient(0deg, rgba(136,83,40,.035) 0 2px, transparent 2px 26px),
+    #edc58f !important;
+}
+.gather-room-name { display: none !important; }
+
+.gather-wall.gather-reference-wall {
+  z-index: 340 !important;
+  box-sizing: border-box;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background:
+    linear-gradient(90deg,#243843 0 24%,#52636b 25% 31%,#e0d7c7 32% 69%,#52636b 70% 77%,#243843 78% 100%) !important;
+  box-shadow:
+    0 6px 0 rgba(28,39,46,.35),
+    inset 0 2px 0 rgba(255,255,255,.32) !important;
+}
+.gather-wall.gather-reference-wall::after { display:none !important; }
+
+.gather-exact-furniture-sprite {
+  display:block;
+  width:100%;
+  height:100%;
+  background-repeat:no-repeat;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+  transform-origin:center center;
+  filter:
+    drop-shadow(0 5px 1px rgba(55,37,24,.16))
+    drop-shadow(4px 7px 4px rgba(48,34,22,.1));
+  pointer-events:none;
+}
+.gather-movable-furniture.reference-fridge img {
+  filter: grayscale(.48) brightness(1.06) drop-shadow(0 5px 2px rgba(55,37,24,.16));
+}
+.gather-mapped-rug {
+  background:
+    repeating-linear-gradient(0deg,rgba(117,94,61,.055) 0 2px,transparent 2px 20px),
+    #d9c49f !important;
+  border:3px solid rgba(150,113,70,.28) !important;
+  border-radius:2px !important;
+  box-shadow:inset 0 0 0 2px rgba(255,250,232,.28);
+}
+.gather-movable-furniture.reference-lounge-rug .gather-mapped-rug {
+  background:
+    repeating-linear-gradient(90deg,rgba(118,94,65,.045) 0 2px,transparent 2px 22px),
+    #d8c29c !important;
+}
+.gather-avatar.manual-player.seated {
+  transition:left 100ms ease,top 100ms ease !important;
+}
+.gather-avatar.manual-player.seated .gather-avatar-sprite {
+  filter:
+    drop-shadow(0 3px 1px rgba(40,48,52,.16))
+    drop-shadow(2px 5px 3px rgba(48,53,56,.08));
+}
+.gather-avatar.manual-player.seated::before,
+.gather-avatar.manual-player.seated::after { opacity:.08 !important; }
