@@ -10651,3 +10651,210 @@
     padding-inline:8px;
   }
 }
+
+
+/* City v5.1 — urban details */
+.gather-city-sidewalk.sidewalk-main-left {
+  left: 960px;
+  top: 0;
+  width: 64px;
+  height: 2688px;
+  border: 0;
+  border-right: 5px solid #8e9691;
+}
+.gather-city-sidewalk.sidewalk-main-right {
+  left: 1344px;
+  top: 0;
+  width: 64px;
+  height: 2688px;
+  border: 0;
+  border-left: 5px solid #8e9691;
+}
+.gather-city-sidewalk.sidewalk-east-left {
+  left: 2208px;
+  top: 0;
+  width: 64px;
+  height: 2688px;
+  border: 0;
+  border-right: 5px solid #8e9691;
+}
+.gather-city-sidewalk.sidewalk-east-right {
+  left: 2528px;
+  top: 0;
+  width: 64px;
+  height: 2688px;
+  border: 0;
+  border-left: 5px solid #8e9691;
+}
+
+.gather-city-parking {
+  position:absolute;
+  z-index:6;
+  display:flex;
+  gap:18px;
+  align-items:flex-end;
+  box-sizing:border-box;
+  border:5px solid #667071;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 74px, rgba(242,238,210,.65) 74px 79px),
+    #555f61;
+  box-shadow:inset 0 4px 0 rgba(255,255,255,.08);
+  pointer-events:none;
+}
+.gather-city-parking span {
+  width:58px;
+  height:100%;
+  border-left:4px solid rgba(245,240,210,.56);
+}
+.gather-city-parking b {
+  position:absolute;
+  left:10px;
+  bottom:8px;
+  color:rgba(247,241,214,.62);
+  font-family:"DM Mono",monospace;
+  font-size:8px;
+  letter-spacing:.08em;
+}
+.gather-city-parking.parking-market {
+  left:128px;
+  top:1415px;
+  width:700px;
+  height:230px;
+}
+.gather-city-parking.parking-garage {
+  left:1370px;
+  top:2050px;
+  width:660px;
+  height:210px;
+}
+
+.gather-city-bench {
+  position:absolute;
+  z-index:3;
+  width:108px;
+  height:32px;
+  border:5px solid #4b4437;
+  background:repeating-linear-gradient(0deg,#a47b4f 0 7px,#765638 7px 10px);
+  box-shadow:0 7px 0 rgba(50,55,49,.20);
+}
+.gather-city-bench::before,
+.gather-city-bench::after {
+  content:"";
+  position:absolute;
+  bottom:-17px;
+  width:10px;
+  height:17px;
+  background:#3f4544;
+}
+.gather-city-bench::before { left:16px; }
+.gather-city-bench::after { right:16px; }
+.gather-city-bench.bench-a { left:80px; top:80px; }
+.gather-city-bench.bench-b { right:82px; bottom:80px; }
+
+.gather-city-planter {
+  position:absolute;
+  width:72px;
+  height:58px;
+  border:6px solid #675a47;
+  background:#b98f63;
+  box-shadow:0 5px 0 rgba(45,52,48,.16);
+}
+.gather-city-planter i {
+  position:absolute;
+  left:50%;
+  top:-30px;
+  width:54px;
+  height:44px;
+  transform:translateX(-50%);
+  border:4px solid #365d3e;
+  border-radius:44%;
+  background:
+    radial-gradient(circle at 35% 35%,#8ec86d 0 9px,transparent 10px),
+    #5b9b53;
+}
+.gather-city-planter.planter-a { left:68px; bottom:55px; }
+.gather-city-planter.planter-b { right:68px; top:54px; }
+
+.gather-city-building-door {
+  position:absolute;
+  left:50%;
+  bottom:-10px;
+  z-index:7;
+  width:84px;
+  height:92px;
+  transform:translateX(-50%);
+  border:6px solid #27383f;
+  border-bottom:0;
+  background:#79573e;
+  box-shadow:inset 0 7px 0 rgba(255,221,169,.12);
+}
+.gather-city-building-door i {
+  position:absolute;
+  right:10px;
+  top:45px;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#e3c66b;
+}
+
+.gather-city-rooftop-unit {
+  position:absolute;
+  top:14px;
+  z-index:5;
+  width:72px;
+  height:38px;
+  border:5px solid #27383f;
+  background:
+    repeating-linear-gradient(90deg,#6f7a7d 0 8px,#566266 8px 13px);
+  box-shadow:4px 5px 0 rgba(33,44,48,.20);
+}
+.gather-city-rooftop-unit.rooftop-a { right:24px; }
+.gather-city-rooftop-unit.rooftop-b { right:112px; width:48px; }
+
+.gather-city-bike-rack {
+  position:absolute;
+  left:2760px;
+  top:1570px;
+  z-index:90;
+  display:flex;
+  gap:9px;
+  height:48px;
+  pointer-events:none;
+}
+.gather-city-bike-rack i {
+  width:28px;
+  height:36px;
+  border:5px solid #536064;
+  border-bottom:0;
+  border-radius:16px 16px 0 0;
+}
+
+.gather-city-mailbox {
+  position:absolute;
+  left:2850px;
+  top:925px;
+  z-index:95;
+  display:grid;
+  place-items:center;
+  width:42px;
+  height:58px;
+  border:5px solid #26373d;
+  border-radius:5px;
+  background:#6757c9;
+  color:#fff;
+  font-family:"DM Mono",monospace;
+  font-size:9px;
+  font-weight:900;
+  box-shadow:0 6px 0 rgba(33,45,49,.20);
+  pointer-events:none;
+}
+.gather-city-mailbox::after {
+  content:"";
+  position:absolute;
+  left:16px;
+  bottom:-26px;
+  width:8px;
+  height:26px;
+  background:#36464a;
+}
