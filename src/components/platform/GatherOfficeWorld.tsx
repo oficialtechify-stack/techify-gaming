@@ -446,7 +446,9 @@ const AI_DESKS = [
   { workerId: 'growth', col: 42, row: 12 },
 ];
 
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:decorator-v3-empty';
+// A planta do Drive já vem mobiliada. Comece com um layout limpo, preservando
+// no navegador a configuração antiga sob a chave anterior, para reversão.
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:drive-map-v1';
 
 const DEFAULT_FURNITURE: FurnitureItem[] = [];
 

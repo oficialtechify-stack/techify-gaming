@@ -9258,8 +9258,17 @@
   display: none !important;
 }
 
-.gather-room::before,
-.gather-wall.gather-reference-wall {
+/* A planta do Drive já contém pisos, paredes e móveis. As antigas áreas do
+   simulador eram opacas e continuavam cobrindo a arte mesmo com o piso oculto. */
+.gather-drive-map ~ .gather-room {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.gather-drive-map ~ .gather-room::before,
+.gather-drive-map ~ .gather-room::after,
+.gather-drive-map ~ .gather-wall.gather-reference-wall {
   display: none !important;
 }
 
