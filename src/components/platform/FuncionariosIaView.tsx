@@ -236,6 +236,7 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   const [tasks, setTasks] = useState<AiTask[]>([]);
   const [access, setAccess] = useState<OfficeAccess | null>(null);
   const [officeMembers, setOfficeMembers] = useState<OfficeMember[]>([]);
+  const [areaNames, setAreaNames] = useState<Record<string, string>>({});
   const [humanTasks, setHumanTasks] = useState<HumanTask[]>([]);
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
   const [isTeamChatOpen, setIsTeamChatOpen] = useState(false);
@@ -338,6 +339,7 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
       setWorkers(workerList.map((worker: Worker) => ({ ...worker, brain: brains[worker.id] || worker.brain || null })));
       setTasks(Array.isArray(data.tasks) ? data.tasks : []);
       setOfficeMembers(Array.isArray(data.officeMembers) ? data.officeMembers : []);
+      setAreaNames(data.areaNames && typeof data.areaNames === 'object' ? data.areaNames : {});
       setHumanTasks(Array.isArray(data.humanTasks) ? data.humanTasks : []);
       setTeamMessages(Array.isArray(data.teamMessages) ? data.teamMessages : []);
       if (data.access) setAccess(data.access);
@@ -796,6 +798,19 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
     }
   };
 
+  const renameOfficeArea = async (areaId: string, name: string) => {
+    if (!currentUser || !access?.isOfficeAdmin) return;
+    setError('');
+    const response = await fetch('/api/office/workers', {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ action: 'rename-office-area', areaId, name }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível renomear a área.');
+    if (data.areaNames && typeof data.areaNames === 'object') setAreaNames(data.areaNames);
+  };
+
   const sendPresence = useCallback((position: { x: number; y: number; direction: 'up' | 'down' | 'left' | 'right' }) => {
     if (!currentUser) return;
     void currentUser.getIdToken().then((token) =>
@@ -1058,6 +1073,9 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
             officeMembers={officeMembers}
             currentUserId={currentUser?.uid || null}
             selectedWorkerId={selectedWorkerId}
+            areaNames={areaNames}
+            canManageAreas={access?.isOfficeAdmin === true}
+            onRenameArea={renameOfficeArea}
             onSelectWorker={selectWorker}
             onSelectHuman={(userId) => {
               setSelectedHumanId(userId);

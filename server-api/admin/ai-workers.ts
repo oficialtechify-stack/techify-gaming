@@ -1133,12 +1133,17 @@ export default async function handler(req: Req, res: Res) {
 
       const snap = await tasks.orderBy('createdAt', 'desc').limit(250).get();
       const taskList = snap.docs.map((doc) => serializeTask(doc.id, doc.data() as Record<string, any>));
-      const [officeMembers, humanTasks, workerBrains, teamMessages] = await Promise.all([
+      const [officeMembers, humanTasks, workerBrains, teamMessages, officeMapSnap] = await Promise.all([
         resolveOfficeMembers(db, officeIdentity),
         resolveHumanTasks(db, officeIdentity),
         resolveWorkerBrains(db, resolvedWorkers, taskList),
         loadTeamMessages(db),
+        db.collection('admin_office_map').doc('areas').get(),
       ]);
+      const officeMapData = officeMapSnap.exists ? officeMapSnap.data() as Record<string, any> : {};
+      const areaNames = officeMapData.names && typeof officeMapData.names === 'object'
+        ? officeMapData.names as Record<string, string>
+        : {};
 
       return res.status(200).json({
         success: true,
@@ -1156,6 +1161,7 @@ export default async function handler(req: Req, res: Res) {
         officeMembers,
         humanTasks,
         teamMessages,
+        areaNames,
         tasks: taskList,
         executionEngine: {
           connected: geminiConnected,
@@ -1373,6 +1379,35 @@ export default async function handler(req: Req, res: Res) {
         return res.status(200).json({ success: true, members });
       }
 
+      if (action === 'rename-office-area') {
+        assertOfficeAdmin(officeIdentity);
+        const areaId = cleanText(body.areaId, 60);
+        const name = cleanText(body.name, 40);
+        const allowedAreaIds = new Set(['operations', 'team-pods', 'meeting', 'lab', 'ceo', 'lobby', 'designer']);
+        if (!allowedAreaIds.has(areaId)) {
+          return res.status(400).json({ error: 'Área do Office inválida.' });
+        }
+        if (name.length < 2) {
+          return res.status(400).json({ error: 'O nome da área precisa ter pelo menos 2 caracteres.' });
+        }
+
+        const ref = db.collection('admin_office_map').doc('areas');
+        const snap = await ref.get();
+        const current = snap.exists ? snap.data() as Record<string, any> : {};
+        const names = current.names && typeof current.names === 'object'
+          ? { ...(current.names as Record<string, string>) }
+          : {};
+        names[areaId] = name;
+
+        await ref.set({
+          names,
+          updatedAt: new Date().toISOString(),
+          updatedBy: officeIdentity.email || officeIdentity.uid,
+        }, { merge: true });
+
+        return res.status(200).json({ success: true, areaNames: names });
+      }
+
       if (action === 'update-presence') {
         const x = Number(body.x);
         const y = Number(body.y);
@@ -1391,12 +1426,12 @@ export default async function handler(req: Req, res: Res) {
             palette: 0,
             active: true,
             deskId: 'ceo',
-            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v1' },
+            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v2' },
             updatedAt: now,
           }, { merge: true });
         } else {
           await db.collection('admin_office_members').doc(officeIdentity.uid).set({
-            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v1' },
+            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v2' },
             updatedAt: now,
           }, { merge: true });
         }
