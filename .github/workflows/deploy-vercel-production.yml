@@ -1,4 +1,5 @@
 name: Deploy production to Vercel
+# Office asset-proxy deployment trigger: 2026-10-07
 
 on:
   push:
