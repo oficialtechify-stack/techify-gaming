@@ -325,6 +325,10 @@ function furnitureSeatPoint(item: FurnitureItem, seatIndex: number) {
   };
 }
 
+function worldDepth(yPx: number) {
+  return 1000 + Math.floor(yPx);
+}
+
 function furnitureFootprint(item: Pick<FurnitureItem, 'x' | 'y' | 'w' | 'h' | 'footprint'>) {
   const fallbackHeight = Math.max(.65, Math.min(1.45, item.h * .32));
   const fallbackWidth = Math.max(.8, item.w * .72);
@@ -2853,12 +2857,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             {furnitureLayout.map((item) => {
               const worker = item.workerId ? workers.find((entry) => entry.id === item.workerId) : null;
               const selected = selectedFurnitureId === item.id;
+              const seatedHere = seated?.furnitureId === item.id;
+              const activeSeatPoint = seatedHere ? furnitureSeatPoint(item, seated.seatIndex) : null;
               const commonProps = {
                 left: item.x * TILE,
                 top: item.y * TILE,
                 width: item.w * TILE,
                 height: item.h * TILE,
-                zIndex: item.kind === 'rug' ? 210 : 900 + Math.floor((item.y + item.h) * TILE),
+                zIndex: item.kind === 'rug'
+                  ? 210
+                  : seatedHere && activeSeatPoint
+                    ? worldDepth(activeSeatPoint.y) - 1
+                    : worldDepth((item.y + item.h) * TILE),
               };
 
               return (
@@ -2955,7 +2965,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 key={worker.id}
                 type="button"
                 className={'gather-avatar ai-avatar state-' + state + (walking ? ' walking' : '') + (selectedWorkerId === worker.id ? ' selected' : '')}
-                style={{ left: motion.x, top: motion.y, zIndex: 800 + Math.floor(motion.y) }}
+                style={{ left: motion.x, top: motion.y, zIndex: worldDepth(motion.y) }}
                 onClick={(event) => {
                   event.stopPropagation();
                   onSelectWorker(worker.id);
@@ -2989,7 +2999,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 key={member.userId}
                 type="button"
                 className={'gather-avatar human-avatar remote' + (member.officeRole === 'ceo' ? ' ceo-avatar' : '') + (moving ? ' walking' : '') + (selectedHumanId === member.userId ? ' selected' : '')}
-                style={{ left: x, top: y, zIndex: 950 + Math.floor(y) }}
+                style={{ left: x, top: y, zIndex: worldDepth(y) }}
                 onClick={(event) => {
                   event.stopPropagation();
                   setSelectedHumanId(member.userId);
@@ -3014,12 +3024,51 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             );
           })}
 
+          {seated && player && (() => {
+            const item = furnitureLayout.find((entry) => entry.id === seated.furnitureId);
+            if (!item) return null;
+            const footprint = furnitureFootprint(item);
+            const localFrontStart = Math.max(
+              45,
+              Math.min(78, ((footprint.y - item.y) / Math.max(.1, item.h)) * 100),
+            );
+
+            return (
+              <div
+                className="gather-seated-furniture-front"
+                aria-hidden="true"
+                style={{
+                  left: item.x * TILE,
+                  top: item.y * TILE,
+                  width: item.w * TILE,
+                  height: item.h * TILE,
+                  zIndex: worldDepth(player.y) + 1,
+                  clipPath: 'inset(' + localFrontStart + '% 0 0 0)',
+                }}
+              >
+                {item.asset ? (
+                  <span
+                    className="gather-exact-furniture-sprite"
+                    style={exactFurnitureStyle(item.asset, item.rotation || 0)}
+                  />
+                ) : item.src ? (
+                  <img
+                    src={item.src}
+                    alt=""
+                    draggable={false}
+                    style={item.rotation ? { transform: 'rotate(' + item.rotation + 'deg)' } : undefined}
+                  />
+                ) : null}
+              </div>
+            );
+          })()}
+
           {player && currentMember && playerFrame && (
             <button
               type="button"
               data-no-pan="true"
               className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '') + (seated ? ' seated' : '')}
-              style={{ left: player.x, top: player.y, zIndex: (seated ? 1040 : 920) + Math.floor(player.y), transition: 'none', willChange: 'left, top' }}
+              style={{ left: player.x, top: player.y, zIndex: worldDepth(player.y), transition: 'none', willChange: 'left, top' }}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}
