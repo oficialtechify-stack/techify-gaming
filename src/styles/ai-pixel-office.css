@@ -9231,3 +9231,245 @@
 }
 .gather-avatar.manual-player.seated::before,
 .gather-avatar.manual-player.seated::after { opacity:.08 !important; }
+
+
+/* =========================================================
+   LeadsPay Office Decorator v2 — empty room, placement physics
+   and Rick multi-frame motion sourced from the supplied frames.
+   ========================================================= */
+
+.gather-decorator-panel {
+  width: 360px;
+  max-height: min(720px, calc(100% - 32px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gather-decorator-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 9px;
+  min-height: 38px;
+  border: 1px solid #e0e5e8;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 10px;
+  color: #879198;
+}
+
+.gather-decorator-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #263037;
+  font-size: 11px;
+}
+
+.gather-decorator-categories {
+  display: flex;
+  gap: 5px;
+  margin: 0 12px 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.gather-decorator-categories::-webkit-scrollbar {
+  display: none;
+}
+
+.gather-decorator-categories button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  border: 1px solid #e3e7e9;
+  border-radius: 999px;
+  background: #f8fafb;
+  color: #6c767c;
+  padding: 0 9px;
+  font-size: 8px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.gather-decorator-categories button.active {
+  border-color: #4f46e5;
+  background: #eef0ff;
+  color: #3730a3;
+}
+
+.gather-decorator-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 150px;
+  max-height: 330px;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+}
+
+.gather-decorator-item {
+  position: relative;
+  min-width: 0;
+  min-height: 96px;
+  display: grid;
+  grid-template-rows: 66px auto;
+  align-items: center;
+  justify-items: center;
+  border: 1px solid #e5e9eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  color: #3b4449;
+  padding: 6px;
+  cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+
+.gather-decorator-item:hover {
+  transform: translateY(-1px);
+  border-color: #5965e9;
+  box-shadow: 0 7px 18px rgba(50,56,72,.10);
+}
+
+.gather-decorator-preview {
+  width: 76px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.gather-decorator-preview .gather-exact-furniture-sprite {
+  width: 68px;
+  height: 58px;
+  display: block;
+}
+
+.gather-decorator-preview img {
+  width: 68px;
+  height: 58px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.gather-decorator-item small {
+  width: 100%;
+  overflow: hidden;
+  color: #4b555b;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gather-decorator-add {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #fff;
+  padding: 2px;
+  box-sizing: content-box;
+}
+
+.gather-selected-furniture-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.gather-selected-furniture-actions button {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #dfe4e7;
+  border-radius: 9px;
+  background: #fff;
+  color: #4b555b;
+  font-size: 8px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.gather-selected-furniture-actions button:hover {
+  border-color: #5965e9;
+  color: #3730a3;
+}
+
+.gather-selected-furniture-actions button.danger:hover {
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+
+.gather-movable-furniture.invalid-placement {
+  outline: 3px solid rgba(239,68,68,.82);
+  outline-offset: 3px;
+  border-radius: 8px;
+  filter: saturate(.75) brightness(1.06);
+}
+
+.gather-movable-furniture.invalid-placement::after {
+  content: "posição inválida";
+  position: absolute;
+  left: 50%;
+  bottom: -19px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 999px;
+  background: #b91c1c;
+  color: #fff;
+  padding: 3px 7px;
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.gather-avatar.manual-player {
+  transition:
+    left 50ms linear,
+    top 50ms linear,
+    filter .14s ease;
+}
+
+.gather-avatar.manual-player .gather-avatar-sprite.ceo-motion-sprite {
+  left: 4px !important;
+  top: 0;
+  width: 64px !important;
+  height: 96px !important;
+  background-size: 512px 480px !important;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transform-origin: 50% 86%;
+  filter:
+    drop-shadow(0 4px 1px rgba(34,39,42,.20))
+    drop-shadow(3px 7px 4px rgba(35,40,44,.12));
+}
+
+.gather-avatar.manual-player.seated .gather-avatar-sprite.ceo-motion-sprite {
+  clip-path: none !important;
+  margin-top: 0 !important;
+}
+
+.gather-avatar.manual-player.walking .gather-avatar-sprite.ceo-motion-sprite {
+  animation: none !important;
+}
+
+@media (max-width: 700px) {
+  .gather-decorator-panel {
+    width: min(340px, calc(100% - 76px));
+  }
+  .gather-decorator-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 260px;
+  }
+}

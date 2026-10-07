@@ -14,6 +14,10 @@ import {
   RotateCcw,
   Minimize2,
   MessageCircle,
+  Plus,
+  RotateCw,
+  Search,
+  Trash2,
   Mic,
   MicOff,
   MonitorUp,
@@ -28,6 +32,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { CEO_RICK_MOTION_SPRITE } from './ceoRickMotion';
 
 type Worker = {
   id: string;
@@ -165,6 +170,23 @@ type FurnitureItem = {
   seats?: FurnitureSeat[];
 };
 
+type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'decor';
+
+type FurnitureCatalogItem = {
+  templateId: string;
+  label: string;
+  category: FurnitureCatalogCategory;
+  kind: FurnitureKind;
+  src?: string;
+  asset?: ExactFurnitureAsset;
+  w: number;
+  h: number;
+  solid?: boolean;
+  className?: string;
+  rotation?: 0 | 90 | 180 | 270;
+  seats?: FurnitureSeat[];
+};
+
 type CallParticipant = {
   uid: string;
   displayName: string;
@@ -220,11 +242,11 @@ const COLS = 72;
 const ROWS = 54;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
-const PLAYER_SPEED = 176;
+const PLAYER_SPEED = 184;
 const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
-const FRAME_MS = 84;
+const FRAME_MS = 48;
 const OFFICE_MAP_VERSION = 'leadspay-reference-v1';
 
 const CEO_AVATAR_STYLES: Array<{
@@ -272,13 +294,41 @@ function exactFurnitureStyle(asset: ExactFurnitureAsset, rotation: 0 | 90 | 180 
   };
 }
 
+function rotateDirection(direction: Direction, rotation: 0 | 90 | 180 | 270 = 0): Direction {
+  if (!rotation) return direction;
+  const directions: Direction[] = ['up','right','down','left'];
+  const index = directions.indexOf(direction);
+  const shift = rotation / 90;
+  return directions[(index + shift) % 4];
+}
+
 function furnitureSeatPoint(item: FurnitureItem, seatIndex: number) {
   const seat = item.seats?.[seatIndex];
   if (!seat) return null;
+
+  const rotation = item.rotation || 0;
+  const cx = item.w / 2;
+  const cy = item.h / 2;
+  const px = seat.dx - cx;
+  const py = seat.dy - cy;
+  let rx = px;
+  let ry = py;
+
+  if (rotation === 90) {
+    rx = -py;
+    ry = px;
+  } else if (rotation === 180) {
+    rx = -px;
+    ry = -py;
+  } else if (rotation === 270) {
+    rx = py;
+    ry = -px;
+  }
+
   return {
-    x: (item.x + seat.dx) * TILE,
-    y: (item.y + seat.dy) * TILE,
-    direction: seat.direction,
+    x: (item.x + cx + rx) * TILE,
+    y: (item.y + cy + ry) * TILE,
+    direction: rotateDirection(seat.direction, rotation),
   };
 }
 
@@ -394,93 +444,167 @@ const AI_DESKS = [
   { workerId: 'growth', col: 17, row: 14 },
 ];
 
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:reference-v1';
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:decorator-v2';
 
-const DEFAULT_FURNITURE: FurnitureItem[] = [
-  // Topo esquerdo — Equipe LeadsPay
-  { id:'ref-brand-leadspay', label:'Logo LeadsPay', kind:'brand', x:4.4, y:3.35, w:7.3, h:1.55, solid:false },
-  { id:'ref-ops-plant-left', label:'Planta superior esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:3.25, y:4.2, w:2.25, h:3.2, solid:true },
-  { id:'ref-ops-paint-1', label:'Quadro 1', kind:'image', src:'/pixel-agents/assets/furniture/SMALL_PAINTING/SMALL_PAINTING.png', x:12.0, y:3.55, w:2.0, h:1.55, solid:false },
-  { id:'ref-ops-paint-2', label:'Quadro 2', kind:'image', src:'/pixel-agents/assets/furniture/SMALL_PAINTING_2/SMALL_PAINTING_2.png', x:14.6, y:3.55, w:2.0, h:1.55, solid:false },
-  { id:'ref-ops-books', label:'Estante superior', kind:'image', asset:'bookshelf', x:18.2, y:3.35, w:5.6, h:3.0, solid:true },
+const DEFAULT_FURNITURE: FurnitureItem[] = [];
 
-  { id:'ref-work-lumy', label:'Estação Lumy', kind:'image', asset:'workstation', x:4.8, y:6.0, w:5.9, h:5.1, solid:true, workerId:'lumy-manager', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-front', label:'Estação Front-end', kind:'image', asset:'workstation', x:12.0, y:6.0, w:5.9, h:5.1, solid:true, workerId:'frontend', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-back', label:'Estação Back-end', kind:'image', asset:'workstation', x:19.2, y:6.0, w:5.9, h:5.1, solid:true, workerId:'backend', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-design', label:'Estação Design IA', kind:'image', asset:'workstation', x:4.8, y:14.0, w:5.9, h:5.1, solid:true, workerId:'designer', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-qa', label:'Estação QA', kind:'image', asset:'workstation', x:12.0, y:14.0, w:5.9, h:5.1, solid:true, workerId:'qa', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-work-growth', label:'Estação Growth', kind:'image', asset:'workstation', x:19.2, y:14.0, w:5.9, h:5.1, solid:true, workerId:'growth', seats:[{dx:2.95,dy:4.15,direction:'up'}] },
-  { id:'ref-ops-plant-right', label:'Planta equipe direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:24.1, y:18.7, w:2.3, h:3.2, solid:true },
-
-  // Topo centro — seis estações
-  { id:'ref-team-work-1', label:'Estação Operação 1', kind:'image', asset:'workstation', x:29.0, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-2', label:'Estação Operação 2', kind:'image', asset:'workstation', x:35.7, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-3', label:'Estação Operação 3', kind:'image', asset:'workstation', x:42.4, y:6.0, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-4', label:'Estação Operação 4', kind:'image', asset:'workstation', x:29.0, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-5', label:'Estação Operação 5', kind:'image', asset:'workstation', x:35.7, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-work-6', label:'Estação Operação 6', kind:'image', asset:'workstation', x:42.4, y:13.7, w:5.6, h:5.0, solid:true, seats:[{dx:2.8,dy:4.08,direction:'up'}] },
-  { id:'ref-team-sofa-left', label:'Sofá operação esquerdo', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:29.0, y:19.0, w:5.0, h:2.75, solid:true, seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}] },
-  { id:'ref-team-side-table', label:'Mesa operação', kind:'image', asset:'side-table', x:36.6, y:18.9, w:3.6, h:2.9, solid:true },
-  { id:'ref-team-sofa-right', label:'Sofá operação direito', kind:'image', src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png', x:43.0, y:19.0, w:5.0, h:2.75, solid:true, seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}] },
-
-  // Topo direito — sala de reunião
-  { id:'ref-meeting-whiteboard', label:'Quadro da reunião', kind:'image', src:'/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png', x:57.0, y:3.45, w:5.2, h:2.0, solid:false },
-  { id:'ref-meeting-plant-l', label:'Planta reunião esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:50.4, y:3.6, w:2.2, h:3.1, solid:true },
-  { id:'ref-meeting-plant-r', label:'Planta reunião direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.2, y:3.6, w:2.2, h:3.1, solid:true },
-  { id:'ref-meeting-table', label:'Mesa longa de reunião', kind:'image', asset:'long-table', x:53.0, y:7.1, w:13.2, h:4.7, solid:true },
-  { id:'ref-meeting-chair-t1', label:'Cadeira superior 1', kind:'image', asset:'chair-green', x:53.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
-  { id:'ref-meeting-chair-t2', label:'Cadeira superior 2', kind:'image', asset:'chair-green', x:57.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
-  { id:'ref-meeting-chair-t3', label:'Cadeira superior 3', kind:'image', asset:'chair-green', x:61.4, y:5.3, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'down'}] },
-  { id:'ref-meeting-chair-b1', label:'Cadeira inferior 1', kind:'image', asset:'chair-green', rotation:180, x:53.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
-  { id:'ref-meeting-chair-b2', label:'Cadeira inferior 2', kind:'image', asset:'chair-green', rotation:180, x:57.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
-  { id:'ref-meeting-chair-b3', label:'Cadeira inferior 3', kind:'image', asset:'chair-green', rotation:180, x:61.4, y:10.8, w:2.45, h:3.0, solid:true, seats:[{dx:1.22,dy:1.5,direction:'up'}] },
-  { id:'ref-meeting-chair-l', label:'Cadeira lateral esquerda', kind:'image', asset:'chair-green', rotation:90, x:51.2, y:8.1, w:2.5, h:3.0, solid:true, seats:[{dx:1.25,dy:1.5,direction:'right'}] },
-  { id:'ref-meeting-chair-r', label:'Cadeira lateral direita', kind:'image', asset:'chair-green', rotation:270, x:65.5, y:8.1, w:2.5, h:3.0, solid:true, seats:[{dx:1.25,dy:1.5,direction:'left'}] },
-
-  // Direita meio — copa/café
-  { id:'ref-cafe-counter', label:'Bancada da copa', kind:'image', asset:'long-table', x:52.1, y:17.8, w:14.8, h:3.6, solid:true },
-  { id:'ref-cafe-fridge', label:'Geladeira', kind:'image', src:'/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png', x:50.5, y:17.4, w:2.5, h:4.3, solid:true, className:'reference-fridge' },
-  { id:'ref-cafe-machine', label:'Cafeteira', kind:'image', src:'/pixel-agents/assets/furniture/COFFEE/COFFEE.png', x:58.3, y:18.0, w:1.3, h:1.3, solid:false },
-  { id:'ref-cafe-table-1', label:'Mesa redonda café 1', kind:'image', asset:'round-table', x:52.7, y:23.0, w:5.0, h:4.7, solid:true },
-  { id:'ref-cafe-chair-1t', label:'Cadeira café 1 superior', kind:'image', asset:'chair-green', x:54.1, y:21.5, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'down'}] },
-  { id:'ref-cafe-chair-1b', label:'Cadeira café 1 inferior', kind:'image', asset:'chair-green', rotation:180, x:54.1, y:26.0, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'up'}] },
-  { id:'ref-cafe-table-2', label:'Mesa redonda café 2', kind:'image', asset:'round-table', x:61.0, y:23.0, w:5.0, h:4.7, solid:true },
-  { id:'ref-cafe-chair-2t', label:'Cadeira café 2 superior', kind:'image', asset:'chair-green', x:62.4, y:21.5, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'down'}] },
-  { id:'ref-cafe-chair-2b', label:'Cadeira café 2 inferior', kind:'image', asset:'chair-green', rotation:180, x:62.4, y:26.0, w:2.2, h:2.8, solid:true, seats:[{dx:1.1,dy:1.4,direction:'up'}] },
-  { id:'ref-cafe-plant', label:'Planta da copa', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.4, y:26.0, w:2.2, h:3.1, solid:true },
-
-  // Centro inferior — lounge principal
-  { id:'ref-lounge-rug', label:'Tapete lounge', kind:'rug', x:24.0, y:29.0, w:22.0, h:17.0, solid:false, className:'reference-lounge-rug' },
-  { id:'ref-lounge-books-l', label:'Estante lounge esquerda', kind:'image', asset:'bookshelf', x:23.0, y:25.3, w:5.6, h:3.0, solid:true },
-  { id:'ref-lounge-paint', label:'Quadro lounge', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png', x:33.0, y:25.45, w:4.5, h:2.7, solid:false },
-  { id:'ref-lounge-books-r', label:'Estante lounge direita', kind:'image', asset:'bookshelf', x:40.6, y:25.3, w:5.6, h:3.0, solid:true },
-  { id:'ref-lounge-arm-l', label:'Poltrona laranja esquerda', kind:'image', asset:'armchair-orange', x:25.7, y:30.0, w:4.5, h:5.1, solid:true, seats:[{dx:2.25,dy:2.65,direction:'down'}] },
-  { id:'ref-lounge-arm-r', label:'Poltrona laranja direita', kind:'image', asset:'armchair-orange', x:40.0, y:30.0, w:4.5, h:5.1, solid:true, seats:[{dx:2.25,dy:2.65,direction:'down'}] },
-  { id:'ref-lounge-sofa-l', label:'Sofá verde esquerdo', kind:'image', asset:'sofa-green', rotation:90, x:27.2, y:35.3, w:4.8, h:7.2, solid:true, seats:[{dx:2.4,dy:2.5,direction:'right'},{dx:2.4,dy:4.75,direction:'right'}] },
-  { id:'ref-lounge-sofa-r', label:'Sofá verde direito', kind:'image', asset:'sofa-green', rotation:270, x:39.0, y:35.3, w:4.8, h:7.2, solid:true, seats:[{dx:2.4,dy:2.5,direction:'left'},{dx:2.4,dy:4.75,direction:'left'}] },
-  { id:'ref-lounge-table', label:'Mesa central lounge', kind:'image', asset:'side-table', x:33.6, y:36.2, w:3.8, h:4.0, solid:true },
-  { id:'ref-lounge-plant-l', label:'Planta lounge esquerda', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:22.4, y:40.5, w:2.4, h:3.4, solid:true },
-  { id:'ref-lounge-plant-r', label:'Planta lounge direita', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:45.1, y:40.5, w:2.4, h:3.4, solid:true },
-  { id:'ref-lounge-bench', label:'Banco inferior lounge', kind:'image', src:'/pixel-agents/assets/furniture/WOODEN_BENCH/WOODEN_BENCH_FRONT.png', x:31.5, y:46.2, w:7.0, h:2.4, solid:true, seats:[{dx:2.2,dy:1.35,direction:'up'},{dx:4.8,dy:1.35,direction:'up'}] },
-
-  // Inferior esquerdo — sala do CEO
-  { id:'ref-ceo-books', label:'Estante CEO', kind:'image', asset:'bookshelf', x:3.8, y:32.0, w:5.5, h:3.0, solid:true },
-  { id:'ref-ceo-rug', label:'Tapete CEO', kind:'rug', x:5.0, y:35.0, w:12.8, h:12.1, solid:false },
-  { id:'ref-ceo-chair', label:'Cadeira do CEO', kind:'image', asset:'chair-black', x:9.7, y:33.9, w:3.2, h:4.0, solid:true, seats:[{dx:1.6,dy:2.0,direction:'down'}] },
-  { id:'ref-ceo-desk', label:'Mesa executiva do CEO', kind:'image', asset:'desk-executive', x:5.8, y:36.0, w:10.5, h:5.3, solid:true },
-  { id:'ref-ceo-visitor-l', label:'Cadeira visitante CEO esquerda', kind:'image', asset:'chair-green', rotation:180, x:5.9, y:42.1, w:3.0, h:3.7, solid:true, seats:[{dx:1.5,dy:1.9,direction:'up'}] },
-  { id:'ref-ceo-visitor-r', label:'Cadeira visitante CEO direita', kind:'image', asset:'chair-green', rotation:180, x:14.0, y:42.1, w:3.0, h:3.7, solid:true, seats:[{dx:1.5,dy:1.9,direction:'up'}] },
-  { id:'ref-ceo-side', label:'Mesa lateral CEO', kind:'image', asset:'side-table', x:9.7, y:43.1, w:3.6, h:3.0, solid:true },
-  { id:'ref-ceo-plant', label:'Planta CEO', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:3.25, y:46.8, w:2.3, h:3.2, solid:true },
-
-  // Inferior direito — sala executiva/design
-  { id:'ref-design-books', label:'Estante designer', kind:'image', asset:'bookshelf', x:62.1, y:32.0, w:5.5, h:3.0, solid:true },
-  { id:'ref-design-rug', label:'Tapete designer', kind:'rug', x:52.0, y:35.0, w:15.2, h:12.1, solid:false },
-  { id:'ref-design-chair', label:'Cadeira da designer', kind:'image', asset:'chair-black', x:57.3, y:33.9, w:3.2, h:4.0, solid:true, seats:[{dx:1.6,dy:2.0,direction:'down'}] },
-  { id:'ref-design-desk', label:'Mesa executiva designer', kind:'image', asset:'desk-executive', x:53.4, y:36.0, w:10.5, h:5.3, solid:true },
-  { id:'ref-design-sofa', label:'Sofá verde designer', kind:'image', asset:'sofa-green', x:54.7, y:43.2, w:7.2, h:4.2, solid:true, seats:[{dx:2.4,dy:2.0,direction:'up'},{dx:4.8,dy:2.0,direction:'up'}] },
-  { id:'ref-design-round', label:'Mesa redonda designer', kind:'image', asset:'round-table', x:62.3, y:43.2, w:4.2, h:4.0, solid:true },
-  { id:'ref-design-plant', label:'Planta designer', kind:'image', src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png', x:66.0, y:44.7, w:2.2, h:3.2, solid:true },
+const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
+  {
+    templateId:'workstation',
+    label:'Estação de trabalho',
+    category:'work',
+    kind:'image',
+    asset:'workstation',
+    w:5.9,
+    h:5.1,
+    solid:true,
+    seats:[{dx:2.95,dy:4.15,direction:'up'}],
+  },
+  {
+    templateId:'desk-executive',
+    label:'Mesa executiva',
+    category:'work',
+    kind:'image',
+    asset:'desk-executive',
+    w:10.5,
+    h:5.3,
+    solid:true,
+  },
+  {
+    templateId:'chair-green',
+    label:'Cadeira verde',
+    category:'seat',
+    kind:'image',
+    asset:'chair-green',
+    w:2.45,
+    h:3.0,
+    solid:true,
+    seats:[{dx:1.22,dy:1.5,direction:'down'}],
+  },
+  {
+    templateId:'chair-black',
+    label:'Cadeira executiva',
+    category:'seat',
+    kind:'image',
+    asset:'chair-black',
+    w:3.2,
+    h:4.0,
+    solid:true,
+    seats:[{dx:1.6,dy:2.0,direction:'down'}],
+  },
+  {
+    templateId:'armchair-orange',
+    label:'Poltrona laranja',
+    category:'seat',
+    kind:'image',
+    asset:'armchair-orange',
+    w:3.8,
+    h:4.1,
+    solid:true,
+    seats:[{dx:1.9,dy:2.15,direction:'down'}],
+  },
+  {
+    templateId:'sofa-green',
+    label:'Sofá verde',
+    category:'seat',
+    kind:'image',
+    asset:'sofa-green',
+    w:7.2,
+    h:4.2,
+    solid:true,
+    seats:[{dx:2.35,dy:2.1,direction:'down'},{dx:4.85,dy:2.1,direction:'down'}],
+  },
+  {
+    templateId:'sofa-red',
+    label:'Sofá',
+    category:'seat',
+    kind:'image',
+    src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png',
+    w:5.0,
+    h:2.75,
+    solid:true,
+    seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}],
+  },
+  {
+    templateId:'side-table',
+    label:'Mesa lateral',
+    category:'table',
+    kind:'image',
+    asset:'side-table',
+    w:3.6,
+    h:2.9,
+    solid:true,
+  },
+  {
+    templateId:'round-table',
+    label:'Mesa redonda',
+    category:'table',
+    kind:'image',
+    asset:'round-table',
+    w:4.8,
+    h:4.5,
+    solid:true,
+  },
+  {
+    templateId:'long-table',
+    label:'Mesa de reunião',
+    category:'table',
+    kind:'image',
+    asset:'long-table',
+    w:13.2,
+    h:4.7,
+    solid:true,
+  },
+  {
+    templateId:'bookshelf',
+    label:'Estante',
+    category:'storage',
+    kind:'image',
+    asset:'bookshelf',
+    w:5.6,
+    h:3.0,
+    solid:true,
+  },
+  {
+    templateId:'plant',
+    label:'Planta grande',
+    category:'decor',
+    kind:'image',
+    src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png',
+    w:2.25,
+    h:3.2,
+    solid:true,
+  },
+  {
+    templateId:'whiteboard',
+    label:'Quadro branco',
+    category:'decor',
+    kind:'image',
+    src:'/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png',
+    w:5.2,
+    h:2.0,
+    solid:false,
+  },
+  {
+    templateId:'painting',
+    label:'Quadro',
+    category:'decor',
+    kind:'image',
+    src:'/pixel-agents/assets/furniture/SMALL_PAINTING/SMALL_PAINTING.png',
+    w:2.0,
+    h:1.55,
+    solid:false,
+  },
+  {
+    templateId:'coffee',
+    label:'Cafeteira',
+    category:'decor',
+    kind:'image',
+    src:'/pixel-agents/assets/furniture/COFFEE/COFFEE.png',
+    w:1.4,
+    h:1.4,
+    solid:false,
+  },
 ];
 
 let ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
@@ -509,6 +633,59 @@ const WALL_RECTS: Array<[number, number, number, number]> = [
   [20, 30, 1, 4], [20, 37, 1, 15],
   [49, 30, 1, 4], [49, 37, 1, 15],
 ];
+
+function rectanglesOverlap(
+  ax:number, ay:number, aw:number, ah:number,
+  bx:number, by:number, bw:number, bh:number,
+  padding = .08,
+) {
+  return (
+    ax + padding < bx + bw - padding &&
+    ax + aw - padding > bx + padding &&
+    ay + padding < by + bh - padding &&
+    ay + ah - padding > by + padding
+  );
+}
+
+function furniturePlacementValid(candidate: FurnitureItem, layout: FurnitureItem[], ignoreId?: string) {
+  if (
+    candidate.x < 3 ||
+    candidate.y < 3 ||
+    candidate.x + candidate.w > COLS - 3 ||
+    candidate.y + candidate.h > ROWS - 3
+  ) return false;
+
+  if (candidate.solid) {
+    for (const [x,y,w,h] of WALL_RECTS) {
+      if (rectanglesOverlap(candidate.x,candidate.y,candidate.w,candidate.h,x,y,w,h,.12)) return false;
+    }
+
+    for (const other of layout) {
+      if (!other.solid || other.id === ignoreId) continue;
+      if (rectanglesOverlap(candidate.x,candidate.y,candidate.w,candidate.h,other.x,other.y,other.w,other.h,.18)) return false;
+    }
+  }
+
+  return true;
+}
+
+function catalogFurniture(template: FurnitureCatalogItem, x:number, y:number): FurnitureItem {
+  return {
+    id: template.templateId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7),
+    label: template.label,
+    kind: template.kind,
+    src: template.src,
+    asset: template.asset,
+    x,
+    y,
+    w: template.w,
+    h: template.h,
+    solid: template.solid,
+    className: template.className,
+    rotation: template.rotation || 0,
+    seats: template.seats?.map((seat) => ({ ...seat })),
+  };
+}
 
 const INTERACTIONS = [
   { type: 'computer' as const, owner: 'ceo', cell: { x: 11, y: 39 }, label: 'Abrir computador do CEO' },
@@ -745,6 +922,32 @@ function spriteFrame(direction: Direction, walking = false, now = Date.now()) {
   return { row, flip, column, bob, lean };
 }
 
+function ceoMotionFrame(direction: Direction, walking: boolean, seated: boolean, now = Date.now()) {
+  if (seated) {
+    const sequence = [0,1,2,3,4,5,6,7,6,5,4,3,2,1];
+    const step = Math.floor(now / 170) % sequence.length;
+    return { row: 4, column: sequence[step], flip: false, bob: 0, lean: 0 };
+  }
+
+  const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
+  const flip = direction === 'left';
+
+  if (!walking) {
+    return { row, column: 0, flip, bob: 0, lean: 0 };
+  }
+
+  const column = Math.floor(now / 76) % 8;
+  const bobPattern = [0,-1,-2,-1,0,-1,-2,-1];
+  const leanPattern = [0,.35,.6,.25,0,-.35,-.6,-.25];
+  return {
+    row,
+    column,
+    flip,
+    bob: bobPattern[column],
+    lean: leanPattern[column],
+  };
+}
+
 function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motion: MotionState, now: number) {
   if (state === 'working') return { key: 'desk', cell: HOME_TARGET[workerId] || { x: 8, y: 10 }, idleIndex: motion.idleIndex, nextIdleAt: now + 7000 };
   if (state === 'waiting_approval') return { key: 'meeting', cell: MEETING_TARGET[workerId] || { x: 60, y: 10 }, idleIndex: motion.idleIndex, nextIdleAt: now + 7000 };
@@ -913,6 +1116,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [furnitureEditMode, setFurnitureEditMode] = useState(false);
   const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null);
   const [furnitureLayout, setFurnitureLayout] = useState<FurnitureItem[]>(DEFAULT_FURNITURE);
+  const [furnitureSearch, setFurnitureSearch] = useState('');
+  const [furnitureCategory, setFurnitureCategory] = useState<'all' | FurnitureCatalogCategory>('all');
+  const [invalidFurnitureId, setInvalidFurnitureId] = useState<string | null>(null);
 
   const fallbackCurrentMember = useMemo<OfficeMember | null>(() => {
     if (!currentUserId) return null;
@@ -1019,28 +1225,41 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     try {
       const saved = window.localStorage.getItem(FURNITURE_STORAGE_KEY);
       if (!saved) {
-        setFurnitureLayout(DEFAULT_FURNITURE.map((item) => ({ ...item })));
+        setFurnitureLayout([]);
         return;
       }
-      const positions = JSON.parse(saved) as Record<string, { x?: number; y?: number }>;
-      setFurnitureLayout(DEFAULT_FURNITURE.map((item) => {
-        const position = positions[item.id];
-        if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return { ...item };
-        return { ...item, x: Number(position.x), y: Number(position.y) };
-      }));
+
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) {
+        setFurnitureLayout([]);
+        return;
+      }
+
+      const clean = parsed
+        .filter((item:any) => (
+          item &&
+          typeof item.id === 'string' &&
+          typeof item.label === 'string' &&
+          Number.isFinite(item.x) &&
+          Number.isFinite(item.y) &&
+          Number.isFinite(item.w) &&
+          Number.isFinite(item.h)
+        ))
+        .map((item:any) => ({
+          ...item,
+          rotation: item.rotation === 90 || item.rotation === 180 || item.rotation === 270 ? item.rotation : 0,
+        })) as FurnitureItem[];
+
+      setFurnitureLayout(clean);
     } catch {
-      setFurnitureLayout(DEFAULT_FURNITURE.map((item) => ({ ...item })));
+      setFurnitureLayout([]);
     }
   }, []);
 
   useEffect(() => {
     ACTIVE_FURNITURE_RECTS = furnitureCollisionRects(furnitureLayout);
     try {
-      const positions = Object.fromEntries(furnitureLayout.map((item) => [
-        item.id,
-        { x: item.x, y: item.y },
-      ]));
-      window.localStorage.setItem(FURNITURE_STORAGE_KEY, JSON.stringify(positions));
+      window.localStorage.setItem(FURNITURE_STORAGE_KEY, JSON.stringify(furnitureLayout));
     } catch {}
   }, [furnitureLayout]);
 
@@ -2131,6 +2350,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     event.stopPropagation();
     setFollowPlayer(false);
     setSelectedFurnitureId(item.id);
+    setInvalidFurnitureId(null);
     furnitureDragRef.current = {
       id: item.id,
       startClientX: event.clientX,
@@ -2146,33 +2366,118 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     if (!drag || drag.id !== event.currentTarget.dataset.furnitureId) return;
     event.preventDefault();
     event.stopPropagation();
+
     const dx = (event.clientX - drag.startClientX) / Math.max(.34, zoom) / TILE;
     const dy = (event.clientY - drag.startClientY) / Math.max(.34, zoom) / TILE;
     const snap = (value: number) => Math.round(value * 2) / 2;
-    setFurnitureLayout((items) => items.map((item) => {
-      if (item.id !== drag.id) return item;
-      const x = Math.max(3, Math.min(COLS - item.w - 3, snap(drag.startX + dx)));
-      const y = Math.max(3, Math.min(ROWS - item.h - 3, snap(drag.startY + dy)));
-      return { ...item, x, y };
-    }));
+
+    setFurnitureLayout((items) => {
+      const current = items.find((item) => item.id === drag.id);
+      if (!current) return items;
+      const candidate = {
+        ...current,
+        x: Math.max(3, Math.min(COLS - current.w - 3, snap(drag.startX + dx))),
+        y: Math.max(3, Math.min(ROWS - current.h - 3, snap(drag.startY + dy))),
+      };
+      const valid = furniturePlacementValid(candidate, items, drag.id);
+      setInvalidFurnitureId(valid ? null : drag.id);
+      return items.map((item) => item.id === drag.id ? candidate : item);
+    });
   };
 
   const finishFurnitureDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!furnitureDragRef.current) return;
+    const drag = furnitureDragRef.current;
+    if (!drag) return;
     event.preventDefault();
     event.stopPropagation();
+
+    setFurnitureLayout((items) => {
+      const current = items.find((item) => item.id === drag.id);
+      if (!current || furniturePlacementValid(current, items, drag.id)) return items;
+      return items.map((item) => item.id === drag.id
+        ? { ...item, x: drag.startX, y: drag.startY }
+        : item
+      );
+    });
+
     furnitureDragRef.current = null;
+    setInvalidFurnitureId(null);
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
   };
 
-  const resetFurnitureLayout = () => {
-    setFurnitureLayout(DEFAULT_FURNITURE.map((item) => ({ ...item })));
+  const findCatalogPlacement = (template: FurnitureCatalogItem) => {
+    const current = playerRef.current;
+    const baseX = current ? current.x / TILE : COLS / 2;
+    const baseY = current ? current.y / TILE : ROWS / 2;
+    const snap = (value:number) => Math.round(value * 2) / 2;
+    const offsets = [
+      [3,0],[-3,0],[0,3],[0,-3],[5,2],[-5,2],[5,-2],[-5,-2],
+      [7,0],[-7,0],[0,6],[0,-6],
+    ];
+
+    for (const [ox,oy] of offsets) {
+      const candidate = catalogFurniture(
+        template,
+        snap(baseX + ox - template.w / 2),
+        snap(baseY + oy - template.h / 2),
+      );
+      if (furniturePlacementValid(candidate, furnitureLayout)) return candidate;
+    }
+
+    for (let y = 4; y < ROWS - template.h - 3; y += 2) {
+      for (let x = 4; x < COLS - template.w - 3; x += 2) {
+        const candidate = catalogFurniture(template,x,y);
+        if (furniturePlacementValid(candidate,furnitureLayout)) return candidate;
+      }
+    }
+
+    return null;
+  };
+
+  const addFurnitureFromCatalog = (template: FurnitureCatalogItem) => {
+    const item = findCatalogPlacement(template);
+    if (!item) return;
+    setFurnitureLayout((items) => [...items,item]);
+    setSelectedFurnitureId(item.id);
+    setInvalidFurnitureId(null);
+    setFurnitureEditMode(true);
+    setFollowPlayer(false);
+  };
+
+  const removeSelectedFurniture = () => {
+    if (!selectedFurnitureId) return;
+    setSeated((current) => current?.furnitureId === selectedFurnitureId ? null : current);
+    setFurnitureLayout((items) => items.filter((item) => item.id !== selectedFurnitureId));
     setSelectedFurnitureId(null);
+    setInvalidFurnitureId(null);
+  };
+
+  const rotateSelectedFurniture = () => {
+    if (!selectedFurnitureId) return;
+    setFurnitureLayout((items) => items.map((item) => {
+      if (item.id !== selectedFurnitureId) return item;
+      const nextRotation = (((item.rotation || 0) + 90) % 360) as 0 | 90 | 180 | 270;
+      return { ...item, rotation: nextRotation };
+    }));
+  };
+
+  const resetFurnitureLayout = () => {
+    setFurnitureLayout([]);
+    setSelectedFurnitureId(null);
+    setInvalidFurnitureId(null);
+    setSeated(null);
   };
 
   const selectedFurniture = selectedFurnitureId
     ? furnitureLayout.find((item) => item.id === selectedFurnitureId) || null
     : null;
+
+  const visibleFurnitureCatalog = FURNITURE_CATALOG.filter((item) => {
+    const query = furnitureSearch.trim().toLowerCase();
+    const categoryMatch = furnitureCategory === 'all' || item.category === furnitureCategory;
+    const searchMatch = !query || item.label.toLowerCase().includes(query);
+    return categoryMatch && searchMatch;
+  });
 
   const selectedArea = selectedAreaId
     ? AREAS.find((area) => area.id === selectedAreaId) || null
@@ -2283,6 +2588,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const draftCeoStyle = CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleDraft) || CEO_AVATAR_STYLES[1];
   const playerWalking = player && !seated ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
   const playerFrame = player ? spriteFrame(player.direction, playerWalking) : null;
+  const ceoPlayerFrame = player && currentMember?.officeRole === 'ceo'
+    ? ceoMotionFrame(player.direction, playerWalking, Boolean(seated))
+    : null;
 
   return (
     <div className="gather-office-shell" ref={shellRef}>
@@ -2385,7 +2693,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 top: item.y * TILE,
                 width: item.w * TILE,
                 height: item.h * TILE,
-                zIndex: item.kind === 'rug' ? 210 : 560 + Math.floor((item.y + item.h) * TILE),
+                zIndex: item.kind === 'rug' ? 210 : 900 + Math.floor((item.y + item.h) * TILE),
               };
 
               return (
@@ -2398,6 +2706,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                     'gather-movable-furniture kind-' + item.kind +
                     (item.className ? ' ' + item.className : '') +
                     (selected ? ' selected' : '') +
+                    (invalidFurnitureId === item.id ? ' invalid-placement' : '') +
                     (furnitureEditMode ? ' editable' : '')
                   }
                   style={commonProps}
@@ -2545,7 +2854,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               type="button"
               data-no-pan="true"
               className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '') + (seated ? ' seated' : '')}
-              style={{ left: player.x, top: player.y, zIndex: (seated ? 1500 : 1100) + Math.floor(player.y) }}
+              style={{ left: player.x, top: player.y, zIndex: (seated ? 1040 : 920) + Math.floor(player.y) }}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}
@@ -2556,11 +2865,16 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               }}
             >
               <span
-                className="gather-avatar-sprite"
-                style={{
+                className={'gather-avatar-sprite' + (ceoPlayerFrame ? ' ceo-motion-sprite' : '')}
+                style={ceoPlayerFrame ? {
+                  backgroundImage: 'url(' + CEO_RICK_MOTION_SPRITE + ')',
+                  backgroundSize: '512px 480px',
+                  backgroundPosition: (-ceoPlayerFrame.column * 64) + 'px ' + (-ceoPlayerFrame.row * 96) + 'px',
+                  transform: 'translateY(' + ceoPlayerFrame.bob + 'px) rotate(' + ceoPlayerFrame.lean + 'deg) scaleX(' + (ceoPlayerFrame.flip ? -1 : 1) + ')',
+                } : {
                   backgroundImage: 'url(' + spriteForMember(currentMember) + ')',
                   backgroundPosition: (-playerFrame.column * 48) + 'px ' + (-playerFrame.row * 96) + 'px',
-                  transform: 'translateY(' + (playerFrame.bob + (seated ? 12 : 0)) + 'px) rotate(' + (seated ? 0 : playerFrame.lean) + 'deg) scaleX(' + (playerFrame.flip ? -1 : 1) + ')',
+                  transform: 'translateY(' + playerFrame.bob + 'px) rotate(' + playerFrame.lean + 'deg) scaleX(' + (playerFrame.flip ? -1 : 1) + ')',
                 }}
               />
               <span className="gather-avatar-tag me">
@@ -2832,34 +3146,109 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         </div>
 
         {furnitureEditMode && canEditFurniture && (
-          <aside className="gather-furniture-editor-panel" data-no-pan="true">
+          <aside className="gather-furniture-editor-panel gather-decorator-panel" data-no-pan="true">
             <div className="people-head">
               <div>
-                <strong>Editar Office</strong>
-                <small>Arraste cada móvel. A posição fica salva automaticamente.</small>
+                <strong>Decorador</strong>
+                <small>Sala vazia: escolha, posicione e organize tudo do seu jeito.</small>
               </div>
               <button type="button" onClick={() => {
                 setFurnitureEditMode(false);
                 setSelectedFurnitureId(null);
+                setInvalidFurnitureId(null);
               }}><X className="h-4 w-4" /></button>
             </div>
+
+            <div className="gather-decorator-search">
+              <Search className="h-4 w-4" />
+              <input
+                value={furnitureSearch}
+                onChange={(event) => setFurnitureSearch(event.target.value)}
+                placeholder="Pesquisar uma decoração"
+              />
+            </div>
+
+            <div className="gather-decorator-categories">
+              {[
+                ['all','Tudo'],
+                ['work','Trabalho'],
+                ['seat','Assentos'],
+                ['table','Mesas'],
+                ['storage','Estantes'],
+                ['decor','Decoração'],
+              ].map(([id,label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={furnitureCategory === id ? 'active' : ''}
+                  onClick={() => setFurnitureCategory(id as typeof furnitureCategory)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="gather-decorator-grid">
+              {visibleFurnitureCatalog.map((template) => (
+                <button
+                  key={template.templateId}
+                  type="button"
+                  className="gather-decorator-item"
+                  onClick={() => addFurnitureFromCatalog(template)}
+                  title={'Adicionar ' + template.label}
+                >
+                  <span className="gather-decorator-preview">
+                    {template.asset ? (
+                      <span
+                        className="gather-exact-furniture-sprite"
+                        style={exactFurnitureStyle(template.asset, template.rotation || 0)}
+                      />
+                    ) : template.src ? (
+                      <img src={template.src} alt="" draggable={false} />
+                    ) : (
+                      <Plus className="h-5 w-5" />
+                    )}
+                  </span>
+                  <small>{template.label}</small>
+                  <Plus className="gather-decorator-add h-3 w-3" />
+                </button>
+              ))}
+            </div>
+
             <div className="gather-furniture-editor-body">
-              <div className="gather-editor-tip">
-                <Move className="h-4 w-4" />
-                <span>Clique e arraste qualquer móvel. O encaixe é feito em meia célula para ficar alinhado como no Gather.</span>
-              </div>
               {selectedFurniture ? (
                 <div className="gather-selected-furniture">
                   <small>Móvel selecionado</small>
                   <strong>{selectedFurniture.label}</strong>
-                  <span>X {selectedFurniture.x.toFixed(1)} · Y {selectedFurniture.y.toFixed(1)}</span>
+                  <span>
+                    X {selectedFurniture.x.toFixed(1)} · Y {selectedFurniture.y.toFixed(1)}
+                    {invalidFurnitureId === selectedFurniture.id ? ' · posição inválida' : ''}
+                  </span>
+                  <div className="gather-selected-furniture-actions">
+                    <button type="button" onClick={rotateSelectedFurniture} title="Girar 90°">
+                      <RotateCw className="h-4 w-4" />
+                      Girar
+                    </button>
+                    <button type="button" className="danger" onClick={removeSelectedFurniture} title="Remover móvel">
+                      <Trash2 className="h-4 w-4" />
+                      Remover
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="gather-selected-furniture empty">Selecione um móvel no mapa.</div>
+                <div className="gather-selected-furniture empty">
+                  Adicione um móvel acima ou selecione um item no mapa.
+                </div>
               )}
+
+              <div className="gather-editor-tip">
+                <Move className="h-4 w-4" />
+                <span>Arraste para mover. O encaixe usa meia célula; paredes e outros móveis bloqueiam posições inválidas.</span>
+              </div>
+
               <button type="button" className="gather-reset-furniture" onClick={resetFurnitureLayout}>
-                <RotateCcw className="h-4 w-4" />
-                Restaurar layout original
+                <Trash2 className="h-4 w-4" />
+                Limpar sala
               </button>
             </div>
           </aside>
