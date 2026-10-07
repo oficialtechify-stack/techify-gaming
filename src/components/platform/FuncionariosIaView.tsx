@@ -62,6 +62,16 @@ type OfficeAccess = {
   canUseAi?: boolean;
 };
 
+type OfficeAvatarStyle = 'social' | 'all-black' | 'old-money' | 'wine';
+
+type OfficeAvatarConfig = {
+  style: OfficeAvatarStyle;
+  skinTone: number;
+  hair: number;
+  facialHair: number;
+  accessory: number;
+};
+
 type OfficeMember = {
   id?: string;
   userId: string;
@@ -73,6 +83,7 @@ type OfficeMember = {
   active: boolean;
   deskId: string;
   avatar?: string | null;
+  avatarConfig?: OfficeAvatarConfig | null;
   position?: { x: number; y: number; direction?: string; updatedAt?: string; mapVersion?: string } | null;
   emote?: { emoji?: string; updatedAt?: string } | null;
 };
@@ -811,6 +822,28 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
     if (data.areaNames && typeof data.areaNames === 'object') setAreaNames(data.areaNames);
   };
 
+  const updateOwnOfficeProfile = async (patch: {
+    displayName?: string;
+    avatarConfig?: OfficeAvatarConfig;
+  }) => {
+    if (!currentUser) return;
+    setError('');
+    const response = await fetch('/api/office/workers', {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ action: 'update-own-office-profile', ...patch }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível salvar seu perfil no Office.');
+    if (data.member) {
+      setOfficeMembers((current) => {
+        const exists = current.some((member) => member.userId === data.member.userId);
+        if (!exists) return [data.member, ...current];
+        return current.map((member) => member.userId === data.member.userId ? data.member : member);
+      });
+    }
+  };
+
   const sendPresence = useCallback((position: { x: number; y: number; direction: 'up' | 'down' | 'left' | 'right' }) => {
     if (!currentUser) return;
     void currentUser.getIdToken().then((token) =>
@@ -1076,6 +1109,7 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
             areaNames={areaNames}
             canManageAreas={access?.isOfficeAdmin === true}
             onRenameArea={renameOfficeArea}
+            onUpdateSelfProfile={updateOwnOfficeProfile}
             onSelectWorker={selectWorker}
             onSelectHuman={(userId) => {
               setSelectedHumanId(userId);
