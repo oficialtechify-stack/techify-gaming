@@ -8695,7 +8695,7 @@
 
 /* CEO local: sempre distinguível dos agentes IA e controlado só pelo usuário */
 .gather-avatar.manual-player {
-  z-index: 1800;
+  /* Depth is assigned inline from the player's Y coordinate, like furniture. */
 }
 
 .gather-avatar.manual-player::before {
@@ -8760,7 +8760,7 @@
 .gather-furniture-layer {
   position: absolute;
   inset: 0;
-  z-index: 500;
+  z-index: auto;
   pointer-events: none;
 }
 
@@ -8784,6 +8784,25 @@
   object-fit: contain;
   image-rendering: pixelated;
   filter: drop-shadow(0 7px 2px rgba(48,35,25,.13));
+  pointer-events: none;
+}
+
+.gather-seated-furniture-front {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.gather-seated-furniture-front > img,
+.gather-seated-furniture-front > .gather-exact-furniture-sprite {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  image-rendering: pixelated;
   pointer-events: none;
 }
 
@@ -9238,6 +9257,29 @@
    and Rick multi-frame motion sourced from the supplied frames.
    ========================================================= */
 
+/* A imagem completa da planta fica apenas como referência de design.
+   O runtime usa salas, pisos e paredes reais para manter visual e colisão alinhados. */
+.gather-drive-map {
+  display: none !important;
+}
+
+.gather-grass,
+.gather-building-floor {
+  display: block !important;
+}
+
+.gather-drive-map ~ .gather-room {
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.gather-drive-map ~ .gather-room::before,
+.gather-drive-map ~ .gather-room::after,
+.gather-drive-map ~ .gather-wall.gather-reference-wall {
+  display: block !important;
+}
+
 .gather-decorator-panel {
   width: 360px;
   max-height: min(720px, calc(100% - 32px));
@@ -9472,37 +9514,4 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     max-height: 260px;
   }
-}
-
-
-/* Rick runtime atlas rendering — clipped IMG, independent from legacy background-position keyframes */
-.gather-avatar.manual-player .gather-avatar-sprite.ceo-motion-sprite {
-  overflow: hidden !important;
-  contain: none !important;
-  background: none !important;
-  background-image: none !important;
-  width: 64px !important;
-  height: 96px !important;
-  left: 4px !important;
-  top: 0 !important;
-  animation: none !important;
-  margin-top: 0 !important;
-}
-
-.gather-avatar.manual-player .gather-avatar-sprite.ceo-motion-sprite > img {
-  position: absolute !important;
-  width: 512px !important;
-  height: 480px !important;
-  max-width: none !important;
-  max-height: none !important;
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  pointer-events: none;
-  user-select: none;
-  transform: none !important;
-  transition: none !important;
-  animation: none !important;
 }
