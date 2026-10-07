@@ -887,7 +887,7 @@ export const PixelOfficeWorld: React.FC<PixelOfficeWorldProps> = ({
         member,
         x: position.x,
         y: position.y,
-        direction: memberDirection('direction' in position ? position.direction : undefined),
+        direction: memberDirection(member.position && position === member.position ? member.position.direction : undefined),
       };
     });
 
