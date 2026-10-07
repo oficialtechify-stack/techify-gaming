@@ -60,6 +60,12 @@ for (const file of MAPS) {
     }
   }
 
+  for (const tileset of map.tilesets || []) {
+    if (typeof tileset.image === 'string' && /^https?:\/\//i.test(tileset.image)) {
+      fail(errors, file, 'tileset image must use a LeadsPay-local path, not an external URL: ' + tileset.image);
+    }
+  }
+
   const collisionLayer = layers.find((layer) => layer.type === 'tilelayer' && layer.name === 'collisions');
   if (collisionLayer && collisionLayer.visible === false) {
     fail(errors, file, 'collision layer cannot be hidden; use opacity 0 instead so WorkAdventure still processes collisions');
