@@ -6048,7 +6048,8 @@
           "visible": true,
           "width": 192,
           "x": 32,
-          "y": 96
+          "y": 96,
+          "class": "area"
         },
         {
           "height": 128,
@@ -6066,7 +6067,8 @@
           "visible": true,
           "width": 224,
           "x": 640,
-          "y": 544
+          "y": 544,
+          "class": "area"
         },
         {
           "height": 224,
@@ -6099,7 +6101,8 @@
           "visible": true,
           "width": 192,
           "x": 768,
-          "y": 224
+          "y": 224,
+          "class": "area"
         },
         {
           "height": 64,
@@ -6117,7 +6120,8 @@
           "visible": true,
           "width": 32,
           "x": 0,
-          "y": 512
+          "y": 512,
+          "class": "area"
         },
         {
           "height": 32,
@@ -6135,7 +6139,8 @@
           "visible": true,
           "width": 32,
           "x": 64,
-          "y": 544
+          "y": 544,
+          "class": "area"
         },
         {
           "id": 21,
@@ -6156,7 +6161,7 @@
             {
               "name": "openWebsiteTrigger",
               "type": "string",
-              "value": "action"
+              "value": "onaction"
             },
             {
               "name": "openWebsiteTriggerMessage",
@@ -6172,8 +6177,14 @@
               "name": "openWebsiteAllowApi",
               "type": "bool",
               "value": true
+            },
+            {
+              "name": "openWebsiteClosable",
+              "type": "bool",
+              "value": true
             }
-          ]
+          ],
+          "class": "area"
         },
         {
           "id": 22,
@@ -6194,7 +6205,7 @@
             {
               "name": "openWebsiteTrigger",
               "type": "string",
-              "value": "action"
+              "value": "onaction"
             },
             {
               "name": "openWebsiteTriggerMessage",
@@ -6210,8 +6221,14 @@
               "name": "openWebsiteAllowApi",
               "type": "bool",
               "value": true
+            },
+            {
+              "name": "openWebsiteClosable",
+              "type": "bool",
+              "value": true
             }
-          ]
+          ],
+          "class": "area"
         },
         {
           "id": 23,
@@ -6232,7 +6249,7 @@
             {
               "name": "openWebsiteTrigger",
               "type": "string",
-              "value": "action"
+              "value": "onaction"
             },
             {
               "name": "openWebsiteTriggerMessage",
@@ -6248,8 +6265,14 @@
               "name": "openWebsiteAllowApi",
               "type": "bool",
               "value": true
+            },
+            {
+              "name": "openWebsiteClosable",
+              "type": "bool",
+              "value": true
             }
-          ]
+          ],
+          "class": "area"
         },
         {
           "id": 24,
@@ -6270,7 +6293,7 @@
             {
               "name": "openWebsiteTrigger",
               "type": "string",
-              "value": "action"
+              "value": "onaction"
             },
             {
               "name": "openWebsiteTriggerMessage",
@@ -6286,8 +6309,14 @@
               "name": "openWebsiteAllowApi",
               "type": "bool",
               "value": true
+            },
+            {
+              "name": "openWebsiteClosable",
+              "type": "bool",
+              "value": true
             }
-          ]
+          ],
+          "class": "area"
         }
       ],
       "opacity": 1,
