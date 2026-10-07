@@ -258,7 +258,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 16;
-const OFFICE_MAP_VERSION = 'leadspay-drive-office-map-v1';
+const OFFICE_MAP_VERSION = 'leadspay-structured-office-map-v2';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
