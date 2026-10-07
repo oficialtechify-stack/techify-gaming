@@ -369,22 +369,6 @@ async function resolveOfficeMembers(
       createdAt: new Date().toISOString(),
     };
     members.unshift(ceoMember);
-    try {
-      await db.collection('admin_office_members').doc(identity.uid).set({
-        userId: identity.uid,
-        displayName,
-        email: identity.email || '',
-        officeRole: 'ceo',
-        title: 'CEO',
-        palette: 0,
-        active: true,
-        deskId: 'ceo',
-        avatar,
-        avatarConfig: ceoMember.avatarConfig,
-        createdAt: ceoMember.createdAt,
-        updatedAt: ceoMember.createdAt,
-      }, { merge: true });
-    } catch {}
   }
 
   return members;
@@ -1076,9 +1060,56 @@ export default async function handler(req: Req, res: Res) {
     const db = getServerAdminFirestore();
     const tasks = db.collection('admin_ai_tasks');
     const geminiConnected = Boolean(String(process.env.GEMINI_API_KEY || '').trim());
-    const resolvedWorkers = await resolveWorkers(db);
 
     if (req.method === 'GET') {
+      const officeShell = cleanText(req.query?.officeShell, 10) === '1';
+      if (officeShell) {
+        const now = new Date().toISOString();
+        return res.status(200).json({
+          success: true,
+          localFirst: true,
+          access: {
+            uid: officeIdentity.uid,
+            email: officeIdentity.email,
+            officeRole: officeIdentity.officeRole,
+            isOfficeAdmin: officeIdentity.isOfficeAdmin,
+            canManageTeam: officeIdentity.isOfficeAdmin,
+            canAssignHumanTasks: officeIdentity.isOfficeAdmin,
+            canUseAi: geminiConnected,
+          },
+          workers: WORKERS.map(({ id, name, role, specialty, palette }) => ({ id, name, role, specialty, palette })),
+          officeMembers: [{
+            id: officeIdentity.uid,
+            userId: officeIdentity.uid,
+            displayName: cleanText(officeIdentity.displayName || officeIdentity.email || 'Você', 80),
+            email: officeIdentity.email || '',
+            officeRole: officeIdentity.officeRole,
+            title: officeIdentity.officeRole === 'ceo' ? 'CEO' : officeIdentity.officeRole === 'designer' ? 'Designer' : 'Equipe',
+            palette: officeIdentity.officeRole === 'ceo' ? 0 : DEFAULT_MEMBER_PALETTE,
+            active: true,
+            deskId: officeIdentity.officeRole === 'ceo' ? 'ceo-local' : 'team',
+            avatar: null,
+            avatarConfig: cleanOfficeAvatarConfig(null, officeIdentity.officeRole === 'ceo' ? 'all-black' : 'social'),
+            position: null,
+            createdAt: now,
+          }],
+          tasks: [],
+          humanTasks: [],
+          teamMessages: [],
+          areaNames: {},
+          executionEngine: {
+            connected: geminiConnected,
+            mode: 'local_first',
+            provider: geminiConnected ? 'Gemini' : null,
+            model: geminiConnected ? String(process.env.AI_EMPLOYEE_MODEL || DEFAULT_MODEL) : null,
+            repoReadConnected: true,
+            repoWriteConnected: Boolean(githubWriteToken()),
+            message: 'O Office funciona localmente. A IA é carregada somente quando você usa Funcionários IA ou tarefas.',
+          },
+        });
+      }
+
+      const resolvedWorkers = await resolveWorkers(db);
       const accessOnly = cleanText(req.query?.accessOnly, 10) === '1';
       if (accessOnly) {
         return res.status(200).json({
@@ -1212,6 +1243,9 @@ export default async function handler(req: Req, res: Res) {
         },
       });
     }
+
+    const resolvedWorkersForWrite = req.method === 'GET' ? null : await resolveWorkers(db);
+    const resolvedWorkers = resolvedWorkersForWrite || WORKERS.map((worker) => ({ ...worker, permissions: [...worker.permissions], repoPrefixes: [...worker.repoPrefixes] })) as WorkerProfile[];
 
     const body = req.body && typeof req.body === 'object'
       ? req.body as Record<string, unknown>

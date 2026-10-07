@@ -202,6 +202,23 @@ const FALLBACK_WORKERS: Worker[] = [
   { id: 'growth', name: 'Nova', role: 'Marketing & Comunidade', specialty: 'Campanhas e comunidade.', palette: 5 },
 ];
 
+function isOfficeQuotaError(value: unknown) {
+  const message = String(value || '');
+  return /RESOURCE_EXHAUSTED|Quota exceeded|quota.*exceeded|8 RESOURCE_EXHAUSTED/i.test(message);
+}
+
+function readLocalOfficeProfile(uid?: string | null) {
+  if (!uid || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem('leadspay-office-profile:' + uid);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 const STATUS_LABEL: Record<TaskStatus, string> = {
   queued: 'Na fila',
   working: 'Trabalhando',
@@ -248,6 +265,8 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   const [access, setAccess] = useState<OfficeAccess | null>(null);
   const [officeMembers, setOfficeMembers] = useState<OfficeMember[]>([]);
   const officeMembersRef = useRef<OfficeMember[]>([]);
+  const lastPresenceSentRef = useRef(0);
+  const lastFullSyncRef = useRef(0);
   const [areaNames, setAreaNames] = useState<Record<string, string>>({});
   const [humanTasks, setHumanTasks] = useState<HumanTask[]>([]);
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
@@ -260,8 +279,8 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
   const [engine, setEngine] = useState<EngineInfo>({
     connected: false,
-    mode: 'supervised',
-    message: 'Carregando executor...',
+    mode: 'local_first',
+    message: 'Office local ativo. IA só é usada quando você abre uma função de Funcionários IA.',
   });
   const [loading, setLoading] = useState(true);
   const [savingTask, setSavingTask] = useState(false);
@@ -339,29 +358,52 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
     };
   };
 
-  const load = async (silent = false) => {
+  const load = async (silent = false, full = false) => {
     if (!currentUser) return;
     if (!silent) setLoading(true);
     if (!silent) setError('');
     try {
-      const response = await fetch('/api/office/workers', {
+      const response = await fetch(full ? '/api/office/workers' : '/api/office/workers?officeShell=1', {
         headers: await authHeaders(),
         cache: 'no-store',
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Não foi possível carregar o LeadsPay Office.');
+
       const workerList = Array.isArray(data.workers) && data.workers.length ? data.workers : FALLBACK_WORKERS;
       const brains = data.brains && typeof data.brains === 'object' ? data.brains : {};
       setWorkers(workerList.map((worker: Worker) => ({ ...worker, brain: brains[worker.id] || worker.brain || null })));
-      setTasks(Array.isArray(data.tasks) ? data.tasks : []);
-      setOfficeMembers(Array.isArray(data.officeMembers) ? data.officeMembers : []);
-      setAreaNames(data.areaNames && typeof data.areaNames === 'object' ? data.areaNames : {});
-      setHumanTasks(Array.isArray(data.humanTasks) ? data.humanTasks : []);
-      setTeamMessages(Array.isArray(data.teamMessages) ? data.teamMessages : []);
+
+      if (Array.isArray(data.tasks)) setTasks(data.tasks);
+      if (data.areaNames && typeof data.areaNames === 'object') setAreaNames(data.areaNames);
+      if (Array.isArray(data.humanTasks)) setHumanTasks(data.humanTasks);
+      if (Array.isArray(data.teamMessages)) setTeamMessages(data.teamMessages);
       if (data.access) setAccess(data.access);
       if (data.executionEngine) setEngine(data.executionEngine);
+
+      if (Array.isArray(data.officeMembers)) {
+        const localProfile = readLocalOfficeProfile(currentUser.uid);
+        const incoming = data.officeMembers.map((member: OfficeMember) =>
+          member.userId === currentUser.uid && localProfile
+            ? {
+                ...member,
+                ...(typeof localProfile.displayName === 'string' ? { displayName: localProfile.displayName } : {}),
+                ...(localProfile.avatarConfig && typeof localProfile.avatarConfig === 'object' ? { avatarConfig: localProfile.avatarConfig } : {}),
+              }
+            : member
+        );
+        setOfficeMembers(incoming);
+      }
+
+      if (full) lastFullSyncRef.current = Date.now();
     } catch (err: any) {
-      if (!silent) setError(err?.message || 'Não foi possível carregar o escritório.');
+      const message = err?.message || 'Não foi possível carregar o escritório.';
+      if (isOfficeQuotaError(message)) {
+        // O mapa, player, avatar e mobiliário continuam locais; não exibimos erro global de quota.
+        if (!silent) setOfficeNotice('Office local ativo. Os recursos online serão retomados quando o serviço estiver disponível.');
+      } else if (!silent) {
+        setError(message);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -370,72 +412,44 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   useEffect(() => {
     if (!currentUser) return;
 
-    const pageIsActive = () =>
-      document.visibilityState === 'visible' && document.hasFocus();
+    const localProfile = readLocalOfficeProfile(currentUser.uid);
+    setOfficeMembers((current) => {
+      if (current.some((member) => member.userId === currentUser.uid)) return current;
+      return [{
+        userId: currentUser.uid,
+        displayName:
+          (typeof localProfile?.displayName === 'string' && localProfile.displayName.trim()) ||
+          currentUser.displayName ||
+          currentUser.email?.split('@')[0] ||
+          'Você',
+        email: currentUser.email || '',
+        officeRole: 'ceo',
+        title: 'CEO',
+        palette: 0,
+        active: true,
+        deskId: 'ceo-local',
+        avatarConfig: localProfile?.avatarConfig || {
+          style: 'all-black',
+          skinTone: 0,
+          hair: 0,
+          facialHair: 0,
+          accessory: 0,
+        },
+        position: null,
+      }, ...current];
+    });
 
-    const syncPresence = () => {
-      if (!pageIsActive()) return;
-      // When the CEO is alone there is nothing remote to poll.
-      if (officeMembersRef.current.length <= 1) return;
-
-      void currentUser.getIdToken()
-        .then((token) => fetch('/api/office/workers?presenceOnly=1', {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        }))
-        .then(async (response) => {
-          if (!response.ok) return null;
-          return response.json().catch(() => null);
-        })
-        .then((data) => {
-          if (!data || !Array.isArray(data.officeMembers)) return;
-          setOfficeMembers((current) => {
-            const next = new Map(current.map((member) => [member.userId, member]));
-            let changed = false;
-
-            for (const member of data.officeMembers as OfficeMember[]) {
-              const existing = next.get(member.userId);
-              const merged = member.userId === currentUser.uid && existing
-                ? { ...existing, ...member, position: existing.position || member.position }
-                : { ...(existing || {}), ...member };
-
-              if (!existing || JSON.stringify(existing) !== JSON.stringify(merged)) {
-                next.set(member.userId, merged as OfficeMember);
-                changed = true;
-              }
-            }
-
-            return changed ? [...next.values()] : current;
-          });
-        })
-        .catch(() => undefined);
-    };
-
-    const syncOffice = () => {
-      if (!pageIsActive()) return;
-      void load(true);
-    };
-
-    void load();
-    const dataInterval = window.setInterval(syncOffice, 30000);
-    const presenceInterval = window.setInterval(syncPresence, 4000);
-
-    const onVisibility = () => {
-      if (!pageIsActive()) return;
-      void load(true);
-      syncPresence();
-    };
-
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('focus', onVisibility);
-
-    return () => {
-      window.clearInterval(dataInterval);
-      window.clearInterval(presenceInterval);
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('focus', onVisibility);
-    };
+    // Só carrega a casca leve. Não existe mais polling automático do Firestore.
+    void load(false, false);
   }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const needsOnlineData = taskDrawerOpen || isTeamChatOpen || isTeamModalOpen || isComputerOpen || isChatOpen;
+    if (!needsOnlineData) return;
+    if (Date.now() - lastFullSyncRef.current < 30000) return;
+    void load(true, true);
+  }, [currentUser?.uid, taskDrawerOpen, isTeamChatOpen, isTeamModalOpen, isComputerOpen, isChatOpen]);
 
   const runTask = async (taskId: string) => {
     if (runningTaskId) return;
@@ -858,24 +872,75 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   }) => {
     if (!currentUser) return;
     setError('');
-    const response = await fetch('/api/office/workers', {
-      method: 'POST',
-      headers: await authHeaders(),
-      body: JSON.stringify({ action: 'update-own-office-profile', ...patch }),
+
+    let localMember: OfficeMember | null = null;
+    setOfficeMembers((current) => {
+      const existing = current.find((member) => member.userId === currentUser.uid);
+      localMember = {
+        ...(existing || {
+          userId: currentUser.uid,
+          displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Você',
+          email: currentUser.email || '',
+          officeRole: 'ceo' as const,
+          title: 'CEO',
+          palette: 0,
+          active: true,
+          deskId: 'ceo-local',
+          avatarConfig: { style: 'all-black', skinTone: 0, hair: 0, facialHair: 0, accessory: 0 },
+          position: null,
+        }),
+        ...(patch.displayName ? { displayName: patch.displayName } : {}),
+        ...(patch.avatarConfig ? { avatarConfig: patch.avatarConfig } : {}),
+      };
+      const withoutSelf = current.filter((member) => member.userId !== currentUser.uid);
+      return [localMember, ...withoutSelf];
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Não foi possível salvar seu perfil no Office.');
-    if (data.member) {
-      setOfficeMembers((current) => {
-        const exists = current.some((member) => member.userId === data.member.userId);
-        if (!exists) return [data.member, ...current];
-        return current.map((member) => member.userId === data.member.userId ? data.member : member);
+
+    try {
+      window.localStorage.setItem(
+        'leadspay-office-profile:' + currentUser.uid,
+        JSON.stringify({
+          displayName: patch.displayName || localMember?.displayName,
+          avatarConfig: patch.avatarConfig || localMember?.avatarConfig,
+        }),
+      );
+    } catch {}
+
+    // Persistência online é best-effort: nunca bloqueia o personagem/roupa locais.
+    try {
+      const response = await fetch('/api/office/workers', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ action: 'update-own-office-profile', ...patch }),
       });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Falha ao sincronizar perfil.');
+      if (data.member) {
+        setOfficeMembers((current) =>
+          current.map((member) => member.userId === data.member.userId
+            ? { ...data.member, displayName: localMember?.displayName || data.member.displayName, avatarConfig: localMember?.avatarConfig || data.member.avatarConfig }
+            : member
+          )
+        );
+      }
+    } catch (err: any) {
+      if (!isOfficeQuotaError(err?.message)) {
+        setOfficeNotice('Perfil salvo neste dispositivo. A sincronização online será tentada depois.');
+      }
     }
   };
 
   const sendPresence = useCallback((position: { x: number; y: number; direction: 'up' | 'down' | 'left' | 'right' }) => {
     if (!currentUser) return;
+
+    // O CEO é local/manual. Só publicamos presença quando existe outra pessoa real no Office.
+    const hasRemotePerson = officeMembersRef.current.some((member) => member.userId !== currentUser.uid);
+    if (!hasRemotePerson) return;
+
+    const now = Date.now();
+    if (now - lastPresenceSentRef.current < 6000) return;
+    lastPresenceSentRef.current = now;
+
     void currentUser.getIdToken().then((token) =>
       fetch('/api/office/workers', {
         method: 'POST',
@@ -993,7 +1058,7 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
           </nav>
 
           <div className="office-standalone-actions">
-            <button type="button" title="Atualizar dados" onClick={() => void load()} disabled={loading}>
+            <button type="button" title="Atualizar dados" onClick={() => void load(false, true)} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button type="button" className="new-task" onClick={() => openTaskFor()}>

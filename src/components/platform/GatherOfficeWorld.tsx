@@ -204,7 +204,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 84;
-const OFFICE_MAP_VERSION = 'gather-v3-furniture';
+const OFFICE_MAP_VERSION = 'gather-v4-local-ceo';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -655,9 +655,22 @@ function resolvedMemberPosition(member: OfficeMember) {
   };
 }
 
-function spriteFrame(direction: Direction) {
+function spriteFrame(direction: Direction, walking = false, now = Date.now()) {
   const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
-  return { row, flip: direction === 'left' };
+  const flip = direction === 'left';
+
+  if (!walking) {
+    return { row, flip, column: 1, bob: 0, lean: 0 };
+  }
+
+  // Passada no estilo Gather: quadros discretos, apoio alternado e leve balanço.
+  // O sprite é nosso; apenas reproduzimos o tipo de movimento/ritmo.
+  const sequence = [1, 2, 3, 4, 5, 6, 5, 4, 3, 2];
+  const step = Math.floor(now / 88) % sequence.length;
+  const column = sequence[step];
+  const bob = step % 2 === 0 ? -1 : -3;
+  const lean = step === 2 || step === 7 ? 1 : step === 4 || step === 9 ? -1 : 0;
+  return { row, flip, column, bob, lean };
 }
 
 function desiredWorkerTarget(workerId: string, state: TaskStatus | 'idle', motion: MotionState, now: number) {
@@ -2081,7 +2094,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     : CEO_AVATAR_STYLES[1];
   const draftCeoStyle = CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleDraft) || CEO_AVATAR_STYLES[1];
   const playerWalking = player ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
-  const playerFrame = player ? spriteFrame(player.direction) : null;
+  const playerFrame = player ? spriteFrame(player.direction, playerWalking) : null;
 
   return (
     <div className="gather-office-shell" ref={shellRef}>
@@ -2249,7 +2262,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             if (!motion) return null;
             const state = workerState(tasks, worker.id);
             const walking = motion.path.length > 0;
-            const frame = spriteFrame(motion.direction);
+            const frame = spriteFrame(motion.direction, walking);
             const task = currentTask(tasks, worker.id);
             return (
               <button
@@ -2266,9 +2279,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   className="gather-avatar-sprite"
                   style={{
                     backgroundImage: 'url(/pixel-agents/assets/characters/char_' + worker.palette + '.png)',
-                    backgroundPositionX: walking ? undefined : '-48px',
-                    backgroundPositionY: (-frame.row * 96) + 'px',
-                    transform: frame.flip ? 'scaleX(-1)' : undefined,
+                    backgroundPosition: (-frame.column * 48) + 'px ' + (-frame.row * 96) + 'px',
+                    transform: 'translateY(' + frame.bob + 'px) rotate(' + frame.lean + 'deg) scaleX(' + (frame.flip ? -1 : 1) + ')',
                   }}
                 />
                 <span className="gather-avatar-tag">
@@ -2284,7 +2296,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           {remoteHumans.map(({ member, x, y, direction }) => {
             const updatedAt = member.position?.updatedAt ? new Date(member.position.updatedAt).getTime() : 0;
             const moving = updatedAt > 0 && Date.now() - updatedAt < 4600;
-            const frame = spriteFrame(direction);
+            const frame = spriteFrame(direction, moving);
             const humanTask = activeHumanTask(humanTasks, member.userId);
             return (
               <button
@@ -2301,9 +2313,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   className="gather-avatar-sprite"
                   style={{
                     backgroundImage: 'url(' + spriteForMember(member) + ')',
-                    backgroundPositionX: moving ? undefined : '-48px',
-                    backgroundPositionY: (-frame.row * 96) + 'px',
-                    transform: frame.flip ? 'scaleX(-1)' : undefined,
+                    backgroundPosition: (-frame.column * 48) + 'px ' + (-frame.row * 96) + 'px',
+                    transform: 'translateY(' + frame.bob + 'px) rotate(' + frame.lean + 'deg) scaleX(' + (frame.flip ? -1 : 1) + ')',
                   }}
                 />
                 <span className="gather-avatar-tag human">
@@ -2320,9 +2331,14 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           {player && currentMember && playerFrame && (
             <button
               type="button"
+              data-no-pan="true"
               className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '')}
               style={{ left: player.x, top: player.y, zIndex: 1100 + Math.floor(player.y) }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
               onClick={(event) => {
+                event.preventDefault();
                 event.stopPropagation();
                 openSelfProfile();
               }}
@@ -2331,9 +2347,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 className="gather-avatar-sprite"
                 style={{
                   backgroundImage: 'url(' + spriteForMember(currentMember) + ')',
-                  backgroundPositionX: playerWalking ? undefined : '-48px',
-                  backgroundPositionY: (-playerFrame.row * 96) + 'px',
-                  transform: playerFrame.flip ? 'scaleX(-1)' : undefined,
+                  backgroundPosition: (-playerFrame.column * 48) + 'px ' + (-playerFrame.row * 96) + 'px',
+                  transform: 'translateY(' + playerFrame.bob + 'px) rotate(' + playerFrame.lean + 'deg) scaleX(' + (playerFrame.flip ? -1 : 1) + ')',
                 }}
               />
               <span className="gather-avatar-tag me">

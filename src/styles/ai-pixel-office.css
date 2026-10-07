@@ -9037,3 +9037,77 @@
     display: none;
   }
 }
+
+
+/* =========================================================
+   LeadsPay Office — local-first CEO + Gather-like character motion
+   ========================================================= */
+
+.gather-avatar .gather-avatar-sprite,
+.gather-avatar.walking .gather-avatar-sprite,
+.gather-avatar.ceo-avatar.walking .gather-avatar-sprite {
+  animation: none !important;
+  margin-top: 0 !important;
+  will-change: transform, background-position;
+  transition: none;
+}
+
+.gather-avatar.manual-player {
+  width: 72px;
+  height: 126px;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.gather-avatar.manual-player .gather-avatar-sprite {
+  left: 12px;
+  transform-origin: 50% 82%;
+}
+
+.gather-avatar.manual-player::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 75px;
+  width: 31px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgba(23, 29, 32, .18);
+  filter: blur(1px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.gather-avatar.manual-player.walking::after {
+  animation: leadspayPlayerShadow .176s steps(2, end) infinite;
+}
+
+@keyframes leadspayPlayerShadow {
+  0%, 100% { width: 30px; opacity: .18; }
+  50% { width: 25px; opacity: .11; }
+}
+
+.gather-avatar.manual-player:hover .gather-avatar-sprite {
+  filter:
+    drop-shadow(0 4px 1px rgba(40,48,52,.24))
+    drop-shadow(0 0 5px rgba(103, 120, 255, .24));
+}
+
+.gather-avatar.manual-player:focus-visible {
+  outline: 0;
+}
+
+.gather-avatar.manual-player:focus-visible::before {
+  box-shadow: 0 0 0 4px rgba(84, 99, 240, .18);
+}
+
+.gather-avatar.manual-player .gather-avatar-tag {
+  pointer-events: none;
+}
+
+/* Evita que o antigo keyframe altere a coluna da sprite sheet do CEO. */
+@keyframes gatherCeoSpriteWalk {
+  from { opacity: 1; }
+  to { opacity: 1; }
+}
