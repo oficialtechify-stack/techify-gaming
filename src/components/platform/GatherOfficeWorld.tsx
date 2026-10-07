@@ -110,6 +110,7 @@ type HumanTaskLite = {
 
 type Direction = 'down' | 'up' | 'left' | 'right';
 type Cell = { x: number; y: number };
+type WorldScene = 'office' | 'city';
 
 type MotionState = {
   x: number;
@@ -302,6 +303,7 @@ interface GatherOfficeWorldProps {
   onOpenTasks?: () => void;
   areaNames?: Record<string, string>;
   canManageAreas?: boolean;
+  scene?: WorldScene;
   onRenameArea?: (areaId: string, name: string) => Promise<void> | void;
   onUpdateSelfProfile?: (patch: {
     displayName?: string;
@@ -314,27 +316,40 @@ const COLS = 112;
 const ROWS = 84;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
+const OFFICE_COLS = 72;
+const OFFICE_ROWS = 54;
+const OFFICE_WORLD_W = OFFICE_COLS * TILE;
+const OFFICE_WORLD_H = OFFICE_ROWS * TILE;
 
 const OFFICE_BOUNDS = { x: 2, y: 2, w: 68, h: 50 };
 const OFFICE_DOOR = { x: 34, y: 51, w: 4, h: 1 };
 
-const OUTDOOR_WATER_RECTS: Array<[number, number, number, number]> = [
-  [78, 7, 24, 14],
-  [8, 65, 26, 12],
+const CITY_OFFICE_ENTRANCE = { x: 49, y: 27, w: 4, h: 3 };
+const CITY_BUILDINGS = [
+  { id:'office', label:'LeadsPay Office', subtitle:'Sede principal', x:37, y:10, w:28, h:18, tone:'office' },
+  { id:'cafe', label:'Café Central', subtitle:'Café & coworking', x:7, y:9, w:19, h:14, tone:'cafe' },
+  { id:'studio', label:'Studio Pixel', subtitle:'Design & criação', x:78, y:8, w:22, h:15, tone:'studio' },
+  { id:'market', label:'Market 24h', subtitle:'Loja da cidade', x:7, y:44, w:20, h:15, tone:'market' },
+  { id:'apartments', label:'Residencial Nova', subtitle:'Apartamentos', x:79, y:43, w:23, h:18, tone:'apartments' },
+  { id:'garage', label:'Tech Garage', subtitle:'Oficina & projetos', x:40, y:54, w:23, h:14, tone:'garage' },
+] as const;
+
+const CITY_WATER_RECTS: Array<[number, number, number, number]> = [
+  [84, 67, 18, 10],
 ];
 
-const OUTDOOR_TREES = [
-  { x: 73, y: 4 }, { x: 106, y: 5 }, { x: 75, y: 25 }, { x: 104, y: 26 },
-  { x: 73, y: 45 }, { x: 104, y: 47 }, { x: 7, y: 57 }, { x: 15, y: 58 },
-  { x: 25, y: 57 }, { x: 45, y: 61 }, { x: 55, y: 57 }, { x: 67, y: 63 },
-  { x: 77, y: 61 }, { x: 88, y: 58 }, { x: 101, y: 63 }, { x: 108, y: 72 },
-  { x: 42, y: 76 }, { x: 56, y: 77 }, { x: 69, y: 74 }, { x: 93, y: 77 },
+const CITY_PARK_TREES = [
+  { x: 8, y: 67 }, { x: 14, y: 71 }, { x: 20, y: 67 },
+  { x: 26, y: 72 }, { x: 32, y: 68 }, { x: 72, y: 70 },
 ];
 
-const OUTDOOR_SOLID_RECTS: Array<[number, number, number, number]> = [
-  ...OUTDOOR_WATER_RECTS,
-  ...OUTDOOR_TREES.map((tree) => [tree.x + .28, tree.y + 1.05, 1.45, .9] as [number, number, number, number]),
+const CITY_SOLID_RECTS: Array<[number, number, number, number]> = [
+  ...CITY_BUILDINGS.map((building) => [building.x, building.y, building.w, building.h] as [number, number, number, number]),
+  ...CITY_WATER_RECTS,
+  ...CITY_PARK_TREES.map((tree) => [tree.x + .3, tree.y + 1.05, 1.4, .85] as [number, number, number, number]),
 ];
+
+let ACTIVE_WORLD_SCENE: WorldScene = 'office';
 const PLAYER_SPEED = 176;
 const PLAYER_ACCEL = 1040;
 const PLAYER_DECEL = 1320;
@@ -342,7 +357,8 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 16;
-const OFFICE_MAP_VERSION = 'leadspay-world-map-v4';
+const OFFICE_MAP_VERSION = 'leadspay-office-map-v5';
+const CITY_MAP_VERSION = 'leadspay-city-map-v1';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -871,15 +887,26 @@ function cellAtPixel(x: number, y: number): Cell {
 }
 
 function areaForCell(cell: Cell) {
+  if (ACTIVE_WORLD_SCENE === 'city') return null;
   return AREAS.find((area) => inRect(cell, area.x, area.y, area.w, area.h)) || null;
 }
 
 function isWalkable(cell: Cell) {
   if (cell.x < 1 || cell.y < 1 || cell.x >= COLS - 1 || cell.y >= ROWS - 1) return false;
-  if (WALL_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
-  if (SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
-  if (OUTDOOR_SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
-  if (ACTIVE_FURNITURE_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
+
+  if (ACTIVE_WORLD_SCENE === 'office') {
+    if (!inRect(cell, OFFICE_BOUNDS.x, OFFICE_BOUNDS.y, OFFICE_BOUNDS.w, OFFICE_BOUNDS.h)) return false;
+    if (WALL_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
+    if (SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
+    if (ACTIVE_FURNITURE_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
+    return true;
+  }
+
+  // A entrada da sede é transitável mesmo estando recortada na fachada do prédio.
+  if (inRect(cell, CITY_OFFICE_ENTRANCE.x, CITY_OFFICE_ENTRANCE.y, CITY_OFFICE_ENTRANCE.w, CITY_OFFICE_ENTRANCE.h)) {
+    return true;
+  }
+  if (CITY_SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
   return true;
 }
 
@@ -1212,10 +1239,23 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   onOpenTasks,
   areaNames = {},
   canManageAreas = false,
+  scene = 'office',
   onRenameArea,
   onUpdateSelfProfile,
 }) => {
   const { currentUser } = useAuth();
+  const isCityScene = scene === 'city';
+  ACTIVE_WORLD_SCENE = scene;
+  const sceneWorldW = isCityScene ? WORLD_W : OFFICE_WORLD_W;
+  const sceneWorldH = isCityScene ? WORLD_H : OFFICE_WORLD_H;
+  const sceneMapVersion = isCityScene ? CITY_MAP_VERSION : OFFICE_MAP_VERSION;
+
+  const goToScene = (path: '/office' | '/cidade') => {
+    if (typeof window === 'undefined') return;
+    window.history.pushState({}, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
   const shellRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<HTMLDivElement | null>(null);
@@ -1472,12 +1512,13 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       return;
     }
 
-    let raw = resolvedMemberPosition(currentMember);
+    let raw = isCityScene
+      ? { x: 51 * TILE, y: 31 * TILE, direction: 'down' as Direction }
+      : resolvedMemberPosition(currentMember);
 
-    // A posição do CEO é local-first: ele é um jogador manual, não um agente IA.
-    // O servidor recebe presença só para os outros usuários enxergarem onde ele está.
+    // Cada cena guarda sua própria posição. O Office e a Cidade não compartilham coordenadas.
     try {
-      const saved = window.localStorage.getItem('leadspay-office-player:' + currentMember.userId);
+      const saved = window.localStorage.getItem('leadspay-office-player:' + currentMember.userId + ':' + scene);
       if (saved) {
         const parsed = JSON.parse(saved) as {
           x?: number;
@@ -1486,7 +1527,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           mapVersion?: string;
         };
         if (
-          parsed.mapVersion === OFFICE_MAP_VERSION &&
+          parsed.mapVersion === sceneMapVersion &&
           Number.isFinite(parsed.x) &&
           Number.isFinite(parsed.y) &&
           canOccupy(Number(parsed.x), Number(parsed.y))
@@ -1518,7 +1559,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     keyboardQueueRef.current = null;
     setWalkTarget(null);
     setPlayer(initial);
-  }, [currentMember?.userId]);
+  }, [currentMember?.userId, scene]);
 
   useEffect(() => {
     const next = { ...workersMotionRef.current };
@@ -1663,8 +1704,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     if (!viewport) return next;
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
-    const scaledW = WORLD_W * currentZoom;
-    const scaledH = WORLD_H * currentZoom;
+    const scaledW = sceneWorldW * currentZoom;
+    const scaledH = sceneWorldH * currentZoom;
 
     const clampAxis = (value: number, viewportSize: number, scaledSize: number) => {
       if (scaledSize <= viewportSize) return (viewportSize - scaledSize) / 2;
@@ -1884,10 +1925,26 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         playerRef.current = nextPlayer;
 
         const playerCell = cellAtPixel(x, y);
+        if (
+          !isCityScene &&
+          playerCell.y >= 51 &&
+          playerCell.x >= OFFICE_DOOR.x &&
+          playerCell.x < OFFICE_DOOR.x + OFFICE_DOOR.w
+        ) {
+          goToScene('/cidade');
+          return;
+        }
+        if (
+          isCityScene &&
+          inRect(playerCell, CITY_OFFICE_ENTRANCE.x, CITY_OFFICE_ENTRANCE.y, CITY_OFFICE_ENTRANCE.w, CITY_OFFICE_ENTRANCE.h)
+        ) {
+          goToScene('/office');
+          return;
+        }
         let nearest: Interaction = null;
         let nearestDistance = Number.POSITIVE_INFINITY;
 
-        for (const item of INTERACTIONS) {
+        for (const item of isCityScene ? [] : INTERACTIONS) {
           const distance = heuristic(playerCell, item.cell);
           if (distance > 2.3 || distance >= nearestDistance) continue;
           if (item.type === 'computer') {
@@ -1907,7 +1964,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           nearest = { type: 'seat', label: 'Levantar', furnitureId: seated.furnitureId, seatIndex: seated.seatIndex };
           nearestDistance = 0;
         } else {
-          for (const item of furnitureLayout) {
+          for (const item of isCityScene ? [] : furnitureLayout) {
             if (!item.seats?.length) continue;
             for (let seatIndex = 0; seatIndex < item.seats.length; seatIndex += 1) {
               const point = furnitureSeatPoint(item, seatIndex);
@@ -1926,7 +1983,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           }
         }
 
-        for (const worker of workersRef.current) {
+        for (const worker of isCityScene ? [] : workersRef.current) {
           const motion = workersMotionRef.current[worker.id];
           if (!motion) continue;
           const distance = distanceTiles(x, y, motion.x, motion.y);
@@ -1936,7 +1993,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           }
         }
 
-        for (const member of officeMembers) {
+        for (const member of isCityScene ? [] : officeMembers) {
           if (member.userId === currentUserId) continue;
           const resolved = resolvedMemberPosition(member);
           const px = resolved.x;
@@ -1954,13 +2011,13 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           localPositionSaveRef.current = now;
           try {
             window.localStorage.setItem(
-              'leadspay-office-player:' + currentMember.userId,
-              JSON.stringify({ x, y, direction, mapVersion: OFFICE_MAP_VERSION }),
+              'leadspay-office-player:' + currentMember.userId + ':' + scene,
+              JSON.stringify({ x, y, direction, mapVersion: sceneMapVersion }),
             );
           } catch {}
         }
 
-        if (now - presenceRef.current > 1300 && onPlayerMove && isManualPlayerMoving) {
+        if (!isCityScene && now - presenceRef.current > 1300 && onPlayerMove && isManualPlayerMoving) {
           presenceRef.current = now;
           onPlayerMove({ x, y, direction });
         }
@@ -2466,12 +2523,12 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     const viewport = viewportRef.current;
     if (!viewport) return;
     const next = Math.max(.22, Math.min(1, Math.min(
-      viewport.clientWidth / WORLD_W,
-      viewport.clientHeight / WORLD_H,
+      viewport.clientWidth / sceneWorldW,
+      viewport.clientHeight / sceneWorldH,
     ) * .96));
     const centered = clampCamera({
-      x: (viewport.clientWidth - WORLD_W * next) / 2,
-      y: (viewport.clientHeight - WORLD_H * next) / 2,
+      x: (viewport.clientWidth - sceneWorldW * next) / 2,
+      y: (viewport.clientHeight - sceneWorldH * next) / 2,
     }, next);
     cameraRef.current = centered;
     setFollowPlayer(false);
@@ -2566,7 +2623,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     window.requestAnimationFrame(() => goToWorldPoint(point.x, point.y));
   };
 
-  const canEditFurniture = Boolean(currentMember?.officeRole === 'ceo' || canManageAreas);
+  const canEditFurniture = !isCityScene && Boolean(currentMember?.officeRole === 'ceo' || canManageAreas);
 
   const startFurnitureDrag = (event: React.PointerEvent<HTMLButtonElement>, item: FurnitureItem) => {
     if (!furnitureEditMode || !canEditFurniture) return;
@@ -2901,7 +2958,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setAreaEditing(false);
   };
 
-  const remoteHumans = officeMembers
+  const remoteHumans = (isCityScene ? [] : officeMembers)
     .filter((member) => member.userId !== currentUserId)
     .map((member) => {
       const resolved = resolvedMemberPosition(member);
@@ -2961,7 +3018,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     : null;
 
   return (
-    <div className="gather-office-shell" ref={shellRef}>
+    <div className={'gather-office-shell gather-scene-' + scene} ref={shellRef}>
       <div
         className={'gather-viewport' + (isPanning ? ' is-panning' : '')}
         ref={viewportRef}
@@ -2979,55 +3036,123 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           className="gather-world"
           ref={worldRef}
           style={{
-            width: WORLD_W,
-            height: WORLD_H,
+            width: sceneWorldW,
+            height: sceneWorldH,
             transform: 'translate3d(' + camera.x + 'px,' + camera.y + 'px,0) scale(' + zoom + ')',
           }}
         >
-          <div className="gather-drive-map" aria-hidden="true" />
-          <div className="gather-grass" />
+          {isCityScene ? (
+            <>
+              <div className="gather-city-ground" aria-hidden="true" />
+              <div className="gather-city-road road-horizontal" aria-hidden="true" />
+              <div className="gather-city-road road-vertical-main" aria-hidden="true" />
+              <div className="gather-city-road road-vertical-east" aria-hidden="true" />
+              <div className="gather-city-sidewalk sidewalk-horizontal-top" aria-hidden="true" />
+              <div className="gather-city-sidewalk sidewalk-horizontal-bottom" aria-hidden="true" />
+              <div className="gather-city-crosswalk crosswalk-main" aria-hidden="true" />
+              <div className="gather-city-crosswalk crosswalk-east" aria-hidden="true" />
 
-          <div className="gather-outdoor-path gather-outdoor-path-main" aria-hidden="true" />
-          <div className="gather-outdoor-path gather-outdoor-path-east" aria-hidden="true" />
-          <div className="gather-outdoor-plaza" aria-hidden="true">
-            <span className="gather-outdoor-fountain"><i /></span>
-            <b>Praça LeadsPay</b>
-          </div>
+              <div className="gather-city-plaza" aria-hidden="true">
+                <span className="gather-city-fountain"><i /></span>
+                <strong>Praça LeadsPay</strong>
+                <small>Centro da cidade</small>
+              </div>
 
-          {OUTDOOR_WATER_RECTS.map(([x, y, width, height], index) => (
-            <div
-              key={'outdoor-water-' + index}
-              className="gather-outdoor-water"
-              aria-hidden="true"
-              style={{ left: x * TILE, top: y * TILE, width: width * TILE, height: height * TILE }}
-            />
-          ))}
+              <div className="gather-city-park" aria-hidden="true">
+                <span>Parque Central</span>
+              </div>
 
-          {OUTDOOR_TREES.map((tree, index) => (
-            <div
-              key={'outdoor-tree-' + index}
-              className="gather-outdoor-tree"
-              aria-hidden="true"
-              style={{ left: tree.x * TILE, top: tree.y * TILE }}
-            >
-              <span />
-              <i />
-            </div>
-          ))}
+              {CITY_WATER_RECTS.map(([x, y, width, height], index) => (
+                <div
+                  key={'city-water-' + index}
+                  className="gather-city-water"
+                  aria-hidden="true"
+                  style={{ left: x * TILE, top: y * TILE, width: width * TILE, height: height * TILE }}
+                />
+              ))}
 
-          <div className="gather-building-floor" />
-          <div
-            className={'gather-office-door' + (player && Math.abs(player.x / TILE - 36) < 4 && Math.abs(player.y / TILE - 51) < 4 ? ' open' : '')}
-            aria-hidden="true"
-            style={{
-              left: OFFICE_DOOR.x * TILE,
-              top: OFFICE_DOOR.y * TILE - 16,
-              width: OFFICE_DOOR.w * TILE,
-            }}
-          >
-            <span>LeadsPay Office</span>
-            <i />
-          </div>
+              {CITY_PARK_TREES.map((tree, index) => (
+                <div
+                  key={'city-tree-' + index}
+                  className="gather-city-tree"
+                  aria-hidden="true"
+                  style={{ left: tree.x * TILE, top: tree.y * TILE }}
+                >
+                  <span />
+                  <i />
+                </div>
+              ))}
+
+              {CITY_BUILDINGS.map((building) => (
+                <div
+                  key={building.id}
+                  className={'gather-city-building tone-' + building.tone}
+                  style={{
+                    left: building.x * TILE,
+                    top: building.y * TILE,
+                    width: building.w * TILE,
+                    height: building.h * TILE,
+                  }}
+                >
+                  <div className="gather-city-building-roof" />
+                  <div className="gather-city-building-sign">
+                    <strong>{building.label}</strong>
+                    <small>{building.subtitle}</small>
+                  </div>
+                  <div className="gather-city-window-row">
+                    <i /><i /><i /><i />
+                  </div>
+                  {building.id === 'office' && (
+                    <button
+                      type="button"
+                      data-no-pan="true"
+                      className="gather-city-office-entrance"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        goToScene('/office');
+                      }}
+                    >
+                      <span>Entrar</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <div className="gather-city-bus-stop" aria-hidden="true">
+                <b>LP</b><span>Ponto</span>
+              </div>
+              <div className="gather-city-lamp lamp-a" aria-hidden="true" />
+              <div className="gather-city-lamp lamp-b" aria-hidden="true" />
+              <div className="gather-city-lamp lamp-c" aria-hidden="true" />
+              <div className="gather-city-scene-label" aria-hidden="true">
+                <strong>Cidade LeadsPay</strong>
+                <span>Explore a cidade · entre nos prédios pelas portas</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="gather-drive-map" aria-hidden="true" />
+              <div className="gather-grass" />
+              <div className="gather-building-floor" />
+              <button
+                type="button"
+                data-no-pan="true"
+                className={'gather-office-door' + (player && Math.abs(player.x / TILE - 36) < 4 && Math.abs(player.y / TILE - 51) < 4 ? ' open' : '')}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  goToScene('/cidade');
+                }}
+                style={{
+                  left: OFFICE_DOOR.x * TILE,
+                  top: OFFICE_DOOR.y * TILE - 16,
+                  width: OFFICE_DOOR.w * TILE,
+                }}
+              >
+                <span>Sair para a cidade</span>
+                <i />
+              </button>
+            </>
+          )}
 
           {walkTarget && (
             <div
@@ -3041,7 +3166,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             />
           )}
 
-          {AREAS.map((area) => (
+          {!isCityScene && AREAS.map((area) => (
             <div
               key={area.id}
               className={'gather-room gather-room-' + area.id + ' area-' + area.kind}
@@ -3069,7 +3194,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             </div>
           ))}
 
-          {selectedArea && (
+          {!isCityScene && selectedArea && (
             <div
               className="gather-area-selected-outline"
               style={{
@@ -3081,7 +3206,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             />
           )}
 
-          {WALL_RECTS.map(([x, y, width, height], index) => (
+          {!isCityScene && WALL_RECTS.map(([x, y, width, height], index) => (
             <div
               key={'reference-wall-' + index}
               className="gather-wall gather-reference-wall"
@@ -3094,7 +3219,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             />
           ))}
 
-          <div className={'gather-furniture-layer' + (furnitureEditMode ? ' editing' : '')}>
+          {!isCityScene && <div className={'gather-furniture-layer' + (furnitureEditMode ? ' editing' : '')}>
             {furnitureLayout.map((item) => {
               const worker = item.workerId ? workers.find((entry) => entry.id === item.workerId) : null;
               const selected = selectedFurnitureId === item.id;
@@ -3187,9 +3312,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 </button>
               );
             })}
-          </div>
+          </div>}
 
-          {currentArea?.kind === 'private' && (
+          {!isCityScene && currentArea?.kind === 'private' && (
             <div
               className="gather-private-focus"
               style={{
@@ -3201,7 +3326,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             />
           )}
 
-          {workers.map((worker) => {
+          {!isCityScene && workers.map((worker) => {
             const motion = workersMotion[worker.id];
             if (!motion) return null;
             const state = workerState(tasks, worker.id);
@@ -3237,7 +3362,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             );
           })}
 
-          {remoteHumans.map(({ member, x, y, direction }) => {
+          {!isCityScene && remoteHumans.map(({ member, x, y, direction }) => {
             const updatedAt = member.position?.updatedAt ? new Date(member.position.updatedAt).getTime() : 0;
             const moving = updatedAt > 0 && Date.now() - updatedAt < 4600;
             const frame = spriteFrame(direction, moving);
@@ -3272,7 +3397,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             );
           })}
 
-          {seated && player && (() => {
+          {!isCityScene && seated && player && (() => {
             const item = furnitureLayout.find((entry) => entry.id === seated.furnitureId);
             if (!item) return null;
             const footprint = furnitureFootprint(item);
@@ -3574,6 +3699,11 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </aside>
         )}
 
+        <div className="gather-scene-switcher" data-no-pan="true">
+          <button type="button" className={!isCityScene ? 'active' : ''} onClick={() => goToScene('/office')}>Escritório</button>
+          <button type="button" className={isCityScene ? 'active' : ''} onClick={() => goToScene('/cidade')}>Cidade</button>
+        </div>
+
         <div className="gather-map-controls">
           <button type="button" onClick={() => changeZoom(.16)} title="Aumentar zoom"><ZoomIn className="h-4 w-4" /></button>
           <button type="button" className="gather-zoom-value" onClick={() => setZoomAround(1)} title="Zoom 100%">{Math.round(zoom * 100)}%</button>
@@ -3584,10 +3714,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             setFollowPlayer(true);
             if (current) centerCameraOn(current.x, current.y);
           }} title="Mostrar minha posição"><LocateFixed className="h-4 w-4" /></button>
-          <button type="button" className={areasOpen ? 'active' : ''} onClick={() => {
+          {!isCityScene && <button type="button" className={areasOpen ? 'active' : ''} onClick={() => {
             setAreasOpen((value) => !value);
             setParticipantsOpen(false);
-          }} title="Áreas e salas"><MapPinned className="h-4 w-4" /></button>
+          }} title="Áreas e salas"><MapPinned className="h-4 w-4" /></button>}
           <button type="button" onClick={() => {
             setParticipantsOpen((value) => !value);
             setAreasOpen(false);
@@ -3742,7 +3872,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </aside>
         )}
 
-        {areasOpen && (
+        {!isCityScene && areasOpen && (
           <aside className="gather-areas-panel">
             <div className="people-head">
               <div>
@@ -3777,7 +3907,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </aside>
         )}
 
-        {participantsOpen && (
+        {!isCityScene && participantsOpen && (
           <aside className="gather-people-panel">
             <div className="people-head">
               <div>
@@ -3801,7 +3931,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </aside>
         )}
 
-        <div className="gather-minimap" onClick={(event) => {
+        {!isCityScene && <div className="gather-minimap" onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width * WORLD_W;
           const y = (event.clientY - rect.top) / rect.height * WORLD_H;
@@ -3825,8 +3955,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               }}
             />
           ))}
-          {player && <b style={{ left: (player.x / WORLD_W * 100) + '%', top: (player.y / WORLD_H * 100) + '%' }} />}
-        </div>
+          {player && <b style={{ left: (player.x / OFFICE_WORLD_W * 100) + '%', top: (player.y / OFFICE_WORLD_H * 100) + '%' }} />}
+        </div>}
 
         {emoteMenuOpen && (
           <div className="gather-emote-menu">
