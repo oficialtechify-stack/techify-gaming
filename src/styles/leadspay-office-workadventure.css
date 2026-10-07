@@ -1392,3 +1392,288 @@
     padding: 0 10px;
   }
 }
+
+
+/* Rick admin autologin flow */
+.lp-office-owned-actions button.secondary.is-connected {
+  border-color: rgba(52,211,153,.24);
+  background: rgba(16,185,129,.08);
+  color: #a7f3d0;
+}
+
+.lp-office-rick-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5,8,13,.74);
+  backdrop-filter: blur(8px);
+}
+
+.lp-office-rick-gate-card {
+  width: min(560px, 100%);
+  display: grid;
+  grid-template-columns: 44px minmax(0,1fr);
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 18px;
+  background: rgba(10,15,23,.96);
+  box-shadow: 0 24px 80px rgba(0,0,0,.35);
+}
+
+.lp-office-rick-gate-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(124,108,255,.24);
+  border-radius: 12px;
+  background: rgba(124,108,255,.10);
+  color: #a89cff;
+}
+
+.lp-office-rick-gate-card strong {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.lp-office-rick-gate-card p {
+  margin: 5px 0 0;
+  color: rgba(255,255,255,.48);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.lp-office-rick-gate-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.lp-office-rick-gate-actions button,
+.lp-office-rick-modal-actions button,
+.lp-office-rick-open-admin {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 0 13px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lp-office-rick-gate-actions .primary,
+.lp-office-rick-modal-actions .save {
+  border: 1px solid rgba(124,108,255,.34);
+  background: #4f5df5;
+  color: #fff;
+}
+
+.lp-office-rick-gate-actions .ghost {
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.62);
+}
+
+.lp-office-rick-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0,0,0,.68);
+  backdrop-filter: blur(10px);
+}
+
+.lp-office-rick-modal {
+  position: relative;
+  width: min(640px, 100%);
+  max-height: min(760px, calc(100dvh - 32px));
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 18px;
+  background: #0b111a;
+  color: #fff;
+  box-shadow: 0 30px 100px rgba(0,0,0,.45);
+}
+
+.lp-office-rick-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 9px;
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.68);
+  cursor: pointer;
+}
+
+.lp-office-rick-modal-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding-right: 42px;
+}
+
+.lp-office-rick-modal-heading > span {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(124,108,255,.11);
+  color: #a89cff;
+}
+
+.lp-office-rick-modal-heading strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.lp-office-rick-modal-heading p {
+  margin: 5px 0 0;
+  color: rgba(255,255,255,.46);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.lp-office-rick-steps {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 14px;
+}
+
+.lp-office-rick-steps > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0,1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 11px;
+  background: rgba(255,255,255,.025);
+}
+
+.lp-office-rick-steps b {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(124,108,255,.12);
+  color: #b7aeff;
+  font-size: 9px;
+}
+
+.lp-office-rick-steps p {
+  margin: 0;
+  color: rgba(255,255,255,.58);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.lp-office-rick-open-admin {
+  width: 100%;
+  margin-bottom: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.76);
+}
+
+.lp-office-rick-url-field {
+  display: grid;
+  gap: 6px;
+}
+
+.lp-office-rick-url-field > span {
+  color: rgba(255,255,255,.46);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.lp-office-rick-url-field input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid rgba(255,255,255,.09);
+  outline: none;
+  border-radius: 10px;
+  background: #0f1620;
+  color: #fff;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 9px;
+}
+
+.lp-office-rick-url-field input:focus {
+  border-color: rgba(124,108,255,.5);
+  box-shadow: 0 0 0 3px rgba(124,108,255,.10);
+}
+
+.lp-office-rick-error {
+  margin: 8px 0 0;
+  color: #fda4af;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.lp-office-rick-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.lp-office-rick-modal-actions .danger {
+  margin-right: auto;
+  border: 1px solid rgba(248,113,113,.18);
+  background: rgba(127,29,29,.12);
+  color: #fca5a5;
+}
+
+@media (max-width: 760px) {
+  .lp-office-rick-gate {
+    padding: 14px;
+  }
+
+  .lp-office-rick-gate-card {
+    grid-template-columns: 38px minmax(0,1fr);
+    padding: 15px;
+  }
+
+  .lp-office-rick-gate-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .lp-office-rick-gate-actions,
+  .lp-office-rick-modal-actions {
+    flex-direction: column;
+  }
+
+  .lp-office-rick-gate-actions button,
+  .lp-office-rick-modal-actions button {
+    width: 100%;
+  }
+
+  .lp-office-rick-modal-actions .danger {
+    margin-right: 0;
+    order: 2;
+  }
+}
