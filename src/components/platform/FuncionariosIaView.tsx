@@ -15,6 +15,7 @@ import {
   Laptop,
   Loader2,
   MessageCircle,
+  MapPinned,
   Pause,
   Pencil,
   Play,
