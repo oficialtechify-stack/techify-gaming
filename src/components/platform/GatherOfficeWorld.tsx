@@ -242,12 +242,14 @@ const COLS = 72;
 const ROWS = 54;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
-const PLAYER_SPEED = 184;
+const PLAYER_SPEED = 190;
+const PLAYER_ACCEL = 1480;
+const PLAYER_DECEL = 2050;
 const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
-const FRAME_MS = 48;
-const OFFICE_MAP_VERSION = 'leadspay-reference-v1';
+const FRAME_MS = 32;
+const OFFICE_MAP_VERSION = 'leadspay-empty-room-physics-v3';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -922,11 +924,17 @@ function spriteFrame(direction: Direction, walking = false, now = Date.now()) {
   return { row, flip, column, bob, lean };
 }
 
-function ceoMotionFrame(direction: Direction, walking: boolean, seated: boolean, now = Date.now()) {
+function ceoMotionFrame(
+  direction: Direction,
+  walking: boolean,
+  seated: boolean,
+  seatedAt = 0,
+  now = Date.now(),
+) {
   if (seated) {
-    const sequence = [0,1,2,3,4,5,6,7,6,5,4,3,2,1];
-    const step = Math.floor(now / 170) % sequence.length;
-    return { row: 4, column: sequence[step], flip: false, bob: 0, lean: 0 };
+    const elapsed = Math.max(0, now - seatedAt);
+    const column = Math.min(7, Math.floor(elapsed / 92));
+    return { row: 4, column, flip: false, bob: 0, lean: 0 };
   }
 
   const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
@@ -936,15 +944,12 @@ function ceoMotionFrame(direction: Direction, walking: boolean, seated: boolean,
     return { row, column: 0, flip, bob: 0, lean: 0 };
   }
 
-  const column = Math.floor(now / 76) % 8;
-  const bobPattern = [0,-1,-2,-1,0,-1,-2,-1];
-  const leanPattern = [0,.35,.6,.25,0,-.35,-.6,-.25];
   return {
     row,
-    column,
+    column: Math.floor(now / 82) % 8,
     flip,
-    bob: bobPattern[column],
-    lean: leanPattern[column],
+    bob: 0,
+    lean: 0,
   };
 }
 
@@ -1054,6 +1059,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const playerRef = useRef<MotionState | null>(null);
   const keyboardQueueRef = useRef<Cell | null>(null);
   const lastKeyboardStepRef = useRef(0);
+  const pressedMovementRef = useRef<Set<string>>(new Set());
   const pathRef = useRef<Cell[]>([]);
   const workersMotionRef = useRef<Record<string, MotionState>>({});
   const tasksRef = useRef(tasks);
@@ -1078,6 +1084,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [followPlayer, setFollowPlayer] = useState(true);
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [seated, setSeated] = useState<{ furnitureId: string; seatIndex: number } | null>(null);
+  const [seatedAt, setSeatedAt] = useState(0);
+  const [animationTick, setAnimationTick] = useState(0);
   const [selectedHumanId, setSelectedHumanId] = useState<string | null>(null);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   const [areaEditing, setAreaEditing] = useState(false);
@@ -1383,6 +1391,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setPlayer(next);
     setWalkTarget(null);
     setSeated(null);
+    setSeatedAt(0);
     setInteraction(null);
   };
 
@@ -1407,6 +1416,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setPlayer(next);
     setWalkTarget(null);
     setFollowPlayer(true);
+    setSeatedAt(Date.now());
     setSeated({ furnitureId, seatIndex });
     setInteraction({ type: 'seat', label: 'Levantar', furnitureId, seatIndex });
   };
@@ -1421,60 +1431,23 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   };
 
   useEffect(() => {
+    const movementKeys = new Set([
+      'w', 'a', 's', 'd',
+      'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
+    ]);
+
     const down = (event: KeyboardEvent) => {
       const element = event.target as HTMLElement | null;
       if (element?.closest('input, textarea, select, [contenteditable="true"]')) return;
       const key = event.key.toLowerCase();
 
-      if (seated && (
-        key === 'e' || key === 'w' || key === 'a' || key === 's' || key === 'd' ||
-        key === 'arrowup' || key === 'arrowdown' || key === 'arrowleft' || key === 'arrowright'
-      )) {
-        standUp();
-        event.preventDefault();
-        return;
-      }
-
-      const movement: Record<string, Cell> = {
-        w: { x: 0, y: -1 },
-        arrowup: { x: 0, y: -1 },
-        s: { x: 0, y: 1 },
-        arrowdown: { x: 0, y: 1 },
-        a: { x: -1, y: 0 },
-        arrowleft: { x: -1, y: 0 },
-        d: { x: 1, y: 0 },
-        arrowright: { x: 1, y: 0 },
-      };
-
-      const step = movement[key];
-      if (step) {
-        const current = playerRef.current;
-        if (!current) return;
-
-        const now = performance.now();
-        if (event.repeat && now - lastKeyboardStepRef.current < 105) {
-          event.preventDefault();
-          return;
-        }
-        lastKeyboardStepRef.current = now;
-
-        if (!event.repeat) {
-          pathRef.current = [];
-          keyboardQueueRef.current = nearestWalkableCell(current.x, current.y);
-        }
-
-        const base = keyboardQueueRef.current ||
-          pathRef.current[pathRef.current.length - 1] ||
-          nearestWalkableCell(current.x, current.y);
-        const target = { x: base.x + step.x, y: base.y + step.y };
-
-        if (isWalkable(target)) {
-          pathRef.current = [...pathRef.current, target].slice(-5);
-          keyboardQueueRef.current = target;
-          setWalkTarget(target);
-          setFollowPlayer(true);
-        }
-
+      if (movementKeys.has(key)) {
+        if (seated) standUp();
+        pressedMovementRef.current.add(key);
+        pathRef.current = [];
+        keyboardQueueRef.current = null;
+        setWalkTarget(null);
+        setFollowPlayer(true);
         event.preventDefault();
         return;
       }
@@ -1485,9 +1458,26 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       }
     };
 
+    const up = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (!movementKeys.has(key)) return;
+      pressedMovementRef.current.delete(key);
+      event.preventDefault();
+    };
+
+    const clearKeys = () => pressedMovementRef.current.clear();
+
     window.addEventListener('keydown', down);
-    return () => window.removeEventListener('keydown', down);
-  }, [interaction, onInteract, seated, furnitureLayout]);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', clearKeys);
+
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', clearKeys);
+      clearKeys();
+    };
+  }, [interaction, seated, furnitureLayout]);
 
   const clampCamera = (next: { x: number; y: number }, currentZoom = zoom) => {
     const viewport = viewportRef.current;
@@ -1593,8 +1583,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       if (currentPlayer) {
         let x = currentPlayer.x;
         let y = currentPlayer.y;
-        let vx = 0;
-        let vy = 0;
+        let vx = currentPlayer.vx;
+        let vy = currentPlayer.vy;
         let direction = currentPlayer.direction;
         const route = seated ? [] : [...pathRef.current];
 
@@ -1605,52 +1595,104 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             x = seatPoint.x;
             y = seatPoint.y;
             direction = seatPoint.direction;
+            vx = 0;
+            vy = 0;
             pathRef.current = [];
           } else {
             setSeated(null);
+            setSeatedAt(0);
           }
-        } else if (route.length) {
-          const point = centerOf(route[0]);
-          const dx = point.x - x;
-          const dy = point.y - y;
-          const distance = Math.hypot(dx, dy);
+        } else {
+          const keys = pressedMovementRef.current;
+          let inputX = 0;
+          let inputY = 0;
 
-          if (distance <= 2.4) {
-            x = point.x;
-            y = point.y;
-            route.shift();
-            pathRef.current = route;
-            if (!route.length) {
-              keyboardQueueRef.current = null;
-              setWalkTarget(null);
-              try {
-                window.localStorage.setItem(
-                  'leadspay-office-player:' + currentMember.userId,
-                  JSON.stringify({ x, y, direction, mapVersion: OFFICE_MAP_VERSION }),
-                );
-              } catch {}
+          if (keys.has('a') || keys.has('arrowleft')) inputX -= 1;
+          if (keys.has('d') || keys.has('arrowright')) inputX += 1;
+          if (keys.has('w') || keys.has('arrowup')) inputY -= 1;
+          if (keys.has('s') || keys.has('arrowdown')) inputY += 1;
+
+          if (inputX !== 0 || inputY !== 0) {
+            const inputLength = Math.hypot(inputX, inputY) || 1;
+            const ux = inputX / inputLength;
+            const uy = inputY / inputLength;
+
+            vx = approach(vx, ux * PLAYER_SPEED, PLAYER_ACCEL * dt);
+            vy = approach(vy, uy * PLAYER_SPEED, PLAYER_ACCEL * dt);
+
+            const nx = x + vx * dt;
+            const ny = y + vy * dt;
+
+            if (canOccupy(nx, y)) x = nx;
+            else vx = 0;
+
+            if (canOccupy(x, ny)) y = ny;
+            else vy = 0;
+
+            direction = directionFor(ux, uy, direction);
+            route.splice(0);
+            pathRef.current = [];
+            keyboardQueueRef.current = null;
+            setWalkTarget(null);
+          } else if (route.length) {
+            const point = centerOf(route[0]);
+            const dx = point.x - x;
+            const dy = point.y - y;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance <= 3) {
+              x = point.x;
+              y = point.y;
+              route.shift();
+              pathRef.current = route;
+
+              if (!route.length) {
+                keyboardQueueRef.current = null;
+                setWalkTarget(null);
+              }
+            } else {
+              const ux = dx / distance;
+              const uy = dy / distance;
+
+              vx = approach(vx, ux * PLAYER_SPEED, PLAYER_ACCEL * dt);
+              vy = approach(vy, uy * PLAYER_SPEED, PLAYER_ACCEL * dt);
+
+              const nx = x + vx * dt;
+              const ny = y + vy * dt;
+              const movedX = canOccupy(nx, y);
+              const movedY = canOccupy(x, ny);
+
+              if (movedX) x = nx;
+              else vx = 0;
+
+              if (movedY) y = ny;
+              else vy = 0;
+
+              direction = directionFor(dx, dy, direction);
+
+              if (!movedX && !movedY) {
+                pathRef.current = [];
+                route.splice(0);
+                keyboardQueueRef.current = null;
+                setWalkTarget(null);
+              }
             }
           } else {
-            const stepDistance = Math.min(distance, PLAYER_SPEED * dt);
-            const ux = dx / distance;
-            const uy = dy / distance;
-            const nx = x + ux * stepDistance;
-            const ny = y + uy * stepDistance;
+            vx = approach(vx, 0, PLAYER_DECEL * dt);
+            vy = approach(vy, 0, PLAYER_DECEL * dt);
 
-            if (canOccupy(nx, ny)) {
-              x = nx;
-              y = ny;
-              vx = ux * PLAYER_SPEED;
-              vy = uy * PLAYER_SPEED;
-              direction = directionFor(dx, dy, direction);
-            } else {
-              const safe = centerOf(nearestWalkableCell(x, y));
-              x = safe.x;
-              y = safe.y;
-              pathRef.current = [];
-              route.splice(0);
-              keyboardQueueRef.current = null;
-              setWalkTarget(null);
+            if (Math.abs(vx) < 3) vx = 0;
+            if (Math.abs(vy) < 3) vy = 0;
+
+            if (vx || vy) {
+              const nx = x + vx * dt;
+              const ny = y + vy * dt;
+
+              if (canOccupy(nx, y)) x = nx;
+              else vx = 0;
+
+              if (canOccupy(x, ny)) y = ny;
+              else vy = 0;
             }
           }
         }
@@ -1746,6 +1788,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
         if (now - renderRef.current >= FRAME_MS) {
           renderRef.current = now;
+          if (seated || Math.abs(vx) + Math.abs(vy) > 4) {
+            setAnimationTick((tick) => (tick + 1) % 1000000);
+          }
 
           if (followPlayer) {
             const viewport = viewportRef.current;
@@ -2446,7 +2491,13 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const removeSelectedFurniture = () => {
     if (!selectedFurnitureId) return;
-    setSeated((current) => current?.furnitureId === selectedFurnitureId ? null : current);
+    setSeated((current) => {
+      if (current?.furnitureId === selectedFurnitureId) {
+        setSeatedAt(0);
+        return null;
+      }
+      return current;
+    });
     setFurnitureLayout((items) => items.filter((item) => item.id !== selectedFurnitureId));
     setSelectedFurnitureId(null);
     setInvalidFurnitureId(null);
@@ -2454,10 +2505,44 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const rotateSelectedFurniture = () => {
     if (!selectedFurnitureId) return;
+    setInvalidFurnitureId(null);
+
     setFurnitureLayout((items) => items.map((item) => {
       if (item.id !== selectedFurnitureId) return item;
+
       const nextRotation = (((item.rotation || 0) + 90) % 360) as 0 | 90 | 180 | 270;
-      return { ...item, rotation: nextRotation };
+      const nextW = item.h;
+      const nextH = item.w;
+      const centerX = item.x + item.w / 2;
+      const centerY = item.y + item.h / 2;
+
+      const rotateSeatDirection = (value: Direction): Direction => {
+        if (value === 'up') return 'right';
+        if (value === 'right') return 'down';
+        if (value === 'down') return 'left';
+        return 'up';
+      };
+
+      const candidate: FurnitureItem = {
+        ...item,
+        x: Math.round((centerX - nextW / 2) * 2) / 2,
+        y: Math.round((centerY - nextH / 2) * 2) / 2,
+        w: nextW,
+        h: nextH,
+        rotation: nextRotation,
+        seats: item.seats?.map((seat) => ({
+          dx: item.h - seat.dy,
+          dy: seat.dx,
+          direction: rotateSeatDirection(seat.direction),
+        })),
+      };
+
+      if (!furniturePlacementValid(candidate, items, item.id)) {
+        setInvalidFurnitureId(item.id);
+        return item;
+      }
+
+      return candidate;
     }));
   };
 
@@ -2466,6 +2551,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setSelectedFurnitureId(null);
     setInvalidFurnitureId(null);
     setSeated(null);
+    setSeatedAt(0);
   };
 
   const selectedFurniture = selectedFurnitureId
@@ -2589,7 +2675,13 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const playerWalking = player && !seated ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
   const playerFrame = player ? spriteFrame(player.direction, playerWalking) : null;
   const ceoPlayerFrame = player && currentMember?.officeRole === 'ceo'
-    ? ceoMotionFrame(player.direction, playerWalking, Boolean(seated))
+    ? ceoMotionFrame(
+        player.direction,
+        playerWalking,
+        Boolean(seated),
+        seatedAt,
+        Date.now() + animationTick * 0,
+      )
     : null;
 
   return (
@@ -3557,7 +3649,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         )}
 
         <div className="gather-movement-help">
-          <span><kbd>WASD</kbd> / setas · 1 bloco por passo</span>
+          <span><kbd>WASD</kbd> / setas · movimento contínuo</span>
           <span>clique + arraste · olhar o mapa</span>
           <span>duplo clique · caminhar até lá</span>
           <span><kbd>E</kbd> interagir</span>
