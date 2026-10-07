@@ -938,7 +938,9 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
     if (!hasRemotePerson) return;
 
     const now = Date.now();
-    if (now - lastPresenceSentRef.current < 6000) return;
+    // Presença online é apenas telemetria para outros usuários; o movimento do jogador é 100% local.
+    // Mantemos no máximo uma gravação a cada 30s para não drenar a cota do Firestore.
+    if (now - lastPresenceSentRef.current < 30000) return;
     lastPresenceSentRef.current = now;
 
     void currentUser.getIdToken().then((token) =>
