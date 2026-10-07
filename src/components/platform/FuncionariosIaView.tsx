@@ -255,11 +255,20 @@ const statusTone = (status: TaskStatus) => {
 
 interface FuncionariosIaViewProps {
   standalone?: boolean;
+  scene?: 'office' | 'city';
   onExit?: () => void;
 }
 
-export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalone = false, onExit }) => {
+export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalone = false, scene = 'office', onExit }) => {
   const { currentUser } = useAuth();
+  const isCityScene = scene === 'city';
+
+  const navigateScene = (path: '/office' | '/cidade') => {
+    if (typeof window === 'undefined') return;
+    window.history.pushState({}, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
   const [workers, setWorkers] = useState<Worker[]>(FALLBACK_WORKERS);
   const [tasks, setTasks] = useState<AiTask[]>([]);
   const [access, setAccess] = useState<OfficeAccess | null>(null);
@@ -1015,8 +1024,8 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
           <div className="office-standalone-brand">
             <span className="office-standalone-logo"><Gamepad2 className="h-4 w-4" /></span>
             <div>
-              <strong>LeadsPay Office</strong>
-              <small>{access?.officeRole === 'ceo' ? 'CEO' : access?.officeRole === 'designer' ? 'Designer' : 'Equipe'} · escritório ao vivo</small>
+              <strong>{isCityScene ? 'Cidade LeadsPay' : 'LeadsPay Office'}</strong>
+              <small>{access?.officeRole === 'ceo' ? 'CEO' : access?.officeRole === 'designer' ? 'Designer' : 'Equipe'} · {isCityScene ? 'mundo externo' : 'escritório ao vivo'}</small>
             </div>
             <span className={`office-standalone-engine ${engine.connected ? 'online' : 'supervised'}`}>
               <i />
@@ -1025,14 +1034,25 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
           </div>
 
           <nav className="office-standalone-tabs">
-            <button type="button" className={!taskDrawerOpen && !isTeamChatOpen && !isComputerOpen && !isTeamModalOpen ? 'active' : ''} onClick={() => {
+            <button type="button" className={!isCityScene && !taskDrawerOpen && !isTeamChatOpen && !isComputerOpen && !isTeamModalOpen ? 'active' : ''} onClick={() => {
               setTaskDrawerOpen(false);
               setIsTeamChatOpen(false);
               setIsComputerOpen(false);
               setIsTeamModalOpen(false);
+              navigateScene('/office');
             }}>
               <Gamepad2 className="h-4 w-4" />
-              Office
+              Escritório
+            </button>
+            <button type="button" className={isCityScene ? 'active' : ''} onClick={() => {
+              setTaskDrawerOpen(false);
+              setIsTeamChatOpen(false);
+              setIsComputerOpen(false);
+              setIsTeamModalOpen(false);
+              navigateScene('/cidade');
+            }}>
+              <MapPinned className="h-4 w-4" />
+              Cidade
             </button>
             <button type="button" className={taskDrawerOpen ? 'active' : ''} onClick={() => setTaskDrawerOpen((value) => !value)}>
               <ClipboardList className="h-4 w-4" />
@@ -1179,8 +1199,10 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
         <div className="ai-office-panel ai-office-panel-world">
           <div className="ai-office-toolbar">
             <div>
-              <strong>Escritório LeadsPay</strong>
-              <span>Uma planta única: CEO, equipe humana e IAs circulam entre operação, reunião, copa, criação, sala da designer e laboratório.</span>
+              <strong>{isCityScene ? 'Cidade LeadsPay' : 'Escritório LeadsPay'}</strong>
+              <span>{isCityScene
+                ? 'Mundo externo separado do escritório: ruas, prédios, praça, lojas e áreas urbanas para explorar.'
+                : 'Ambiente interno separado: CEO, equipe humana e IAs trabalham dentro do escritório.'}</span>
             </div>
             <div className="ai-office-legend">
               <span><i className="legend-dot working" /> trabalhando</span>
@@ -1205,6 +1227,7 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
             selectedWorkerId={selectedWorkerId}
             areaNames={areaNames}
             canManageAreas={access?.isOfficeAdmin === true}
+            scene={scene}
             onRenameArea={renameOfficeArea}
             onUpdateSelfProfile={updateOwnOfficeProfile}
             onSelectWorker={selectWorker}
