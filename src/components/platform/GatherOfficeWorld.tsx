@@ -1126,7 +1126,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           }
         }
 
-        if (now - presenceRef.current > 620 && onPlayerMove && Math.abs(vx) + Math.abs(vy) > 4) {
+        if (now - presenceRef.current > 1300 && onPlayerMove && Math.abs(vx) + Math.abs(vy) > 4) {
           presenceRef.current = now;
           onPlayerMove({ x, y, direction });
         }
@@ -2091,7 +2091,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
           {remoteHumans.map(({ member, x, y, direction }) => {
             const updatedAt = member.position?.updatedAt ? new Date(member.position.updatedAt).getTime() : 0;
-            const moving = updatedAt > 0 && Date.now() - updatedAt < 1800;
+            const moving = updatedAt > 0 && Date.now() - updatedAt < 4600;
             const frame = spriteFrame(direction);
             const humanTask = activeHumanTask(humanTasks, member.userId);
             return (

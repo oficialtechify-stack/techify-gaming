@@ -247,6 +247,7 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   const [tasks, setTasks] = useState<AiTask[]>([]);
   const [access, setAccess] = useState<OfficeAccess | null>(null);
   const [officeMembers, setOfficeMembers] = useState<OfficeMember[]>([]);
+  const officeMembersRef = useRef<OfficeMember[]>([]);
   const [areaNames, setAreaNames] = useState<Record<string, string>>({});
   const [humanTasks, setHumanTasks] = useState<HumanTask[]>([]);
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
@@ -309,6 +310,10 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   });
 
   useEffect(() => {
+    officeMembersRef.current = officeMembers;
+  }, [officeMembers]);
+
+  useEffect(() => {
     if (!isChatOpen) return;
     const node = chatBodyRef.current;
     if (!node) return;
@@ -363,11 +368,16 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
   };
 
   useEffect(() => {
-    void load();
-    const dataInterval = window.setInterval(() => void load(true), 6000);
+    if (!currentUser) return;
 
-    const presenceInterval = window.setInterval(() => {
-      if (!currentUser) return;
+    const pageIsActive = () =>
+      document.visibilityState === 'visible' && document.hasFocus();
+
+    const syncPresence = () => {
+      if (!pageIsActive()) return;
+      // When the CEO is alone there is nothing remote to poll.
+      if (officeMembersRef.current.length <= 1) return;
+
       void currentUser.getIdToken()
         .then((token) => fetch('/api/office/workers?presenceOnly=1', {
           headers: { Authorization: `Bearer ${token}` },
@@ -399,11 +409,31 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
           });
         })
         .catch(() => undefined);
-    }, 950);
+    };
+
+    const syncOffice = () => {
+      if (!pageIsActive()) return;
+      void load(true);
+    };
+
+    void load();
+    const dataInterval = window.setInterval(syncOffice, 30000);
+    const presenceInterval = window.setInterval(syncPresence, 4000);
+
+    const onVisibility = () => {
+      if (!pageIsActive()) return;
+      void load(true);
+      syncPresence();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onVisibility);
 
     return () => {
       window.clearInterval(dataInterval);
       window.clearInterval(presenceInterval);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onVisibility);
     };
   }, [currentUser?.uid]);
 
