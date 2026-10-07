@@ -181,7 +181,7 @@ type FurnitureItem = {
   footprint?: FurnitureFootprint;
 };
 
-type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'custom';
+type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'decor' | 'other' | 'custom';
 
 type FurnitureCatalogItem = {
   templateId: string;
@@ -207,6 +207,7 @@ type CustomFurnitureAsset = {
   w: number;
   h: number;
   solid: boolean;
+  category?: Exclude<FurnitureCatalogCategory, 'custom'>;
   createdAt: number;
 };
 
@@ -254,6 +255,21 @@ async function saveCustomFurnitureAsset(asset: CustomFurnitureAsset) {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error || new Error('Não foi possível salvar o móvel.'));
       tx.onabort = () => reject(tx.error || new Error('Não foi possível salvar o móvel.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function deleteCustomFurnitureAsset(assetId: string) {
+  const db = await openCustomFurnitureDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(CUSTOM_FURNITURE_STORE, 'readwrite');
+      tx.objectStore(CUSTOM_FURNITURE_STORE).delete(assetId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Não foi possível excluir o móvel.'));
+      tx.onabort = () => reject(tx.error || new Error('Não foi possível excluir o móvel.'));
     });
   } finally {
     db.close();
@@ -1345,6 +1361,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [customFurnitureAssets, setCustomFurnitureAssets] = useState<CustomFurnitureAsset[]>([]);
   const [customFurnitureNotice, setCustomFurnitureNotice] = useState('');
   const [customFurnitureUploading, setCustomFurnitureUploading] = useState(false);
+  const [customFurnitureCategory, setCustomFurnitureCategory] = useState<Exclude<FurnitureCatalogCategory, 'custom'>>('work');
 
   const fallbackCurrentMember = useMemo<OfficeMember | null>(() => {
     if (!currentUserId) return null;
@@ -2802,7 +2819,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setSeatedAt(0);
   };
 
-  const prepareCustomFurnitureImage = (file: File) => new Promise<CustomFurnitureAsset>((resolve, reject) => {
+  const prepareCustomFurnitureImage = (
+    file: File,
+    category: Exclude<FurnitureCatalogCategory, 'custom'>,
+  ) => new Promise<CustomFurnitureAsset>((resolve, reject) => {
     if (!['image/png', 'image/webp', 'image/jpeg'].includes(file.type)) {
       reject(new Error('Use PNG, WebP ou JPG.'));
       return;
@@ -2851,6 +2871,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           w: Math.round(w * 10) / 10,
           h: Math.round(h * 10) / 10,
           solid: true,
+          category,
           createdAt: Date.now(),
         });
       };
@@ -2867,7 +2888,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setCustomFurnitureNotice('');
     setCustomFurnitureUploading(true);
     try {
-      const asset = await prepareCustomFurnitureImage(file);
+      const asset = await prepareCustomFurnitureImage(file, customFurnitureCategory);
       await saveCustomFurnitureAsset(asset);
       setCustomFurnitureAssets((items) => [asset, ...items.filter((item) => item.id !== asset.id)]);
       setFurnitureCategory('custom');
@@ -2880,6 +2901,28 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     }
   };
 
+  const handleDeleteCustomFurniture = async (assetId: string) => {
+    const asset = customFurnitureAssets.find((item) => item.id === assetId);
+    if (!asset) return;
+    const confirmed = window.confirm(
+      'Excluir "' + asset.label + '" da biblioteca? As cópias já colocadas no escritório também serão removidas.',
+    );
+    if (!confirmed) return;
+
+    setCustomFurnitureNotice('');
+    try {
+      await deleteCustomFurnitureAsset(assetId);
+      setCustomFurnitureAssets((items) => items.filter((item) => item.id !== assetId));
+      setFurnitureLayout((items) => items.filter((item) => item.customAssetId !== assetId));
+      if (selectedFurnitureId && furnitureLayout.find((item) => item.id === selectedFurnitureId)?.customAssetId === assetId) {
+        setSelectedFurnitureId(null);
+      }
+      setCustomFurnitureNotice('Móvel excluído da biblioteca.');
+    } catch (error: any) {
+      setCustomFurnitureNotice(error?.message || 'Não foi possível excluir esse móvel.');
+    }
+  };
+
   const selectedFurniture = selectedFurnitureId
     ? furnitureLayout.find((item) => item.id === selectedFurnitureId) || null
     : null;
@@ -2887,7 +2930,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const customFurnitureCatalog = customFurnitureAssets.map<FurnitureCatalogItem>((asset) => ({
     templateId: 'custom:' + asset.id,
     label: asset.label,
-    category: 'custom',
+    category: asset.category || 'custom',
     kind: 'image',
     src: asset.src,
     customAssetId: asset.id,
@@ -2904,7 +2947,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const visibleFurnitureCatalog = [...customFurnitureCatalog, ...FURNITURE_CATALOG].filter((item) => {
     const query = furnitureSearch.trim().toLowerCase();
-    const categoryMatch = furnitureCategory === 'all' || item.category === furnitureCategory;
+    const categoryMatch =
+      furnitureCategory === 'all' ||
+      (furnitureCategory === 'custom' ? Boolean(item.customAssetId) : item.category === furnitureCategory);
     const searchMatch = !query || item.label.toLowerCase().includes(query);
     return categoryMatch && searchMatch;
   });
@@ -3818,6 +3863,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 ['table','Mesas'],
                 ['storage','Estantes'],
                 ['custom','Meus móveis'],
+                ['decor','Decoração'],
+                ['other','Outros'],
               ].map(([id,label]) => (
                 <button
                   key={id}
@@ -3838,6 +3885,20 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 onChange={handleCustomFurnitureUpload}
                 hidden
               />
+              <label className="gather-custom-furniture-category">
+                <span>Categoria do móvel</span>
+                <select
+                  value={customFurnitureCategory}
+                  onChange={(event) => setCustomFurnitureCategory(event.target.value as Exclude<FurnitureCatalogCategory, 'custom'>)}
+                >
+                  <option value="work">Trabalho</option>
+                  <option value="seat">Assentos</option>
+                  <option value="table">Mesas</option>
+                  <option value="storage">Estantes</option>
+                  <option value="decor">Decoração</option>
+                  <option value="other">Outros</option>
+                </select>
+              </label>
               <button
                 type="button"
                 disabled={customFurnitureUploading}
@@ -3852,28 +3913,44 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
             <div className="gather-decorator-grid">
               {visibleFurnitureCatalog.map((template) => (
-                <button
-                  key={template.templateId}
-                  type="button"
-                  className="gather-decorator-item"
-                  onClick={() => addFurnitureFromCatalog(template)}
-                  title={'Adicionar ' + template.label}
-                >
-                  <span className="gather-decorator-preview">
-                    {template.asset ? (
-                      <span
-                        className="gather-exact-furniture-sprite"
-                        style={exactFurnitureStyle(template.asset, template.rotation || 0)}
-                      />
-                    ) : template.src ? (
-                      <img src={template.src} alt="" draggable={false} />
-                    ) : (
-                      <Plus className="h-5 w-5" />
-                    )}
-                  </span>
-                  <small>{template.label}</small>
-                  <Plus className="gather-decorator-add h-3 w-3" />
-                </button>
+                <div key={template.templateId} className="gather-decorator-item-wrap">
+                  <button
+                    type="button"
+                    className="gather-decorator-item"
+                    onClick={() => addFurnitureFromCatalog(template)}
+                    title={'Adicionar ' + template.label}
+                  >
+                    <span className="gather-decorator-preview">
+                      {template.asset ? (
+                        <span
+                          className="gather-exact-furniture-sprite"
+                          style={exactFurnitureStyle(template.asset, template.rotation || 0)}
+                        />
+                      ) : template.src ? (
+                        <img src={template.src} alt="" draggable={false} />
+                      ) : (
+                        <Plus className="h-5 w-5" />
+                      )}
+                    </span>
+                    <small>{template.label}</small>
+                    <Plus className="gather-decorator-add h-3 w-3" />
+                  </button>
+                  {template.customAssetId && (
+                    <button
+                      type="button"
+                      className="gather-decorator-delete"
+                      title="Excluir da biblioteca"
+                      aria-label={'Excluir ' + template.label}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleDeleteCustomFurniture(template.customAssetId!);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
 

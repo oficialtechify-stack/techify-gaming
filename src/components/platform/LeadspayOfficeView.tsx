@@ -16,6 +16,8 @@ import {
   RefreshCw,
   Send,
   Sparkles,
+  Trash2,
+  Upload,
   Users,
   XCircle,
 } from 'lucide-react';
@@ -24,6 +26,18 @@ import '../../styles/leadspay-office-workadventure.css';
 
 type OfficeTool = 'world' | 'tasks' | 'chat' | 'computer' | 'team' | 'ai' | 'decorator';
 type WorldScene = 'city' | 'office';
+type FurnitureCategory = 'work' | 'seat' | 'table' | 'storage' | 'decor' | 'other';
+
+type LocalFurnitureAsset = {
+  id: string;
+  label: string;
+  src: string;
+  w: number;
+  h: number;
+  solid: boolean;
+  category?: FurnitureCategory;
+  createdAt: number;
+};
 
 type OfficeWorker = {
   id: string;
@@ -125,6 +139,79 @@ const TOOL_ITEMS: Array<{ id: OfficeTool; label: string; icon: React.ElementType
   { id: 'decorator', label: 'Decorador', icon: Palette },
 ];
 
+const OFFICE_FURNITURE_DB = 'leadspay-office-custom-furniture-v1';
+const OFFICE_FURNITURE_STORE = 'assets';
+
+function openOfficeFurnitureDb() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(OFFICE_FURNITURE_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(OFFICE_FURNITURE_STORE)) {
+        db.createObjectStore(OFFICE_FURNITURE_STORE, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Não foi possível abrir a biblioteca de móveis.'));
+  });
+}
+
+async function listOfficeFurniture() {
+  const db = await openOfficeFurnitureDb();
+  try {
+    return await new Promise<LocalFurnitureAsset[]>((resolve, reject) => {
+      const tx = db.transaction(OFFICE_FURNITURE_STORE, 'readonly');
+      const request = tx.objectStore(OFFICE_FURNITURE_STORE).getAll();
+      request.onsuccess = () => resolve((request.result || []) as LocalFurnitureAsset[]);
+      request.onerror = () => reject(request.error || new Error('Não foi possível carregar os móveis.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function putOfficeFurniture(asset: LocalFurnitureAsset) {
+  const db = await openOfficeFurnitureDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(OFFICE_FURNITURE_STORE, 'readwrite');
+      tx.objectStore(OFFICE_FURNITURE_STORE).put(asset);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Não foi possível salvar o móvel.'));
+      tx.onabort = () => reject(tx.error || new Error('Não foi possível salvar o móvel.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function removeOfficeFurniture(assetId: string) {
+  const db = await openOfficeFurnitureDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(OFFICE_FURNITURE_STORE, 'readwrite');
+      tx.objectStore(OFFICE_FURNITURE_STORE).delete(assetId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Não foi possível excluir o móvel.'));
+      tx.onabort = () => reject(tx.error || new Error('Não foi possível excluir o móvel.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+function furnitureCategoryLabel(category?: FurnitureCategory) {
+  const labels: Record<FurnitureCategory, string> = {
+    work: 'Trabalho',
+    seat: 'Assentos',
+    table: 'Mesas',
+    storage: 'Estantes',
+    decor: 'Decoração',
+    other: 'Outros',
+  };
+  return labels[category || 'other'];
+}
+
 function statusLabel(status?: string) {
   const map: Record<string, string> = {
     queued: 'Na fila',
@@ -183,9 +270,21 @@ export const LeadspayOfficeView: React.FC<LeadspayOfficeViewProps> = ({
   const [error, setError] = useState('');
   const [teamInput, setTeamInput] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const furnitureInputRef = useRef<HTMLInputElement | null>(null);
+  const [furnitureAssets, setFurnitureAssets] = useState<LocalFurnitureAsset[]>([]);
+  const [furnitureCategory, setFurnitureCategory] = useState<FurnitureCategory>('work');
+  const [furnitureNotice, setFurnitureNotice] = useState('');
+  const [furnitureBusy, setFurnitureBusy] = useState(false);
 
   const activeSceneUrl = useMemo(() => resolveMapUrl(scene), [scene, frameKey]);
   const isEmbedded = Boolean(embeddedPanel);
+
+  useEffect(() => {
+    if (typeof indexedDB === 'undefined') return;
+    void listOfficeFurniture()
+      .then((items) => setFurnitureAssets(items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))))
+      .catch(() => undefined);
+  }, []);
 
   const authHeaders = async () => {
     if (!currentUser) throw new Error('Sessão do LeadsPay Office não encontrada.');
@@ -387,16 +486,156 @@ export const LeadspayOfficeView: React.FC<LeadspayOfficeViewProps> = ({
     </div>
   );
 
+  const prepareFurnitureUpload = (file: File) => new Promise<LocalFurnitureAsset>((resolve, reject) => {
+    if (!['image/png', 'image/webp', 'image/jpeg'].includes(file.type)) {
+      reject(new Error('Use PNG, WebP ou JPG.'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      reject(new Error('O arquivo precisa ter no máximo 5 MB.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('A imagem enviada é inválida.'));
+      image.onload = () => {
+        const maxSide = 512;
+        const ratio = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Não foi possível preparar a imagem.'));
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const src = canvas.toDataURL('image/webp', .92);
+        const aspect = canvas.width / Math.max(1, canvas.height);
+        const w = aspect >= 1 ? 4.8 : Math.max(1.5, 4.8 * aspect);
+        const h = aspect >= 1 ? Math.max(1.5, 4.8 / aspect) : 4.8;
+        resolve({
+          id: 'custom-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+          label: file.name.replace(/\.[^.]+$/, '').trim() || 'Meu móvel',
+          src,
+          w: Math.round(w * 10) / 10,
+          h: Math.round(h * 10) / 10,
+          solid: true,
+          category: furnitureCategory,
+          createdAt: Date.now(),
+        });
+      };
+      image.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const uploadFurniture = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setFurnitureBusy(true);
+    setFurnitureNotice('');
+    try {
+      const asset = await prepareFurnitureUpload(file);
+      await putOfficeFurniture(asset);
+      setFurnitureAssets((items) => [asset, ...items.filter((item) => item.id !== asset.id)]);
+      setFurnitureNotice('Móvel salvo na biblioteca.');
+    } catch (err: any) {
+      setFurnitureNotice(err?.message || 'Não foi possível salvar esse móvel.');
+    } finally {
+      setFurnitureBusy(false);
+    }
+  };
+
+  const changeFurnitureCategory = async (asset: LocalFurnitureAsset, category: FurnitureCategory) => {
+    const next = { ...asset, category };
+    await putOfficeFurniture(next);
+    setFurnitureAssets((items) => items.map((item) => item.id === asset.id ? next : item));
+  };
+
+  const deleteFurniture = async (asset: LocalFurnitureAsset) => {
+    if (!window.confirm('Excluir "' + asset.label + '" da biblioteca?')) return;
+    setFurnitureBusy(true);
+    setFurnitureNotice('');
+    try {
+      await removeOfficeFurniture(asset.id);
+      setFurnitureAssets((items) => items.filter((item) => item.id !== asset.id));
+      setFurnitureNotice('Móvel excluído da biblioteca.');
+    } catch (err: any) {
+      setFurnitureNotice(err?.message || 'Não foi possível excluir esse móvel.');
+    } finally {
+      setFurnitureBusy(false);
+    }
+  };
+
   const renderDecorator = () => (
     <div className="lp-office-panel">
       <div className="lp-office-panel-heading">
-        <div><strong>Decorador</strong><span>Os móveis passam a ser administrados pelo editor do WorkAdventure.</span></div>
+        <div><strong>Decorador</strong><span>Organize sua biblioteca antes de posicionar os objetos no mapa.</span></div>
       </div>
+
+      <div className="lp-office-furniture-upload">
+        <input
+          ref={furnitureInputRef}
+          type="file"
+          accept="image/png,image/webp,image/jpeg"
+          hidden
+          onChange={uploadFurniture}
+        />
+        <label>
+          <span>Categoria do móvel</span>
+          <select value={furnitureCategory} onChange={(event) => setFurnitureCategory(event.target.value as FurnitureCategory)}>
+            <option value="work">Trabalho</option>
+            <option value="seat">Assentos</option>
+            <option value="table">Mesas</option>
+            <option value="storage">Estantes</option>
+            <option value="decor">Decoração</option>
+            <option value="other">Outros</option>
+          </select>
+        </label>
+        <button type="button" disabled={furnitureBusy} onClick={() => furnitureInputRef.current?.click()}>
+          {furnitureBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          {furnitureBusy ? 'Preparando...' : 'Enviar meu móvel'}
+        </button>
+        <small>PNG, WebP ou JPG · até 5 MB. Fundo transparente fica melhor.</small>
+        {furnitureNotice && <em>{furnitureNotice}</em>}
+      </div>
+
+      <div className="lp-office-furniture-library">
+        {furnitureAssets.length === 0 ? (
+          <div className="lp-office-empty"><Palette /><strong>Sua biblioteca está vazia</strong><span>Envie um móvel acima para começar.</span></div>
+        ) : furnitureAssets.map((asset) => (
+          <article key={asset.id} className="lp-office-furniture-card">
+            <div className="lp-office-furniture-preview"><img src={asset.src} alt={asset.label} /></div>
+            <div className="lp-office-furniture-card-body">
+              <strong>{asset.label}</strong>
+              <span>{furnitureCategoryLabel(asset.category)}</span>
+              <select
+                value={asset.category || 'other'}
+                onChange={(event) => void changeFurnitureCategory(asset, event.target.value as FurnitureCategory)}
+              >
+                <option value="work">Trabalho</option>
+                <option value="seat">Assentos</option>
+                <option value="table">Mesas</option>
+                <option value="storage">Estantes</option>
+                <option value="decor">Decoração</option>
+                <option value="other">Outros</option>
+              </select>
+            </div>
+            <button type="button" className="lp-office-furniture-delete" title="Excluir móvel" onClick={() => void deleteFurniture(asset)}>
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </article>
+        ))}
+      </div>
+
       <div className="lp-office-decorator">
         <Palette />
-        <strong>Editor nativo de objetos</strong>
-        <p>No mundo, use o editor do WorkAdventure para enviar PNG/WebP, posicionar o móvel, definir profundidade e colisão. Assim não precisamos manter um editor de móveis separado em React.</p>
-        <button type="button" onClick={() => setActiveTool('world')}><Gamepad2 className="h-4 w-4" />Voltar para o mundo</button>
+        <strong>Posicionamento no WorkAdventure</strong>
+        <p>A biblioteca acima organiza seus arquivos por categoria e permite apagar o que você não quiser manter. No mundo, o editor do WorkAdventure continua responsável por posição, profundidade e colisão.</p>
+        <button type="button" onClick={() => setActiveTool('world')}><Gamepad2 className="h-4 w-4" />Abrir o mundo</button>
       </div>
     </div>
   );
