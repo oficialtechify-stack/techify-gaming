@@ -48,6 +48,14 @@
   ],
   "rewrites": [
     {
+      "source": "/office-world/assets/kenney/:path*",
+      "destination": "https://raw.githubusercontent.com/scottyfncodes/GenAlpha/4cae1d3ea77070f1237ea39f141fa4861715c5a7/static/public/tiles/:path*"
+    },
+    {
+      "source": "/office-world/assets/workadventure/:path*",
+      "destination": "https://raw.githubusercontent.com/workadventure/map-starter-kit/1143646a9c02c3928eac4acbb123642c62a48a85/tilesets/:path*"
+    },
+    {
       "source": "/__/auth/:path*",
       "destination": "https://techify-gaming-106fe.firebaseapp.com/__/auth/:path*"
     },
