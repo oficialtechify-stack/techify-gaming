@@ -29,6 +29,9 @@ jobs:
       - name: TypeScript
         run: npm run lint
 
+      - name: Validate LeadsPay Office maps
+        run: npm run validate:office-world
+
       - name: Build frontend
         run: npx vite build
 

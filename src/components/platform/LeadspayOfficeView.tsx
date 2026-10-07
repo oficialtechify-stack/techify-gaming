@@ -550,9 +550,15 @@ export const LeadspayOfficeView: React.FC<LeadspayOfficeViewProps> = ({
   };
 
   const changeFurnitureCategory = async (asset: LocalFurnitureAsset, category: FurnitureCategory) => {
-    const next = { ...asset, category };
-    await putOfficeFurniture(next);
-    setFurnitureAssets((items) => items.map((item) => item.id === asset.id ? next : item));
+    setFurnitureNotice('');
+    try {
+      const next = { ...asset, category };
+      await putOfficeFurniture(next);
+      setFurnitureAssets((items) => items.map((item) => item.id === asset.id ? next : item));
+      setFurnitureNotice('Categoria atualizada.');
+    } catch (err: any) {
+      setFurnitureNotice(err?.message || 'Não foi possível alterar a categoria.');
+    }
   };
 
   const deleteFurniture = async (asset: LocalFurnitureAsset) => {
