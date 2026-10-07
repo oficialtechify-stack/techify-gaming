@@ -469,9 +469,9 @@ const AI_DESKS = [
   { workerId: 'growth', col: 42, row: 12 },
 ];
 
-// A planta do Drive já vem mobiliada. Comece com um layout limpo, preservando
-// no navegador a configuração antiga sob a chave anterior, para reversão.
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:drive-map-v1';
+// O mapa estrutural começa sem móveis posicionados. Uma nova chave de persistência
+// impede layouts antigos do navegador de trazerem móveis legados para o Decorá.
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:structured-map-v2';
 
 const DEFAULT_FURNITURE: FurnitureItem[] = [];
 
