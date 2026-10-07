@@ -1,5 +1,5 @@
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
-import { releaseDelayDays, type PlatformRole } from '../../lib/platformBilling.js';
+import { releaseDelayDays, roleAvailableCentsField, rolePendingCentsField, type PlatformRole } from '../../lib/platformBilling.js';
 import { releaseStripeBalanceDocument } from '../crons/stripe-releases.js';
 import { calculateUserLedgerBalances } from '../../lib/balanceLedger.js';
 
@@ -85,31 +85,48 @@ export default async function handler(req: Req, res: Res) {
       : releases;
 
     const pending = visibleReleases.filter((item) => item.status === 'pending');
-    const ledger = await calculateUserLedgerBalances(db, identity.uid);
-    const roleLedger = ledger[role];
+    const pendingField = rolePendingCentsField(role);
+    const availableField = roleAvailableCentsField(role);
+    const savedPendingCents = Number(profile[pendingField]);
+    const savedAvailableCents = Number(profile[availableField]);
+    const hasAuthoritativeRoleBalances =
+      Number.isSafeInteger(savedPendingCents) && savedPendingCents >= 0 &&
+      Number.isSafeInteger(savedAvailableCents) && savedAvailableCents >= 0;
 
-    // Reconciliamos os campos salvos do perfil com o livro-caixa real.
-    // Isso remove automaticamente saldos legados/demonstrativos sem lastro.
-    const reconciled = {
-      empresaPendingBalanceCents: ledger.empresa.pendingCents,
-      empresaAvailableBalanceCents: ledger.empresa.availableCents,
-      afiliadoPendingBalanceCents: ledger.afiliado.pendingCents,
-      afiliadoAvailableBalanceCents: ledger.afiliado.availableCents,
-      pendingBalance: Number(((ledger.empresa.pendingCents + ledger.afiliado.pendingCents) / 100).toFixed(2)),
-      availableBalance: Number(((ledger.empresa.availableCents + ledger.afiliado.availableCents) / 100).toFixed(2)),
-      updatedAt: new Date().toISOString(),
-    };
+    // Caminho normal: os webhooks, a liberação e o saque já mantêm estes campos
+    // incrementais no perfil. Evitamos reler balance_releases + withdrawals
+    // só para recalcular números que já estão materializados.
+    let pendingAmountCents: number;
+    let availableAmountCents: number;
+    let releasedGrossCents: number;
+    let withdrawnCents: number;
 
-    const currentProfile = profileSnap.data() as Record<string, any>;
-    const needsReconcile =
-      Number(currentProfile.empresaPendingBalanceCents || 0) !== reconciled.empresaPendingBalanceCents ||
-      Number(currentProfile.empresaAvailableBalanceCents || 0) !== reconciled.empresaAvailableBalanceCents ||
-      Number(currentProfile.afiliadoPendingBalanceCents || 0) !== reconciled.afiliadoPendingBalanceCents ||
-      Number(currentProfile.afiliadoAvailableBalanceCents || 0) !== reconciled.afiliadoAvailableBalanceCents ||
-      Number(currentProfile.pendingBalance || 0) !== reconciled.pendingBalance ||
-      Number(currentProfile.availableBalance || 0) !== reconciled.availableBalance;
+    if (hasAuthoritativeRoleBalances) {
+      pendingAmountCents = savedPendingCents;
+      availableAmountCents = savedAvailableCents;
+      releasedGrossCents = visibleReleases
+        .filter((item) => String(item.status || '').toLowerCase() === 'available')
+        .reduce((sum, item) => sum + Math.max(0, Number(item.amountCents || 0)), 0);
+      withdrawnCents = Math.max(0, releasedGrossCents - availableAmountCents);
+    } else {
+      // Perfis legados/inconsistentes ainda podem ser reparados pela leitura completa.
+      const ledger = await calculateUserLedgerBalances(db, identity.uid);
+      const roleLedger = ledger[role];
+      pendingAmountCents = roleLedger.pendingCents;
+      availableAmountCents = roleLedger.availableCents;
+      releasedGrossCents = roleLedger.releasedGrossCents;
+      withdrawnCents = roleLedger.withdrawnCents;
 
-    if (needsReconcile) {
+      const reconciled = {
+        empresaPendingBalanceCents: ledger.empresa.pendingCents,
+        empresaAvailableBalanceCents: ledger.empresa.availableCents,
+        afiliadoPendingBalanceCents: ledger.afiliado.pendingCents,
+        afiliadoAvailableBalanceCents: ledger.afiliado.availableCents,
+        pendingBalance: Number(((ledger.empresa.pendingCents + ledger.afiliado.pendingCents) / 100).toFixed(2)),
+        availableBalance: Number(((ledger.empresa.availableCents + ledger.afiliado.availableCents) / 100).toFixed(2)),
+        updatedAt: new Date().toISOString(),
+      };
+
       await Promise.all([
         profileRef.set(reconciled, { merge: true }),
         db.collection('users').doc(identity.uid).set(reconciled, { merge: true }),
@@ -122,10 +139,10 @@ export default async function handler(req: Req, res: Res) {
       success: true,
       role,
       policyDays: releaseDelayDays(profile),
-      pendingAmountCents: roleLedger.pendingCents,
-      availableAmountCents: roleLedger.availableCents,
-      releasedGrossCents: roleLedger.releasedGrossCents,
-      withdrawnCents: roleLedger.withdrawnCents,
+      pendingAmountCents,
+      availableAmountCents,
+      releasedGrossCents,
+      withdrawnCents,
       nextReleaseAt: nextRelease?.availableAt || null,
       releases: visibleReleases.slice(0, 200).map((item) => ({
         id: item.id,
