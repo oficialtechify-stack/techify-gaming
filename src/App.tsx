@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ActiveModal } from './types';
 import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
-import { FuncionariosIaView } from './components/platform/FuncionariosIaView';
+import { LeadspayOfficeView } from './components/platform/LeadspayOfficeView';
 import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
@@ -279,9 +279,9 @@ function MainApp() {
 
     return (
       <ErrorBoundary fallbackTitle="Erro ao carregar o LeadsPay Office">
-        <FuncionariosIaView
+        <LeadspayOfficeView
           standalone
-          scene={isCityPath ? 'city' : 'office'}
+          initialScene={isCityPath ? 'city' : 'office'}
           onExit={() => {
             window.history.pushState({}, '', '/');
             setAppPath('/');
