@@ -279,14 +279,7 @@ function MainApp() {
 
     return (
       <ErrorBoundary fallbackTitle="Erro ao carregar o LeadsPay Office">
-        <LeadspayOfficeView
-          standalone
-          onExit={() => {
-            window.history.pushState({}, '', '/');
-            setAppPath('/');
-            setViewPlatform(true);
-          }}
-        />
+        <LeadspayOfficeView standalone />
       </ErrorBoundary>
     );
   }
