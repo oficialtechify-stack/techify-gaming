@@ -54,6 +54,7 @@ import { DatabaseManagerView } from './DatabaseManagerView';
 import { AdminModalImagesManager } from './AdminModalImagesManager';
 import { MeuPerfilView } from './MeuPerfilView';
 import { AssistentesIaView } from './AssistentesIaView';
+import { LeadspayOfficeView } from './LeadspayOfficeView';
 import { AssinaturasView } from './AssinaturasView';
 import { CuponsView } from './CuponsView';
 import { ClientesView } from './ClientesView';
@@ -1609,12 +1610,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   <button
                     key={item.id}
                     onClick={() => {
-                      if (item.id === 'funcionarios_ia') {
-                        window.history.pushState({}, '', '/office');
-                        window.dispatchEvent(new PopStateEvent('popstate'));
-                        setIsMobileMenuOpen(false);
-                        return;
-                      }
                       setActiveTab(item.id);
                       setIsMobileMenuOpen(false);
                     }}
@@ -2007,22 +2002,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
 
           {activeTab === 'funcionarios_ia' && ((roleMode === 'admin' && isSuperAdmin) || hasOfficeAccess) && (
-            <div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-white/10 bg-[#08101b] p-8 text-center shadow-2xl">
-              <Gamepad2 className="mx-auto h-10 w-10 text-[#D9F22A]" />
-              <h2 className="mt-4 text-2xl font-black text-white">LeadsPay Office agora é um aplicativo separado</h2>
-              <p className="mt-2 text-sm text-white/60">
-                O escritório roda fora do dashboard para ganhar tela, desempenho e uma experiência espacial completa.
-              </p>
-              <button
-                type="button"
-                className="mt-6 rounded-xl bg-[#D9F22A] px-5 py-3 text-sm font-black text-[#071019]"
-                onClick={() => {
-                  window.history.pushState({}, '', '/office');
-                  window.dispatchEvent(new PopStateEvent('popstate'));
-                }}
-              >
-                Abrir LeadsPay Office
-              </button>
+            <div className="w-full">
+              <LeadspayOfficeView />
             </div>
           )}
 
