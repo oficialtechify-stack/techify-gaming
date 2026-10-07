@@ -686,8 +686,83 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [callParticipants, setCallParticipants] = useState<CallParticipant[]>([]);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [callConnecting, setCallConnecting] = useState(false);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [profileNameDraft, setProfileNameDraft] = useState('');
+  const [avatarStyleDraft, setAvatarStyleDraft] = useState<OfficeAvatarStyle>('all-black');
+  const [avatarCategory, setAvatarCategory] = useState<'skin' | 'hair' | 'facial' | 'outfit' | 'accessory'>('outfit');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   const currentMember = officeMembers.find((member) => member.userId === currentUserId) || null;
+  const profileTimeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Recife',
+    [],
+  );
+
+  const openSelfProfile = () => {
+    if (!currentMember) return;
+    setSelectedAreaId(null);
+    setSelectedHumanId(currentMember.userId);
+    setProfileError('');
+  };
+
+  const openProfileEditor = () => {
+    if (!currentMember) return;
+    setProfileNameDraft(currentMember.displayName || '');
+    setAvatarStyleDraft(avatarStyleOf(currentMember));
+    setProfileError('');
+    setProfileEditorOpen(true);
+  };
+
+  const openAvatarEditor = () => {
+    if (!currentMember) return;
+    setAvatarStyleDraft(avatarStyleOf(currentMember));
+    setAvatarCategory('outfit');
+    setProfileError('');
+    setAvatarEditorOpen(true);
+  };
+
+  const saveSelfProfile = async () => {
+    if (!currentMember || !onUpdateSelfProfile || profileSaving) return;
+    const displayName = profileNameDraft.trim();
+    if (displayName.length < 2) {
+      setProfileError('Digite um nome com pelo menos 2 caracteres.');
+      return;
+    }
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      await onUpdateSelfProfile({
+        displayName,
+        avatarConfig: currentMember.avatarConfig || DEFAULT_CEO_AVATAR_CONFIG,
+      });
+      setProfileEditorOpen(false);
+    } catch (error: any) {
+      setProfileError(error?.message || 'Não foi possível salvar seu perfil.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const saveAvatarStyle = async () => {
+    if (!currentMember || !onUpdateSelfProfile || profileSaving) return;
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      await onUpdateSelfProfile({
+        avatarConfig: {
+          ...(currentMember.avatarConfig || DEFAULT_CEO_AVATAR_CONFIG),
+          style: avatarStyleDraft,
+        },
+      });
+      setAvatarEditorOpen(false);
+    } catch (error: any) {
+      setProfileError(error?.message || 'Não foi possível salvar seu avatar.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   useEffect(() => {
     const sync = () => setIsFullscreen(document.fullscreenElement === shellRef.current);
@@ -1517,6 +1592,29 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setCamera(centered);
     requestAnimationFrame(() => applyWorldTransform(centered, next));
   };
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    let resizeFrame = 0;
+    const refit = () => {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(() => fitMap());
+    };
+
+    const initialFrame = window.requestAnimationFrame(() => fitMap());
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refit) : null;
+    observer?.observe(viewport);
+    window.addEventListener('resize', refit);
+
+    return () => {
+      window.cancelAnimationFrame(initialFrame);
+      window.cancelAnimationFrame(resizeFrame);
+      observer?.disconnect();
+      window.removeEventListener('resize', refit);
+    };
+  }, []);
 
   const onViewportPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
