@@ -944,8 +944,20 @@ function ceoMotionFrame(
   }
 
   if (!walking) {
-    const idleStep = Math.floor(now / 250) % 4; // 4 FPS
-    return { row: 3, column: logicalColumns[idleStep], flip: false, bob: 0, lean: 0 };
+    // Parado = quadro fixo. Mantém a última direção sem reproduzir ciclo de caminhada.
+    if (direction === 'up') {
+      return { row: 1, column: logicalColumns[0], flip: false, bob: 0, lean: 0 };
+    }
+    if (direction === 'left' || direction === 'right') {
+      return {
+        row: 2,
+        column: logicalColumns[0],
+        flip: direction === 'right',
+        bob: 0,
+        lean: 0,
+      };
+    }
+    return { row: 3, column: logicalColumns[0], flip: false, bob: 0, lean: 0 };
   }
 
   const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
@@ -1817,6 +1829,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               previousPlayer &&
               Math.abs(previousPlayer.x - nextPlayer.x) < .2 &&
               Math.abs(previousPlayer.y - nextPlayer.y) < .2 &&
+              Math.abs(previousPlayer.vx - nextPlayer.vx) < .5 &&
+              Math.abs(previousPlayer.vy - nextPlayer.vy) < .5 &&
               previousPlayer.direction === nextPlayer.direction &&
               previousPlayer.path.length === nextPlayer.path.length
             ) {
@@ -2680,7 +2694,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     ? CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleOf(currentMember)) || CEO_AVATAR_STYLES[1]
     : CEO_AVATAR_STYLES[1];
   const draftCeoStyle = CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleDraft) || CEO_AVATAR_STYLES[1];
-  const playerWalking = player && !seated ? Math.abs(player.vx) + Math.abs(player.vy) > 4 : false;
+  const playerWalking = player && !seated ? Math.hypot(player.vx, player.vy) > 8 : false;
   const playerFrame = player ? spriteFrame(player.direction, playerWalking) : null;
   const ceoPlayerFrame = player && currentMember?.officeRole === 'ceo'
     ? ceoMotionFrame(
