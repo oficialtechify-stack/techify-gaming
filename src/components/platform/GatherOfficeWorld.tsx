@@ -225,7 +225,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 84;
-const OFFICE_MAP_VERSION = 'leadspay-reference-v1';
+const OFFICE_MAP_VERSION = 'leadspay-reference-v2';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -269,6 +269,50 @@ function exactFurnitureStyle(asset: ExactFurnitureAsset, rotation: 0 | 90 | 180 
     backgroundSize: '400% 300%',
     backgroundPosition: (col * (100 / 3)) + '% ' + (row * 50) + '%',
     transform: 'rotate(' + rotation + 'deg)',
+  };
+}
+
+function exactFurnitureImage(asset: ExactFurnitureAsset, rotation: 0 | 90 | 180 | 270 = 0) {
+  const front: Record<ExactFurnitureAsset, string> = {
+    'chair-green': '/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png',
+    'chair-black': '/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png',
+    'desk-executive': '/pixel-agents/assets/furniture/DESK/DESK_FRONT.png',
+    'bookshelf': '/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png',
+    'armchair-orange': '/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png',
+    'sofa-green': '/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png',
+    'side-table': '/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png',
+    'round-table': '/pixel-agents/assets/furniture/SMALL_TABLE/SMALL_TABLE_FRONT.png',
+    'long-table': '/pixel-agents/assets/furniture/TABLE_FRONT/TABLE_FRONT.png',
+    'workstation': '/pixel-agents/assets/furniture/DESK/DESK_FRONT.png',
+  };
+
+  const back: Partial<Record<ExactFurnitureAsset, string>> = {
+    'chair-green': '/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_BACK.png',
+    'chair-black': '/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_BACK.png',
+    'armchair-orange': '/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_BACK.png',
+    'sofa-green': '/pixel-agents/assets/furniture/SOFA/SOFA_BACK.png',
+  };
+
+  const side: Partial<Record<ExactFurnitureAsset, string>> = {
+    'chair-green': '/pixel-agents/assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_SIDE.png',
+    'chair-black': '/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_SIDE.png',
+    'desk-executive': '/pixel-agents/assets/furniture/DESK/DESK_SIDE.png',
+    'armchair-orange': '/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_SIDE.png',
+    'sofa-green': '/pixel-agents/assets/furniture/SOFA/SOFA_SIDE.png',
+    'round-table': '/pixel-agents/assets/furniture/SMALL_TABLE/SMALL_TABLE_SIDE.png',
+    'workstation': '/pixel-agents/assets/furniture/DESK/DESK_SIDE.png',
+  };
+
+  if (rotation === 180 && back[asset]) return { src: back[asset]!, style: undefined };
+  if ((rotation === 90 || rotation === 270) && side[asset]) {
+    return {
+      src: side[asset]!,
+      style: rotation === 270 ? { transform: 'scaleX(-1)' } as React.CSSProperties : undefined,
+    };
+  }
+  return {
+    src: front[asset],
+    style: rotation === 180 ? { transform: 'rotate(180deg)' } as React.CSSProperties : undefined,
   };
 }
 
@@ -394,7 +438,7 @@ const AI_DESKS = [
   { workerId: 'growth', col: 17, row: 14 },
 ];
 
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:reference-v1';
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:reference-v2';
 
 const DEFAULT_FURNITURE: FurnitureItem[] = [
   // Topo esquerdo — Equipe LeadsPay
@@ -1595,7 +1639,11 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          if (!cancelled) setCallNotice(data.error || 'Não foi possível conectar a esta área.');
+          const message = String(data.error || 'Não foi possível conectar a esta área.');
+          if (!cancelled) {
+            if (/RESOURCE_EXHAUSTED|quota.*exceeded/i.test(message)) setCallNotice('');
+            else setCallNotice(message);
+          }
           return;
         }
         if (cancelled) return;
@@ -1652,12 +1700,16 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           }
         }
       } catch (error: any) {
-        if (!cancelled) setCallNotice(error?.message || 'Não foi possível conectar ao áudio desta área.');
+        const message = String(error?.message || 'Não foi possível conectar ao áudio desta área.');
+        if (!cancelled) {
+          if (/RESOURCE_EXHAUSTED|quota.*exceeded/i.test(message)) setCallNotice('');
+          else setCallNotice(message);
+        }
       }
     };
 
     void syncCall();
-    const interval = window.setInterval(() => void syncCall(), 1200);
+    const interval = window.setInterval(() => void syncCall(), 8000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -2436,12 +2488,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                     <span className="leadspay-pixel-sign"><b>✣</b> LeadsPay</span>
                   ) : item.kind === 'rug' ? (
                     <span className="gather-mapped-rug" />
-                  ) : item.asset ? (
-                    <span
-                      className="gather-exact-furniture-sprite"
-                      style={exactFurnitureStyle(item.asset, item.rotation || 0)}
-                    />
-                  ) : (
+                  ) : item.asset ? (() => {
+                    const resolved = exactFurnitureImage(item.asset, item.rotation || 0);
+                    return (
+                      <img
+                        src={resolved.src}
+                        alt=""
+                        draggable={false}
+                        className="gather-exact-furniture-image"
+                        style={resolved.style}
+                      />
+                    );
+                  })() : (
                     <img
                       src={item.src}
                       alt=""
