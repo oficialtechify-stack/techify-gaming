@@ -23,8 +23,6 @@ function MainApp() {
 
   const isOfficePath = appPath === '/office' || appPath === '/leadspay-office';
   const isCityPath = appPath === '/cidade' || appPath === '/leadspay-city' || appPath === '/mundo';
-  const officePanelMatch = appPath.match(/^\/office-panel\/(tasks|chat|computer|team|ai|decorator)$/);
-  const officeEmbeddedPanel = officePanelMatch?.[1] as 'tasks' | 'chat' | 'computer' | 'team' | 'ai' | 'decorator' | undefined;
 
   // Direct checkout link state
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -249,23 +247,6 @@ function MainApp() {
     }
   };
 
-  if (officeEmbeddedPanel) {
-    if (!isAuthenticated || !currentUser) {
-      return (
-        <div className="min-h-[100dvh] bg-[#080d14] text-white flex items-center justify-center p-5">
-          <div className="max-w-sm text-center">
-            <p className="text-sm text-white/60">Sua sessão do LeadsPay é necessária para abrir este painel do Office.</p>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <ErrorBoundary fallbackTitle="Erro ao carregar painel do LeadsPay Office">
-        <LeadspayOfficeView embeddedPanel={officeEmbeddedPanel} />
-      </ErrorBoundary>
-    );
-  }
-
   // Rotas diretas antigas continuam como atalhos do mesmo LeadsPay Office.
   if (isOfficePath || isCityPath) {
     if (!isAuthenticated || !currentUser) {
@@ -275,16 +256,16 @@ function MainApp() {
             <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-[#D9F22A]/30 bg-[#D9F22A]/10 text-[#D9F22A]">
               <span className="text-lg font-black">LP</span>
             </div>
-            <h1 className="text-2xl font-black">{isCityPath ? 'Cidade LeadsPay' : 'LeadsPay Office'}</h1>
+            <h1 className="text-2xl font-black">LeadsPay Office</h1>
             <p className="mt-2 text-sm text-white/60">
-              Entre na sua conta LeadsPay para acessar {isCityPath ? 'a cidade' : 'o escritório'}.
+              Entre na sua conta LeadsPay para acessar o WorkAdventure.
             </p>
             <button
               type="button"
               onClick={() => setActiveModal('login')}
               className="mt-6 w-full rounded-xl bg-[#D9F22A] px-4 py-3 text-sm font-black text-[#071019]"
             >
-              {isCityPath ? 'Entrar na Cidade' : 'Entrar no Office'}
+              Entrar no Office
             </button>
           </div>
           <Modals
@@ -298,15 +279,7 @@ function MainApp() {
 
     return (
       <ErrorBoundary fallbackTitle="Erro ao carregar o LeadsPay Office">
-        <LeadspayOfficeView
-          standalone
-          initialScene={isCityPath ? 'city' : 'office'}
-          onExit={() => {
-            window.history.pushState({}, '', '/');
-            setAppPath('/');
-            setViewPlatform(true);
-          }}
-        />
+        <LeadspayOfficeView standalone />
       </ErrorBoundary>
     );
   }
