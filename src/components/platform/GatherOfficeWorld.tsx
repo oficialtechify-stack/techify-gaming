@@ -18,6 +18,7 @@ import {
   RotateCw,
   Search,
   Trash2,
+  Upload,
   Mic,
   MicOff,
   MonitorUp,
@@ -165,6 +166,7 @@ type FurnitureItem = {
   label: string;
   kind: FurnitureKind;
   src?: string;
+  customAssetId?: string;
   asset?: ExactFurnitureAsset;
   x: number;
   y: number;
@@ -178,7 +180,7 @@ type FurnitureItem = {
   footprint?: FurnitureFootprint;
 };
 
-type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage';
+type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'custom';
 
 type FurnitureCatalogItem = {
   templateId: string;
@@ -186,6 +188,7 @@ type FurnitureCatalogItem = {
   category: FurnitureCatalogCategory;
   kind: FurnitureKind;
   src?: string;
+  customAssetId?: string;
   asset?: ExactFurnitureAsset;
   w: number;
   h: number;
@@ -195,6 +198,66 @@ type FurnitureCatalogItem = {
   seats?: FurnitureSeat[];
   footprint?: FurnitureFootprint;
 };
+
+type CustomFurnitureAsset = {
+  id: string;
+  label: string;
+  src: string;
+  w: number;
+  h: number;
+  solid: boolean;
+  createdAt: number;
+};
+
+const CUSTOM_FURNITURE_DB = 'leadspay-office-custom-furniture-v1';
+const CUSTOM_FURNITURE_STORE = 'assets';
+
+function openCustomFurnitureDb() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('Seu navegador não oferece armazenamento local para móveis.'));
+      return;
+    }
+    const request = indexedDB.open(CUSTOM_FURNITURE_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CUSTOM_FURNITURE_STORE)) {
+        db.createObjectStore(CUSTOM_FURNITURE_STORE, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Não foi possível abrir a biblioteca de móveis.'));
+  });
+}
+
+async function loadCustomFurnitureAssets(): Promise<CustomFurnitureAsset[]> {
+  const db = await openCustomFurnitureDb();
+  try {
+    return await new Promise<CustomFurnitureAsset[]>((resolve, reject) => {
+      const tx = db.transaction(CUSTOM_FURNITURE_STORE, 'readonly');
+      const request = tx.objectStore(CUSTOM_FURNITURE_STORE).getAll();
+      request.onsuccess = () => resolve((request.result || []) as CustomFurnitureAsset[]);
+      request.onerror = () => reject(request.error || new Error('Não foi possível carregar seus móveis.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function saveCustomFurnitureAsset(asset: CustomFurnitureAsset) {
+  const db = await openCustomFurnitureDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(CUSTOM_FURNITURE_STORE, 'readwrite');
+      tx.objectStore(CUSTOM_FURNITURE_STORE).put(asset);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Não foi possível salvar o móvel.'));
+      tx.onabort = () => reject(tx.error || new Error('Não foi possível salvar o móvel.'));
+    });
+  } finally {
+    db.close();
+  }
+}
 
 type CallParticipant = {
   uid: string;
@@ -247,10 +310,31 @@ interface GatherOfficeWorldProps {
 }
 
 const TILE = 32;
-const COLS = 72;
-const ROWS = 54;
+const COLS = 112;
+const ROWS = 84;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
+
+const OFFICE_BOUNDS = { x: 2, y: 2, w: 68, h: 50 };
+const OFFICE_DOOR = { x: 34, y: 51, w: 4, h: 1 };
+
+const OUTDOOR_WATER_RECTS: Array<[number, number, number, number]> = [
+  [78, 7, 24, 14],
+  [8, 65, 26, 12],
+];
+
+const OUTDOOR_TREES = [
+  { x: 73, y: 4 }, { x: 106, y: 5 }, { x: 75, y: 25 }, { x: 104, y: 26 },
+  { x: 73, y: 45 }, { x: 104, y: 47 }, { x: 7, y: 57 }, { x: 15, y: 58 },
+  { x: 25, y: 57 }, { x: 45, y: 61 }, { x: 55, y: 57 }, { x: 67, y: 63 },
+  { x: 77, y: 61 }, { x: 88, y: 58 }, { x: 101, y: 63 }, { x: 108, y: 72 },
+  { x: 42, y: 76 }, { x: 56, y: 77 }, { x: 69, y: 74 }, { x: 93, y: 77 },
+];
+
+const OUTDOOR_SOLID_RECTS: Array<[number, number, number, number]> = [
+  ...OUTDOOR_WATER_RECTS,
+  ...OUTDOOR_TREES.map((tree) => [tree.x + .28, tree.y + 1.05, 1.45, .9] as [number, number, number, number]),
+];
 const PLAYER_SPEED = 176;
 const PLAYER_ACCEL = 1040;
 const PLAYER_DECEL = 1320;
@@ -258,7 +342,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 16;
-const OFFICE_MAP_VERSION = 'leadspay-structured-office-map-v3';
+const OFFICE_MAP_VERSION = 'leadspay-world-map-v4';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -471,7 +555,7 @@ const AI_DESKS = [
 
 // O mapa estrutural começa sem móveis posicionados. Uma nova chave de persistência
 // impede layouts antigos do navegador de trazerem móveis legados para o Decorá.
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:structured-map-v3';
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:world-map-v4';
 
 const DEFAULT_FURNITURE: FurnitureItem[] = [
   // Área aberta — somente o mobiliário novo do catálogo atual.
@@ -668,7 +752,7 @@ function furnitureCollisionRects(items: FurnitureItem[]) {
 const SOLID_RECTS: Array<[number, number, number, number]> = [];
 
 const WALL_RECTS: Array<[number, number, number, number]> = [
-  [2, 2, 68, 1], [2, 51, 68, 1], [2, 2, 1, 50], [69, 2, 1, 50],
+  [2, 2, 68, 1], [2, 51, 32, 1], [38, 51, 32, 1], [2, 2, 1, 50], [69, 2, 1, 50],
   [27, 2, 1, 18], [27, 23, 1, 1],
   [49, 2, 1, 12], [49, 17, 1, 13],
   [49, 16, 16, 1], [68, 16, 2, 1],
@@ -694,10 +778,10 @@ function rectanglesOverlap(
 
 function furniturePlacementValid(candidate: FurnitureItem, layout: FurnitureItem[], ignoreId?: string) {
   if (
-    candidate.x < 3 ||
-    candidate.y < 3 ||
-    candidate.x + candidate.w > COLS - 3 ||
-    candidate.y + candidate.h > ROWS - 3
+    candidate.x < OFFICE_BOUNDS.x + 1 ||
+    candidate.y < OFFICE_BOUNDS.y + 1 ||
+    candidate.x + candidate.w > OFFICE_BOUNDS.x + OFFICE_BOUNDS.w - 1 ||
+    candidate.y + candidate.h > OFFICE_BOUNDS.y + OFFICE_BOUNDS.h - 1
   ) return false;
 
   if (candidate.solid) {
@@ -742,7 +826,8 @@ function catalogFurniture(template: FurnitureCatalogItem, x:number, y:number): F
     id: template.templateId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7),
     label: template.label,
     kind: template.kind,
-    src: template.src,
+    src: template.customAssetId ? undefined : template.src,
+    customAssetId: template.customAssetId,
     asset: template.asset,
     x,
     y,
@@ -790,10 +875,10 @@ function areaForCell(cell: Cell) {
 }
 
 function isWalkable(cell: Cell) {
-  if (cell.x < 0 || cell.y < 0 || cell.x >= COLS || cell.y >= ROWS) return false;
-  if (!inRect(cell, 2, 2, 68, 50)) return false;
+  if (cell.x < 1 || cell.y < 1 || cell.x >= COLS - 1 || cell.y >= ROWS - 1) return false;
   if (WALL_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
   if (SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
+  if (OUTDOOR_SOLID_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
   if (ACTIVE_FURNITURE_RECTS.some(([x, y, w, h]) => inRect(cell, x, y, w, h))) return false;
   return true;
 }
@@ -1153,6 +1238,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     startX: number;
     startY: number;
   } | null>(null);
+  const customFurnitureInputRef = useRef<HTMLInputElement | null>(null);
 
   const [player, setPlayer] = useState<MotionState | null>(null);
   const [workersMotion, setWorkersMotion] = useState<Record<string, MotionState>>({});
@@ -1205,6 +1291,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [furnitureSearch, setFurnitureSearch] = useState('');
   const [furnitureCategory, setFurnitureCategory] = useState<'all' | FurnitureCatalogCategory>('all');
   const [invalidFurnitureId, setInvalidFurnitureId] = useState<string | null>(null);
+  const [customFurnitureAssets, setCustomFurnitureAssets] = useState<CustomFurnitureAsset[]>([]);
+  const [customFurnitureNotice, setCustomFurnitureNotice] = useState('');
+  const [customFurnitureUploading, setCustomFurnitureUploading] = useState(false);
 
   const fallbackCurrentMember = useMemo<OfficeMember | null>(() => {
     if (!currentUserId) return null;
@@ -1305,6 +1394,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     const sync = () => setIsFullscreen(document.fullscreenElement === shellRef.current);
     document.addEventListener('fullscreenchange', sync);
     return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadCustomFurnitureAssets()
+      .then((assets) => {
+        if (!cancelled) setCustomFurnitureAssets(assets.sort((a, b) => b.createdAt - a.createdAt));
+      })
+      .catch(() => {
+        if (!cancelled) setCustomFurnitureNotice('Sua biblioteca local não pôde ser carregada.');
+      });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -2321,7 +2422,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const setZoomAround = (nextZoom: number, clientX?: number, clientY?: number) => {
     const viewport = viewportRef.current;
-    const next = Math.max(.34, Math.min(2.6, Number(nextZoom.toFixed(2))));
+    const next = Math.max(.22, Math.min(2.6, Number(nextZoom.toFixed(2))));
     if (!viewport) {
       setZoom(next);
       return;
@@ -2364,7 +2465,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const fitMap = () => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const next = Math.max(.34, Math.min(1, Math.min(
+    const next = Math.max(.22, Math.min(1, Math.min(
       viewport.clientWidth / WORLD_W,
       viewport.clientHeight / WORLD_H,
     ) * .96));
@@ -2633,11 +2734,107 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     setSeatedAt(0);
   };
 
+  const prepareCustomFurnitureImage = (file: File) => new Promise<CustomFurnitureAsset>((resolve, reject) => {
+    if (!['image/png', 'image/webp', 'image/jpeg'].includes(file.type)) {
+      reject(new Error('Use PNG, WebP ou JPG.'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      reject(new Error('O arquivo precisa ter no máximo 5 MB.'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('A imagem enviada é inválida.'));
+      image.onload = () => {
+        const maxSide = 512;
+        const ratio = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Não foi possível preparar a imagem.'));
+          return;
+        }
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const src = canvas.toDataURL('image/webp', .92);
+        const aspect = canvas.width / Math.max(1, canvas.height);
+        let w = 4;
+        let h = 4;
+        if (aspect >= 1) {
+          w = Math.max(2.2, Math.min(7, 4.8));
+          h = Math.max(1.5, Math.min(6, w / aspect));
+        } else {
+          h = Math.max(2.2, Math.min(6.5, 4.8));
+          w = Math.max(1.5, Math.min(6, h * aspect));
+        }
+
+        resolve({
+          id: 'custom-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+          label: file.name.replace(/\.[^.]+$/, '').trim() || 'Meu móvel',
+          src,
+          w: Math.round(w * 10) / 10,
+          h: Math.round(h * 10) / 10,
+          solid: true,
+          createdAt: Date.now(),
+        });
+      };
+      image.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const handleCustomFurnitureUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setCustomFurnitureNotice('');
+    setCustomFurnitureUploading(true);
+    try {
+      const asset = await prepareCustomFurnitureImage(file);
+      await saveCustomFurnitureAsset(asset);
+      setCustomFurnitureAssets((items) => [asset, ...items.filter((item) => item.id !== asset.id)]);
+      setFurnitureCategory('custom');
+      setFurnitureSearch('');
+      setCustomFurnitureNotice('Móvel salvo. Clique nele para colocar no escritório.');
+    } catch (error: any) {
+      setCustomFurnitureNotice(error?.message || 'Não foi possível enviar esse móvel.');
+    } finally {
+      setCustomFurnitureUploading(false);
+    }
+  };
+
   const selectedFurniture = selectedFurnitureId
     ? furnitureLayout.find((item) => item.id === selectedFurnitureId) || null
     : null;
 
-  const visibleFurnitureCatalog = FURNITURE_CATALOG.filter((item) => {
+  const customFurnitureCatalog = customFurnitureAssets.map<FurnitureCatalogItem>((asset) => ({
+    templateId: 'custom:' + asset.id,
+    label: asset.label,
+    category: 'custom',
+    kind: 'image',
+    src: asset.src,
+    customAssetId: asset.id,
+    w: asset.w,
+    h: asset.h,
+    solid: asset.solid,
+    footprint: {
+      x: Math.max(.15, asset.w * .14),
+      y: Math.max(.2, asset.h * .68),
+      w: Math.max(.7, asset.w * .72),
+      h: Math.max(.6, asset.h * .24),
+    },
+  }));
+
+  const visibleFurnitureCatalog = [...customFurnitureCatalog, ...FURNITURE_CATALOG].filter((item) => {
     const query = furnitureSearch.trim().toLowerCase();
     const categoryMatch = furnitureCategory === 'all' || item.category === furnitureCategory;
     const searchMatch = !query || item.label.toLowerCase().includes(query);
@@ -2789,7 +2986,48 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         >
           <div className="gather-drive-map" aria-hidden="true" />
           <div className="gather-grass" />
+
+          <div className="gather-outdoor-path gather-outdoor-path-main" aria-hidden="true" />
+          <div className="gather-outdoor-path gather-outdoor-path-east" aria-hidden="true" />
+          <div className="gather-outdoor-plaza" aria-hidden="true">
+            <span className="gather-outdoor-fountain"><i /></span>
+            <b>Praça LeadsPay</b>
+          </div>
+
+          {OUTDOOR_WATER_RECTS.map(([x, y, width, height], index) => (
+            <div
+              key={'outdoor-water-' + index}
+              className="gather-outdoor-water"
+              aria-hidden="true"
+              style={{ left: x * TILE, top: y * TILE, width: width * TILE, height: height * TILE }}
+            />
+          ))}
+
+          {OUTDOOR_TREES.map((tree, index) => (
+            <div
+              key={'outdoor-tree-' + index}
+              className="gather-outdoor-tree"
+              aria-hidden="true"
+              style={{ left: tree.x * TILE, top: tree.y * TILE }}
+            >
+              <span />
+              <i />
+            </div>
+          ))}
+
           <div className="gather-building-floor" />
+          <div
+            className={'gather-office-door' + (player && Math.abs(player.x / TILE - 36) < 4 && Math.abs(player.y / TILE - 51) < 4 ? ' open' : '')}
+            aria-hidden="true"
+            style={{
+              left: OFFICE_DOOR.x * TILE,
+              top: OFFICE_DOOR.y * TILE - 16,
+              width: OFFICE_DOOR.w * TILE,
+            }}
+          >
+            <span>LeadsPay Office</span>
+            <i />
+          </div>
 
           {walkTarget && (
             <div
@@ -2863,6 +3101,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               const seatedHere = seated?.furnitureId === item.id;
               const activeSeatPoint = seatedHere && seated ? furnitureSeatPoint(item, seated.seatIndex) : null;
               const depthFootprint = furnitureFootprint(item);
+              const resolvedCustomAsset = item.customAssetId
+                ? customFurnitureAssets.find((asset) => asset.id === item.customAssetId)
+                : null;
+              const resolvedFurnitureSrc = item.src || resolvedCustomAsset?.src;
               const commonProps = {
                 left: item.x * TILE,
                 top: item.y * TILE,
@@ -2929,13 +3171,15 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                       className="gather-exact-furniture-sprite"
                       style={exactFurnitureStyle(item.asset, item.rotation || 0)}
                     />
-                  ) : (
+                  ) : resolvedFurnitureSrc ? (
                     <img
-                      src={item.src}
+                      src={resolvedFurnitureSrc}
                       alt=""
                       draggable={false}
                       style={item.rotation ? { transform: 'rotate(' + item.rotation + 'deg)' } : undefined}
                     />
+                  ) : (
+                    <span className="gather-missing-custom-furniture">imagem indisponível</span>
                   )}
                   {furnitureEditMode && (
                     <span className="gather-furniture-label">{item.label}</span>
@@ -3374,7 +3618,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             <div className="people-head">
               <div>
                 <strong>Decorador</strong>
-                <small>Planta mobiliada do Drive. Você ainda pode adicionar e organizar móveis.</small>
+                <small>Organize o escritório e envie seus próprios móveis em PNG, WebP ou JPG.</small>
               </div>
               <button type="button" onClick={() => {
                 setFurnitureEditMode(false);
@@ -3399,6 +3643,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 ['seat','Assentos'],
                 ['table','Mesas'],
                 ['storage','Estantes'],
+                ['custom','Meus móveis'],
               ].map(([id,label]) => (
                 <button
                   key={id}
@@ -3409,6 +3654,26 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                   {label}
                 </button>
               ))}
+            </div>
+
+            <div className="gather-custom-furniture-upload">
+              <input
+                ref={customFurnitureInputRef}
+                type="file"
+                accept="image/png,image/webp,image/jpeg"
+                onChange={handleCustomFurnitureUpload}
+                hidden
+              />
+              <button
+                type="button"
+                disabled={customFurnitureUploading}
+                onClick={() => customFurnitureInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                {customFurnitureUploading ? 'Preparando móvel...' : 'Enviar meu móvel'}
+              </button>
+              <small>Até 5 MB. Fundo transparente fica melhor no mapa.</small>
+              {customFurnitureNotice && <span>{customFurnitureNotice}</span>}
             </div>
 
             <div className="gather-decorator-grid">
