@@ -153,6 +153,13 @@ type FurnitureSeat = {
   direction: Direction;
 };
 
+type FurnitureFootprint = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 type FurnitureItem = {
   id: string;
   label: string;
@@ -168,9 +175,10 @@ type FurnitureItem = {
   className?: string;
   rotation?: 0 | 90 | 180 | 270;
   seats?: FurnitureSeat[];
+  footprint?: FurnitureFootprint;
 };
 
-type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'decor';
+type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage';
 
 type FurnitureCatalogItem = {
   templateId: string;
@@ -185,6 +193,7 @@ type FurnitureCatalogItem = {
   className?: string;
   rotation?: 0 | 90 | 180 | 270;
   seats?: FurnitureSeat[];
+  footprint?: FurnitureFootprint;
 };
 
 type CallParticipant = {
@@ -249,7 +258,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 16;
-const OFFICE_MAP_VERSION = 'leadspay-empty-room-physics-v4';
+const OFFICE_MAP_VERSION = 'leadspay-structured-office-map-v2';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -308,29 +317,43 @@ function furnitureSeatPoint(item: FurnitureItem, seatIndex: number) {
   const seat = item.seats?.[seatIndex];
   if (!seat) return null;
 
-  const rotation = item.rotation || 0;
-  const cx = item.w / 2;
-  const cy = item.h / 2;
-  const px = seat.dx - cx;
-  const py = seat.dy - cy;
-  let rx = px;
-  let ry = py;
+  // seats are rotated together with the furniture item. Do not rotate them again here.
+  return {
+    x: (item.x + seat.dx) * TILE,
+    y: (item.y + seat.dy) * TILE,
+    direction: seat.direction,
+  };
+}
 
-  if (rotation === 90) {
-    rx = -py;
-    ry = px;
-  } else if (rotation === 180) {
-    rx = -px;
-    ry = -py;
-  } else if (rotation === 270) {
-    rx = py;
-    ry = -px;
-  }
+function worldDepth(yPx: number) {
+  return 1000 + Math.floor(yPx);
+}
+
+function furnitureFootprint(item: Pick<FurnitureItem, 'x' | 'y' | 'w' | 'h' | 'footprint'>) {
+  const fallbackHeight = Math.max(.65, Math.min(1.45, item.h * .32));
+  const fallbackWidth = Math.max(.8, item.w * .72);
+  const local = item.footprint || {
+    x: (item.w - fallbackWidth) / 2,
+    y: Math.max(0, item.h - fallbackHeight - .08),
+    w: fallbackWidth,
+    h: fallbackHeight,
+  };
 
   return {
-    x: (item.x + cx + rx) * TILE,
-    y: (item.y + cy + ry) * TILE,
-    direction: rotateDirection(seat.direction, rotation),
+    x: item.x + local.x,
+    y: item.y + local.y,
+    w: Math.max(.2, local.w),
+    h: Math.max(.2, local.h),
+  };
+}
+
+function rotateFurnitureFootprint90(item: FurnitureItem): FurnitureFootprint | undefined {
+  if (!item.footprint) return undefined;
+  return {
+    x: item.h - (item.footprint.y + item.footprint.h),
+    y: item.footprint.x,
+    w: item.footprint.h,
+    h: item.footprint.w,
   };
 }
 
@@ -376,10 +399,10 @@ const AREAS: OfficeArea[] = [
   { id: 'operations', name: 'Equipe LeadsPay', kind: 'open', x: 3, y: 3, w: 24, h: 20, subtitle: 'Time principal e estações de trabalho' },
   { id: 'team-pods', name: 'Operação', kind: 'open', x: 28, y: 3, w: 21, h: 20, subtitle: 'Operação, tecnologia e suporte' },
   { id: 'meeting', name: 'Sala de Reunião', kind: 'private', x: 50, y: 3, w: 19, h: 13, max: 10, subtitle: 'Reuniões privadas e alinhamentos' },
-  { id: 'lab', name: 'Café & Copa', kind: 'social', x: 50, y: 17, w: 19, h: 13, max: 10, subtitle: 'Café, refeições e conversas rápidas' },
-  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 3, y: 31, w: 17, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
+  { id: 'lab', name: 'Café & Copa', kind: 'social', x: 50, y: 17, w: 19, h: 13, max: 10, subtitle: 'Reuniões informais e descanso' },
+  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 50, y: 31, w: 19, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
   { id: 'lobby', name: 'Lounge', kind: 'social', x: 21, y: 24, w: 28, h: 27, subtitle: 'Área central para encontros e descanso' },
-  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 50, y: 31, w: 19, h: 20, max: 5, subtitle: 'Design, referências e produção visual' },
+  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 3, y: 31, w: 17, h: 20, max: 5, subtitle: 'Design, referências e produção visual' },
 ];
 
 const AREA_ENTRY_TARGET: Record<string, Cell> = {
@@ -387,18 +410,18 @@ const AREA_ENTRY_TARGET: Record<string, Cell> = {
   'team-pods': { x: 37, y: 20 },
   meeting: { x: 52, y: 14 },
   lab: { x: 52, y: 28 },
-  ceo: { x: 17, y: 33 },
+  ceo: { x: 52, y: 33 },
   lobby: { x: 35, y: 27 },
-  designer: { x: 52, y: 33 },
+  designer: { x: 17, y: 33 },
 };
 
 const HOME_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 8, y: 12 },
-  frontend: { x: 15, y: 12 },
-  backend: { x: 23, y: 12 },
-  designer: { x: 8, y: 20 },
-  qa: { x: 15, y: 20 },
-  growth: { x: 23, y: 20 },
+  'lumy-manager': { x: 32, y: 10 },
+  frontend: { x: 38, y: 10 },
+  backend: { x: 44, y: 10 },
+  designer: { x: 32, y: 18 },
+  qa: { x: 38, y: 18 },
+  growth: { x: 44, y: 18 },
 };
 
 const MEETING_TARGET: Record<string, Cell> = {
@@ -432,21 +455,23 @@ const IDLE_TARGETS: Record<string, Cell[]> = {
   'lumy-manager': [{ x: 37, y: 34 }, { x: 38, y: 39 }, { x: 38, y: 18 }],
   frontend: [{ x: 38, y: 10 }, { x: 42, y: 18 }, { x: 35, y: 38 }],
   backend: [{ x: 61, y: 19 }, { x: 41, y: 18 }, { x: 35, y: 34 }],
-  designer: [{ x: 56, y: 36 }, { x: 65, y: 39 }, { x: 39, y: 34 }],
+  designer: [{ x: 6, y: 36 }, { x: 15, y: 39 }, { x: 39, y: 34 }],
   qa: [{ x: 61, y: 20 }, { x: 43, y: 10 }, { x: 33, y: 37 }],
   growth: [{ x: 41, y: 32 }, { x: 48, y: 16 }, { x: 38, y: 41 }],
 };
 
 const AI_DESKS = [
-  { workerId: 'lumy-manager', col: 5, row: 6 },
-  { workerId: 'frontend', col: 11, row: 6 },
-  { workerId: 'backend', col: 17, row: 6 },
-  { workerId: 'designer', col: 5, row: 14 },
-  { workerId: 'qa', col: 11, row: 14 },
-  { workerId: 'growth', col: 17, row: 14 },
+  { workerId: 'lumy-manager', col: 30, row: 4 },
+  { workerId: 'frontend', col: 36, row: 4 },
+  { workerId: 'backend', col: 42, row: 4 },
+  { workerId: 'designer', col: 30, row: 12 },
+  { workerId: 'qa', col: 36, row: 12 },
+  { workerId: 'growth', col: 42, row: 12 },
 ];
 
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:decorator-v3-empty';
+// O mapa estrutural começa sem móveis posicionados. Uma nova chave de persistência
+// impede layouts antigos do navegador de trazerem móveis legados para o Decorá.
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:structured-map-v2';
 
 const DEFAULT_FURNITURE: FurnitureItem[] = [];
 
@@ -460,6 +485,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:5.9,
     h:5.1,
     solid:true,
+    footprint:{x:.65,y:3.05,w:4.6,h:1.55},
     seats:[{dx:2.95,dy:4.15,direction:'up'}],
   },
   {
@@ -471,6 +497,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:10.5,
     h:5.3,
     solid:true,
+    footprint:{x:.8,y:3.35,w:8.9,h:1.35},
   },
   {
     templateId:'chair-green',
@@ -481,6 +508,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:2.45,
     h:3.0,
     solid:true,
+    footprint:{x:.52,y:1.92,w:1.4,h:.88},
     seats:[{dx:1.22,dy:1.5,direction:'down'}],
   },
   {
@@ -492,6 +520,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:3.2,
     h:4.0,
     solid:true,
+    footprint:{x:.68,y:2.5,w:1.84,h:1.12},
     seats:[{dx:1.6,dy:2.0,direction:'down'}],
   },
   {
@@ -503,6 +532,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:3.8,
     h:4.1,
     solid:true,
+    footprint:{x:.55,y:2.55,w:2.7,h:1.22},
     seats:[{dx:1.9,dy:2.15,direction:'down'}],
   },
   {
@@ -514,18 +544,8 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:7.2,
     h:4.2,
     solid:true,
+    footprint:{x:.7,y:2.62,w:5.8,h:1.25},
     seats:[{dx:2.35,dy:2.1,direction:'down'},{dx:4.85,dy:2.1,direction:'down'}],
-  },
-  {
-    templateId:'sofa-red',
-    label:'Sofá',
-    category:'seat',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png',
-    w:5.0,
-    h:2.75,
-    solid:true,
-    seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}],
   },
   {
     templateId:'side-table',
@@ -536,6 +556,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:3.6,
     h:2.9,
     solid:true,
+    footprint:{x:.52,y:1.7,w:2.55,h:.95},
   },
   {
     templateId:'round-table',
@@ -546,6 +567,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:4.8,
     h:4.5,
     solid:true,
+    footprint:{x:.8,y:2.2,w:3.2,h:1.55},
   },
   {
     templateId:'long-table',
@@ -556,6 +578,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:13.2,
     h:4.7,
     solid:true,
+    footprint:{x:.9,y:2.7,w:11.4,h:1.45},
   },
   {
     templateId:'bookshelf',
@@ -566,46 +589,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:5.6,
     h:3.0,
     solid:true,
-  },
-  {
-    templateId:'plant',
-    label:'Planta grande',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png',
-    w:2.25,
-    h:3.2,
-    solid:true,
-  },
-  {
-    templateId:'whiteboard',
-    label:'Quadro branco',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png',
-    w:5.2,
-    h:2.0,
-    solid:false,
-  },
-  {
-    templateId:'painting',
-    label:'Quadro',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/SMALL_PAINTING/SMALL_PAINTING.png',
-    w:2.0,
-    h:1.55,
-    solid:false,
-  },
-  {
-    templateId:'coffee',
-    label:'Cafeteira',
-    category:'decor',
-    kind:'image',
-    src:'/pixel-agents/assets/furniture/COFFEE/COFFEE.png',
-    w:1.4,
-    h:1.4,
-    solid:false,
+    footprint:{x:.45,y:2.18,w:4.7,h:.68},
   },
 ];
 
@@ -614,12 +598,15 @@ let ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
 function furnitureCollisionRects(items: FurnitureItem[]) {
   return items
     .filter((item) => item.solid)
-    .map((item) => [
-      Math.floor(item.x),
-      Math.floor(item.y),
-      Math.max(1, Math.ceil(item.w)),
-      Math.max(1, Math.ceil(item.h)),
-    ] as [number, number, number, number]);
+    .map((item) => {
+      const footprint = furnitureFootprint(item);
+      return [
+        footprint.x,
+        footprint.y,
+        footprint.w,
+        footprint.h,
+      ] as [number, number, number, number];
+    });
 }
 
 const SOLID_RECTS: Array<[number, number, number, number]> = [];
@@ -658,13 +645,36 @@ function furniturePlacementValid(candidate: FurnitureItem, layout: FurnitureItem
   ) return false;
 
   if (candidate.solid) {
+    const candidateFootprint = furnitureFootprint(candidate);
+
     for (const [x,y,w,h] of WALL_RECTS) {
-      if (rectanglesOverlap(candidate.x,candidate.y,candidate.w,candidate.h,x,y,w,h,.12)) return false;
+      if (
+        rectanglesOverlap(
+          candidateFootprint.x,
+          candidateFootprint.y,
+          candidateFootprint.w,
+          candidateFootprint.h,
+          x,y,w,h,.12,
+        )
+      ) return false;
     }
 
     for (const other of layout) {
       if (!other.solid || other.id === ignoreId) continue;
-      if (rectanglesOverlap(candidate.x,candidate.y,candidate.w,candidate.h,other.x,other.y,other.w,other.h,.18)) return false;
+      const otherFootprint = furnitureFootprint(other);
+      if (
+        rectanglesOverlap(
+          candidateFootprint.x,
+          candidateFootprint.y,
+          candidateFootprint.w,
+          candidateFootprint.h,
+          otherFootprint.x,
+          otherFootprint.y,
+          otherFootprint.w,
+          otherFootprint.h,
+          .18,
+        )
+      ) return false;
     }
   }
 
@@ -686,17 +696,18 @@ function catalogFurniture(template: FurnitureCatalogItem, x:number, y:number): F
     className: template.className,
     rotation: template.rotation || 0,
     seats: template.seats?.map((seat) => ({ ...seat })),
+    footprint: template.footprint ? { ...template.footprint } : undefined,
   };
 }
 
 const INTERACTIONS = [
-  { type: 'computer' as const, owner: 'ceo', cell: { x: 11, y: 39 }, label: 'Abrir computador do CEO' },
-  { type: 'computer' as const, owner: 'designer-human', cell: { x: 59, y: 39 }, label: 'Abrir computador da designer' },
+  { type: 'computer' as const, owner: 'ceo', cell: { x: 52, y: 34 }, label: 'Abrir computador do CEO' },
+  { type: 'computer' as const, owner: 'designer-human', cell: { x: 17, y: 34 }, label: 'Abrir computador da designer' },
   { type: 'meeting' as const, owner: 'meeting', cell: { x: 59, y: 13 }, label: 'Abrir sala de reunião' },
   { type: 'object' as const, objectId: 'coffee' as const, cell: { x: 59, y: 19 }, label: 'Pegar um café' },
   { type: 'object' as const, objectId: 'creative-board' as const, cell: { x: 35, y: 27 }, label: 'Abrir quadro criativo' },
   { type: 'object' as const, objectId: 'lab-terminal' as const, cell: { x: 64, y: 19 }, label: 'Usar a copa' },
-  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 64, y: 33 }, label: 'Abrir moodboard da designer' },
+  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 11, y: 33 }, label: 'Abrir moodboard da designer' },
 ];
 
 function inRect(cell: Cell, x: number, y: number, w: number, h: number) {
@@ -874,9 +885,9 @@ function activeHumanTask(tasks: HumanTaskLite[], userId: string) {
 }
 
 function defaultHumanPosition(member: OfficeMember) {
-  if (member.officeRole === 'ceo') return centerOf({ x: 35, y: 49 });
-  if (member.officeRole === 'designer') return centerOf({ x: 59, y: 48 });
-  return centerOf({ x: 35, y: 28 });
+  if (member.officeRole === 'ceo') return centerOf({ x: 52, y: 34 });
+  if (member.officeRole === 'designer') return centerOf({ x: 17, y: 34 });
+  return centerOf({ x: 35, y: 36 });
 }
 
 function memberDirection(value?: string): Direction {
@@ -2534,6 +2545,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           dy: seat.dx,
           direction: rotateSeatDirection(seat.direction),
         })),
+        footprint: rotateFurnitureFootprint90(item),
       };
 
       if (!furniturePlacementValid(candidate, items, item.id)) {
@@ -2710,6 +2722,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             transform: 'translate3d(' + camera.x + 'px,' + camera.y + 'px,0) scale(' + zoom + ')',
           }}
         >
+          <div className="gather-drive-map" aria-hidden="true" />
           <div className="gather-grass" />
           <div className="gather-building-floor" />
 
@@ -2782,12 +2795,19 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             {furnitureLayout.map((item) => {
               const worker = item.workerId ? workers.find((entry) => entry.id === item.workerId) : null;
               const selected = selectedFurnitureId === item.id;
+              const seatedHere = seated?.furnitureId === item.id;
+              const activeSeatPoint = seatedHere && seated ? furnitureSeatPoint(item, seated.seatIndex) : null;
+              const depthFootprint = furnitureFootprint(item);
               const commonProps = {
                 left: item.x * TILE,
                 top: item.y * TILE,
                 width: item.w * TILE,
                 height: item.h * TILE,
-                zIndex: item.kind === 'rug' ? 210 : 900 + Math.floor((item.y + item.h) * TILE),
+                zIndex: item.kind === 'rug'
+                  ? 210
+                  : seatedHere && activeSeatPoint
+                    ? worldDepth(activeSeatPoint.y) - 1
+                    : worldDepth((depthFootprint.y + depthFootprint.h) * TILE),
               };
 
               return (
@@ -2884,7 +2904,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 key={worker.id}
                 type="button"
                 className={'gather-avatar ai-avatar state-' + state + (walking ? ' walking' : '') + (selectedWorkerId === worker.id ? ' selected' : '')}
-                style={{ left: motion.x, top: motion.y, zIndex: 800 + Math.floor(motion.y) }}
+                style={{ left: motion.x, top: motion.y, zIndex: worldDepth(motion.y) }}
                 onClick={(event) => {
                   event.stopPropagation();
                   onSelectWorker(worker.id);
@@ -2918,7 +2938,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 key={member.userId}
                 type="button"
                 className={'gather-avatar human-avatar remote' + (member.officeRole === 'ceo' ? ' ceo-avatar' : '') + (moving ? ' walking' : '') + (selectedHumanId === member.userId ? ' selected' : '')}
-                style={{ left: x, top: y, zIndex: 950 + Math.floor(y) }}
+                style={{ left: x, top: y, zIndex: worldDepth(y) }}
                 onClick={(event) => {
                   event.stopPropagation();
                   setSelectedHumanId(member.userId);
@@ -2943,12 +2963,57 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             );
           })}
 
+          {seated && player && (() => {
+            const item = furnitureLayout.find((entry) => entry.id === seated.furnitureId);
+            if (!item) return null;
+            const footprint = furnitureFootprint(item);
+            const localFrontStart = Math.max(
+              45,
+              Math.min(78, ((footprint.y - item.y) / Math.max(.1, item.h)) * 100),
+            );
+
+            return (
+              <div
+                className="gather-seated-furniture-front"
+                aria-hidden="true"
+                style={{
+                  left: item.x * TILE,
+                  top: item.y * TILE,
+                  width: item.w * TILE,
+                  height: item.h * TILE,
+                  zIndex: worldDepth(player.y) + 1,
+                  clipPath: 'inset(' + localFrontStart + '% 0 0 0)',
+                }}
+              >
+                {item.asset ? (
+                  <span
+                    className="gather-exact-furniture-sprite"
+                    style={exactFurnitureStyle(item.asset, item.rotation || 0)}
+                  />
+                ) : item.src ? (
+                  <img
+                    src={item.src}
+                    alt=""
+                    draggable={false}
+                    style={item.rotation ? { transform: 'rotate(' + item.rotation + 'deg)' } : undefined}
+                  />
+                ) : null}
+              </div>
+            );
+          })()}
+
           {player && currentMember && playerFrame && (
             <button
               type="button"
               data-no-pan="true"
               className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '') + (seated ? ' seated' : '')}
-              style={{ left: player.x, top: player.y, zIndex: (seated ? 1040 : 920) + Math.floor(player.y), transition: 'none', willChange: 'left, top' }}
+              style={{
+                left: player.x,
+                top: seated ? player.y - TILE * .42 : player.y,
+                zIndex: worldDepth(player.y),
+                transition: 'none',
+                willChange: 'left, top',
+              }}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}
@@ -3259,7 +3324,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             <div className="people-head">
               <div>
                 <strong>Decorador</strong>
-                <small>Sala vazia: escolha, posicione e organize tudo do seu jeito.</small>
+                <small>Planta mobiliada do Drive. Você ainda pode adicionar e organizar móveis.</small>
               </div>
               <button type="button" onClick={() => {
                 setFurnitureEditMode(false);
@@ -3284,7 +3349,6 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 ['seat','Assentos'],
                 ['table','Mesas'],
                 ['storage','Estantes'],
-                ['decor','Decoração'],
               ].map(([id,label]) => (
                 <button
                   key={id}
