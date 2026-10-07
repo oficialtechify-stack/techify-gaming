@@ -172,12 +172,12 @@ const HOME_TARGET: Record<string, Cell> = {
 };
 
 const MEETING_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 56, y: 6 },
-  frontend: { x: 56, y: 10 },
-  backend: { x: 65, y: 6 },
-  designer: { x: 65, y: 10 },
-  qa: { x: 59, y: 11 },
-  growth: { x: 63, y: 11 },
+  'lumy-manager': { x: 55, y: 12 },
+  frontend: { x: 57, y: 12 },
+  backend: { x: 59, y: 12 },
+  designer: { x: 62, y: 12 },
+  qa: { x: 64, y: 12 },
+  growth: { x: 66, y: 12 },
 };
 
 const QUEUE_TARGET: Record<string, Cell> = {
@@ -217,20 +217,22 @@ const AI_DESKS = [
 ];
 
 const SOLID_RECTS: Array<[number, number, number, number]> = [
-  // AI desks
+  // AI desks + wall furniture
   [5, 5, 5, 4], [11, 5, 5, 4], [17, 5, 5, 4],
   [5, 13, 5, 4], [11, 13, 5, 4], [17, 13, 5, 4],
+  [3, 3, 4, 3], [26, 3, 4, 3], [3, 18, 2, 3], [28, 18, 3, 3],
   // Team pods and lounge
   [35, 6, 5, 4], [42, 6, 5, 4], [35, 14, 5, 4], [42, 14, 5, 4],
   [34, 18, 4, 3], [43, 18, 4, 3],
-  // Meeting
-  [57, 6, 8, 4],
+  // Meeting table + chairs
+  [57, 6, 8, 4], [55, 6, 2, 4], [65, 6, 2, 4], [58, 10, 2, 2], [62, 10, 2, 2],
+  [53, 3, 2, 3], [67, 3, 2, 3],
   // Lab
   [56, 18, 4, 3], [63, 18, 3, 3],
   // CEO
-  [7, 31, 7, 4], [5, 27, 3, 2], [16, 27, 2, 2],
+  [7, 31, 7, 4], [5, 27, 3, 2], [16, 27, 2, 2], [4, 38, 5, 3], [9, 39, 4, 3], [15, 39, 3, 3],
   // Lobby
-  [28, 31, 6, 4], [36, 31, 4, 3], [28, 39, 4, 3],
+  [24, 31, 5, 3], [29, 31, 5, 4], [36, 31, 4, 3], [28, 39, 4, 3],
   // Designer
   [53, 31, 7, 4], [50, 28, 4, 2], [63, 28, 3, 2], [59, 39, 5, 3],
 ];
@@ -315,25 +317,16 @@ function nearestWalkableCell(x: number, y: number): Cell {
 }
 
 function neighbors(cell: Cell) {
-  const result: Cell[] = [];
-  for (let dy = -1; dy <= 1; dy += 1) {
-    for (let dx = -1; dx <= 1; dx += 1) {
-      if (!dx && !dy) continue;
-      const next = { x: cell.x + dx, y: cell.y + dy };
-      if (!isWalkable(next)) continue;
-      if (dx && dy) {
-        if (!isWalkable({ x: cell.x + dx, y: cell.y }) || !isWalkable({ x: cell.x, y: cell.y + dy })) continue;
-      }
-      result.push(next);
-    }
-  }
-  return result;
+  return [
+    { x: cell.x, y: cell.y - 1 },
+    { x: cell.x + 1, y: cell.y },
+    { x: cell.x, y: cell.y + 1 },
+    { x: cell.x - 1, y: cell.y },
+  ].filter(isWalkable);
 }
 
 function heuristic(a: Cell, b: Cell) {
-  const dx = Math.abs(a.x - b.x);
-  const dy = Math.abs(a.y - b.y);
-  return Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
 function findPath(start: Cell, goal: Cell) {
@@ -409,7 +402,7 @@ function smoothPath(from: { x: number; y: number }, path: Cell[]) {
 }
 
 function buildRoute(x: number, y: number, target: Cell) {
-  return smoothPath({ x, y }, findPath(nearestWalkableCell(x, y), target));
+  return findPath(nearestWalkableCell(x, y), target);
 }
 
 function directionFor(dx: number, dy: number, fallback: Direction): Direction {
@@ -576,8 +569,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const { currentUser } = useAuth();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const keysRef = useRef(new Set<string>());
   const playerRef = useRef<MotionState | null>(null);
+  const keyboardQueueRef = useRef<Cell | null>(null);
+  const lastKeyboardStepRef = useRef(0);
   const pathRef = useRef<Cell[]>([]);
   const workersMotionRef = useRef<Record<string, MotionState>>({});
   const tasksRef = useRef(tasks);
@@ -602,6 +596,8 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   const [lockedAreas, setLockedAreas] = useState<Record<string, boolean>>({});
   const [callNotice, setCallNotice] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const [walkTarget, setWalkTarget] = useState<Cell | null>(null);
   const [emoteMenuOpen, setEmoteMenuOpen] = useState(false);
   const [localEmote, setLocalEmote] = useState<{ emoji: string; updatedAt: number } | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -678,23 +674,58 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       const element = event.target as HTMLElement | null;
       if (element?.closest('input, textarea, select, [contenteditable="true"]')) return;
       const key = event.key.toLowerCase();
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-        keysRef.current.add(key);
-        pathRef.current = [];
+      const movement: Record<string, Cell> = {
+        w: { x: 0, y: -1 },
+        arrowup: { x: 0, y: -1 },
+        s: { x: 0, y: 1 },
+        arrowdown: { x: 0, y: 1 },
+        a: { x: -1, y: 0 },
+        arrowleft: { x: -1, y: 0 },
+        d: { x: 1, y: 0 },
+        arrowright: { x: 1, y: 0 },
+      };
+
+      const step = movement[key];
+      if (step) {
+        const current = playerRef.current;
+        if (!current) return;
+
+        const now = performance.now();
+        if (event.repeat && now - lastKeyboardStepRef.current < 105) {
+          event.preventDefault();
+          return;
+        }
+        lastKeyboardStepRef.current = now;
+
+        if (!event.repeat) {
+          pathRef.current = [];
+          keyboardQueueRef.current = nearestWalkableCell(current.x, current.y);
+        }
+
+        const base = keyboardQueueRef.current ||
+          pathRef.current[pathRef.current.length - 1] ||
+          nearestWalkableCell(current.x, current.y);
+        const target = { x: base.x + step.x, y: base.y + step.y };
+
+        if (isWalkable(target)) {
+          pathRef.current = [...pathRef.current, target].slice(-5);
+          keyboardQueueRef.current = target;
+          setWalkTarget(target);
+          setFollowPlayer(true);
+        }
+
         event.preventDefault();
+        return;
       }
+
       if (key === 'e' && interaction && onInteract) {
         onInteract(interaction);
         event.preventDefault();
       }
     };
-    const up = (event: KeyboardEvent) => keysRef.current.delete(event.key.toLowerCase());
+
     window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-    };
+    return () => window.removeEventListener('keydown', down);
   }, [interaction, onInteract]);
 
   const clampCamera = (next: { x: number; y: number }, currentZoom = zoom) => {
@@ -796,55 +827,50 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
       if (currentPlayer) {
         let x = currentPlayer.x;
         let y = currentPlayer.y;
-        let vx = currentPlayer.vx;
-        let vy = currentPlayer.vy;
+        let vx = 0;
+        let vy = 0;
         let direction = currentPlayer.direction;
-        const keys = keysRef.current;
-        let inputX = 0;
-        let inputY = 0;
-        if (keys.has('w') || keys.has('arrowup')) inputY -= 1;
-        if (keys.has('s') || keys.has('arrowdown')) inputY += 1;
-        if (keys.has('a') || keys.has('arrowleft')) inputX -= 1;
-        if (keys.has('d') || keys.has('arrowright')) inputX += 1;
+        const route = [...pathRef.current];
 
-        let desiredX = 0;
-        let desiredY = 0;
-        let route = [...pathRef.current];
-
-        if (inputX || inputY) {
-          route = [];
-          pathRef.current = [];
-          const length = Math.hypot(inputX, inputY) || 1;
-          desiredX = inputX / length * PLAYER_SPEED;
-          desiredY = inputY / length * PLAYER_SPEED;
-        } else if (route.length) {
+        if (route.length) {
           const point = centerOf(route[0]);
           const dx = point.x - x;
           const dy = point.y - y;
           const distance = Math.hypot(dx, dy);
-          if (distance < 8) {
+
+          if (distance <= 2.4) {
+            x = point.x;
+            y = point.y;
             route.shift();
             pathRef.current = route;
-          } else if (distance > 0) {
-            desiredX = dx / distance * PLAYER_SPEED;
-            desiredY = dy / distance * PLAYER_SPEED;
+            if (!route.length) {
+              keyboardQueueRef.current = null;
+              setWalkTarget(null);
+            }
+          } else {
+            const stepDistance = Math.min(distance, PLAYER_SPEED * dt);
+            const ux = dx / distance;
+            const uy = dy / distance;
+            const nx = x + ux * stepDistance;
+            const ny = y + uy * stepDistance;
+
+            if (canOccupy(nx, ny)) {
+              x = nx;
+              y = ny;
+              vx = ux * PLAYER_SPEED;
+              vy = uy * PLAYER_SPEED;
+              direction = directionFor(dx, dy, direction);
+            } else {
+              const safe = centerOf(nearestWalkableCell(x, y));
+              x = safe.x;
+              y = safe.y;
+              pathRef.current = [];
+              route.splice(0);
+              keyboardQueueRef.current = null;
+              setWalkTarget(null);
+            }
           }
         }
-
-        const accel = (inputX || inputY || route.length) ? 620 : 900;
-        vx = approach(vx, desiredX, accel * dt);
-        vy = approach(vy, desiredY, accel * dt);
-        if (!inputX && !inputY && !route.length) {
-          vx = approach(vx, 0, 980 * dt);
-          vy = approach(vy, 0, 980 * dt);
-        }
-
-        const nx = x + vx * dt;
-        const ny = y + vy * dt;
-        if (canOccupy(nx, y)) x = nx; else vx = 0;
-        if (canOccupy(x, ny)) y = ny; else vy = 0;
-
-        if (Math.abs(vx) + Math.abs(vy) > 4) direction = directionFor(vx, vy, direction);
 
         const nextPlayer: MotionState = {
           ...currentPlayer,
@@ -1317,6 +1343,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     if (!current) return;
     const target = nearestWalkableCell(x, y);
     pathRef.current = buildRoute(current.x, current.y, target);
+    keyboardQueueRef.current = pathRef.current[pathRef.current.length - 1] || target;
+    setWalkTarget(target);
+    setFollowPlayer(true);
   };
 
   const locatePerson = (member: OfficeMember) => {
@@ -1338,7 +1367,10 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
 
   const onViewportPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, input, textarea, select, [data-no-pan="true"]')) return;
     dragRef.current = { x: event.clientX, y: event.clientY, moved: false };
+    setIsPanning(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -1359,12 +1391,21 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   };
 
   const onViewportPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
     dragRef.current = null;
-    if (!drag?.moved) {
-      const point = worldPointFromEvent(event.clientX, event.clientY);
-      goToWorldPoint(point.x, point.y);
-    }
+    setIsPanning(false);
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
+  };
+
+  const onViewportPointerCancel = () => {
+    dragRef.current = null;
+    setIsPanning(false);
+  };
+
+  const onViewportDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, input, textarea, select, [data-no-pan="true"]')) return;
+    const point = worldPointFromEvent(event.clientX, event.clientY);
+    goToWorldPoint(point.x, point.y);
   };
 
   const remoteHumans = officeMembers
@@ -1411,11 +1452,13 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
   return (
     <div className="gather-office-shell" ref={shellRef}>
       <div
-        className="gather-viewport"
+        className={'gather-viewport' + (isPanning ? ' is-panning' : '')}
         ref={viewportRef}
         onPointerDown={onViewportPointerDown}
         onPointerMove={onViewportPointerMove}
         onPointerUp={onViewportPointerUp}
+        onPointerCancel={onViewportPointerCancel}
+        onDoubleClick={onViewportDoubleClick}
         onWheel={(event) => {
           event.preventDefault();
           changeZoom(event.deltaY < 0 ? .08 : -.08);
@@ -1431,6 +1474,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         >
           <div className="gather-grass" />
           <div className="gather-building-floor" />
+
+          {walkTarget && (
+            <div
+              className="gather-walk-target"
+              style={{
+                left: walkTarget.x * TILE,
+                top: walkTarget.y * TILE,
+                width: TILE,
+                height: TILE,
+              }}
+            />
+          )}
 
           {AREAS.map((area) => (
             <div
@@ -1486,6 +1541,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
                 }}
                 title={worker ? 'Mesa de ' + worker.name : 'Mesa'}
               >
+                <span className="desk-divider" />
                 <img className="desk-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
                 <img className="desk-table" src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" />
                 <img className="desk-pc gather-pc-screen" src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_1.png" alt="" />
@@ -1493,9 +1549,18 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             );
           })}
 
+          <div className="gather-operations-decor">
+            <img className="operations-books-a" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
+            <img className="operations-books-b" src="/pixel-agents/assets/furniture/DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF.png" alt="" />
+            <img className="operations-plant-a" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
+            <img className="operations-plant-b" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
+            <img className="operations-clock" src="/pixel-agents/assets/furniture/CLOCK/CLOCK.png" alt="" />
+          </div>
+
           <div className="gather-team-pods">
             {[0, 1, 2, 3].map((index) => (
               <div key={index} className={'team-pod pod-' + index}>
+                <span className="pod-divider" />
                 <img className="pod-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
                 <img className="pod-table" src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" />
               </div>
@@ -1508,9 +1573,20 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               <img key={index} className={'meeting-chair chair-' + index} src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
             ))}
             <img className="meeting-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
+            <img className="meeting-plant-a" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
+            <img className="meeting-plant-b" src="/pixel-agents/assets/furniture/PLANT_2/PLANT_2.png" alt="" />
+            <img className="meeting-clock" src="/pixel-agents/assets/furniture/CLOCK/CLOCK.png" alt="" />
           </div>
 
           <div className="gather-lab-furniture">
+            <div className="lab-station station-a">
+              <img className="lab-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+              <img className="lab-table" src="/pixel-agents/assets/furniture/SMALL_TABLE/SMALL_TABLE_FRONT.png" alt="" />
+            </div>
+            <div className="lab-station station-b">
+              <img className="lab-chair" src="/pixel-agents/assets/furniture/CUSHIONED_CHAIR/CUSHIONED_CHAIR_FRONT.png" alt="" />
+              <img className="lab-table" src="/pixel-agents/assets/furniture/SMALL_TABLE/SMALL_TABLE_FRONT.png" alt="" />
+            </div>
             <img className="lab-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
             <img className="lab-pc-a" src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_1.png" alt="" />
             <img className="lab-pc-b" src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_2.png" alt="" />
@@ -1525,11 +1601,14 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               <img src="/pixel-agents/assets/furniture/DESK/DESK_FRONT.png" alt="" className="desk-table" />
               <img src="/pixel-agents/assets/furniture/PC/PC_FRONT_ON_1.png" alt="" className="desk-pc" />
             </div>
+            <div className="ceo-rug" />
             <img className="ceo-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
+            <img className="ceo-coffee-table" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
             <img className="ceo-plant" src="/pixel-agents/assets/furniture/LARGE_PLANT/LARGE_PLANT.png" alt="" />
           </div>
 
           <div className="gather-lobby-furniture">
+            <div className="lobby-rug" />
             <img className="lobby-sofa" src="/pixel-agents/assets/furniture/SOFA/SOFA_FRONT.png" alt="" />
             <img className="lobby-table" src="/pixel-agents/assets/furniture/COFFEE_TABLE/COFFEE_TABLE.png" alt="" />
             <img className="lobby-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
@@ -1538,6 +1617,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </div>
 
           <div className="gather-designer-furniture">
+            <div className="designer-rug" />
             <img className="designer-board" src="/pixel-agents/assets/furniture/WHITEBOARD/WHITEBOARD.png" alt="" />
             <img className="designer-painting" src="/pixel-agents/assets/furniture/LARGE_PAINTING/LARGE_PAINTING.png" alt="" />
             <div className="designer-desk">
@@ -1881,8 +1961,9 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         )}
 
         <div className="gather-movement-help">
-          <span><kbd>WASD</kbd> mover</span>
-          <span>arraste o mapa para olhar ao redor</span>
+          <span><kbd>WASD</kbd> / setas · 1 bloco por passo</span>
+          <span>clique + arraste · olhar o mapa</span>
+          <span>duplo clique · caminhar até lá</span>
           <span><kbd>E</kbd> interagir</span>
         </div>
       </div>

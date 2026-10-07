@@ -7084,3 +7084,325 @@
   visibility: visible;
   content-visibility: visible;
 }
+
+
+/* =========================================================
+   GATHER-LIKE TILE NAVIGATION + MODERN PIXEL FURNITURE
+   ========================================================= */
+
+.gather-viewport {
+  cursor: grab;
+}
+
+.gather-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.gather-walk-target {
+  position: absolute;
+  z-index: 760;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 2px solid rgba(86, 224, 204, .92);
+  border-radius: 7px;
+  background: rgba(86, 224, 204, .12);
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.48),
+    0 0 0 4px rgba(86,224,204,.08);
+  animation: gatherWalkTilePulse .75s ease-in-out infinite alternate;
+}
+
+.gather-walk-target::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #56e0cc;
+  box-shadow: 0 0 0 4px rgba(86,224,204,.18);
+}
+
+@keyframes gatherWalkTilePulse {
+  from { opacity: .72; transform: scale(.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* More visible 32x32 tile language without turning the office into a debug grid. */
+.gather-room::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .20;
+  background-image:
+    linear-gradient(to right, rgba(98,110,119,.18) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(98,110,119,.18) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.gather-room > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Modern workstation language: cubicle backs, pale desks and aligned tile footprints. */
+.desk-divider,
+.pod-divider {
+  position: absolute;
+  left: 7px;
+  top: 0;
+  z-index: 1;
+  width: 146px;
+  height: 48px;
+  border: 3px solid #87949b;
+  border-bottom-width: 5px;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,.72), rgba(219,228,232,.9));
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.66),
+    0 4px 0 rgba(92,103,110,.14);
+  image-rendering: pixelated;
+}
+
+.desk-divider::after,
+.pod-divider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -5px;
+  width: 3px;
+  background: #87949b;
+  transform: translateX(-50%);
+}
+
+.gather-workstation,
+.team-pod {
+  filter: drop-shadow(0 7px 3px rgba(64,72,77,.12));
+}
+
+.gather-workstation .desk-table,
+.team-pod .pod-table,
+.ceo-desk .desk-table,
+.designer-desk .desk-table,
+.gather-meeting-furniture .meeting-table,
+.lab-station .lab-table {
+  filter: grayscale(.76) brightness(1.48) contrast(.88);
+}
+
+.gather-workstation .desk-chair,
+.team-pod .pod-chair,
+.ceo-desk .desk-chair,
+.designer-desk .desk-chair,
+.lab-station .lab-chair {
+  filter: saturate(.68) brightness(1.06);
+}
+
+.gather-workstation .desk-pc,
+.ceo-desk .desk-pc,
+.designer-desk .desk-pc,
+.gather-lab-furniture .lab-pc-a,
+.gather-lab-furniture .lab-pc-b {
+  filter: brightness(1.04) saturate(.82);
+}
+
+/* Operation room becomes a real bank of workstations rather than isolated furniture. */
+.gather-operations-decor {
+  position: absolute;
+  inset: 0;
+  z-index: 74;
+  pointer-events: none;
+}
+
+.gather-operations-decor img {
+  position: absolute;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 5px 2px rgba(65,72,75,.10));
+}
+
+.operations-books-a { left: 112px; top: 108px; width: 96px; }
+.operations-books-b { left: 838px; top: 108px; width: 96px; }
+.operations-plant-a { left: 124px; top: 608px; width: 48px; }
+.operations-plant-b { left: 912px; top: 590px; width: 64px; }
+.operations-clock { left: 496px; top: 106px; width: 40px; }
+
+/* Team pods read like Gather coworking cubicles. */
+.gather-team-pods::before,
+.gather-team-pods::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  border: 3px solid rgba(115,128,145,.34);
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.12) 0 31px, rgba(121,136,148,.08) 31px 32px),
+    rgba(230,235,247,.38);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.28);
+}
+
+.gather-team-pods::before {
+  left: 1088px;
+  top: 142px;
+  width: 430px;
+  height: 190px;
+}
+
+.gather-team-pods::after {
+  left: 1088px;
+  top: 390px;
+  width: 430px;
+  height: 190px;
+}
+
+/* Meeting room: dense central table, chairs, wall decor. */
+.gather-meeting-furniture .meeting-table {
+  filter: grayscale(.72) brightness(1.42) contrast(.9);
+}
+
+.gather-meeting-furniture .meeting-chair {
+  filter: hue-rotate(32deg) saturate(.64) brightness(1.05);
+}
+
+.gather-meeting-furniture .meeting-plant-a,
+.gather-meeting-furniture .meeting-plant-b,
+.gather-meeting-furniture .meeting-clock {
+  position: absolute;
+  z-index: 7;
+  image-rendering: pixelated;
+}
+
+.gather-meeting-furniture .meeting-plant-a { left: 1718px; top: 112px; width: 48px; }
+.gather-meeting-furniture .meeting-plant-b { left: 2150px; top: 112px; width: 48px; }
+.gather-meeting-furniture .meeting-clock { left: 1918px; top: 108px; width: 40px; }
+
+/* Laboratory now has actual desks under the computers. */
+.lab-station {
+  position: absolute;
+  z-index: 5;
+  width: 128px;
+  height: 112px;
+}
+
+.lab-station.station-a { left: 1840px; top: 548px; }
+.lab-station.station-b { left: 2010px; top: 548px; }
+
+.lab-station .lab-chair {
+  position: absolute;
+  left: 40px;
+  top: 37px;
+  width: 48px;
+  height: 96px;
+  z-index: 2;
+}
+
+.lab-station .lab-table {
+  position: absolute;
+  left: 10px;
+  top: 28px;
+  width: 108px;
+  z-index: 4;
+}
+
+.gather-lab-furniture .lab-pc-a { left: 1880px; top: 530px; width: 48px; z-index: 8; }
+.gather-lab-furniture .lab-pc-b { left: 2050px; top: 530px; width: 48px; z-index: 8; }
+.gather-lab-furniture .lab-board { left: 1708px; top: 536px; width: 112px; }
+.gather-lab-furniture .lab-books { left: 2140px; top: 532px; width: 48px; }
+
+/* CEO room: distinct work zone + lounge zone. */
+.ceo-rug,
+.lobby-rug,
+.designer-rug {
+  position: absolute;
+  z-index: 1;
+  image-rendering: pixelated;
+  box-sizing: border-box;
+}
+
+.ceo-rug {
+  left: 220px;
+  top: 968px;
+  width: 332px;
+  height: 230px;
+  border: 5px solid #d8dedc;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.24) 0 31px, rgba(126,151,170,.08) 31px 32px),
+    #dce7ef;
+  box-shadow: inset 0 0 0 3px rgba(255,255,255,.55);
+}
+
+.gather-ceo-furniture .ceo-coffee-table {
+  position: absolute;
+  left: 308px;
+  top: 1244px;
+  z-index: 8;
+  width: 96px;
+  filter: grayscale(.58) brightness(1.28);
+}
+
+.gather-ceo-furniture .ceo-sofa {
+  filter: hue-rotate(116deg) saturate(.72) brightness(1.12);
+}
+
+/* Lobby gets the central collaboration feel visible in Gather templates. */
+.lobby-rug {
+  left: 760px;
+  top: 968px;
+  width: 520px;
+  height: 300px;
+  border: 5px solid rgba(117,131,137,.45);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(84,102,111,.06) 31px 32px),
+    #d9e3e5;
+}
+
+.gather-lobby-furniture .lobby-sofa {
+  filter: hue-rotate(150deg) saturate(.76) brightness(1.1);
+}
+
+/* Designer room: warmer creative zone with a clear desk and soft seating area. */
+.designer-rug {
+  left: 1650px;
+  top: 956px;
+  width: 458px;
+  height: 324px;
+  border: 5px solid rgba(175,146,175,.36);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(145,113,150,.07) 31px 32px),
+    #ede2ef;
+}
+
+.gather-designer-furniture .designer-sofa {
+  filter: hue-rotate(305deg) saturate(.72) brightness(1.13);
+}
+
+.gather-designer-furniture .designer-plant,
+.gather-ceo-furniture .ceo-plant,
+.gather-lobby-furniture .lobby-plant-a,
+.gather-lobby-furniture .lobby-plant-b {
+  filter: saturate(.82) brightness(1.03);
+}
+
+/* The player now visually glides from tile-center to tile-center. */
+.gather-avatar:not(.remote) {
+  transition:
+    left 68ms linear,
+    top 68ms linear,
+    filter .14s ease;
+}
+
+.gather-movement-help {
+  max-width: calc(100% - 230px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+@media (max-width: 760px) {
+  .gather-movement-help span:nth-child(2),
+  .gather-movement-help span:nth-child(3) {
+    display: none;
+  }
+}
