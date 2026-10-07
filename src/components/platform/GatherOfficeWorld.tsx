@@ -3068,7 +3068,13 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               type="button"
               data-no-pan="true"
               className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '') + (seated ? ' seated' : '')}
-              style={{ left: player.x, top: player.y, zIndex: worldDepth(player.y), transition: 'none', willChange: 'left, top' }}
+              style={{
+                left: player.x,
+                top: seated ? player.y - TILE * .42 : player.y,
+                zIndex: worldDepth(player.y),
+                transition: 'none',
+                willChange: 'left, top',
+              }}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}
