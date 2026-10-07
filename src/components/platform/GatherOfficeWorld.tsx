@@ -2163,27 +2163,76 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             </button>
 
             {selectedHuman ? (
-              <>
-                <div className="context-title">
-                  <span className="context-avatar">{selectedHuman.displayName.slice(0, 1).toUpperCase()}</span>
-                  <div>
-                    <strong>{selectedHuman.displayName}</strong>
-                    <small>{selectedHuman.title}</small>
+              selfProfileSelected ? (
+                <>
+                  <div className="gather-self-profile-head">
+                    <span className="gather-self-profile-avatar">
+                      <span
+                        className="gather-self-profile-sprite"
+                        style={{
+                          backgroundImage: 'url(' + spriteForMember(selectedHuman) + ')',
+                          backgroundPosition: '-48px 0',
+                        }}
+                      />
+                      <i />
+                    </span>
+                    <div>
+                      <strong>{selectedHuman.displayName}</strong>
+                      <small>● online · {profileTimeZone}</small>
+                    </div>
                   </div>
-                </div>
-                <button type="button" className="context-primary" onClick={() => {
-                  locatePerson(selectedHuman);
-                  const resolved = resolvedMemberPosition(selectedHuman);
-                  goToWorldPoint(resolved.x, resolved.y);
-                }}>
-                  <LocateFixed className="h-4 w-4" />
-                  Ir até essa pessoa
-                </button>
-                <button type="button" className="context-secondary" onClick={() => onSelectHuman?.(selectedHuman.userId)}>
-                  <ChevronRight className="h-4 w-4" />
-                  Abrir estação
-                </button>
-              </>
+
+                  <div className="gather-self-profile-actions">
+                    <button type="button" className="context-primary" onClick={openProfileEditor}>
+                      <UserRound className="h-4 w-4" />
+                      Editar perfil
+                    </button>
+                    <button type="button" className="gather-profile-icon-button" onClick={openAvatarEditor} title="Editar avatar">
+                      <Shirt className="h-4 w-4" />
+                    </button>
+                    <button type="button" className="gather-profile-icon-button" title="Mais opções">•••</button>
+                  </div>
+
+                  <div className="gather-profile-avatar-summary">
+                    <span
+                      className="gather-profile-avatar-preview"
+                      style={{
+                        backgroundImage: 'url(' + activeCeoStyle.sprite + ')',
+                        backgroundPosition: '-48px 0',
+                      }}
+                    />
+                    <div>
+                      <strong>Avatar CEO</strong>
+                      <small>{activeCeoStyle.name} · {activeCeoStyle.subtitle}</small>
+                    </div>
+                    <button type="button" onClick={openAvatarEditor}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="context-title">
+                    <span className="context-avatar">{selectedHuman.displayName.slice(0, 1).toUpperCase()}</span>
+                    <div>
+                      <strong>{selectedHuman.displayName}</strong>
+                      <small>{selectedHuman.title}</small>
+                    </div>
+                  </div>
+                  <button type="button" className="context-primary" onClick={() => {
+                    locatePerson(selectedHuman);
+                    const resolved = resolvedMemberPosition(selectedHuman);
+                    goToWorldPoint(resolved.x, resolved.y);
+                  }}>
+                    <LocateFixed className="h-4 w-4" />
+                    Ir até essa pessoa
+                  </button>
+                  <button type="button" className="context-secondary" onClick={() => onSelectHuman?.(selectedHuman.userId)}>
+                    <ChevronRight className="h-4 w-4" />
+                    Abrir estação
+                  </button>
+                </>
+              )
             ) : (selectedArea || currentArea) ? (() => {
               const area = (selectedArea || currentArea) as OfficeArea;
               const people = officeMembers.filter((member) => {
@@ -2392,10 +2441,20 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
         )}
 
         <div className="gather-bottom-dock">
-          <div className="dock-profile">
-            <span>{currentMember?.displayName?.slice(0, 1).toUpperCase() || 'L'}</span>
+          <button type="button" className="dock-profile" onClick={openSelfProfile} title="Meu perfil">
+            {currentMember?.officeRole === 'ceo' ? (
+              <span
+                className="dock-profile-sprite"
+                style={{
+                  backgroundImage: 'url(' + spriteForMember(currentMember) + ')',
+                  backgroundPosition: '-48px 0',
+                }}
+              />
+            ) : (
+              <span>{currentMember?.displayName?.slice(0, 1).toUpperCase() || 'L'}</span>
+            )}
             <i />
-          </div>
+          </button>
           <button type="button" className={micOn ? 'active' : ''} onClick={() => void toggleMic()} title="Microfone">
             {micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
           </button>
@@ -2418,6 +2477,171 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             <ClipboardList className="h-5 w-5" />
           </button>
         </div>
+
+        {profileEditorOpen && currentMember && (
+          <div className="gather-profile-modal-backdrop" data-no-pan="true">
+            <section className="gather-profile-modal compact" role="dialog" aria-modal="true" aria-label="Editar perfil">
+              <header>
+                <strong>Editar perfil</strong>
+                <button type="button" onClick={() => setProfileEditorOpen(false)}><X className="h-5 w-5" /></button>
+              </header>
+
+              <div className="gather-profile-modal-body">
+                <div className="gather-profile-identity-grid">
+                  <div>
+                    <small>Foto de perfil</small>
+                    <span className="gather-profile-letter">
+                      {currentMember.displayName.slice(0, 1).toUpperCase()}
+                      <button type="button" title="Editar nome"><Pencil className="h-3 w-3" /></button>
+                    </span>
+                  </div>
+                  <div>
+                    <small>Avatar</small>
+                    <span className="gather-profile-avatar-large">
+                      <span
+                        style={{
+                          backgroundImage: 'url(' + activeCeoStyle.sprite + ')',
+                          backgroundPosition: '-48px 0',
+                        }}
+                      />
+                      <button type="button" onClick={openAvatarEditor} title="Editar avatar"><Pencil className="h-3 w-3" /></button>
+                    </span>
+                  </div>
+                </div>
+
+                <label className="gather-profile-field">
+                  <span>Nome completo*</span>
+                  <input
+                    autoFocus
+                    value={profileNameDraft}
+                    maxLength={80}
+                    onChange={(event) => setProfileNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void saveSelfProfile();
+                    }}
+                  />
+                </label>
+
+                <label className="gather-profile-field">
+                  <span>Fuso horário</span>
+                  <div className="gather-profile-static-field">(UTC-03:00) {profileTimeZone}</div>
+                </label>
+
+                {profileError && <div className="gather-profile-error">{profileError}</div>}
+              </div>
+
+              <footer>
+                <button type="button" className="secondary" onClick={() => setProfileEditorOpen(false)}>Cancelar</button>
+                <button type="button" className="primary" disabled={profileSaving} onClick={() => void saveSelfProfile()}>
+                  {profileSaving ? 'Salvando...' : 'Salvar'}
+                </button>
+              </footer>
+            </section>
+          </div>
+        )}
+
+        {avatarEditorOpen && currentMember && (
+          <div className="gather-profile-modal-backdrop avatar" data-no-pan="true">
+            <section className="gather-avatar-editor" role="dialog" aria-modal="true" aria-label="Editar avatar">
+              <header>
+                <strong>Editar Avatar</strong>
+                <button type="button" onClick={() => setAvatarEditorOpen(false)}><X className="h-5 w-5" /></button>
+              </header>
+
+              <div className="gather-avatar-editor-body">
+                <nav className="gather-avatar-categories">
+                  {[
+                    ['skin', 'Tom da pele'],
+                    ['hair', 'Cabelo'],
+                    ['facial', 'Pelos faciais'],
+                    ['outfit', 'Parte de cima'],
+                    ['outfit', 'Jaqueta'],
+                    ['outfit', 'Parte de baixo'],
+                    ['outfit', 'Sapatos'],
+                    ['accessory', 'Chapéu'],
+                    ['accessory', 'Óculos'],
+                    ['accessory', 'Outro'],
+                    ['outfit', 'Fantasia'],
+                  ].map(([id, label], index) => (
+                    <button
+                      key={label + index}
+                      type="button"
+                      className={avatarCategory === id || (avatarCategory === 'outfit' && id === 'outfit') ? 'active' : ''}
+                      onClick={() => setAvatarCategory(id as typeof avatarCategory)}
+                    >
+                      {id === 'outfit' ? <Shirt className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </nav>
+
+                <div className="gather-avatar-options">
+                  {avatarCategory === 'outfit' ? (
+                    <>
+                      <div className="gather-avatar-style-grid">
+                        {CEO_AVATAR_STYLES.map((style) => (
+                          <button
+                            key={style.id}
+                            type="button"
+                            className={avatarStyleDraft === style.id ? 'selected' : ''}
+                            onClick={() => setAvatarStyleDraft(style.id)}
+                          >
+                            <span
+                              className="gather-avatar-style-sprite"
+                              style={{
+                                backgroundImage: 'url(' + style.sprite + ')',
+                                backgroundPosition: '-48px 0',
+                              }}
+                            />
+                            <strong>{style.name}</strong>
+                            <small>{style.subtitle}</small>
+                            {avatarStyleDraft === style.id && <i><Check className="h-3.5 w-3.5" /></i>}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="gather-avatar-palette">
+                        {['#171717', '#3b2a22', '#ece2ce', '#5b1d2b', '#ffffff', '#6b7280', '#9ca3af'].map((color) => (
+                          <button key={color} type="button" style={{ background: color }} aria-label={'Cor ' + color} />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="gather-avatar-simple-options">
+                      <div className="gather-avatar-simple-icon"><UserRound className="h-8 w-8" /></div>
+                      <strong>Visual base do CEO</strong>
+                      <p>O cabelo, pele e traços do seu personagem ficam preservados; as roupas completas mudam pelos quatro looks acima.</p>
+                      <button type="button" onClick={() => setAvatarCategory('outfit')}>
+                        <Shirt className="h-4 w-4" />
+                        Ver roupas
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="gather-avatar-live-preview">
+                  <span className="gather-avatar-preview-name"><i />{currentMember.displayName}</span>
+                  <span
+                    className="gather-avatar-preview-sprite"
+                    style={{
+                      backgroundImage: 'url(' + draftCeoStyle.sprite + ')',
+                      backgroundPosition: '-48px 0',
+                    }}
+                  />
+                  <small>{draftCeoStyle.name}</small>
+                </div>
+              </div>
+
+              {profileError && <div className="gather-profile-error avatar-error">{profileError}</div>}
+
+              <footer>
+                <button type="button" className="secondary" onClick={() => setAvatarEditorOpen(false)}>Cancelar</button>
+                <button type="button" className="primary" disabled={profileSaving} onClick={() => void saveAvatarStyle()}>
+                  {profileSaving ? 'Salvando...' : 'Feito'}
+                </button>
+              </footer>
+            </section>
+          </div>
+        )}
 
         {activeCallRoom && (
           <div className="gather-call-badge">
