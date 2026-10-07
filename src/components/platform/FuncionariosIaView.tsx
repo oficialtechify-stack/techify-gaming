@@ -1035,60 +1035,72 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
           </div>
 
           <nav className="office-standalone-tabs">
-            <button type="button" className={!isCityScene && !taskDrawerOpen && !isTeamChatOpen && !isComputerOpen && !isTeamModalOpen ? 'active' : ''} onClick={() => {
-              setTaskDrawerOpen(false);
-              setIsTeamChatOpen(false);
-              setIsComputerOpen(false);
-              setIsTeamModalOpen(false);
-              navigateScene('/office');
-            }}>
-              <Gamepad2 className="h-4 w-4" />
-              Escritório
-            </button>
-            <button type="button" className={isCityScene ? 'active' : ''} onClick={() => {
-              setTaskDrawerOpen(false);
-              setIsTeamChatOpen(false);
-              setIsComputerOpen(false);
-              setIsTeamModalOpen(false);
-              navigateScene('/cidade');
-            }}>
-              <MapPinned className="h-4 w-4" />
-              Cidade
-            </button>
-            <button type="button" className={taskDrawerOpen ? 'active' : ''} onClick={() => setTaskDrawerOpen((value) => !value)}>
-              <ClipboardList className="h-4 w-4" />
-              Tarefas
-              {tasks.length > 0 && <b>{tasks.length}</b>}
-            </button>
-            <button type="button" className={isTeamChatOpen ? 'active' : ''} onClick={() => setIsTeamChatOpen(true)}>
-              <MessageCircle className="h-4 w-4" />
-              Chat
-            </button>
-            <button type="button" className={isComputerOpen ? 'active' : ''} onClick={() => setIsComputerOpen(true)}>
-              <Laptop className="h-4 w-4" />
-              Computador
-            </button>
-            {access?.canManageTeam && (
-              <button type="button" className={isTeamModalOpen ? 'active' : ''} onClick={() => setIsTeamModalOpen(true)}>
-                <Users className="h-4 w-4" />
-                Equipe
-              </button>
+            {isCityScene ? (
+              <>
+                <button type="button" className="active" onClick={() => navigateScene('/cidade')}>
+                  <MapPinned className="h-4 w-4" />
+                  Cidade
+                </button>
+                <button type="button" onClick={() => navigateScene('/office')}>
+                  <Gamepad2 className="h-4 w-4" />
+                  Entrar no escritório
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className={!taskDrawerOpen && !isTeamChatOpen && !isComputerOpen && !isTeamModalOpen ? 'active' : ''} onClick={() => {
+                  setTaskDrawerOpen(false);
+                  setIsTeamChatOpen(false);
+                  setIsComputerOpen(false);
+                  setIsTeamModalOpen(false);
+                }}>
+                  <Gamepad2 className="h-4 w-4" />
+                  Escritório
+                </button>
+                <button type="button" onClick={() => navigateScene('/cidade')}>
+                  <MapPinned className="h-4 w-4" />
+                  Sair para a cidade
+                </button>
+                <button type="button" className={taskDrawerOpen ? 'active' : ''} onClick={() => setTaskDrawerOpen((value) => !value)}>
+                  <ClipboardList className="h-4 w-4" />
+                  Tarefas
+                  {tasks.length > 0 && <b>{tasks.length}</b>}
+                </button>
+                <button type="button" className={isTeamChatOpen ? 'active' : ''} onClick={() => setIsTeamChatOpen(true)}>
+                  <MessageCircle className="h-4 w-4" />
+                  Chat
+                </button>
+                <button type="button" className={isComputerOpen ? 'active' : ''} onClick={() => setIsComputerOpen(true)}>
+                  <Laptop className="h-4 w-4" />
+                  Computador
+                </button>
+                {access?.canManageTeam && (
+                  <button type="button" className={isTeamModalOpen ? 'active' : ''} onClick={() => setIsTeamModalOpen(true)}>
+                    <Users className="h-4 w-4" />
+                    Equipe
+                  </button>
+                )}
+                <button type="button" onClick={() => selectedWorker && openChat(selectedWorker.id)}>
+                  <Brain className="h-4 w-4" />
+                  Funcionários IA
+                </button>
+              </>
             )}
-            <button type="button" onClick={() => selectedWorker && openChat(selectedWorker.id)}>
-              <Brain className="h-4 w-4" />
-              Funcionários IA
-            </button>
           </nav>
 
           <div className="office-standalone-actions">
-            <button type="button" title="Atualizar dados" onClick={() => void load(false, true)} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button type="button" className="new-task" onClick={() => openTaskFor()}>
-              <Plus className="h-4 w-4" />
-              Nova tarefa
-            </button>
-            <button type="button" title="Voltar para LeadsPay" onClick={onExit}>
+            {!isCityScene && (
+              <>
+                <button type="button" title="Atualizar dados" onClick={() => void load(false, true)} disabled={loading}>
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+                <button type="button" className="new-task" onClick={() => openTaskFor()}>
+                  <Plus className="h-4 w-4" />
+                  Nova tarefa
+                </button>
+              </>
+            )}
+            <button type="button" title={isCityScene ? 'Voltar para LeadsPay' : 'Voltar para LeadsPay'} onClick={onExit}>
               <ArrowLeft className="h-4 w-4" />
             </button>
           </div>
@@ -1205,14 +1217,16 @@ export const FuncionariosIaView: React.FC<FuncionariosIaViewProps> = ({ standalo
                 ? 'Mundo externo separado do escritório: ruas, prédios, praça, lojas e áreas urbanas para explorar.'
                 : 'Ambiente interno separado: CEO, equipe humana e IAs trabalham dentro do escritório.'}</span>
             </div>
-            <div className="ai-office-legend">
-              <span><i className="legend-dot working" /> trabalhando</span>
-              <span><i className="legend-dot queued" /> fila</span>
-              <span><i className="legend-dot approval" /> aprovação</span>
-            </div>
+            {!isCityScene && (
+              <div className="ai-office-legend">
+                <span><i className="legend-dot working" /> trabalhando</span>
+                <span><i className="legend-dot queued" /> fila</span>
+                <span><i className="legend-dot approval" /> aprovação</span>
+              </div>
+            )}
           </div>
 
-          {officeNotice && (
+          {!isCityScene && officeNotice && (
             <div className="office-game-notice">
               <Sparkles className="h-3.5 w-3.5" />
               <span>{officeNotice}</span>
