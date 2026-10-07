@@ -8,6 +8,11 @@ const PRODUCTION_BRANCH = 'main';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isQuotaExceeded = (error) => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /RESOURCE_EXHAUSTED|Quota exceeded|quota exceeded/i.test(message);
+};
+
 async function request(url, token, options = {}, accepted = [200]) {
   let last;
   for (let attempt = 1; attempt <= 5; attempt += 1) {
@@ -187,12 +192,17 @@ async function main() {
     }
 
     const db = getFirestore(app);
-    await db.collection('balance_releases')
-      .where('availableAt', '<=', new Date().toISOString())
-      .orderBy('availableAt', 'asc')
-      .limit(1)
-      .get();
-    console.log('[Firestore publish] Consulta financeira do cron validada.');
+    try {
+      await db.collection('balance_releases')
+        .where('availableAt', '<=', new Date().toISOString())
+        .orderBy('availableAt', 'asc')
+        .limit(1)
+        .get();
+      console.log('[Firestore publish] Consulta financeira do cron validada.');
+    } catch (error) {
+      if (!isQuotaExceeded(error)) throw error;
+      console.warn('[Firestore publish] Regras já publicadas. Validação financeira pós-publicação ignorada porque a cota de leitura do Firestore está temporariamente esgotada.');
+    }
 
     const apiKey = String(
       process.env.VITE_FIREBASE_API_KEY ||
@@ -211,11 +221,14 @@ async function main() {
       await sleep(4000);
     }
 
-    if (plansStatus !== 200 || couponsStatus !== 403) {
+    const publicValidationQuotaBlocked = plansStatus === 429 || couponsStatus === 429;
+    if (publicValidationQuotaBlocked) {
+      console.warn(`[Firestore publish] Regras já publicadas. Validação pública pós-publicação adiada por cota temporária: plans=${plansStatus}, coupons=${couponsStatus}.`);
+    } else if (plansStatus !== 200 || couponsStatus !== 403) {
       throw new Error(`Rules publicadas, mas a validação pública não bateu com o esperado: plans=${plansStatus}, coupons=${couponsStatus}.`);
+    } else {
+      console.log('[Firestore publish] Validação final OK: plans público (200) e coupons protegido (403).');
     }
-
-    console.log('[Firestore publish] Validação final OK: plans público (200) e coupons protegido (403).');
   } finally {
     await deleteApp(app).catch(() => {});
   }
