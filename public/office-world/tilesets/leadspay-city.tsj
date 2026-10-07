@@ -1,0 +1,34 @@
+{
+  "columns": 6,
+  "image": "https://raw.githubusercontent.com/Emreram/outbreak/claude/wizardly-cray-UGv1J/public/assets/tiles/city_tileset.png",
+  "imageheight": 32,
+  "imagewidth": 192,
+  "margin": 0,
+  "name": "leadspay-city-cc0",
+  "properties": [
+    {
+      "name": "tilesetCopyright",
+      "type": "string",
+      "value": "Kenney Roguelike Modern City (CC0), compacted into a 6-tile strip by Emreram/outbreak. See /office-world/CREDITS.md"
+    }
+  ],
+  "spacing": 0,
+  "tilecount": 6,
+  "tileheight": 32,
+  "tiles": [
+    {
+      "id": 3,
+      "properties": [
+        {
+          "name": "collides",
+          "type": "bool",
+          "value": true
+        }
+      ]
+    }
+  ],
+  "tilewidth": 32,
+  "tiledversion": "1.11.2",
+  "type": "tileset",
+  "version": "1.10"
+}
