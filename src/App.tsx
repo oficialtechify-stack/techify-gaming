@@ -22,6 +22,7 @@ function MainApp() {
   const { isAuthenticated, currentUser } = useAuth();
 
   const isOfficePath = appPath === '/office' || appPath === '/leadspay-office';
+  const isCityPath = appPath === '/cidade' || appPath === '/leadspay-city' || appPath === '/mundo';
 
   // Direct checkout link state
   const [checkoutPlan, setCheckoutPlan] = useState<CompanyPlan | null>(null);
@@ -246,8 +247,8 @@ function MainApp() {
     }
   };
 
-  // LeadsPay Office roda como aplicativo independente do dashboard.
-  if (isOfficePath) {
+  // O Office e a Cidade são cenas independentes, cada uma com sua própria URL.
+  if (isOfficePath || isCityPath) {
     if (!isAuthenticated || !currentUser) {
       return (
         <div className="min-h-[100dvh] bg-[#071019] text-white flex items-center justify-center p-6">
@@ -255,14 +256,16 @@ function MainApp() {
             <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-[#D9F22A]/30 bg-[#D9F22A]/10 text-[#D9F22A]">
               <span className="text-lg font-black">LP</span>
             </div>
-            <h1 className="text-2xl font-black">LeadsPay Office</h1>
-            <p className="mt-2 text-sm text-white/60">Entre na sua conta LeadsPay para acessar o escritório.</p>
+            <h1 className="text-2xl font-black">{isCityPath ? 'Cidade LeadsPay' : 'LeadsPay Office'}</h1>
+            <p className="mt-2 text-sm text-white/60">
+              Entre na sua conta LeadsPay para acessar {isCityPath ? 'a cidade' : 'o escritório'}.
+            </p>
             <button
               type="button"
               onClick={() => setActiveModal('login')}
               className="mt-6 w-full rounded-xl bg-[#D9F22A] px-4 py-3 text-sm font-black text-[#071019]"
             >
-              Entrar no Office
+              {isCityPath ? 'Entrar na Cidade' : 'Entrar no Office'}
             </button>
           </div>
           <Modals
@@ -278,6 +281,7 @@ function MainApp() {
       <ErrorBoundary fallbackTitle="Erro ao carregar o LeadsPay Office">
         <FuncionariosIaView
           standalone
+          scene={isCityPath ? 'city' : 'office'}
           onExit={() => {
             window.history.pushState({}, '', '/');
             setAppPath('/');
