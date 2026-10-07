@@ -8802,11 +8802,13 @@
   border: 1px dashed rgba(89,103,116,.34);
   border-radius: 8px;
   background: rgba(255,255,255,.025);
+  opacity: 0;
   pointer-events: none;
 }
 
 .gather-movable-furniture.editable:hover::after,
 .gather-movable-furniture.selected::after {
+  opacity: 1;
   border: 2px solid #5b65ee;
   background: rgba(91,101,238,.08);
   box-shadow: 0 0 0 3px rgba(91,101,238,.12);
@@ -8830,6 +8832,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.gather-movable-furniture .gather-furniture-label {
+  display: none;
+}
+
+.gather-movable-furniture.selected .gather-furniture-label {
+  display: block;
 }
 
 .kind-rug {
@@ -9204,6 +9214,21 @@
     drop-shadow(0 5px 1px rgba(55,37,24,.16))
     drop-shadow(4px 7px 4px rgba(48,34,22,.1));
   pointer-events:none;
+}
+
+.gather-exact-furniture-image {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+  object-position: center bottom;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transform-origin: center center;
+  filter:
+    drop-shadow(0 5px 1px rgba(55,37,24,.16))
+    drop-shadow(4px 7px 4px rgba(48,34,22,.1));
+  pointer-events: none;
 }
 .gather-movable-furniture.reference-fridge img {
   filter: grayscale(.48) brightness(1.06) drop-shadow(0 5px 2px rgba(55,37,24,.16));
