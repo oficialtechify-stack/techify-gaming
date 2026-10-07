@@ -153,6 +153,13 @@ type FurnitureSeat = {
   direction: Direction;
 };
 
+type FurnitureFootprint = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 type FurnitureItem = {
   id: string;
   label: string;
@@ -168,6 +175,7 @@ type FurnitureItem = {
   className?: string;
   rotation?: 0 | 90 | 180 | 270;
   seats?: FurnitureSeat[];
+  footprint?: FurnitureFootprint;
 };
 
 type FurnitureCatalogCategory = 'work' | 'seat' | 'table' | 'storage' | 'decor';
@@ -185,6 +193,7 @@ type FurnitureCatalogItem = {
   className?: string;
   rotation?: 0 | 90 | 180 | 270;
   seats?: FurnitureSeat[];
+  footprint?: FurnitureFootprint;
 };
 
 type CallParticipant = {
@@ -308,29 +317,39 @@ function furnitureSeatPoint(item: FurnitureItem, seatIndex: number) {
   const seat = item.seats?.[seatIndex];
   if (!seat) return null;
 
-  const rotation = item.rotation || 0;
-  const cx = item.w / 2;
-  const cy = item.h / 2;
-  const px = seat.dx - cx;
-  const py = seat.dy - cy;
-  let rx = px;
-  let ry = py;
+  // seats are rotated together with the furniture item. Do not rotate them again here.
+  return {
+    x: (item.x + seat.dx) * TILE,
+    y: (item.y + seat.dy) * TILE,
+    direction: seat.direction,
+  };
+}
 
-  if (rotation === 90) {
-    rx = -py;
-    ry = px;
-  } else if (rotation === 180) {
-    rx = -px;
-    ry = -py;
-  } else if (rotation === 270) {
-    rx = py;
-    ry = -px;
-  }
+function furnitureFootprint(item: Pick<FurnitureItem, 'x' | 'y' | 'w' | 'h' | 'footprint'>) {
+  const fallbackHeight = Math.max(.65, Math.min(1.45, item.h * .32));
+  const fallbackWidth = Math.max(.8, item.w * .72);
+  const local = item.footprint || {
+    x: (item.w - fallbackWidth) / 2,
+    y: Math.max(0, item.h - fallbackHeight - .08),
+    w: fallbackWidth,
+    h: fallbackHeight,
+  };
 
   return {
-    x: (item.x + cx + rx) * TILE,
-    y: (item.y + cy + ry) * TILE,
-    direction: rotateDirection(seat.direction, rotation),
+    x: item.x + local.x,
+    y: item.y + local.y,
+    w: Math.max(.2, local.w),
+    h: Math.max(.2, local.h),
+  };
+}
+
+function rotateFurnitureFootprint90(item: FurnitureItem): FurnitureFootprint | undefined {
+  if (!item.footprint) return undefined;
+  return {
+    x: item.h - (item.footprint.y + item.footprint.h),
+    y: item.footprint.x,
+    w: item.footprint.h,
+    h: item.footprint.w,
   };
 }
 
@@ -462,6 +481,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:5.9,
     h:5.1,
     solid:true,
+    footprint:{x:.65,y:3.05,w:4.6,h:1.55},
     seats:[{dx:2.95,dy:4.15,direction:'up'}],
   },
   {
@@ -473,6 +493,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:10.5,
     h:5.3,
     solid:true,
+    footprint:{x:.8,y:3.35,w:8.9,h:1.35},
   },
   {
     templateId:'chair-green',
@@ -483,6 +504,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:2.45,
     h:3.0,
     solid:true,
+    footprint:{x:.52,y:1.92,w:1.4,h:.88},
     seats:[{dx:1.22,dy:1.5,direction:'down'}],
   },
   {
@@ -494,6 +516,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:3.2,
     h:4.0,
     solid:true,
+    footprint:{x:.68,y:2.5,w:1.84,h:1.12},
     seats:[{dx:1.6,dy:2.0,direction:'down'}],
   },
   {
@@ -505,6 +528,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:3.8,
     h:4.1,
     solid:true,
+    footprint:{x:.55,y:2.55,w:2.7,h:1.22},
     seats:[{dx:1.9,dy:2.15,direction:'down'}],
   },
   {
@@ -516,6 +540,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:7.2,
     h:4.2,
     solid:true,
+    footprint:{x:.7,y:2.62,w:5.8,h:1.25},
     seats:[{dx:2.35,dy:2.1,direction:'down'},{dx:4.85,dy:2.1,direction:'down'}],
   },
   {
@@ -527,6 +552,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:5.0,
     h:2.75,
     solid:true,
+    footprint:{x:.55,y:1.68,w:3.9,h:.86},
     seats:[{dx:1.7,dy:1.55,direction:'down'},{dx:3.3,dy:1.55,direction:'down'}],
   },
   {
@@ -538,6 +564,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:3.6,
     h:2.9,
     solid:true,
+    footprint:{x:.52,y:1.7,w:2.55,h:.95},
   },
   {
     templateId:'round-table',
@@ -548,6 +575,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:4.8,
     h:4.5,
     solid:true,
+    footprint:{x:.8,y:2.2,w:3.2,h:1.55},
   },
   {
     templateId:'long-table',
@@ -558,6 +586,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:13.2,
     h:4.7,
     solid:true,
+    footprint:{x:.9,y:2.7,w:11.4,h:1.45},
   },
   {
     templateId:'bookshelf',
@@ -568,6 +597,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:5.6,
     h:3.0,
     solid:true,
+    footprint:{x:.45,y:2.18,w:4.7,h:.68},
   },
   {
     templateId:'plant',
@@ -578,6 +608,7 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
     w:2.25,
     h:3.2,
     solid:true,
+    footprint:{x:.66,y:2.28,w:.95,h:.72},
   },
   {
     templateId:'whiteboard',
@@ -616,12 +647,15 @@ let ACTIVE_FURNITURE_RECTS: Array<[number, number, number, number]> = [];
 function furnitureCollisionRects(items: FurnitureItem[]) {
   return items
     .filter((item) => item.solid)
-    .map((item) => [
-      Math.floor(item.x),
-      Math.floor(item.y),
-      Math.max(1, Math.ceil(item.w)),
-      Math.max(1, Math.ceil(item.h)),
-    ] as [number, number, number, number]);
+    .map((item) => {
+      const footprint = furnitureFootprint(item);
+      return [
+        footprint.x,
+        footprint.y,
+        footprint.w,
+        footprint.h,
+      ] as [number, number, number, number];
+    });
 }
 
 const SOLID_RECTS: Array<[number, number, number, number]> = [];
@@ -660,13 +694,36 @@ function furniturePlacementValid(candidate: FurnitureItem, layout: FurnitureItem
   ) return false;
 
   if (candidate.solid) {
+    const candidateFootprint = furnitureFootprint(candidate);
+
     for (const [x,y,w,h] of WALL_RECTS) {
-      if (rectanglesOverlap(candidate.x,candidate.y,candidate.w,candidate.h,x,y,w,h,.12)) return false;
+      if (
+        rectanglesOverlap(
+          candidateFootprint.x,
+          candidateFootprint.y,
+          candidateFootprint.w,
+          candidateFootprint.h,
+          x,y,w,h,.12,
+        )
+      ) return false;
     }
 
     for (const other of layout) {
       if (!other.solid || other.id === ignoreId) continue;
-      if (rectanglesOverlap(candidate.x,candidate.y,candidate.w,candidate.h,other.x,other.y,other.w,other.h,.18)) return false;
+      const otherFootprint = furnitureFootprint(other);
+      if (
+        rectanglesOverlap(
+          candidateFootprint.x,
+          candidateFootprint.y,
+          candidateFootprint.w,
+          candidateFootprint.h,
+          otherFootprint.x,
+          otherFootprint.y,
+          otherFootprint.w,
+          otherFootprint.h,
+          .18,
+        )
+      ) return false;
     }
   }
 
@@ -688,6 +745,7 @@ function catalogFurniture(template: FurnitureCatalogItem, x:number, y:number): F
     className: template.className,
     rotation: template.rotation || 0,
     seats: template.seats?.map((seat) => ({ ...seat })),
+    footprint: template.footprint ? { ...template.footprint } : undefined,
   };
 }
 
@@ -2548,6 +2606,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           dy: seat.dx,
           direction: rotateSeatDirection(seat.direction),
         })),
+        footprint: rotateFurnitureFootprint90(item),
       };
 
       if (!furniturePlacementValid(candidate, items, item.id)) {
