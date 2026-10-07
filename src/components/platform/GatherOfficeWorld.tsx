@@ -242,14 +242,14 @@ const COLS = 72;
 const ROWS = 54;
 const WORLD_W = COLS * TILE;
 const WORLD_H = ROWS * TILE;
-const PLAYER_SPEED = 190;
-const PLAYER_ACCEL = 1480;
-const PLAYER_DECEL = 2050;
+const PLAYER_SPEED = 176;
+const PLAYER_ACCEL = 1040;
+const PLAYER_DECEL = 1320;
 const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
-const FRAME_MS = 32;
-const OFFICE_MAP_VERSION = 'leadspay-empty-room-physics-v3';
+const FRAME_MS = 16;
+const OFFICE_MAP_VERSION = 'leadspay-empty-room-physics-v4';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -446,7 +446,7 @@ const AI_DESKS = [
   { workerId: 'growth', col: 17, row: 14 },
 ];
 
-const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:decorator-v2';
+const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:decorator-v3-empty';
 
 const DEFAULT_FURNITURE: FurnitureItem[] = [];
 
@@ -931,22 +931,33 @@ function ceoMotionFrame(
   seatedAt = 0,
   now = Date.now(),
 ) {
+  // O pacote do Rick possui 4 quadros por animação.
+  // A folha compacta usada no runtime mantém 8 colunas para compatibilidade;
+  // usamos 0/2/4/6 para reproduzir exatamente os 4 quadros, na ordem esquerda -> direita.
+  const logicalColumns = [0, 2, 4, 6] as const;
+
   if (seated) {
     const elapsed = Math.max(0, now - seatedAt);
-    const column = Math.min(7, Math.floor(elapsed / 92));
-    return { row: 4, column, flip: false, bob: 0, lean: 0 };
+    const seatStep = Math.min(3, Math.floor(elapsed / 150));
+    return { row: 4, column: logicalColumns[seatStep], flip: false, bob: 0, lean: 0 };
   }
 
   const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
-  const flip = direction === 'left';
+  // A animação lateral fornecida é walk_left; para direita, espelhamos horizontalmente.
+  const flip = direction === 'right';
 
   if (!walking) {
-    return { row, column: 0, flip, bob: 0, lean: 0 };
+    if (direction === 'down') {
+      const idleStep = Math.floor(now / 250) % 4; // 4 FPS
+      return { row: 0, column: logicalColumns[idleStep], flip: false, bob: 0, lean: 0 };
+    }
+    return { row, column: logicalColumns[0], flip, bob: 0, lean: 0 };
   }
 
+  const walkStep = Math.floor(now / 125) % 4; // 8 FPS
   return {
     row,
-    column: Math.floor(now / 82) % 8,
+    column: logicalColumns[walkStep],
     flip,
     bob: 0,
     lean: 0,
@@ -2672,7 +2683,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
     ? CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleOf(currentMember)) || CEO_AVATAR_STYLES[1]
     : CEO_AVATAR_STYLES[1];
   const draftCeoStyle = CEO_AVATAR_STYLES.find((style) => style.id === avatarStyleDraft) || CEO_AVATAR_STYLES[1];
-  const playerWalking = player && !seated ? Math.abs(player.vx) + Math.abs(player.vy) > 7 : false;
+  const playerWalking = player && !seated ? Math.abs(player.vx) + Math.abs(player.vy) > 4 : false;
   const playerFrame = player ? spriteFrame(player.direction, playerWalking) : null;
   const ceoPlayerFrame = player && currentMember?.officeRole === 'ceo'
     ? ceoMotionFrame(
@@ -2946,7 +2957,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
               type="button"
               data-no-pan="true"
               className={'gather-avatar human-avatar me manual-player' + (currentMember.officeRole === 'ceo' ? ' ceo-avatar' : '') + (playerWalking ? ' walking' : '') + (seated ? ' seated' : '')}
-              style={{ left: player.x, top: player.y, zIndex: (seated ? 1040 : 920) + Math.floor(player.y) }}
+              style={{ left: player.x, top: player.y, zIndex: (seated ? 1040 : 920) + Math.floor(player.y), transition: 'none', willChange: 'left, top' }}
               onPointerDown={(event) => {
                 event.stopPropagation();
               }}
