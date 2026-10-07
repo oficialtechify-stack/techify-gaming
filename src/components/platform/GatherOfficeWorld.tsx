@@ -931,9 +931,10 @@ function ceoMotionFrame(
   seatedAt = 0,
   now = Date.now(),
 ) {
-  // O pacote do Rick possui 4 quadros por animação.
-  // A folha compacta usada no runtime mantém 8 colunas para compatibilidade;
-  // usamos 0/2/4/6 para reproduzir exatamente os 4 quadros, na ordem esquerda -> direita.
+  // Atlas do Rick:
+  // row 0 = walk_front, row 1 = walk_back, row 2 = walk_left,
+  // row 3 = idle_front, row 4 = sit_front.
+  // Cada animação tem 4 quadros; o atlas duplica cada quadro em duas colunas.
   const logicalColumns = [0, 2, 4, 6] as const;
 
   if (seated) {
@@ -942,19 +943,15 @@ function ceoMotionFrame(
     return { row: 4, column: logicalColumns[seatStep], flip: false, bob: 0, lean: 0 };
   }
 
-  const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
-  // A animação lateral fornecida é walk_left; para direita, espelhamos horizontalmente.
-  const flip = direction === 'right';
-
   if (!walking) {
-    if (direction === 'down') {
-      const idleStep = Math.floor(now / 250) % 4; // 4 FPS
-      return { row: 0, column: logicalColumns[idleStep], flip: false, bob: 0, lean: 0 };
-    }
-    return { row, column: logicalColumns[0], flip, bob: 0, lean: 0 };
+    const idleStep = Math.floor(now / 250) % 4; // 4 FPS
+    return { row: 3, column: logicalColumns[idleStep], flip: false, bob: 0, lean: 0 };
   }
 
+  const row = direction === 'up' ? 1 : direction === 'left' || direction === 'right' ? 2 : 0;
+  const flip = direction === 'right'; // walk_right = walk_left espelhado
   const walkStep = Math.floor(now / 125) % 4; // 8 FPS
+
   return {
     row,
     column: logicalColumns[walkStep],
