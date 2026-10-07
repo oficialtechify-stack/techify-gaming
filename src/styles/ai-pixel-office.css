@@ -9238,6 +9238,31 @@
    and Rick multi-frame motion sourced from the supplied frames.
    ========================================================= */
 
+/* Planta completa fornecida pelo usuário no Google Drive. A arte mantém
+   exatamente a proporção do mundo (4:3); avatares, salas e controles ficam
+   em camadas separadas e continuam interativos. */
+.gather-drive-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url('/pixel-agents/assets/maps/leadspay-office-drive-map.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  image-rendering: auto;
+}
+
+.gather-grass,
+.gather-building-floor {
+  display: none !important;
+}
+
+.gather-room::before,
+.gather-wall.gather-reference-wall {
+  display: none !important;
+}
+
 .gather-decorator-panel {
   width: 360px;
   max-height: min(720px, calc(100% - 32px));

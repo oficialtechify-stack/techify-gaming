@@ -249,7 +249,7 @@ const AI_SPEED = 42;
 const PLAYER_RADIUS_X = 8;
 const PLAYER_RADIUS_Y = 5;
 const FRAME_MS = 16;
-const OFFICE_MAP_VERSION = 'leadspay-empty-room-physics-v4';
+const OFFICE_MAP_VERSION = 'leadspay-drive-office-map-v1';
 
 const CEO_AVATAR_STYLES: Array<{
   id: OfficeAvatarStyle;
@@ -376,10 +376,10 @@ const AREAS: OfficeArea[] = [
   { id: 'operations', name: 'Equipe LeadsPay', kind: 'open', x: 3, y: 3, w: 24, h: 20, subtitle: 'Time principal e estações de trabalho' },
   { id: 'team-pods', name: 'Operação', kind: 'open', x: 28, y: 3, w: 21, h: 20, subtitle: 'Operação, tecnologia e suporte' },
   { id: 'meeting', name: 'Sala de Reunião', kind: 'private', x: 50, y: 3, w: 19, h: 13, max: 10, subtitle: 'Reuniões privadas e alinhamentos' },
-  { id: 'lab', name: 'Café & Copa', kind: 'social', x: 50, y: 17, w: 19, h: 13, max: 10, subtitle: 'Café, refeições e conversas rápidas' },
-  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 3, y: 31, w: 17, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
+  { id: 'lab', name: 'Café & Copa', kind: 'social', x: 50, y: 17, w: 19, h: 13, max: 10, subtitle: 'Reuniões informais e descanso' },
+  { id: 'ceo', name: 'Sala do CEO', kind: 'private', x: 50, y: 31, w: 19, h: 20, max: 4, subtitle: 'Planejamento, aprovações e decisões' },
   { id: 'lobby', name: 'Lounge', kind: 'social', x: 21, y: 24, w: 28, h: 27, subtitle: 'Área central para encontros e descanso' },
-  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 50, y: 31, w: 19, h: 20, max: 5, subtitle: 'Design, referências e produção visual' },
+  { id: 'designer', name: 'Sala da Designer', kind: 'private', x: 3, y: 31, w: 17, h: 20, max: 5, subtitle: 'Design, referências e produção visual' },
 ];
 
 const AREA_ENTRY_TARGET: Record<string, Cell> = {
@@ -387,18 +387,18 @@ const AREA_ENTRY_TARGET: Record<string, Cell> = {
   'team-pods': { x: 37, y: 20 },
   meeting: { x: 52, y: 14 },
   lab: { x: 52, y: 28 },
-  ceo: { x: 17, y: 33 },
+  ceo: { x: 52, y: 33 },
   lobby: { x: 35, y: 27 },
-  designer: { x: 52, y: 33 },
+  designer: { x: 17, y: 33 },
 };
 
 const HOME_TARGET: Record<string, Cell> = {
-  'lumy-manager': { x: 8, y: 12 },
-  frontend: { x: 15, y: 12 },
-  backend: { x: 23, y: 12 },
-  designer: { x: 8, y: 20 },
-  qa: { x: 15, y: 20 },
-  growth: { x: 23, y: 20 },
+  'lumy-manager': { x: 32, y: 10 },
+  frontend: { x: 38, y: 10 },
+  backend: { x: 44, y: 10 },
+  designer: { x: 32, y: 18 },
+  qa: { x: 38, y: 18 },
+  growth: { x: 44, y: 18 },
 };
 
 const MEETING_TARGET: Record<string, Cell> = {
@@ -432,18 +432,18 @@ const IDLE_TARGETS: Record<string, Cell[]> = {
   'lumy-manager': [{ x: 37, y: 34 }, { x: 38, y: 39 }, { x: 38, y: 18 }],
   frontend: [{ x: 38, y: 10 }, { x: 42, y: 18 }, { x: 35, y: 38 }],
   backend: [{ x: 61, y: 19 }, { x: 41, y: 18 }, { x: 35, y: 34 }],
-  designer: [{ x: 56, y: 36 }, { x: 65, y: 39 }, { x: 39, y: 34 }],
+  designer: [{ x: 6, y: 36 }, { x: 15, y: 39 }, { x: 39, y: 34 }],
   qa: [{ x: 61, y: 20 }, { x: 43, y: 10 }, { x: 33, y: 37 }],
   growth: [{ x: 41, y: 32 }, { x: 48, y: 16 }, { x: 38, y: 41 }],
 };
 
 const AI_DESKS = [
-  { workerId: 'lumy-manager', col: 5, row: 6 },
-  { workerId: 'frontend', col: 11, row: 6 },
-  { workerId: 'backend', col: 17, row: 6 },
-  { workerId: 'designer', col: 5, row: 14 },
-  { workerId: 'qa', col: 11, row: 14 },
-  { workerId: 'growth', col: 17, row: 14 },
+  { workerId: 'lumy-manager', col: 30, row: 4 },
+  { workerId: 'frontend', col: 36, row: 4 },
+  { workerId: 'backend', col: 42, row: 4 },
+  { workerId: 'designer', col: 30, row: 12 },
+  { workerId: 'qa', col: 36, row: 12 },
+  { workerId: 'growth', col: 42, row: 12 },
 ];
 
 const FURNITURE_STORAGE_KEY = 'leadspay-office-furniture:decorator-v3-empty';
@@ -690,13 +690,13 @@ function catalogFurniture(template: FurnitureCatalogItem, x:number, y:number): F
 }
 
 const INTERACTIONS = [
-  { type: 'computer' as const, owner: 'ceo', cell: { x: 11, y: 39 }, label: 'Abrir computador do CEO' },
-  { type: 'computer' as const, owner: 'designer-human', cell: { x: 59, y: 39 }, label: 'Abrir computador da designer' },
+  { type: 'computer' as const, owner: 'ceo', cell: { x: 52, y: 34 }, label: 'Abrir computador do CEO' },
+  { type: 'computer' as const, owner: 'designer-human', cell: { x: 17, y: 34 }, label: 'Abrir computador da designer' },
   { type: 'meeting' as const, owner: 'meeting', cell: { x: 59, y: 13 }, label: 'Abrir sala de reunião' },
   { type: 'object' as const, objectId: 'coffee' as const, cell: { x: 59, y: 19 }, label: 'Pegar um café' },
   { type: 'object' as const, objectId: 'creative-board' as const, cell: { x: 35, y: 27 }, label: 'Abrir quadro criativo' },
   { type: 'object' as const, objectId: 'lab-terminal' as const, cell: { x: 64, y: 19 }, label: 'Usar a copa' },
-  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 64, y: 33 }, label: 'Abrir moodboard da designer' },
+  { type: 'object' as const, objectId: 'designer-board' as const, cell: { x: 11, y: 33 }, label: 'Abrir moodboard da designer' },
 ];
 
 function inRect(cell: Cell, x: number, y: number, w: number, h: number) {
@@ -874,9 +874,9 @@ function activeHumanTask(tasks: HumanTaskLite[], userId: string) {
 }
 
 function defaultHumanPosition(member: OfficeMember) {
-  if (member.officeRole === 'ceo') return centerOf({ x: 35, y: 49 });
-  if (member.officeRole === 'designer') return centerOf({ x: 59, y: 48 });
-  return centerOf({ x: 35, y: 28 });
+  if (member.officeRole === 'ceo') return centerOf({ x: 52, y: 34 });
+  if (member.officeRole === 'designer') return centerOf({ x: 17, y: 34 });
+  return centerOf({ x: 35, y: 36 });
 }
 
 function memberDirection(value?: string): Direction {
@@ -2719,6 +2719,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             transform: 'translate3d(' + camera.x + 'px,' + camera.y + 'px,0) scale(' + zoom + ')',
           }}
         >
+          <div className="gather-drive-map" aria-hidden="true" />
           <div className="gather-grass" />
           <div className="gather-building-floor" />
 
@@ -3253,7 +3254,7 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
             <div className="people-head">
               <div>
                 <strong>Decorador</strong>
-                <small>Sala vazia: escolha, posicione e organize tudo do seu jeito.</small>
+                <small>Planta mobiliada do Drive. Você ainda pode adicionar e organizar móveis.</small>
               </div>
               <button type="button" onClick={() => {
                 setFurnitureEditMode(false);

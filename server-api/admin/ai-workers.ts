@@ -1540,12 +1540,12 @@ export default async function handler(req: Req, res: Res) {
             palette: 0,
             active: true,
             deskId: 'ceo',
-            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v2' },
+            position: { x, y, direction, updatedAt: now, mapVersion: 'leadspay-drive-office-map-v1' },
             updatedAt: now,
           }, { merge: true });
         } else {
           await db.collection('admin_office_members').doc(officeIdentity.uid).set({
-            position: { x, y, direction, updatedAt: now, mapVersion: 'gather-v2' },
+            position: { x, y, direction, updatedAt: now, mapVersion: 'leadspay-drive-office-map-v1' },
             updatedAt: now,
           }, { merge: true });
         }
