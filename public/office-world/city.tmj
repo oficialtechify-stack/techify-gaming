@@ -24373,7 +24373,7 @@
     {
       "firstgid": 1,
       "name": "Kenney Modern City",
-      "image": "https://raw.githubusercontent.com/scottyfncodes/GenAlpha/main/static/public/tiles/kenney-roguelike-city-pack.png",
+      "image": "https://raw.githubusercontent.com/scottyfncodes/GenAlpha/4cae1d3ea77070f1237ea39f141fa4861715c5a7/static/public/tiles/kenney-roguelike-city-pack.png",
       "imagewidth": 628,
       "imageheight": 475,
       "tilewidth": 16,
@@ -24393,7 +24393,7 @@
     {
       "firstgid": 1100,
       "name": "Kenney RPG Urban",
-      "image": "https://raw.githubusercontent.com/scottyfncodes/GenAlpha/main/static/public/tiles/kenney-rpg-urban-pack.png",
+      "image": "https://raw.githubusercontent.com/scottyfncodes/GenAlpha/4cae1d3ea77070f1237ea39f141fa4861715c5a7/static/public/tiles/kenney-rpg-urban-pack.png",
       "imagewidth": 458,
       "imageheight": 305,
       "tilewidth": 16,
@@ -24413,7 +24413,7 @@
     {
       "firstgid": 2000,
       "name": "Leadspay Collision",
-      "image": "https://raw.githubusercontent.com/scottyfncodes/GenAlpha/main/static/public/tiles/kenney-roguelike-city-pack.png",
+      "image": "https://raw.githubusercontent.com/scottyfncodes/GenAlpha/4cae1d3ea77070f1237ea39f141fa4861715c5a7/static/public/tiles/kenney-roguelike-city-pack.png",
       "imagewidth": 628,
       "imageheight": 475,
       "tilewidth": 16,
