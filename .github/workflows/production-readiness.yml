@@ -28,6 +28,9 @@ jobs:
       - name: TypeScript
         run: npm run lint
 
+      - name: Validate LeadsPay Office maps
+        run: npm run validate:office-world
+
       - name: Unit tests
         run: node --import tsx --test lib/*.test.ts
 
