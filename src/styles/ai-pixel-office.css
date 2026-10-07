@@ -9522,3 +9522,289 @@
 .gather-movable-furniture.selected::after { opacity: 1; }
 .gather-movable-furniture .gather-furniture-label { display: none; }
 .gather-movable-furniture.selected .gather-furniture-label { display: block; }
+
+
+/* =========================================================
+   LeadsPay Office v4 — exterior world + real entrance + uploads
+   ========================================================= */
+.gather-world {
+  background: #72ad62;
+  overflow: hidden;
+}
+
+.gather-grass {
+  background:
+    linear-gradient(45deg, rgba(255,255,255,.035) 25%, transparent 25% 75%, rgba(31,92,44,.035) 75%),
+    linear-gradient(-45deg, rgba(255,255,255,.025) 25%, transparent 25% 75%, rgba(31,92,44,.03) 75%),
+    radial-gradient(circle at 18px 20px, rgba(42,111,50,.22) 0 2px, transparent 3px),
+    radial-gradient(circle at 72px 64px, rgba(226,239,164,.23) 0 2px, transparent 3px),
+    #78b765 !important;
+  background-size: 32px 32px, 32px 32px, 96px 96px, 128px 128px, auto !important;
+}
+
+.gather-outdoor-path {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  border: 4px solid rgba(121,88,56,.18);
+  background:
+    repeating-linear-gradient(0deg, rgba(117,79,43,.055) 0 2px, transparent 2px 17px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 31px),
+    #d7bb83;
+  box-shadow:
+    inset 0 0 0 3px rgba(250,226,178,.24),
+    0 0 0 2px rgba(78,110,57,.09);
+}
+
+.gather-outdoor-path-main {
+  left: 1056px;
+  top: 1632px;
+  width: 192px;
+  height: 1056px;
+  border-top: 0;
+}
+
+.gather-outdoor-path-east {
+  left: 1056px;
+  top: 1888px;
+  width: 2464px;
+  height: 160px;
+}
+
+.gather-outdoor-water {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  border: 10px solid #416f58;
+  border-radius: 18px;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.16) 0 3px, transparent 3px 23px),
+    repeating-linear-gradient(90deg, rgba(28,88,124,.16) 0 2px, transparent 2px 33px),
+    #55a7c7;
+  box-shadow:
+    0 0 0 8px rgba(201,183,119,.65),
+    0 10px 0 rgba(53,95,61,.2),
+    inset 0 0 0 4px rgba(174,226,239,.25);
+  pointer-events: none;
+}
+
+.gather-outdoor-water::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 3px dashed rgba(218,244,247,.22);
+  border-radius: 12px;
+}
+
+.gather-outdoor-tree {
+  position: absolute;
+  z-index: 650;
+  width: 64px;
+  height: 76px;
+  pointer-events: none;
+  filter: drop-shadow(5px 8px 2px rgba(35,70,42,.2));
+}
+
+.gather-outdoor-tree > span {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  width: 52px;
+  height: 52px;
+  border: 4px solid #245536;
+  border-radius: 42% 48% 45% 46%;
+  background:
+    radial-gradient(circle at 30% 28%, #8bd56f 0 8px, transparent 9px),
+    radial-gradient(circle at 70% 35%, #5aaa54 0 11px, transparent 12px),
+    radial-gradient(circle at 47% 67%, #4b9849 0 13px, transparent 14px),
+    #3d8443;
+  image-rendering: pixelated;
+}
+
+.gather-outdoor-tree > i {
+  position: absolute;
+  left: 27px;
+  top: 47px;
+  width: 12px;
+  height: 28px;
+  border: 3px solid #674124;
+  background: #9b6937;
+  box-shadow: inset 3px 0 0 rgba(255,218,141,.22);
+}
+
+.gather-outdoor-plaza {
+  position: absolute;
+  left: 2368px;
+  top: 1024px;
+  z-index: 5;
+  width: 448px;
+  height: 352px;
+  border: 6px solid rgba(91,82,66,.22);
+  border-radius: 18px;
+  background:
+    repeating-linear-gradient(0deg, rgba(110,95,74,.09) 0 2px, transparent 2px 32px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.13) 0 2px, transparent 2px 32px),
+    #d7c79d;
+  box-shadow: 0 10px 0 rgba(53,87,52,.13), inset 0 0 0 5px rgba(245,231,190,.28);
+  pointer-events: none;
+}
+
+.gather-outdoor-plaza > b {
+  position: absolute;
+  left: 18px;
+  bottom: 15px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(38,51,48,.76);
+  color: #fff;
+  font-family: "DM Mono", monospace;
+  font-size: 9px;
+  letter-spacing: .04em;
+}
+
+.gather-outdoor-fountain {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: 118px;
+  height: 86px;
+  transform: translate(-50%,-50%);
+  border: 8px solid #697b76;
+  border-radius: 50%;
+  background: #5daac7;
+  box-shadow:
+    0 7px 0 #445a57,
+    inset 0 0 0 8px rgba(193,236,242,.28);
+}
+
+.gather-outdoor-fountain > i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 42px;
+  transform: translate(-50%,-55%);
+  border: 5px solid #6c7875;
+  background: #c8d0cb;
+  box-shadow: 0 5px 0 #4f6260;
+}
+
+.gather-office-door {
+  position: absolute;
+  z-index: 780;
+  height: 64px;
+  pointer-events: none;
+  transform-origin: center bottom;
+}
+
+.gather-office-door > span {
+  position: absolute;
+  left: 50%;
+  top: -31px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 5px 9px 6px;
+  border: 3px solid #182a33;
+  border-radius: 5px;
+  background: #2d4650;
+  color: #f6e8c9;
+  font-family: "DM Mono", monospace;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  box-shadow: 0 5px 0 rgba(20,35,40,.3);
+}
+
+.gather-office-door > i {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 48px;
+  border: 6px solid #223741;
+  border-bottom: 0;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.12), transparent 25% 75%, rgba(0,0,0,.11)),
+    #8e6541;
+  box-shadow:
+    inset 0 7px 0 rgba(237,199,146,.22),
+    0 5px 0 rgba(19,35,40,.25);
+  transition: transform .14s ease, opacity .14s ease;
+  transform-origin: 8px center;
+}
+
+.gather-office-door.open > i {
+  transform: perspective(110px) rotateY(-72deg);
+  opacity: .72;
+}
+
+.gather-missing-custom-furniture {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 2px dashed rgba(103,80,130,.45);
+  background: rgba(255,255,255,.55);
+  color: #655a70;
+  font-size: 7px;
+  text-align: center;
+}
+
+.gather-custom-furniture-upload {
+  margin: 0 12px 10px;
+  padding: 10px;
+  border: 1px solid #e3e7eb;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f7f5ff, #fff);
+}
+
+.gather-custom-furniture-upload > button {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #c9c3ff;
+  border-radius: 9px;
+  background: #5b50e7;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(91,80,231,.18);
+}
+
+.gather-custom-furniture-upload > button:disabled {
+  opacity: .62;
+  cursor: wait;
+}
+
+.gather-custom-furniture-upload > small,
+.gather-custom-furniture-upload > span {
+  display: block;
+  margin-top: 7px;
+  font-size: 7px;
+  line-height: 1.4;
+  color: #7a838a;
+}
+
+.gather-custom-furniture-upload > span {
+  color: #4b5ab8;
+  font-weight: 800;
+}
+
+.gather-decorator-item img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 2px rgba(45,38,33,.16));
+}
+
+@media (max-width: 700px) {
+  .gather-custom-furniture-upload {
+    margin-inline: 9px;
+  }
+}
