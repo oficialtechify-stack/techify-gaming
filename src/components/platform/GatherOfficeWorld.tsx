@@ -3748,11 +3748,6 @@ export const GatherOfficeWorld: React.FC<GatherOfficeWorldProps> = ({
           </aside>
         )}
 
-        <div className="gather-scene-switcher" data-no-pan="true">
-          <button type="button" className={!isCityScene ? 'active' : ''} onClick={() => goToScene('/office')}>Escritório</button>
-          <button type="button" className={isCityScene ? 'active' : ''} onClick={() => goToScene('/cidade')}>Cidade</button>
-        </div>
-
         <div className="gather-map-controls">
           <button type="button" onClick={() => changeZoom(.16)} title="Aumentar zoom"><ZoomIn className="h-4 w-4" /></button>
           <button type="button" className="gather-zoom-value" onClick={() => setZoomAround(1)} title="Zoom 100%">{Math.round(zoom * 100)}%</button>
