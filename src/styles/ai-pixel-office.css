@@ -8718,3 +8718,322 @@
   opacity: .76;
   font-size: 6px;
 }
+
+
+/* =========================================================
+   LeadsPay Office v3 — map reference + Gather furniture editor
+   ========================================================= */
+
+.gather-room-operations,
+.gather-room-team-pods {
+  background:
+    repeating-linear-gradient(0deg, rgba(133,91,44,.045) 0 2px, transparent 2px 18px),
+    linear-gradient(90deg, rgba(255,255,255,.22), transparent 20%, rgba(255,255,255,.08)),
+    #d9b282 !important;
+}
+
+.gather-room-meeting {
+  background:
+    linear-gradient(rgba(255,255,255,.14), rgba(255,255,255,.14)),
+    #cec7b7 !important;
+}
+
+.gather-room-lab {
+  background:
+    repeating-linear-gradient(90deg, rgba(155,105,57,.055) 0 2px, transparent 2px 22px),
+    #d7b88d !important;
+}
+
+.gather-room-ceo,
+.gather-room-designer {
+  background:
+    repeating-linear-gradient(0deg, rgba(139,93,48,.045) 0 2px, transparent 2px 20px),
+    #d8b57f !important;
+}
+
+.gather-room-lobby {
+  background:
+    repeating-linear-gradient(90deg, rgba(154,108,65,.04) 0 2px, transparent 2px 24px),
+    #d6b98e !important;
+}
+
+.gather-furniture-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  pointer-events: none;
+}
+
+.gather-movable-furniture {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  pointer-events: auto;
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.gather-movable-furniture img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 7px 2px rgba(48,35,25,.13));
+  pointer-events: none;
+}
+
+.gather-movable-furniture.editable {
+  cursor: grab;
+}
+
+.gather-movable-furniture.editable:active {
+  cursor: grabbing;
+}
+
+.gather-movable-furniture.editable::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px dashed rgba(89,103,116,.34);
+  border-radius: 8px;
+  background: rgba(255,255,255,.025);
+  pointer-events: none;
+}
+
+.gather-movable-furniture.editable:hover::after,
+.gather-movable-furniture.selected::after {
+  border: 2px solid #5b65ee;
+  background: rgba(91,101,238,.08);
+  box-shadow: 0 0 0 3px rgba(91,101,238,.12);
+}
+
+.gather-furniture-label {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  z-index: 5;
+  transform: translateX(-50%);
+  max-width: 150px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(25,31,35,.92);
+  color: #fff;
+  padding: 3px 7px;
+  font-family: "DM Mono", monospace;
+  font-size: 6px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.kind-rug {
+  pointer-events: none;
+}
+
+.gather-furniture-layer.editing .kind-rug {
+  pointer-events: auto;
+}
+
+.gather-mapped-rug {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 4px solid rgba(169,143,105,.35);
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(0deg, rgba(129,107,77,.035) 0 2px, transparent 2px 8px),
+    #cdbb9c;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
+}
+
+.leadspay-pixel-sign {
+  min-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 3px solid #1c252b;
+  border-radius: 4px;
+  background: #f2f3ef;
+  color: #1f2a2f;
+  padding: 8px 12px;
+  font-family: "DM Mono", monospace;
+  font-size: 16px;
+  font-weight: 1000;
+  letter-spacing: -.8px;
+  box-shadow: 0 6px 0 rgba(53,43,31,.18);
+  image-rendering: pixelated;
+}
+
+.leadspay-pixel-sign b {
+  color: #8bbd10;
+  font-size: 20px;
+}
+
+.gather-furniture-editor-panel {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 19000;
+  width: min(330px, calc(100% - 90px));
+  overflow: hidden;
+  border: 1px solid rgba(57,68,74,.14);
+  border-radius: 16px;
+  background: rgba(255,255,255,.97);
+  color: #2d383e;
+  box-shadow: 0 18px 52px rgba(31,41,46,.18);
+  backdrop-filter: blur(14px);
+}
+
+.gather-furniture-editor-panel .people-head {
+  padding: 12px 13px;
+}
+
+.gather-furniture-editor-body {
+  border-top: 1px solid #edf0f2;
+  padding: 12px;
+}
+
+.gather-editor-tip {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  border-radius: 11px;
+  background: #f3f5ff;
+  color: #56606a;
+  padding: 10px;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.gather-editor-tip svg {
+  flex: 0 0 auto;
+  color: #5665ef;
+}
+
+.gather-selected-furniture {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  border: 1px solid #e5e9eb;
+  border-radius: 11px;
+  background: #fbfcfc;
+  padding: 10px;
+}
+
+.gather-selected-furniture small {
+  color: #929ba0;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.gather-selected-furniture strong {
+  font-size: 10px;
+}
+
+.gather-selected-furniture span {
+  color: #717d83;
+  font-family: "DM Mono", monospace;
+  font-size: 7px;
+}
+
+.gather-selected-furniture.empty {
+  color: #8a9499;
+  font-size: 8px;
+}
+
+.gather-reset-furniture {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 10px;
+  border: 1px solid #dce2e5;
+  border-radius: 10px;
+  background: #fff;
+  color: #59666d;
+  font-size: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gather-reset-furniture:hover {
+  background: #f5f7f8;
+}
+
+/* Real sprite-sheet walking for every avatar, including the CEO. */
+.gather-avatar.walking .gather-avatar-sprite,
+.gather-avatar.ceo-avatar.walking .gather-avatar-sprite {
+  animation:
+    gatherSpriteSheetWalk .56s steps(1, end) infinite,
+    gatherAvatarBob .28s ease-in-out infinite alternate !important;
+}
+
+@keyframes gatherSpriteSheetWalk {
+  0%   { background-position-x: 0; }
+  14%  { background-position-x: -48px; }
+  28%  { background-position-x: -96px; }
+  42%  { background-position-x: -144px; }
+  57%  { background-position-x: -192px; }
+  71%  { background-position-x: -240px; }
+  85%  { background-position-x: -288px; }
+  100% { background-position-x: 0; }
+}
+
+/* CEO uses the exact same sprite viewport and proportions as all other characters. */
+.gather-avatar.manual-player,
+.gather-avatar.ceo-avatar {
+  width: 64px;
+  height: 122px;
+}
+
+.gather-avatar.manual-player .gather-avatar-sprite,
+.gather-avatar.ceo-avatar .gather-avatar-sprite {
+  left: 8px;
+  top: 0;
+  width: 48px;
+  height: 96px;
+  background-size: 336px 288px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.gather-avatar.manual-player {
+  pointer-events: auto !important;
+}
+
+.gather-avatar.manual-player .gather-avatar-tag {
+  top: 86px;
+  min-width: 72px;
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.gather-avatar.manual-player::before {
+  top: 78px;
+  width: 30px;
+  height: 10px;
+  border-width: 1px;
+  opacity: .7;
+}
+
+@media (max-width: 700px) {
+  .gather-furniture-editor-panel {
+    left: 8px;
+    top: 8px;
+    width: min(300px, calc(100% - 78px));
+  }
+
+  .gather-furniture-label {
+    display: none;
+  }
+}
