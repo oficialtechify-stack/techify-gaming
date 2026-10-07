@@ -1,12 +1,28 @@
-# LeadsPay Office — créditos dos assets
+# LeadsPay Office — créditos e licenças
 
-O mapa usa um tileset compacto baseado no **Kenney Roguelike Modern City 2.0**.
+## Cidade LeadsPay
 
-- Autor original: Kenney
-- Licença: CC0 / domínio público
-- Uso comercial permitido; atribuição não é obrigatória.
-- Pack original: https://kenney.nl/assets/roguelike-modern-city
+A Cidade LeadsPay usa assets dos packs **Kenney Roguelike Modern City 2.0** e **Kenney RPG Urban Pack**.
 
-O arquivo compacto de 6 tiles usado por estes mapas está hospedado no repositório público Emreram/outbreak, cujo CREDITS.md identifica o material como Kenney CC0 e documenta a ordem dos tiles.
+- Autor: Kenney
+- Licença: CC0 1.0 / domínio público
+- Uso comercial permitido
+- Atribuição não obrigatória
+- Layout da Cidade LeadsPay: original do projeto LeadsPay
 
-A disposição dos mapas Cidade LeadsPay e LeadsPay Office é original do projeto LeadsPay.
+Os sprites são carregados de um mirror público que preserva os packs e o aviso de licença CC0.
+
+## LeadsPay Office
+
+O interior v2 foi adaptado do **WorkAdventure Map Starter Kit**.
+
+- Mapa-base: WorkAdventure Map Starter Kit
+- Licença do mapa-base: CC-BY-SA 3.0
+- Assets WorkAdventure: licença específica de recursos WorkAdventure, permitidos para uso em mapas WorkAdventure SaaS ou self-hosted
+- Modificações, integrações e organização: LeadsPay
+
+O mapa foi alterado para incluir identidade LeadsPay, nomes de áreas, saída para a Cidade LeadsPay e áreas interativas para Tarefas, Chat, Equipe e Funcionários IA.
+
+## Móveis personalizados
+
+Imagens enviadas pelo usuário permanecem pertencentes ao usuário. O LeadsPay Office não reivindica autoria desses arquivos.
