@@ -1229,3 +1229,166 @@
     bottom: 8px;
   }
 }
+
+
+/* LeadsPay owned WorkAdventure world */
+.lp-office-owned-world {
+  width: 100%;
+  height: calc(100dvh - 118px);
+  min-height: 700px;
+  display: grid;
+  grid-template-rows: 54px minmax(0,1fr);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
+  background: #05080d;
+  box-shadow: 0 20px 70px rgba(0,0,0,.30);
+}
+
+.lp-office-owned-world.is-standalone {
+  height: 100dvh;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+.lp-office-owned-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 12px 0 14px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  background: #05080d;
+}
+
+.lp-office-owned-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.lp-office-owned-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(124,108,255,.24);
+  border-radius: 9px;
+  background: rgba(124,108,255,.09);
+  color: #a89cff;
+}
+
+.lp-office-owned-title > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lp-office-owned-title strong {
+  color: rgba(255,255,255,.90);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.lp-office-owned-title span {
+  overflow: hidden;
+  color: rgba(255,255,255,.38);
+  font-size: 8px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lp-office-owned-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.lp-office-owned-actions button {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lp-office-owned-actions button.secondary {
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.68);
+}
+
+.lp-office-owned-actions button.secondary:hover {
+  background: rgba(255,255,255,.075);
+  color: #fff;
+}
+
+.lp-office-owned-actions button.primary {
+  border: 1px solid rgba(124,108,255,.36);
+  background: #4f5df5;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(50,62,210,.20);
+}
+
+.lp-office-owned-actions button.primary:hover {
+  background: #5d6aff;
+}
+
+.lp-office-owned-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #1d3048;
+}
+
+.lp-office-owned-world:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  border: 0;
+  border-radius: 0;
+  grid-template-rows: 54px minmax(0,1fr);
+}
+
+.lp-office-owned-world:fullscreen .lp-office-owned-toolbar {
+  background: #05080d;
+}
+
+.lp-office-owned-world:fullscreen .lp-office-owned-stage {
+  min-height: 0;
+}
+
+@media (max-width: 760px) {
+  .lp-office-owned-world {
+    height: calc(100dvh - 78px);
+    min-height: 620px;
+    grid-template-rows: 48px minmax(0,1fr);
+    border-radius: 12px;
+  }
+
+  .lp-office-owned-title span,
+  .lp-office-owned-actions .secondary span {
+    display: none;
+  }
+
+  .lp-office-owned-actions button {
+    width: 36px;
+    height: 34px;
+    padding: 0;
+  }
+
+  .lp-office-owned-actions button.primary {
+    width: auto;
+    padding: 0 10px;
+  }
+}
