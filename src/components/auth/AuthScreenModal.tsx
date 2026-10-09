@@ -39,7 +39,10 @@ import {
   isValidCNPJ, 
   cleanDigits,
   getAuthErrorMessage,
-  validateStrongPassword
+  validateStrongPassword,
+  startSmsMfaSignIn,
+  completeSmsMfaSignIn,
+  type SmsMfaSignInChallenge
 } from '../../services/authService';
 import {
   subscribeAuthModalSettings,
@@ -206,6 +209,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('afiliado');
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
+  const [mfaChallenge, setMfaChallenge] = useState<SmsMfaSignInChallenge | null>(null);
+  const [mfaCode, setMfaCode] = useState<string>('');
 
   // 2. Affiliate Registration State (Screenshot 1)
   const [affName, setAffName] = useState<string>('');
@@ -235,6 +240,9 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
 
   // Switch tab helper
   const handleSwitchTab = (tab: AuthModalType) => {
+    mfaChallenge?.verifier.clear();
+    setMfaChallenge(null);
+    setMfaCode('');
     setCurrentTab(tab);
     setManualAffiliateOpen(false);
     setBasicCompanyOpen(false);
@@ -288,8 +296,45 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         if (onLoginSuccess) onLoginSuccess();
       }, 1000);
     } catch (error: any) {
+      if (String(error?.code || '') === 'auth/multi-factor-auth-required') {
+        try {
+          const challenge = await startSmsMfaSignIn(error, 'leadspay-login-mfa-recaptcha');
+          setMfaChallenge(challenge);
+          setMfaCode('');
+          setSuccessMessage('Enviamos um código SMS para o segundo fator cadastrado.');
+          setErrorMessage('');
+        } catch (mfaError: any) {
+          setErrorMessage(getAuthErrorMessage(mfaError));
+        } finally {
+          setIsSubmitting(false);
+        }
+        return;
+      }
+
       setIsSubmitting(false);
       console.error('Erro no login:', error);
+      setErrorMessage(getAuthErrorMessage(error));
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+
+    setErrorMessage('');
+    setSuccessMessage('');
+    setIsSubmitting(true);
+
+    try {
+      await completeSmsMfaSignIn(mfaChallenge, mfaCode);
+      setMfaChallenge(null);
+      setMfaCode('');
+      setSuccessMessage('Segundo fator confirmado. Entrando na plataforma...');
+      setIsSubmitting(false);
+      onClose();
+      if (onLoginSuccess) onLoginSuccess();
+    } catch (error: any) {
+      setIsSubmitting(false);
       setErrorMessage(getAuthErrorMessage(error));
     }
   };
@@ -1105,7 +1150,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
               </div>
 
               {/* Login Form */}
-              <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleLoginSubmit} className={`${mfaChallenge ? 'hidden' : 'flex'} flex-col gap-4`}>
                 {/* E-mail */}
                 <div className="space-y-1.5">
                   <label htmlFor="leadspay-login-email" className="text-[10px] font-bold text-white/70 uppercase tracking-wider">
@@ -1188,6 +1233,53 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                   <span>Entrar com o Google</span>
                 </button>
               </form>
+
+              {mfaChallenge && (
+                <form onSubmit={handleMfaSubmit} className="flex flex-col gap-4 rounded-2xl border border-[#D9F22A]/25 bg-[#09111b] p-4">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#D9F22A]" />
+                    <div>
+                      <h3 className="text-sm font-black text-white">Verificação em duas etapas</h3>
+                      <p className="mt-1 text-xs leading-5 text-white/55">
+                        Digite o código enviado por SMS para {mfaChallenge.phoneHint}.
+                      </p>
+                    </div>
+                  </div>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                    placeholder="Código SMS"
+                    className="w-full rounded-xl border border-white/10 bg-[#060a15] px-4 py-3.5 text-sm text-white outline-none transition focus:border-[#D9F22A]"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || mfaCode.length < 4}
+                    className="w-full rounded-xl bg-[#D9F22A] px-5 py-3.5 text-xs font-black uppercase tracking-wider text-[#060A15] transition hover:bg-[#c8e217] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Confirmando...' : 'Confirmar código'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      mfaChallenge.verifier.clear();
+                      setMfaChallenge(null);
+                      setMfaCode('');
+                      setSuccessMessage('');
+                    }}
+                    className="text-xs font-bold text-white/55 hover:text-white"
+                  >
+                    Voltar para o login
+                  </button>
+                  <div id="leadspay-login-mfa-recaptcha" />
+                </form>
+              )}
 
               {/* Footer Switcher */}
               <div className="text-center text-xs text-white/60 pt-1">
