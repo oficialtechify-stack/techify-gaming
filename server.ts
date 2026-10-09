@@ -3,6 +3,7 @@ import path from 'path';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { createIpRateLimit } from './lib/rateLimit.js';
+import { applySecurityHeaders, rejectUnsafeJsonPayload } from './lib/securityMiddleware.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
 dotenv.config();
@@ -39,10 +40,28 @@ import mcpProtocolHandler from './server-api/mcp/protocol.js';
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
+// Respect the first reverse proxy hop so req.ip cannot be chosen directly by client headers.
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use(applySecurityHeaders);
+
 app.use(express.json({
   limit: '2mb',
+  strict: true,
+  type: ['application/json', 'application/*+json'],
   verify: (req: any, _res, buf) => { req.rawBody = Buffer.from(buf); },
 }));
+
+app.use((req, res, next) => {
+  if (
+    req.path === '/api/stripe/webhook' ||
+    req.path === '/api/webhooks/stripe' ||
+    req.path === '/api/webhook/stripe'
+  ) {
+    return next();
+  }
+  return rejectUnsafeJsonPayload(req, res, next);
+});
 
 const adapt = (handler: any) => (req: express.Request, res: express.Response) => handler(req as any, res as any);
 
