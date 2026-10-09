@@ -53,7 +53,6 @@ import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
 import { AdminDashboardView } from './AdminDashboardView';
 
-import { AdminModalImagesManager } from './AdminModalImagesManager';
 import { MeuPerfilView } from './MeuPerfilView';
 import { AssistentesIaView } from './AssistentesIaView';
 import { AssinaturasView } from './AssinaturasView';
@@ -1379,7 +1378,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'clientes' as PlatformTab, label: 'Clientes Globais', icon: Users },
     { id: 'assinaturas' as PlatformTab, label: 'Assinaturas', icon: Repeat },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios Globais', icon: BarChart3 },
-    { id: 'modal_backgrounds' as PlatformTab, label: 'Design da Plataforma', icon: ImageIcon, badge: 'Design' },
   ];
 
   const currentNavItems =
@@ -2297,7 +2295,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           )}
           {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
-          {activeTab === 'modal_backgrounds' && isSuperAdmin && <AdminModalImagesManager />}
             </>
           )}
         </main>
