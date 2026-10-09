@@ -120,7 +120,7 @@ import {
   CreditCard,
   ArrowUpRight,
   Share2,
-  Image as ImageIcon
+  Image as ImageIcon,
   Home,
   BadgeDollarSign,
   WalletCards,
