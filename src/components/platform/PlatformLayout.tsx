@@ -683,15 +683,25 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           return () => {};
         })();
 
-    const unsubWith = subscribeWithdrawals((withList) => {
-      setWithdrawals(withList);
-    }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId, effectiveCompanyId);
+    const needsWithdrawals =
+      activeTab === 'financeiro' ||
+      activeTab === 'carteira' ||
+      activeTab === 'saques';
+
+    const unsubWith = needsWithdrawals
+      ? subscribeWithdrawals((withList) => {
+          setWithdrawals(withList);
+        }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId, effectiveCompanyId)
+      : (() => {
+          setWithdrawals([]);
+          return () => {};
+        })();
 
     return () => {
       unsubAffiliations();
       unsubWith();
     };
-  }, [effectiveUserId, isSuperAdmin, roleMode, effectiveCompanyId]);
+  }, [effectiveUserId, isSuperAdmin, roleMode, effectiveCompanyId, activeTab]);
 
   // Affiliate Codes belonging strictly to THIS user
   const userAffiliationCodes = useMemo(() => {
