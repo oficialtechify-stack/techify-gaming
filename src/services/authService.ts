@@ -7,6 +7,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   sendEmailVerification,
+  deleteUser,
   getMultiFactorResolver,
   PhoneAuthProvider,
   PhoneMultiFactorGenerator,
@@ -570,6 +571,7 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
   if (cleanCpf && cleanCpf.length === 11) {
     const cpfExists = await checkCpfAlreadyExists(cleanCpf, user.uid);
     if (cpfExists) {
+      await deleteUser(user).catch(() => undefined);
       const err = new Error('custom/cpf-already-in-use');
       (err as any).code = 'custom/cpf-already-in-use';
       throw err;
@@ -814,6 +816,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
   if (docType === 'CNPJ' && cleanCnpj && cleanCnpj.length === 14) {
     const cnpjExists = await checkCnpjAlreadyExists(cleanCnpj, user.uid);
     if (cnpjExists) {
+      await deleteUser(user).catch(() => undefined);
       const err = new Error('custom/cnpj-already-in-use');
       (err as any).code = 'custom/cnpj-already-in-use';
       throw err;
