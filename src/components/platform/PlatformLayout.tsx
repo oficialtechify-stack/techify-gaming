@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion } from 'motion/react';
 import { 
   PlatformTab, 
   CompanyStartup,
@@ -120,6 +121,11 @@ import {
   ArrowUpRight,
   Share2,
   Image as ImageIcon
+  Home,
+  BadgeDollarSign,
+  WalletCards,
+  ReceiptText,
+  Grid2X2,
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -1736,7 +1742,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               className="lg:hidden p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 cursor-pointer flex-shrink-0 flex items-center justify-center"
               aria-label="Abrir menu de navegação"
             >
-              <Menu className="w-[18px] h-[18px]" />
+              <motion.span
+            className="inline-flex"
+            animate={isMobileMenuOpen ? { rotate: 90, scale: 1.06 } : { rotate: 0, scale: 1 }}
+            transition={{ duration: 0.22 }}
+          >
+            <Grid2X2 className="w-[18px] h-[18px]" />
+          </motion.span>
             </button>
 
             {/* Current Panel Status Badge */}
@@ -2307,7 +2319,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeTab === 'dashboard' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            <LayoutDashboard className="w-[18px] h-[18px]" />
+            <motion.span
+              className="inline-flex"
+              animate={activeTab === 'dashboard' ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+              transition={{ duration: 0.35 }}
+            >
+              <Home className="w-[18px] h-[18px]" />
+            </motion.span>
             <span className="max-w-full truncate text-[9px] font-semibold leading-none">Início</span>
           </button>
 
@@ -2318,7 +2336,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 activeTab === 'afiliados' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
-              <Share2 className="w-[18px] h-[18px]" />
+              <motion.span
+                className="inline-flex"
+                animate={activeTab === 'afiliados' ? { rotate: [0, -7, 7, 0] } : { rotate: 0 }}
+                transition={{ duration: 0.42 }}
+              >
+                <Link2 className="w-[18px] h-[18px]" />
+              </motion.span>
               <span className="max-w-full truncate text-[9px] font-semibold leading-none">Links</span>
             </button>
           ) : (
@@ -2328,7 +2352,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                 activeTab === 'minha_empresa' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
-              <Building2 className="w-[18px] h-[18px]" />
+              <motion.span
+                className="inline-flex"
+                animate={activeTab === 'minha_empresa' ? { y: [0, -2, 0] } : { y: 0 }}
+                transition={{ duration: 0.34 }}
+              >
+                <Store className="w-[18px] h-[18px]" />
+              </motion.span>
               <span className="max-w-full truncate text-[9px] font-semibold leading-none">Startup</span>
             </button>
           )}
@@ -2342,7 +2372,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeTab === 'vitrine' || activeTab === 'cobrancas' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            {roleMode === 'empresa' ? <CreditCard className="w-[18px] h-[18px]" /> : <ShoppingBag className="w-[18px] h-[18px]" />}
+            <motion.span
+              className="inline-flex"
+              animate={activeTab === 'vitrine' || activeTab === 'cobrancas' ? { scale: [1, 0.9, 1.06, 1] } : { scale: 1 }}
+              transition={{ duration: 0.34 }}
+            >
+              {roleMode === 'empresa' ? <BadgeDollarSign className="w-[18px] h-[18px]" /> : <Sparkles className="w-[18px] h-[18px]" />}
+            </motion.span>
             <span className="max-w-full truncate text-[9px] font-semibold leading-none">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
           </button>
 
@@ -2355,7 +2391,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeTab === 'vendas' || activeTab === 'carteira' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            {roleMode === 'empresa' ? <Wallet className="w-[18px] h-[18px]" /> : <Receipt className="w-[18px] h-[18px]" />}
+            <motion.span
+              className="inline-flex"
+              animate={activeTab === 'vendas' || activeTab === 'carteira' ? { y: [0, -3, 0], scale: [1, 1.05, 1] } : { y: 0, scale: 1 }}
+              transition={{ duration: 0.38 }}
+            >
+              {roleMode === 'empresa' ? <WalletCards className="w-[18px] h-[18px]" /> : <ReceiptText className="w-[18px] h-[18px]" />}
+            </motion.span>
             <span className="max-w-full truncate text-[9px] font-semibold leading-none">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
           </button>
 
