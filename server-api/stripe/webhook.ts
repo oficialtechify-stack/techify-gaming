@@ -161,8 +161,8 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       createdAt: now.toISOString(),
       paidAt: now.toISOString(),
-      is_test: !paymentIntent.livemode,
       environment: paymentIntent.livemode ? 'production' : 'development',
+      ...(!paymentIntent.livemode ? { is_test: true } : {}),
       couponCode: order.couponCode || null,
       utmSource: order.utmSource || null,
       utmMedium: order.utmMedium || null,
@@ -203,8 +203,8 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
         availableAt: participant.availableAt,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        is_test: !paymentIntent.livemode,
         environment: paymentIntent.livemode ? 'production' : 'development',
+        ...(!paymentIntent.livemode ? { is_test: true } : {}),
       });
     }
 
@@ -269,21 +269,17 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       tx.set(db.collection('clients').doc(clientId), {
         id: clientId,
         companyId: order.companyId,
-        store_id: order.companyId,
-        empresa_id: order.companyId,
         name: order.buyerName,
-        nome_completo: order.buyerName,
         email: order.buyerEmail,
         total_spent: FieldValue.increment(Number(order.productAmountCents || 0) / 100),
         orders_count: FieldValue.increment(1),
         last_order_at: now.toISOString(),
         last_plan_name: order.planName,
-        status_compra: 'PAGO',
         status: 'active',
         updatedAt: now.toISOString(),
         created_at: now.toISOString(),
         environment: paymentIntent.livemode ? 'production' : 'development',
-        is_test: !paymentIntent.livemode,
+        ...(!paymentIntent.livemode ? { is_test: true } : {}),
       }, { merge: true });
     }
 
