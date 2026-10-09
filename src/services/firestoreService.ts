@@ -696,8 +696,8 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
  */
 export function subscribeAllAffiliations(callback: (affiliations: UserAffiliation[]) => void, companyId?: string) {
   const q = companyId 
-    ? query(collection(db, COLLECTIONS.AFFILIATIONS), where("companyId", "==", companyId), limit(200))
-    : query(collection(db, COLLECTIONS.AFFILIATIONS), limit(200));
+    ? query(collection(db, COLLECTIONS.AFFILIATIONS), where("companyId", "==", companyId), orderBy("createdAt", "desc"), limit(200))
+    : query(collection(db, COLLECTIONS.AFFILIATIONS), orderBy("createdAt", "desc"), limit(200));
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
@@ -817,10 +817,10 @@ export function subscribeSales(
   affiliateId?: string
 ) {
   const q = companyId
-    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId), limit(250))
+    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId), orderBy("createdAt", "desc"), limit(250))
     : affiliateId
-      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId), limit(250))
-      : query(collection(db, COLLECTIONS.SALES), limit(250));
+      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId), orderBy("createdAt", "desc"), limit(250))
+      : query(collection(db, COLLECTIONS.SALES), orderBy("createdAt", "desc"), limit(250));
   return onSnapshot(q, (snap) => {
     const list: SaleTransaction[] = [];
     snap.forEach((d) => {
@@ -842,11 +842,11 @@ export function subscribeSales(
  * Realtime Withdrawals Listener (Filtered strictly by user unless superadmin)
  */
 export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void, userId?: string, companyId?: string) {
-  let q: any = query(collection(db, COLLECTIONS.WITHDRAWALS), limit(200));
+  let q: any = query(collection(db, COLLECTIONS.WITHDRAWALS), orderBy("createdAt", "desc"), limit(200));
   if (companyId) {
-    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("companyId", "==", companyId), limit(200));
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("companyId", "==", companyId), orderBy("createdAt", "desc"), limit(200));
   } else if (userId) {
-    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("userId", "==", userId), limit(200));
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(200));
   }
 
   return onSnapshot(q, (snap: any) => {
