@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { COLLECTIONS, sanitizeForFirestore } from '../services/firestoreService';
@@ -45,6 +45,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let unsubProfile: (() => void) | null = null;
 
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      const usesPasswordProvider = Boolean(user?.providerData?.some((provider) => provider.providerId === 'password'));
+
+      if (user && usesPasswordProvider && !user.emailVerified) {
+        if (unsubProfile) {
+          unsubProfile();
+          unsubProfile = null;
+        }
+        setCurrentUser(null);
+        setUserProfile(INITIAL_USER_PROFILE);
+        setUserRole('afiliado');
+        await signOut(auth).catch(() => undefined);
+        setLoading(false);
+        return;
+      }
+
       setCurrentUser(user);
 
       if (user) {
@@ -160,6 +175,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const res = await registerAffiliate(data);
+      if (res.requiresEmailVerification) {
+        setCurrentUser(null);
+        setUserProfile(INITIAL_USER_PROFILE);
+        setUserRole('afiliado');
+        return res;
+      }
       setCurrentUser(res.user);
       setUserProfile(res.profile);
       setUserRole('afiliado');
@@ -177,6 +198,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const res = await registerCompany(data);
+      if (res.requiresEmailVerification) {
+        setCurrentUser(null);
+        setUserProfile(INITIAL_USER_PROFILE);
+        setUserRole('afiliado');
+        return res;
+      }
       setCurrentUser(res.user);
       setUserProfile(res.profile);
       setUserRole('empresa');
@@ -245,7 +272,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userProfile,
         userRole,
         setUserRole,
-        isAuthenticated: !!currentUser,
+        isAuthenticated: Boolean(currentUser && (currentUser.emailVerified || !currentUser.providerData.some((provider) => provider.providerId === 'password'))),
         loading,
         registerAffiliateUser,
         registerCompanyUser,
