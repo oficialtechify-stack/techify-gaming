@@ -3,22 +3,28 @@ import { useEffect } from 'react';
 export const BrowserInteractionGuard: React.FC = () => {
   useEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
-      event.preventDefault();
-    };
-
-    const handleDragStart = (event: DragEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.tagName === 'IMG') {
+      if (target?.closest('[data-protect-context-menu="true"]')) {
         event.preventDefault();
       }
     };
 
-    document.addEventListener('contextmenu', handleContextMenu, { capture: true });
-    document.addEventListener('dragstart', handleDragStart, { capture: true });
+    const handleDragStart = (event: DragEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest('[data-protect-drag="true"]') ||
+        target?.tagName === 'IMG'
+      ) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu, true);
+    document.addEventListener('dragstart', handleDragStart, true);
 
     return () => {
-      document.removeEventListener('contextmenu', handleContextMenu, { capture: true } as EventListenerOptions);
-      document.removeEventListener('dragstart', handleDragStart, { capture: true } as EventListenerOptions);
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+      document.removeEventListener('dragstart', handleDragStart, true);
     };
   }, []);
 
