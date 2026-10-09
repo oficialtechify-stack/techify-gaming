@@ -1238,7 +1238,7 @@ export async function createOrUpdateClientInFirebase(clientData: {
         created_at: prevData.created_at || now,
         data_criacao: prevData.created_at || now,
         total_spent: updatedTotal,
-        valor_pedido: payload.valor_pedido,
+        valor_pedido: updatedTotal,
         orders_count: updatedCount,
         last_order_at: now,
         last_plan_name: payload.last_plan_name,
