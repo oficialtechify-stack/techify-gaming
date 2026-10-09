@@ -52,10 +52,11 @@ import { RelatoriosView } from './RelatoriosView';
 import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
 import { AdminDashboardView } from './AdminDashboardView';
+
+const LeadspayOfficeView = React.lazy(() => import('./LeadspayOfficeView'));
 import { AdminModalImagesManager } from './AdminModalImagesManager';
 import { MeuPerfilView } from './MeuPerfilView';
 import { AssistentesIaView } from './AssistentesIaView';
-import { LeadspayOfficeView } from './LeadspayOfficeView';
 import { AssinaturasView } from './AssinaturasView';
 import { CuponsView } from './CuponsView';
 import { ClientesView } from './ClientesView';
@@ -2089,7 +2090,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {activeTab === 'funcionarios_ia' && ((roleMode === 'admin' && isSuperAdmin) || hasOfficeAccess) && (
             <div className="w-full">
-              <LeadspayOfficeView />
+              <React.Suspense fallback={
+                <div className="min-h-[50vh] flex items-center justify-center text-sm text-white/50">
+                  Carregando LeadsPay Office...
+                </div>
+              }>
+                <LeadspayOfficeView />
+              </React.Suspense>
             </div>
           )}
 
