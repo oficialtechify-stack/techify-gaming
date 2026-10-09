@@ -53,7 +53,6 @@ import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
 import { AdminDashboardView } from './AdminDashboardView';
 
-const LeadspayOfficeView = React.lazy(() => import('./LeadspayOfficeView'));
 import { AdminModalImagesManager } from './AdminModalImagesManager';
 import { MeuPerfilView } from './MeuPerfilView';
 import { AssistentesIaView } from './AssistentesIaView';
@@ -176,46 +175,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const userEmail = (currentUser?.email || userProfile?.email || '').toLowerCase().trim();
   const isSuperAdmin = isSuperAdminEmail(userEmail);
-  const [hasOfficeAccess, setHasOfficeAccess] = useState<boolean>(isSuperAdmin);
-  const [officeAccessRole, setOfficeAccessRole] = useState<'ceo' | 'designer' | 'member' | null>(isSuperAdmin ? 'ceo' : null);
-
-  useEffect(() => {
-    if (!currentUser) {
-      setHasOfficeAccess(false);
-      setOfficeAccessRole(null);
-      return;
-    }
-    if (isSuperAdmin) {
-      setHasOfficeAccess(true);
-      setOfficeAccessRole('ceo');
-      return;
-    }
-
-    let cancelled = false;
-    currentUser.getIdToken()
-      .then((token) => fetch('/api/office/workers?accessOnly=1', {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      }))
-      .then(async (response) => {
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'Sem acesso ao Office');
-        if (!cancelled) {
-          setHasOfficeAccess(true);
-          setOfficeAccessRole(data.access?.officeRole || 'member');
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setHasOfficeAccess(false);
-          setOfficeAccessRole(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.uid, isSuperAdmin]);
   
   // Realtime Database Collections
   const [companies, setCompanies] = useState<CompanyStartup[]>([]);
@@ -1389,9 +1348,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'vitrine' as PlatformTab, label: 'Marketplace de Startups', icon: ShoppingBag, badge: `${plans.length}` },
     { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Ativo' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
-    ...(hasOfficeAccess ? [
-      { id: 'funcionarios_ia' as PlatformTab, label: 'LeadsPay Office', icon: Gamepad2, badge: officeAccessRole === 'designer' ? 'Designer' : 'Equipe' }
-    ] : []),
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
       { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
@@ -1406,9 +1362,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
     { id: 'integracoes' as PlatformTab, label: 'Webhooks & APIs', icon: Network },
     { id: 'relatorios' as PlatformTab, label: 'Relatórios & UTMs', icon: BarChart3 },
-    ...(hasOfficeAccess ? [
-      { id: 'funcionarios_ia' as PlatformTab, label: 'LeadsPay Office', icon: Gamepad2, badge: officeAccessRole === 'designer' ? 'Designer' : 'Equipe' }
-    ] : []),
     ...(isSuperAdmin ? [
       { id: 'database' as PlatformTab, label: 'Painel Admin & Logotipo', icon: Database, badge: 'Admin' },
       { id: 'modal_backgrounds' as PlatformTab, label: 'Imagens dos Modais', icon: ImageIcon, badge: 'Design' }
@@ -1693,9 +1646,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   <button
                     key={item.id}
                     onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    if (item.id === 'funcionarios_ia' && roleMode === 'admin' && isSuperAdmin) {
+                      window.location.assign('/leadspay-office');
+                      return;
+                    }
+                    setActiveTab(item.id);
+                    setIsMobileMenuOpen(false);
+                  }}
                     className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#102419] text-[#D9F22A] border border-[#D9F22A]/40 shadow-[0_0_15px_rgba(217,242,42,0.15)]'
@@ -2086,18 +2043,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               roleMode={roleMode}
               onNavigateToProfile={() => setActiveTab('meu_perfil')}
             />
-          )}
-
-          {activeTab === 'funcionarios_ia' && ((roleMode === 'admin' && isSuperAdmin) || hasOfficeAccess) && (
-            <div className="w-full">
-              <React.Suspense fallback={
-                <div className="min-h-[50vh] flex items-center justify-center text-sm text-white/50">
-                  Carregando LeadsPay Office...
-                </div>
-              }>
-                <LeadspayOfficeView />
-              </React.Suspense>
-            </div>
           )}
 
           {(activeTab === 'minha_empresa' || activeTab === 'produtos') && (
