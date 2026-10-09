@@ -45,7 +45,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   }
 
   try {
-    const identity = await verifyFirebaseIdentity(req.headers.authorization);
+    const identity = await verifyFirebaseIdentity(req.headers.authorization, { requireVerifiedEmail: true });
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const role = body.role as Role;
     if (role !== 'empresa' && role !== 'afiliado') return res.status(400).json({ error: 'Tipo de perfil inválido.' });
