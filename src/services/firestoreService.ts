@@ -243,7 +243,7 @@ export async function submitVerificationRequestInFirebase(
 
 
 export function subscribeVerifications(callback: (requests: VerificationRequest[]) => void) {
-  const q = collection(db, COLLECTIONS.VERIFICATIONS);
+  const q = query(collection(db, COLLECTIONS.VERIFICATIONS), limit(200));
   return onSnapshot(q, (snap) => {
     const list: VerificationRequest[] = [];
     snap.forEach((d) => {
@@ -313,7 +313,7 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
       if (docSnap.exists() && docSnap.data()?.archived !== true && docSnap.data()?.isArchived !== true) {
         callback([{ id: docSnap.id, ...(docSnap.data() as Omit<CompanyStartup, 'id'>) }]);
       } else {
-        const q = query(collection(db, COLLECTIONS.COMPANIES), where("companyId", "==", companyId));
+        const q = query(collection(db, COLLECTIONS.COMPANIES), where("companyId", "==", companyId), limit(1));
         getDocs(q).then((snap) => {
           const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) }));
           callback(list);
@@ -325,7 +325,7 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
     });
   }
 
-  const q = collection(db, COLLECTIONS.COMPANIES);
+  const q = query(collection(db, COLLECTIONS.COMPANIES), limit(200));
   return onSnapshot(q, (snap) => {
     const list: CompanyStartup[] = [];
     snap.forEach((d) => {
@@ -358,7 +358,7 @@ export async function findCompanyByOwnerId(userId: string, companyId?: string): 
 
   if (userId) {
     try {
-      const q = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
+      const q = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId), limit(1));
       const snap = await getDocs(q);
       if (!snap.empty) {
         const d = snap.docs[0];
@@ -528,8 +528,8 @@ export async function deleteCompanyInFirebase(companyId: string) {
  */
 export function subscribePlans(callback: (plans: CompanyPlan[]) => void, companyId?: string) {
   const q = companyId 
-    ? query(collection(db, COLLECTIONS.PLANS), where("companyId", "==", companyId))
-    : collection(db, COLLECTIONS.PLANS);
+    ? query(collection(db, COLLECTIONS.PLANS), where("companyId", "==", companyId), limit(200))
+    : query(collection(db, COLLECTIONS.PLANS), limit(200));
   return onSnapshot(q, (snap) => {
     const list: CompanyPlan[] = [];
     snap.forEach((d) => {
@@ -675,7 +675,7 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
     callback([]);
     return () => {};
   }
-  const q = query(collection(db, COLLECTIONS.AFFILIATIONS), where("userId", "==", userId));
+  const q = query(collection(db, COLLECTIONS.AFFILIATIONS), where("userId", "==", userId), limit(200));
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
@@ -695,8 +695,8 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
  */
 export function subscribeAllAffiliations(callback: (affiliations: UserAffiliation[]) => void, companyId?: string) {
   const q = companyId 
-    ? query(collection(db, COLLECTIONS.AFFILIATIONS), where("companyId", "==", companyId))
-    : collection(db, COLLECTIONS.AFFILIATIONS);
+    ? query(collection(db, COLLECTIONS.AFFILIATIONS), where("companyId", "==", companyId), limit(200))
+    : query(collection(db, COLLECTIONS.AFFILIATIONS), limit(200));
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
@@ -784,13 +784,13 @@ export async function findAffiliationByCode(code: string): Promise<UserAffiliati
   try {
     const clean = code.trim();
     if (!clean) return null;
-    const q1 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliateCode", "==", clean));
+    const q1 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliateCode", "==", clean), limit(1));
     const snap1 = await getDocs(q1);
     if (!snap1.empty) {
       const docData = snap1.docs[0].data() as UserAffiliation;
       return { id: snap1.docs[0].id, ...docData };
     }
-    const q2 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliate_code", "==", clean));
+    const q2 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliate_code", "==", clean), limit(1));
     const snap2 = await getDocs(q2);
     if (!snap2.empty) {
       const docData = snap2.docs[0].data() as UserAffiliation;
@@ -816,10 +816,10 @@ export function subscribeSales(
   affiliateId?: string
 ) {
   const q = companyId
-    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId))
+    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId), limit(250))
     : affiliateId
-      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId))
-      : collection(db, COLLECTIONS.SALES);
+      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId), limit(250))
+      : query(collection(db, COLLECTIONS.SALES), limit(250));
   return onSnapshot(q, (snap) => {
     const list: SaleTransaction[] = [];
     snap.forEach((d) => {
@@ -841,11 +841,11 @@ export function subscribeSales(
  * Realtime Withdrawals Listener (Filtered strictly by user unless superadmin)
  */
 export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void, userId?: string, companyId?: string) {
-  let q: any = collection(db, COLLECTIONS.WITHDRAWALS);
+  let q: any = query(collection(db, COLLECTIONS.WITHDRAWALS), limit(200));
   if (companyId) {
-    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("companyId", "==", companyId));
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("companyId", "==", companyId), limit(200));
   } else if (userId) {
-    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("userId", "==", userId));
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("userId", "==", userId), limit(200));
   }
 
   return onSnapshot(q, (snap: any) => {
@@ -1108,8 +1108,8 @@ export function subscribeClients(
 
   const clientsColl = collection(db, COLLECTIONS.CLIENTS);
   const q = storeId 
-    ? query(clientsColl, where("companyId", "==", storeId))
-    : query(clientsColl, orderBy('created_at', 'desc'));
+    ? query(clientsColl, where("companyId", "==", storeId), limit(200))
+    : query(clientsColl, orderBy('created_at', 'desc'), limit(200));
 
   return onSnapshot(q, (snapshot) => {
     const clients: PlatformClient[] = [];
