@@ -1736,7 +1736,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               className="lg:hidden p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 cursor-pointer flex-shrink-0 flex items-center justify-center"
               aria-label="Abrir menu de navegação"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-[18px] h-[18px]" />
             </button>
 
             {/* Current Panel Status Badge */}
@@ -2300,36 +2300,36 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         </main>
 
         {/* MOBILE BOTTOM NAVIGATION BAR */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#060A15]/95 backdrop-blur-xl border-t border-white/10 px-1.5 flex items-center justify-around shadow-2xl safe-area-inset-bottom">
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 min-h-[58px] bg-[#060A15]/96 backdrop-blur-xl border-t border-white/10 px-1.5 pb-[max(env(safe-area-inset-bottom),4px)] pt-1 flex items-stretch justify-around shadow-2xl">
           <button
             onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
-            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'dashboard' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-0.5">Início</span>
+            <LayoutDashboard className="w-[18px] h-[18px]" />
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">Início</span>
           </button>
 
           {roleMode === 'afiliado' ? (
             <button
               onClick={() => { setActiveTab('afiliados'); setIsMobileMenuOpen(false); }}
-              className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+              className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'afiliados' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
-              <Share2 className="w-5 h-5" />
-              <span className="text-[10px] font-semibold mt-0.5">Links</span>
+              <Share2 className="w-[18px] h-[18px]" />
+              <span className="max-w-full truncate text-[9px] font-semibold leading-none">Links</span>
             </button>
           ) : (
             <button
               onClick={() => { setActiveTab('minha_empresa'); setIsMobileMenuOpen(false); }}
-              className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+              className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'minha_empresa' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
-              <Building2 className="w-5 h-5" />
-              <span className="text-[10px] font-semibold mt-0.5">Startup</span>
+              <Building2 className="w-[18px] h-[18px]" />
+              <span className="max-w-full truncate text-[9px] font-semibold leading-none">Startup</span>
             </button>
           )}
 
@@ -2338,12 +2338,12 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               setActiveTab(roleMode === 'empresa' ? 'cobrancas' : 'vitrine');
               setIsMobileMenuOpen(false);
             }}
-            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'vitrine' || activeTab === 'cobrancas' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            {roleMode === 'empresa' ? <CreditCard className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-0.5">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
+            {roleMode === 'empresa' ? <CreditCard className="w-[18px] h-[18px]" /> : <ShoppingBag className="w-[18px] h-[18px]" />}
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
           </button>
 
           <button
@@ -2351,20 +2351,20 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               setActiveTab(roleMode === 'empresa' ? 'carteira' : 'vendas');
               setIsMobileMenuOpen(false);
             }}
-            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'vendas' || activeTab === 'carteira' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            {roleMode === 'empresa' ? <Wallet className="w-5 h-5" /> : <Receipt className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-0.5">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
+            {roleMode === 'empresa' ? <Wallet className="w-[18px] h-[18px]" /> : <Receipt className="w-[18px] h-[18px]" />}
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
           </button>
 
           <button
             onClick={() => setIsMobileMenuOpen(true)}
             className="h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer min-w-[50px]"
           >
-            <Menu className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-0.5">Menu</span>
+            <Menu className="w-[18px] h-[18px]" />
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">Menu</span>
           </button>
         </nav>
       </div>
