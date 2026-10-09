@@ -51,6 +51,7 @@ import { EquipeView } from './EquipeView';
 import { RelatoriosView } from './RelatoriosView';
 import { IntegracoesView } from './IntegracoesView';
 import { DatabaseManagerView } from './DatabaseManagerView';
+import { AdminDashboardView } from './AdminDashboardView';
 import { AdminModalImagesManager } from './AdminModalImagesManager';
 import { MeuPerfilView } from './MeuPerfilView';
 import { AssistentesIaView } from './AssistentesIaView';
@@ -1415,6 +1416,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const adminNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard', icon: LayoutDashboard, badge: 'Master' },
+    { id: 'database' as PlatformTab, label: 'Painel ADM', icon: Database, badge: 'Admin' },
     { id: 'funcionarios_ia' as PlatformTab, label: 'LeadsPay Office', icon: Gamepad2, badge: 'HQ' },
     { id: 'vendas' as PlatformTab, label: 'Todas as Vendas', icon: Receipt },
     { id: 'financeiro' as PlatformTab, label: 'Financeiro Global', icon: Wallet },
@@ -2019,7 +2021,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           ) : (
             <>
               {activeTab === 'dashboard' && roleMode === 'admin' && isSuperAdmin && (
-                <DatabaseManagerView />
+                <AdminDashboardView />
               )}
 
               {activeTab === 'dashboard' && !(roleMode === 'admin' && isSuperAdmin) && (
