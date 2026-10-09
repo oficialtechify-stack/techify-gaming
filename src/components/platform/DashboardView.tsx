@@ -802,7 +802,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Right: Search, Filter Dropdowns, and Bell + Profile Cluster */}
-        <div className="flex items-center flex-wrap lg:flex-nowrap gap-1.5 sm:gap-2.5 justify-end">
+        <div className="hidden sm:flex items-center flex-wrap lg:flex-nowrap gap-1.5 sm:gap-2.5 justify-end">
           {/* Search bar with pill shape */}
           <div className="relative w-full sm:w-48 md:w-56 lg:w-44 xl:w-56 flex-shrink min-w-[170px]">
             <Search className="w-3.5 h-3.5 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
