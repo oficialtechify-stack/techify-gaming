@@ -646,8 +646,8 @@ async function processProductSubscriptionInvoice(
       }),
       createdAt: now.toISOString(),
       paidAt: now.toISOString(),
-      is_test: !invoice.livemode,
       environment: invoice.livemode ? 'production' : 'development',
+      ...(!invoice.livemode ? { is_test: true } : {}),
       utmSource: metadata.utm_source || null,
       utmMedium: metadata.utm_medium || null,
       utmCampaign: metadata.utm_campaign || null,
@@ -679,8 +679,8 @@ async function processProductSubscriptionInvoice(
       availableAt: companyAvailableAt,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
-      is_test: !invoice.livemode,
       environment: invoice.livemode ? 'production' : 'development',
+      ...(!invoice.livemode ? { is_test: true } : {}),
     });
 
     tx.update(companyProfileRef, {
@@ -755,20 +755,16 @@ async function processProductSubscriptionInvoice(
       tx.set(db.collection('clients').doc(clientId), {
         id: clientId,
         companyId,
-        store_id: companyId,
-        empresa_id: companyId,
         name: buyerName,
-        nome_completo: buyerName,
         email: buyerEmail,
         total_spent: FieldValue.increment(productAmountCents / 100),
         orders_count: FieldValue.increment(1),
         last_order_at: now.toISOString(),
         last_plan_name: sale.platformName,
-        status_compra: 'PAGO',
         status: 'active',
         subscriptionId: subscription.id,
         updatedAt: now.toISOString(),
-        ...(firstCharge ? { created_at: now.toISOString(), data_criacao: now.toISOString() } : {}),
+        ...(firstCharge ? { createdAt: now.toISOString(), created_at: now.toISOString() } : {}),
       }, { merge: true });
     }
 
