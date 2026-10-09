@@ -67,6 +67,84 @@ async function deleteInChunks(refs: FirebaseFirestore.DocumentReference[]) {
   return deleted;
 }
 
+
+async function normalizeLegacyData() {
+  const db = getServerAdminFirestore();
+  const summary: Record<string, { scanned: number; updated: number }> = {};
+
+  const normalizeClients = async () => {
+    const snap = await db.collection('clients').limit(1000).get();
+    let updated = 0;
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const companyId = String(data.companyId || data.store_id || data.empresa_id || '').trim();
+      const name = String(data.name || data.nome_completo || '').trim();
+      const phone = String(data.phone || data.celular || '').trim();
+      const document = String(data.document || data.cpf_cnpj || '').trim();
+      const status = String(data.status || data.status_compra || '').trim();
+      const createdAt = String(data.createdAt || data.created_at || data.data_criacao || '').trim();
+
+      const patch: Record<string, any> = {};
+      if (!data.companyId && companyId) patch.companyId = companyId;
+      if (!data.name && name) patch.name = name;
+      if (!data.phone && phone) patch.phone = phone;
+      if (!data.document && document) patch.document = document;
+      if (!data.status && status) patch.status = status;
+      if (!data.createdAt && createdAt) patch.createdAt = createdAt;
+
+      const legacyFields = ['store_id','empresa_id','nome_completo','celular','cpf_cnpj','valor_pedido','status_compra','data_criacao'];
+      let hasLegacy = false;
+      for (const field of legacyFields) {
+        if (Object.prototype.hasOwnProperty.call(data, field)) {
+          patch[field] = FieldValue.delete();
+          hasLegacy = true;
+        }
+      }
+
+      if (Object.keys(patch).length && (hasLegacy || Object.keys(patch).some((key) => !legacyFields.includes(key)))) {
+        patch.updatedAt = new Date().toISOString();
+        await doc.ref.set(patch, { merge: true });
+        updated++;
+      }
+    }
+    summary.clients = { scanned: snap.size, updated };
+  };
+
+  const normalizeAffiliations = async () => {
+    const snap = await db.collection('affiliations').limit(1000).get();
+    let updated = 0;
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const patch: Record<string, any> = {};
+
+      const userId = String(data.userId || data.user_id || data.affiliateId || '').trim();
+      const planId = String(data.planId || data.plan_id || '').trim();
+      const affiliateCode = String(data.affiliateCode || data.affiliate_code || '').trim();
+
+      if (!data.userId && userId) patch.userId = userId;
+      if (!data.planId && planId) patch.planId = planId;
+      if (!data.affiliateCode && affiliateCode) patch.affiliateCode = affiliateCode;
+
+      for (const field of ['user_id','plan_id','affiliate_code']) {
+        if (Object.prototype.hasOwnProperty.call(data, field)) {
+          patch[field] = FieldValue.delete();
+        }
+      }
+
+      if (Object.keys(patch).length) {
+        patch.updatedAt = new Date().toISOString();
+        await doc.ref.set(patch, { merge: true });
+        updated++;
+      }
+    }
+    summary.affiliations = { scanned: snap.size, updated };
+  };
+
+  await normalizeClients();
+  await normalizeAffiliations();
+  return summary;
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
@@ -107,6 +185,15 @@ export default async function handler(req: Req, res: Res) {
       }
       await ref.delete();
       return res.status(200).json({ success: true, deleted: 1 });
+    }
+
+    if (action === 'normalize-legacy-data') {
+      const summary = await normalizeLegacyData();
+      return res.status(200).json({
+        success: true,
+        summary,
+        message: 'Campos legados normalizados sem excluir documentos reais.',
+      });
     }
 
     if (action === 'cleanup-test-data') {
