@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from "firebase/app-check";
 import config from '../../firebase-applet-config.json';
 
 export const firebaseConfig = {
@@ -14,6 +15,23 @@ export const firebaseConfig = {
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+const appCheckSiteKey = ((import.meta as any).env?.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY || '').trim();
+let appCheckInstance: AppCheck | null = null;
+
+if (typeof window !== 'undefined' && appCheckSiteKey) {
+  try {
+    appCheckInstance = initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (error) {
+    // Em HMR/desenvolvimento a instância pode já ter sido inicializada.
+    console.warn('[Firebase App Check] inicialização ignorada:', error);
+  }
+}
+
+export const appCheck = appCheckInstance;
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
