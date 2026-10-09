@@ -12,6 +12,7 @@ import { CompanyPlan } from './types/platform';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliateTracking';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
+import { BrowserInteractionGuard } from './components/security/BrowserInteractionGuard';
 import LeadspayLanding from './components/LeadspayLanding';
 import './styles/leadspay-landing.css';
 
@@ -320,6 +321,7 @@ export default function App() {
   return (
     <ErrorBoundary fallbackTitle="Erro ao carregar ecossistema LeadsPay">
       <AuthProvider>
+        <BrowserInteractionGuard />
         <MainApp />
       </AuthProvider>
     </ErrorBoundary>
