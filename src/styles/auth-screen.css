@@ -510,3 +510,22 @@
   .leadspay-auth-screen .auth-card-topbar { gap: 10px; }
   .leadspay-auth-screen .auth-theme-toggle { min-width: 76px; min-height: 38px; padding-inline: 10px; }
 }
+
+/* Dark-mode contrast fixes for auth actions. Keep Google label/icon legible even
+   when generic text utility overrides are active inside the modal. */
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button {
+  border-color: #465c4c !important;
+  background: #f7faf6 !important;
+  color: #173d31 !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button > span {
+  color: #173d31 !important;
+  opacity: 1 !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button:hover {
+  border-color: #83bd65 !important;
+  background: #ffffff !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button svg {
+  opacity: 1 !important;
+}
