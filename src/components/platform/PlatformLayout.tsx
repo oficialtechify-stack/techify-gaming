@@ -390,7 +390,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     if (roleMode !== 'admin') {
       setRoleMode('admin');
-      setActiveTab('database');
+      setActiveTab('dashboard');
     }
     if (userRole !== 'admin') {
       setUserRole('admin');
@@ -1414,7 +1414,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const adminNavItems = [
-    { id: 'database' as PlatformTab, label: 'Painel Global LeadsPay', icon: Database, badge: 'Master' },
+    { id: 'dashboard' as PlatformTab, label: 'Dashboard', icon: LayoutDashboard, badge: 'Master' },
     { id: 'funcionarios_ia' as PlatformTab, label: 'LeadsPay Office', icon: Gamepad2, badge: 'HQ' },
     { id: 'vendas' as PlatformTab, label: 'Todas as Vendas', icon: Receipt },
     { id: 'financeiro' as PlatformTab, label: 'Financeiro Global', icon: Wallet },
@@ -2018,7 +2018,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             />
           ) : (
             <>
-              {activeTab === 'dashboard' && (
+              {activeTab === 'dashboard' && roleMode === 'admin' && isSuperAdmin && (
+                <DatabaseManagerView />
+              )}
+
+              {activeTab === 'dashboard' && !(roleMode === 'admin' && isSuperAdmin) && (
                 <DashboardView
                   roleMode={roleMode}
                   userProfile={userProfile}
