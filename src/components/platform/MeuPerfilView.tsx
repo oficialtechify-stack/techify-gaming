@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
+import { AccountSecurityPanel } from './AccountSecurityPanel';
 import { StripeConnectCompanyPanel, type ConnectStatus } from './StripeConnectCompanyPanel';
 import { requestProfileEditInFirebase } from '../../services/firestoreService';
 
@@ -825,6 +826,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         )}
       </div>
+
+      <AccountSecurityPanel />
 
       {(roleMode === 'empresa' || roleMode === 'afiliado') && (
         <div className="mb-6">
