@@ -55,10 +55,26 @@ export function getServerAdminFirestore() {
   return getFirestore(loadAdminApp());
 }
 
-export async function verifyFirebaseIdentity(authorization?: string) {
+export async function verifyFirebaseIdentity(
+  authorization?: string,
+  options: { requireVerifiedEmail?: boolean } = {},
+) {
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
   if (!match) throw new Error('Firebase ID token ausente.');
+
   const decoded = await getAuth(loadAdminApp()).verifyIdToken(match[1], true);
   if (!decoded.uid) throw new Error('Firebase ID token inválido.');
-  return { uid: decoded.uid, email: decoded.email || null, emailVerified: decoded.email_verified === true };
+
+  const emailVerified = decoded.email_verified === true;
+  if (options.requireVerifiedEmail && decoded.email && !emailVerified) {
+    const error = new Error('E-mail ainda não verificado.');
+    (error as any).code = 'EMAIL_NOT_VERIFIED';
+    throw error;
+  }
+
+  return {
+    uid: decoded.uid,
+    email: decoded.email || null,
+    emailVerified,
+  };
 }
