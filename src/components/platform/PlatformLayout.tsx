@@ -18,13 +18,13 @@ import {
 } from '../../data/platformData';
 import { 
   seedFirestoreIfEmpty,
-  subscribeUserProfile,
-  subscribeCompanies,
-  subscribePlans,
-  subscribeUserAffiliations,
-  subscribeAllAffiliations,
   subscribeSales,
-  subscribeWithdrawals,
+  fetchMarketplacePlansSnapshot,
+  fetchCompaniesSnapshot,
+  fetchPlansSnapshot,
+  fetchUserAffiliationsSnapshot,
+  fetchCompanyAffiliationsSnapshot,
+  fetchWithdrawalsSnapshot,
   createCompanyInFirebase,
   deleteCompanyInFirebase,
   createCompanyPlanInFirebase,
@@ -583,57 +583,110 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       ? (canonicalCompanyId || userProfile?.companyId || undefined)
       : undefined;
 
-  // 1. Company-isolated or Global subscriptions (companies, plans, affiliations, and sales)
+  // 1. Role-aware bounded loading.
+  // Collections that do not need instant updates are loaded once with strict limits.
+  // Only sales keep a tenant/user-scoped realtime listener for payment confirmations.
   useEffect(() => {
+    let cancelled = false;
     setTransactions([]);
     setSalesDataLoaded(false);
+
     seedFirestoreIfEmpty().then(() => {
-      setDbConnected(true);
+      if (!cancelled) setDbConnected(true);
     });
 
-    // Nunca abra listeners globais enquanto uma conta Empresa ainda está resolvendo seu tenant.
-    if (roleMode === 'empresa' && !effectiveCompanyId) {
-      setCompanies([]);
-      setPlans([]);
-      setAllAffiliations([]);
+    const loadBaseData = async () => {
+      try {
+        if (roleMode === 'empresa') {
+          if (!effectiveCompanyId) {
+            setCompanies([]);
+            setPlans([]);
+            setAllAffiliations([]);
+            setTransactions([]);
+            setSalesDataLoaded(true);
+            return;
+          }
+
+          const [companyList, planList, companyAffiliations] = await Promise.all([
+            fetchCompaniesSnapshot(effectiveCompanyId, 1),
+            fetchPlansSnapshot(effectiveCompanyId, 120),
+            fetchCompanyAffiliationsSnapshot(effectiveCompanyId, 200),
+          ]);
+
+          if (!cancelled) {
+            setCompanies(companyList);
+            setPlans(planList);
+            setAllAffiliations(companyAffiliations);
+          }
+          return;
+        }
+
+        if (roleMode === 'afiliado') {
+          const marketplacePlans = await fetchMarketplacePlansSnapshot();
+          if (!cancelled) {
+            // Afiliado não precisa manter a coleção global de empresas em memória.
+            setCompanies([]);
+            setPlans(marketplacePlans);
+            setAllAffiliations([]);
+          }
+          return;
+        }
+
+        if (roleMode === 'admin' && isSuperAdmin) {
+          const [companyList, planList] = await Promise.all([
+            fetchCompaniesSnapshot(undefined, 80),
+            fetchPlansSnapshot(undefined, 120),
+          ]);
+          if (!cancelled) {
+            setCompanies(companyList);
+            setPlans(planList);
+            // Dados globais mais pesados do admin serão servidos pelo resumo/paginação.
+            setAllAffiliations([]);
+          }
+        }
+      } catch (error) {
+        console.error('[Platform base data]', error);
+        if (!cancelled) {
+          setCompanies([]);
+          setPlans([]);
+          setAllAffiliations([]);
+        }
+      }
+    };
+
+    void loadBaseData();
+
+    if (roleMode === 'admin') {
       setTransactions([]);
       setSalesDataLoaded(true);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    const unsubCompanies = subscribeCompanies((compList) => {
-      setCompanies(compList);
-    }, effectiveCompanyId);
-
-    const unsubPlans = subscribePlans((planList) => {
-      setPlans(planList);
-    }, effectiveCompanyId);
-
-    const unsubAllAffiliations = roleMode === 'afiliado'
-      ? (() => {
-          setAllAffiliations([]);
-          return () => {};
-        })()
-      : subscribeAllAffiliations((allAffList) => {
-          setAllAffiliations(allAffList);
-        }, effectiveCompanyId);
+    if (roleMode === 'empresa' && !effectiveCompanyId) {
+      setSalesDataLoaded(true);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const unsubSales = subscribeSales(
       (salesList) => {
-        setTransactions(salesList);
-        setSalesDataLoaded(true);
+        if (!cancelled) {
+          setTransactions(salesList);
+          setSalesDataLoaded(true);
+        }
       },
       effectiveCompanyId,
       roleMode === 'afiliado' ? effectiveUserId : undefined
     );
 
     return () => {
-      unsubCompanies();
-      unsubPlans();
-      unsubAllAffiliations();
+      cancelled = true;
       unsubSales();
     };
-  }, [effectiveCompanyId, effectiveUserId, roleMode]);
+  }, [effectiveCompanyId, effectiveUserId, roleMode, isSuperAdmin]);
 
   useEffect(() => {
     if (!currentUser || roleMode === 'admin') {
@@ -668,22 +721,37 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     };
   }, [currentUser?.uid, roleMode]);
 
-  // 2. User-specific subscriptions (user affiliations, user withdrawals strictly isolated to this account)
+  // 2. User-specific bounded loads. These lists do not need permanent listeners.
   useEffect(() => {
-    if (!effectiveUserId) return;
+    if (!effectiveUserId) {
+      setAffiliations([]);
+      setWithdrawals([]);
+      return;
+    }
 
-    // In Test Mode (Sandbox), users can freely test and access affiliations without restrictions!
-    const unsubAffiliations = subscribeUserAffiliations((affList) => {
+    let cancelled = false;
+
+    Promise.all([
+      fetchUserAffiliationsSnapshot(effectiveUserId, 120),
+      fetchWithdrawalsSnapshot(
+        (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId,
+        effectiveCompanyId,
+        100
+      ),
+    ]).then(([affList, withList]) => {
+      if (cancelled) return;
       setAffiliations(affList);
-    }, effectiveUserId);
-
-    const unsubWith = subscribeWithdrawals((withList) => {
       setWithdrawals(withList);
-    }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId, effectiveCompanyId);
+    }).catch((error) => {
+      console.error('[Platform user data]', error);
+      if (!cancelled) {
+        setAffiliations([]);
+        setWithdrawals([]);
+      }
+    });
 
     return () => {
-      unsubAffiliations();
-      unsubWith();
+      cancelled = true;
     };
   }, [effectiveUserId, isSuperAdmin, roleMode, effectiveCompanyId]);
 
@@ -972,6 +1040,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     try {
       const aff = await createAffiliationInFirebase(plan, userProfile);
+      setAffiliations((current) => [aff, ...current.filter((item) => item.id !== aff.id)]);
       const affStatus = String(aff.status || '').trim().toLowerCase();
       const pendingApproval = ['pendente', 'pending', 'requested', 'solicitado'].includes(affStatus);
       setLiveToast({
@@ -997,6 +1066,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const handleCreateCompany = async (companyData: Omit<CompanyStartup, 'id' | 'createdAt'>) => {
     try {
       const created = await createCompanyInFirebase(companyData);
+      setCompanies((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setRoleMode('empresa');
       setUserRole('empresa');
       setActiveTab('minha_empresa');
@@ -1017,6 +1087,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     if (!confirm('Deseja realmente remover esta empresa e seus planos?')) return;
     try {
       await deleteCompanyInFirebase(companyId);
+      setCompanies((current) => current.filter((item) => item.id !== companyId));
+      setPlans((current) => current.filter((item) => item.companyId !== companyId));
       setLiveToast({
         message: 'Empresa removida com sucesso',
         sub: 'Registro excluído',
@@ -1062,6 +1134,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       };
 
       const created = await createCompanyPlanInFirebase(sanitizedPlan);
+      setPlans((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setLiveToast({
         message: 'Produto criado com sucesso!',
         sub: `${created.name} (${sanitizedPlan.companyName})`,
@@ -1084,6 +1157,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const handleUpdatePlan = async (planId: string, updates: Partial<CompanyPlan>) => {
     try {
       const savedPlan = await updateCompanyPlanInFirebase(planId, updates);
+      setPlans((current) => current.map((item) => item.id === planId ? savedPlan : item));
       setDetailedEditingPlan((current) => current?.id === planId ? savedPlan : current);
       setLiveCheckoutPlan((current) => current?.id === planId ? savedPlan : current);
       setLiveToast({
@@ -1117,6 +1191,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       };
       const { id, ...cleanPlan } = duplicatedData as any;
       const created = await createCompanyPlanInFirebase(cleanPlan);
+      setPlans((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setLiveToast({
         message: 'Plano duplicado com sucesso!',
         sub: created.name,
@@ -1134,6 +1209,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     if (!confirm('Deseja realmente arquivar este produto?')) return;
     try {
       await deleteCompanyPlanInFirebase(planId, companyId);
+      setPlans((current) => current.filter((item) => item.id !== planId));
       setLiveToast({
         message: 'Produto arquivado com sucesso',
         sub: 'Catálogo atualizado',
@@ -1233,6 +1309,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     try {
       if (roleMode !== 'empresa' && roleMode !== 'afiliado') throw new Error('Selecione o perfil de Empresa ou Afiliado para sacar.');
       const result = await requestWithdrawalViaBackend(amount, roleMode);
+      setWithdrawals((current) => [
+        result.withdrawal,
+        ...current.filter((item) => item.id !== result.withdrawal.id),
+      ]);
       setLiveToast({
         message: 'Saque enviado para processamento!',
         sub: result.message || 'A Stripe encaminhará o valor para a conta bancária cadastrada.',
