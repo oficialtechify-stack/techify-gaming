@@ -609,6 +609,23 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setPlans(planList);
     }, effectiveCompanyId);
 
+    const unsubSales = subscribeSales(
+      (salesList) => {
+        setTransactions(salesList);
+        setSalesDataLoaded(true);
+      },
+      effectiveCompanyId,
+      roleMode === 'afiliado' ? effectiveUserId : undefined
+    );
+
+    return () => {
+      unsubCompanies();
+      unsubPlans();
+      unsubSales();
+    };
+  }, [effectiveCompanyId, effectiveUserId, roleMode]);
+
+  useEffect(() => {
     const needsCompanyAffiliations =
       roleMode === 'admin' ||
       (
@@ -622,31 +639,20 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         )
       );
 
-    const unsubAllAffiliations = needsCompanyAffiliations
-      ? subscribeAllAffiliations((allAffList) => {
-          setAllAffiliations(allAffList);
-        }, effectiveCompanyId)
-      : (() => {
-          setAllAffiliations([]);
-          return () => {};
-        })();
+    if (!needsCompanyAffiliations) {
+      setAllAffiliations([]);
+      return;
+    }
 
-    const unsubSales = subscribeSales(
-      (salesList) => {
-        setTransactions(salesList);
-        setSalesDataLoaded(true);
-      },
-      effectiveCompanyId,
-      roleMode === 'afiliado' ? effectiveUserId : undefined
-    );
+    if (roleMode === 'empresa' && !effectiveCompanyId) {
+      setAllAffiliations([]);
+      return;
+    }
 
-    return () => {
-      unsubCompanies();
-      unsubPlans();
-      unsubAllAffiliations();
-      unsubSales();
-    };
-  }, [effectiveCompanyId, effectiveUserId, roleMode, activeTab]);
+    return subscribeAllAffiliations((allAffList) => {
+      setAllAffiliations(allAffList);
+    }, effectiveCompanyId);
+  }, [roleMode, activeTab, effectiveCompanyId]);
 
   useEffect(() => {
     if (!currentUser || roleMode === 'admin') {
