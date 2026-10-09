@@ -38,7 +38,8 @@ import {
   isValidCPF, 
   isValidCNPJ, 
   cleanDigits,
-  getAuthErrorMessage 
+  getAuthErrorMessage,
+  validateStrongPassword
 } from '../../services/authService';
 import {
   subscribeAuthModalSettings,
@@ -215,7 +216,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   const [affPixKey, setAffPixKey] = useState<string>('');
   const [affPassword, setAffPassword] = useState<string>('');
   const [affConfirmPassword, setAffConfirmPassword] = useState<string>('');
-  const [affTermsAccepted, setAffTermsAccepted] = useState<boolean>(true);
+  const [affTermsAccepted, setAffTermsAccepted] = useState<boolean>(false);
 
   // 3. Company Registration State (Screenshot 2)
   const [compName, setCompName] = useState<string>('');
@@ -310,8 +311,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
       setErrorMessage('As senhas digitadas não coincidem.');
       return;
     }
-    if (affPassword.length < 6) {
-      setErrorMessage('A senha deve ter pelo menos 6 caracteres.');
+    if (!validateStrongPassword(affPassword)) {
+      setErrorMessage('Use uma senha com pelo menos 12 caracteres, incluindo letra maiúscula, minúscula e número.');
       return;
     }
     if (!affTermsAccepted) {
@@ -322,7 +323,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      await registerAffiliateUser({
+      const res = await registerAffiliateUser({
         name: affName,
         email: affEmail,
         password: affPassword,
@@ -332,12 +333,15 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         pixKeyType: affPixKeyType
       });
 
-      setSuccessMessage('Conta de Afiliado criada com sucesso! Redirecionando...');
-      setTimeout(() => {
+      if (res.requiresEmailVerification) {
         setIsSubmitting(false);
-        onClose();
-        if (onLoginSuccess) onLoginSuccess();
-      }, 1200);
+        setSuccessMessage('Conta criada. Enviamos um link de verificação para seu e-mail. Confirme o endereço antes de entrar.');
+        setLoginEmail(affEmail.trim().toLowerCase());
+        return;
+      }
+
+      setSuccessMessage('Conta de Afiliado criada com sucesso!');
+      setIsSubmitting(false);
     } catch (error: any) {
       setIsSubmitting(false);
       console.error('Erro no cadastro de afiliado:', error);
@@ -362,8 +366,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
       setErrorMessage('As senhas digitadas não coincidem.');
       return;
     }
-    if (compPassword.length < 6) {
-      setErrorMessage('A senha deve ter pelo menos 6 caracteres.');
+    if (!validateStrongPassword(compPassword)) {
+      setErrorMessage('Use uma senha com pelo menos 12 caracteres, incluindo letra maiúscula, minúscula e número.');
       return;
     }
 
@@ -382,16 +386,15 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         category: compCategory
       });
 
-      const isExisting = res.company?.id && res.company.name !== compName;
-      setSuccessMessage(isExisting
-        ? `Conta conectada com sucesso! Acessando ${res.company?.name || 'sua empresa'}...`
-        : 'Acesso corporativo liberado com sucesso! Redirecionando para o painel...'
-      );
-      setTimeout(() => {
+      if (res.requiresEmailVerification) {
         setIsSubmitting(false);
-        onClose();
-        if (onLoginSuccess) onLoginSuccess();
-      }, 1200);
+        setSuccessMessage('Conta criada. Enviamos um link de verificação para seu e-mail. Confirme o endereço antes de entrar.');
+        setLoginEmail(compEmail.trim().toLowerCase());
+        return;
+      }
+
+      setSuccessMessage('Conta corporativa criada com sucesso!');
+      setIsSubmitting(false);
     } catch (error: any) {
       setIsSubmitting(false);
       console.error('Erro no cadastro de empresa:', error);
@@ -709,7 +712,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                           required
                           value={affPassword}
                           onChange={(e) => setAffPassword(e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="12+ caracteres, maiúscula, minúscula e número"
                           className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#09111b] border border-white/10 focus:border-[#a3e635] text-xs text-white placeholder:text-white/30 outline-none transition-all"
                         />
                         <button
@@ -978,7 +981,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                           required
                           value={compPassword}
                           onChange={(e) => setCompPassword(e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="12+ caracteres, maiúscula, minúscula e número"
                           className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#09111b] border border-white/10 focus:border-[#a3e635] text-xs text-white placeholder:text-white/30 outline-none transition-all"
                         />
                         <button
