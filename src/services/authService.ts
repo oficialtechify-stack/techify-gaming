@@ -273,14 +273,15 @@ export function getAuthErrorMessage(error: any): string {
   if (code.includes('auth/invalid-email')) {
     return 'O formato do e-mail informado é inválido. Digite um e-mail válido (ex: seuemail@exemplo.com).';
   }
-  if (code.includes('auth/weak-password')) {
-    return 'A senha é muito fraca. Digite pelo menos 6 caracteres seguros.';
+  if (code.includes('custom/weak-password-policy') || code.includes('auth/weak-password')) {
+    return 'Use uma senha com pelo menos 12 caracteres, incluindo letra maiúscula, minúscula e número.';
   }
-  if (code.includes('auth/user-not-found')) {
-    return 'Nenhuma conta encontrada com este e-mail. Crie sua conta gratuitamente.';
-  }
-  if (code.includes('auth/wrong-password') || code.includes('auth/invalid-credential')) {
-    return 'E-mail ou senha incorretos. Verifique suas credenciais ou utilize a recuperação de senha.';
+  if (
+    code.includes('auth/user-not-found') ||
+    code.includes('auth/wrong-password') ||
+    code.includes('auth/invalid-credential')
+  ) {
+    return 'Não foi possível entrar com essas credenciais. Confira os dados ou use a recuperação de senha.';
   }
   if (code.includes('auth/too-many-requests')) {
     return 'Muitas tentativas em sequência. Por segurança, aguarde alguns instantes e tente novamente.';
@@ -331,6 +332,11 @@ export function getAuthErrorMessage(error: any): string {
  */
 export async function registerAffiliate(data: RegisterAffiliateData): Promise<AuthResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
+  if (!validateStrongPassword(data.password)) {
+    const err = new Error('custom/weak-password-policy');
+    (err as any).code = 'custom/weak-password-policy';
+    throw err;
+  }
   const cleanCpf = data.cpf ? cleanDigits(data.cpf) : '';
   const formattedCpf = cleanCpf ? formatCPF(cleanCpf) : '';
 
@@ -474,7 +480,9 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     console.warn('Erro ao registrar verificação de afiliado:', verifErr);
   }
 
-  return { user, profile };
+  await sendEmailVerification(user);
+  await signOut(auth);
+  return { user, profile, requiresEmailVerification: true };
 }
 
 /**
@@ -482,6 +490,11 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
  */
 export async function registerCompany(data: RegisterCompanyData): Promise<AuthResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
+  if (!validateStrongPassword(data.password)) {
+    const err = new Error('custom/weak-password-policy');
+    (err as any).code = 'custom/weak-password-policy';
+    throw err;
+  }
   
   const docType = data.documentType || (data.cnpj ? 'CNPJ' : data.cpf ? 'CPF' : data.hasNoCnpj ? 'SEM_CNPJ' : 'CNPJ');
   const cleanCnpj = data.cnpj ? cleanDigits(data.cnpj) : '';
@@ -758,7 +771,9 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     console.warn('Erro ao salvar registro de verificação de empresa:', vErr);
   }
 
-  return { user, profile, company };
+  await sendEmailVerification(user);
+  await signOut(auth);
+  return { user, profile, company, requiresEmailVerification: true };
 }
 
 /**
