@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { ActiveModal } from './types';
 import { Modals } from './components/Modals';
 import { PlatformLayout } from './components/platform/PlatformLayout';
-import { LeadspayOfficeView } from './components/platform/LeadspayOfficeView';
 import { AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CustomCheckoutPage } from './components/checkout/CustomCheckoutPage';
@@ -14,6 +13,8 @@ import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliat
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import LeadspayLanding from './components/LeadspayLanding';
 import './styles/leadspay-landing.css';
+
+const LeadspayOfficeView = lazy(() => import('./components/platform/LeadspayOfficeView'));
 
 function MainApp() {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -279,7 +280,13 @@ function MainApp() {
 
     return (
       <ErrorBoundary fallbackTitle="Erro ao carregar o LeadsPay Office">
-        <LeadspayOfficeView standalone />
+        <Suspense fallback={
+          <div className="min-h-[100dvh] bg-[#071019] text-white flex items-center justify-center">
+            Carregando LeadsPay Office...
+          </div>
+        }>
+          <LeadspayOfficeView standalone />
+        </Suspense>
       </ErrorBoundary>
     );
   }
