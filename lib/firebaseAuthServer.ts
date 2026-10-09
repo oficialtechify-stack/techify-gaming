@@ -17,8 +17,16 @@ export function isAdminUid(uid: string, allowlist: string | undefined): boolean 
  * Future guard for privileged endpoints. A caller must also pass a route-specific
  * ownership/role check before an Admin SDK write is made.
  */
-export async function verifyFirebaseIdentity(header: string | undefined): Promise<DecodedIdToken> {
+export async function verifyFirebaseIdentity(
+  header: string | undefined,
+  options: { requireVerifiedEmail?: boolean } = {},
+): Promise<DecodedIdToken> {
   const token = extractBearerToken(header);
   if (!token) throw new Error('É necessário entrar na conta para continuar.');
-  return getAuth(getServerAdminApp()).verifyIdToken(token, true);
+
+  const decoded = await getAuth(getServerAdminApp()).verifyIdToken(token, true);
+  if (options.requireVerifiedEmail && decoded.email && decoded.email_verified !== true) {
+    throw new Error('Confirme seu e-mail antes de continuar.');
+  }
+  return decoded;
 }
