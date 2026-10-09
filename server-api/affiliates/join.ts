@@ -31,7 +31,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
-    const identity = await verifyFirebaseIdentity(authorization);
+    const identity = await verifyFirebaseIdentity(authorization, { requireVerifiedEmail: true });
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const planId = typeof body.planId === 'string' ? body.planId.trim() : '';
     if (!/^[A-Za-z0-9_-]{1,150}$/.test(planId)) {
