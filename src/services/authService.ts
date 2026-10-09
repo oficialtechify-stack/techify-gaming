@@ -7,6 +7,13 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   sendEmailVerification,
+  getMultiFactorResolver,
+  PhoneAuthProvider,
+  PhoneMultiFactorGenerator,
+  RecaptchaVerifier,
+  multiFactor,
+  type MultiFactorResolver,
+  type MultiFactorInfo,
   User 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -56,6 +63,167 @@ export function validateStrongPassword(password: string): boolean {
     /[a-z]/.test(password) &&
     /[A-Z]/.test(password) &&
     /\d/.test(password);
+}
+
+
+export interface SmsMfaSignInChallenge {
+  resolver: MultiFactorResolver;
+  verificationId: string;
+  phoneHint: string;
+  verifier: RecaptchaVerifier;
+}
+
+export interface SmsMfaEnrollmentChallenge {
+  verificationId: string;
+  phoneNumber: string;
+  verifier: RecaptchaVerifier;
+}
+
+export function getEnrolledSecondFactors(): MultiFactorInfo[] {
+  const user = auth.currentUser;
+  return user ? [...multiFactor(user).enrolledFactors] : [];
+}
+
+export async function startSmsMfaSignIn(
+  error: any,
+  recaptchaContainerId: string,
+): Promise<SmsMfaSignInChallenge> {
+  if (String(error?.code || '') !== 'auth/multi-factor-auth-required') {
+    throw error;
+  }
+
+  const resolver = getMultiFactorResolver(auth, error);
+  const phoneHint = resolver.hints.find(
+    (hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID,
+  );
+
+  if (!phoneHint) {
+    const err = new Error('custom/mfa-phone-unavailable');
+    (err as any).code = 'custom/mfa-phone-unavailable';
+    throw err;
+  }
+
+  const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
+    size: 'invisible',
+  });
+
+  try {
+    const provider = new PhoneAuthProvider(auth);
+    const verificationId = await provider.verifyPhoneNumber({
+      multiFactorHint: phoneHint,
+      session: resolver.session,
+    }, verifier);
+
+    return {
+      resolver,
+      verificationId,
+      phoneHint: phoneHint.displayName || 'telefone cadastrado',
+      verifier,
+    };
+  } catch (err) {
+    verifier.clear();
+    throw err;
+  }
+}
+
+export async function completeSmsMfaSignIn(
+  challenge: SmsMfaSignInChallenge,
+  code: string,
+): Promise<User> {
+  try {
+    const credential = PhoneAuthProvider.credential(
+      challenge.verificationId,
+      code.trim(),
+    );
+    const assertion = PhoneMultiFactorGenerator.assertion(credential);
+    const result = await challenge.resolver.resolveSignIn(assertion);
+    return result.user;
+  } finally {
+    challenge.verifier.clear();
+  }
+}
+
+export async function startSmsMfaEnrollment(
+  phoneNumber: string,
+  recaptchaContainerId: string,
+): Promise<SmsMfaEnrollmentChallenge> {
+  const user = auth.currentUser;
+  if (!user) {
+    const err = new Error('custom/auth-required');
+    (err as any).code = 'custom/auth-required';
+    throw err;
+  }
+  if (!user.emailVerified) {
+    const err = new Error('custom/email-not-verified');
+    (err as any).code = 'custom/email-not-verified';
+    throw err;
+  }
+
+  const normalizedPhone = phoneNumber.replace(/[^+\d]/g, '');
+  if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) {
+    const err = new Error('custom/invalid-phone-e164');
+    (err as any).code = 'custom/invalid-phone-e164';
+    throw err;
+  }
+
+  const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
+    size: 'invisible',
+  });
+
+  try {
+    const session = await multiFactor(user).getSession();
+    const provider = new PhoneAuthProvider(auth);
+    const verificationId = await provider.verifyPhoneNumber({
+      phoneNumber: normalizedPhone,
+      session,
+    }, verifier);
+
+    return {
+      verificationId,
+      phoneNumber: normalizedPhone,
+      verifier,
+    };
+  } catch (err) {
+    verifier.clear();
+    throw err;
+  }
+}
+
+export async function completeSmsMfaEnrollment(
+  challenge: SmsMfaEnrollmentChallenge,
+  code: string,
+  displayName = 'SMS',
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) {
+    challenge.verifier.clear();
+    throw new Error('Faça login novamente para ativar a verificação em duas etapas.');
+  }
+
+  try {
+    const credential = PhoneAuthProvider.credential(
+      challenge.verificationId,
+      code.trim(),
+    );
+    const assertion = PhoneMultiFactorGenerator.assertion(credential);
+    await multiFactor(user).enroll(assertion, displayName);
+    await user.getIdToken(true);
+  } finally {
+    challenge.verifier.clear();
+  }
+}
+
+export async function disableSmsMfa(factorUid: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para alterar a segurança da conta.');
+
+  const factor = multiFactor(user).enrolledFactors.find(
+    (item) => item.uid === factorUid,
+  );
+  if (!factor) return;
+
+  await multiFactor(user).unenroll(factor);
+  await user.getIdToken(true);
 }
 
 /**
@@ -269,6 +437,18 @@ export function getAuthErrorMessage(error: any): string {
   }
   if (code.includes('custom/email-not-verified')) {
     return 'Confirme seu e-mail antes de entrar. Enviamos um novo link de verificação para sua caixa de entrada.';
+  }
+  if (code.includes('custom/mfa-phone-unavailable')) {
+    return 'A conta exige verificação em duas etapas, mas não há um telefone SMS disponível.';
+  }
+  if (code.includes('custom/invalid-phone-e164')) {
+    return 'Informe o telefone com código do país, por exemplo +5581999999999.';
+  }
+  if (code.includes('auth/invalid-verification-code')) {
+    return 'O código de verificação está incorreto ou expirou.';
+  }
+  if (code.includes('auth/code-expired')) {
+    return 'O código SMS expirou. Solicite um novo código.';
   }
   if (code.includes('auth/invalid-email')) {
     return 'O formato do e-mail informado é inválido. Digite um e-mail válido (ex: seuemail@exemplo.com).';
