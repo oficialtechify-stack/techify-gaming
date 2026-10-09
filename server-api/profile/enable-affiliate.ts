@@ -22,6 +22,7 @@ export default async function handler(req: Req, res: Res) {
   try {
     const identity = await verifyFirebaseIdentity(
       typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
+      { requireVerifiedEmail: true },
     );
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const cpf = digits(body.cpf);
