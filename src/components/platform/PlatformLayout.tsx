@@ -672,10 +672,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   useEffect(() => {
     if (!effectiveUserId) return;
 
-    // In Test Mode (Sandbox), users can freely test and access affiliations without restrictions!
-    const unsubAffiliations = subscribeUserAffiliations((affList) => {
-      setAffiliations(affList);
-    }, effectiveUserId);
+    // Afiliações pessoais só existem no modo Afiliado. Empresa/Admin não devem
+    // manter esse listener aberto, pois ele gera leituras sem utilidade.
+    const unsubAffiliations = roleMode === 'afiliado'
+      ? subscribeUserAffiliations((affList) => {
+          setAffiliations(affList);
+        }, effectiveUserId)
+      : (() => {
+          setAffiliations([]);
+          return () => {};
+        })();
 
     const unsubWith = subscribeWithdrawals((withList) => {
       setWithdrawals(withList);
