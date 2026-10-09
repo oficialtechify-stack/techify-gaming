@@ -146,6 +146,29 @@ async function normalizeLegacyData() {
   return summary;
 }
 
+
+async function cleanupTechnicalHistory() {
+  const db = getServerAdminFirestore();
+  const cutoffMs = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const snap = await db.collection('stripe_webhook_events').limit(1000).get();
+  const refs: FirebaseFirestore.DocumentReference[] = [];
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    if (String(data.status || '') !== 'completed') continue;
+    const completedMs = Date.parse(String(data.completedAt || data.updatedAt || ''));
+    if (!Number.isFinite(completedMs) || completedMs > cutoffMs) continue;
+    refs.push(doc.ref);
+  }
+
+  const deleted = await deleteInChunks(refs);
+  return {
+    scanned: snap.size,
+    deleted,
+    retained: snap.size - deleted,
+  };
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
@@ -194,6 +217,17 @@ export default async function handler(req: Req, res: Res) {
         success: true,
         summary,
         message: 'Campos legados normalizados sem excluir documentos reais.',
+      });
+    }
+
+    if (action === 'cleanup-technical-history') {
+      const result = await cleanupTechnicalHistory();
+      return res.status(200).json({
+        success: true,
+        result,
+        message: result.deleted
+          ? `${result.deleted} evento(s) técnico(s) antigo(s) da Stripe foram removidos.`
+          : 'Nenhum evento técnico antigo da Stripe precisava ser removido.',
       });
     }
 
