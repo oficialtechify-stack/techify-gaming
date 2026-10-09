@@ -11,7 +11,8 @@ import {
   query,
   where,
   orderBy,
-  limit
+  limit,
+  deleteField
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { 
@@ -1177,8 +1178,11 @@ export async function createOrUpdateClientInFirebase(clientData: {
   const cleanDoc = (clientData.document || '').replace(/\D/g, '');
   const cleanPhone = (clientData.phone || '').trim();
   const targetStoreId = clientData.store_id || 'store_default';
-  const isTest = clientData.is_test ?? true;
+  const isTest = clientData.is_test === true;
   const env = clientData.environment || (isTest ? 'development' : 'production');
+  if (env === 'production' && isTest) {
+    throw new Error('Registro de teste não pode ser gravado no ambiente de produção.');
+  }
   const statusCompra = clientData.status_compra || clientData.status || 'PIX_GERADO';
 
   // ID previsível e seguro baseado na loja + email/doc
@@ -1193,37 +1197,44 @@ export async function createOrUpdateClientInFirebase(clientData: {
       const updatedTotal = (Number(prevData.total_spent) || 0) + (Number(clientData.total_spent) || 0);
       const updatedCount = (Number(prevData.orders_count) || 1) + 1;
 
-      const payload: Partial<PlatformClient> = {
-        name: clientData.name || prevData.name,
-        nome_completo: clientData.name || prevData.name,
-        email: cleanEmail || prevData.email,
-        phone: cleanPhone || prevData.phone,
-        celular: cleanPhone || prevData.phone,
-        document: cleanDoc || prevData.document,
-        cpf_cnpj: cleanDoc || prevData.document,
+      const payload = {
+        companyId: targetStoreId,
+        name: clientData.name || prevData.name || prevData.nome_completo || 'Cliente Sem Nome',
+        email: cleanEmail || prevData.email || '',
+        phone: cleanPhone || prevData.phone || prevData.celular || '',
+        document: cleanDoc || prevData.document || prevData.cpf_cnpj || '',
         total_spent: updatedTotal,
-        valor_pedido: Number(clientData.total_spent) || updatedTotal,
         orders_count: updatedCount,
         last_order_at: now,
-        last_plan_name: clientData.last_plan_name || prevData.last_plan_name,
-        status_compra: statusCompra,
+        last_plan_name: clientData.last_plan_name || prevData.last_plan_name || '',
         status: statusCompra,
-        is_test: isTest,
-        environment: env
+        environment: env,
+        updatedAt: now,
+        // Remove aliases legados quando o registro for atualizado.
+        store_id: deleteField(),
+        empresa_id: deleteField(),
+        nome_completo: deleteField(),
+        celular: deleteField(),
+        cpf_cnpj: deleteField(),
+        valor_pedido: deleteField(),
+        status_compra: deleteField(),
+        is_test: deleteField(),
+        data_criacao: deleteField()
       };
 
-      await updateDoc(clientDocRef, sanitizeForFirestore(payload));
+      await updateDoc(clientDocRef, payload);
       return {
         id: clientId,
+        companyId: targetStoreId,
         store_id: targetStoreId,
         empresa_id: targetStoreId,
-        name: payload.name!,
-        nome_completo: payload.name!,
-        email: payload.email!,
-        phone: payload.phone,
-        celular: payload.phone,
-        document: payload.document,
-        cpf_cnpj: payload.document,
+        name: String(payload.name),
+        nome_completo: String(payload.name),
+        email: String(payload.email),
+        phone: String(payload.phone || ''),
+        celular: String(payload.phone || ''),
+        document: String(payload.document || ''),
+        cpf_cnpj: String(payload.document || ''),
         created_at: prevData.created_at || now,
         data_criacao: prevData.created_at || now,
         total_spent: updatedTotal,
@@ -1237,31 +1248,49 @@ export async function createOrUpdateClientInFirebase(clientData: {
         environment: env
       };
     } else {
-      const newClient: PlatformClient = {
-        id: clientId,
-        store_id: targetStoreId,
-        empresa_id: targetStoreId,
+      const persistedClient = {
+        companyId: targetStoreId,
         name: clientData.name.trim(),
-        nome_completo: clientData.name.trim(),
         email: cleanEmail,
         phone: cleanPhone,
-        celular: cleanPhone,
         document: cleanDoc,
-        cpf_cnpj: cleanDoc,
         created_at: now,
-        data_criacao: now,
         total_spent: Number(clientData.total_spent) || 0,
-        valor_pedido: Number(clientData.total_spent) || 0,
         orders_count: 1,
         last_order_at: now,
         last_plan_name: clientData.last_plan_name || '',
+        status: statusCompra,
+        environment: env,
+        updatedAt: now
+      };
+
+      await setDoc(clientDocRef, sanitizeForFirestore(persistedClient));
+
+      const newClient: PlatformClient = {
+        id: clientId,
+        companyId: targetStoreId,
+        store_id: targetStoreId,
+        empresa_id: targetStoreId,
+        name: persistedClient.name,
+        nome_completo: persistedClient.name,
+        email: persistedClient.email,
+        phone: persistedClient.phone,
+        celular: persistedClient.phone,
+        document: persistedClient.document,
+        cpf_cnpj: persistedClient.document,
+        created_at: persistedClient.created_at,
+        data_criacao: persistedClient.created_at,
+        total_spent: persistedClient.total_spent,
+        valor_pedido: persistedClient.total_spent,
+        orders_count: persistedClient.orders_count,
+        last_order_at: persistedClient.last_order_at,
+        last_plan_name: persistedClient.last_plan_name,
         status_compra: statusCompra,
         status: statusCompra,
-        is_test: isTest,
+        is_test: false,
         environment: env
       };
 
-      await setDoc(clientDocRef, sanitizeForFirestore(newClient));
       return newClient;
     }
   } catch (error: any) {
