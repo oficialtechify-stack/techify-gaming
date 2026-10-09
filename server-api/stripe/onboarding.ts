@@ -39,7 +39,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   }
 
   try {
-    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined);
+    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined, { requireVerifiedEmail: true });
     const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
     const role = body.role as Role;
     if (role !== 'empresa' && role !== 'afiliado') return fail(res, 400, 'Selecione a conta de Empresa ou Afiliado.');
