@@ -260,7 +260,7 @@ export function getAuthErrorMessage(error: any): string {
     return 'Este e-mail já está cadastrado como EMPRESA. Por segurança e regras da plataforma, contas corporativas não podem ser usadas para atuar como afiliado. Utilize um e-mail pessoal diferente para sua conta de Afiliado.';
   }
   if (code.includes('custom/email-already-in-use')) {
-    return 'Este e-mail já possui uma conta no LeadsPay. Você pode fazer login diretamente com sua senha.';
+    return 'Não foi possível concluir o cadastro com esses dados. Tente entrar ou use a recuperação de senha.';
   }
 
   // Firebase Authentication Errors
@@ -327,8 +327,8 @@ export function getAuthErrorMessage(error: any): string {
 }
 
 /**
- * Cadastrar Afiliado Real no Firebase Auth e Firestore
- * Se o usuário já existir no Auth com a mesma senha (ex: recadastro ou teste), efetua login e atualiza perfil sem erro.
+ * Cadastrar Afiliado Real no Firebase Auth e Firestore.
+ * Contas existentes nunca são autenticadas automaticamente durante o cadastro.
  */
 export async function registerAffiliate(data: RegisterAffiliateData): Promise<AuthResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
