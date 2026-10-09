@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
+import { createIpRateLimit } from './lib/rateLimit.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
 dotenv.config();
@@ -45,6 +46,12 @@ app.use(express.json({
 
 const adapt = (handler: any) => (req: express.Request, res: express.Response) => handler(req as any, res as any);
 
+const checkoutRateLimit = createIpRateLimit({ windowMs: 60_000, max: 20, keyPrefix: 'checkout' });
+const subscriptionCheckoutRateLimit = createIpRateLimit({ windowMs: 60_000, max: 12, keyPrefix: 'subscription-checkout' });
+const publicLookupRateLimit = createIpRateLimit({ windowMs: 60_000, max: 120, keyPrefix: 'public-lookup' });
+const profileCheckRateLimit = createIpRateLimit({ windowMs: 60_000, max: 30, keyPrefix: 'profile-check' });
+
+
 app.get('/api/health', (_req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -54,25 +61,25 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.all('/api/stripe/checkout', adapt(stripeCheckoutHandler));
+app.all('/api/stripe/checkout', checkoutRateLimit, adapt(stripeCheckoutHandler));
 app.all('/api/stripe/onboarding', adapt(stripeOnboardingHandler));
 app.all('/api/stripe/connect-status', adapt(stripeConnectStatusHandler));
 app.all('/api/stripe/express-dashboard', adapt(stripeExpressDashboardHandler));
 app.all('/api/stripe/status', adapt(stripeStatusHandler));
-app.all('/api/stripe/subscription-checkout', adapt(stripeSubscriptionCheckoutHandler));
-app.all('/api/plans/checkout', adapt(stripeSubscriptionCheckoutHandler));
+app.all('/api/stripe/subscription-checkout', subscriptionCheckoutRateLimit, adapt(stripeSubscriptionCheckoutHandler));
+app.all('/api/plans/checkout', subscriptionCheckoutRateLimit, adapt(stripeSubscriptionCheckoutHandler));
 app.all('/api/stripe/withdrawal', adapt(stripeWithdrawalHandler));
 app.all('/api/withdrawals/request', adapt(stripeWithdrawalHandler));
 app.all(['/api/stripe/webhook','/api/webhooks/stripe','/api/webhook/stripe'], adapt(stripeWebhookHandler));
 app.all(['/api/crons/stripe-releases','/api/cron/stripe-releases','/api/cron/release-balances'], adapt(stripeReleasesCronHandler));
-app.all('/api/plans', adapt(plansHandler));
+app.all('/api/plans', publicLookupRateLimit, adapt(plansHandler));
 app.all('/api/coupons', adapt(couponsHandler));
 app.all('/api/companies', adapt(companiesHandler));
 app.all('/api/profile/enable-affiliate', adapt(enableAffiliateHandler));
 app.all('/api/affiliates/join', adapt(affiliateJoinHandler));
 app.all('/api/affiliates/subscriptions', adapt(affiliateSubscriptionsHandler));
 app.all('/api/affiliates/traffic-report', adapt(affiliateTrafficReportHandler));
-app.all('/api/profile/check-document', adapt(checkDocumentHandler));
+app.all('/api/profile/check-document', profileCheckRateLimit, adapt(checkDocumentHandler));
 app.all('/api/profile/submit-verification', adapt(submitVerificationHandler));
 app.all('/api/profile/legacy-lookup', adapt(legacyLookupHandler));
 app.all('/api/admin/audit-identities', adapt(auditIdentitiesHandler));
