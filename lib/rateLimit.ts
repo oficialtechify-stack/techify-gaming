@@ -15,12 +15,6 @@ const buckets = new Map<string, Bucket>();
 let lastSweepAt = 0;
 
 function getClientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0].trim();
-  }
-  const realIp = req.headers['x-real-ip'];
-  if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
   return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
