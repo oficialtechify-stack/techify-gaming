@@ -609,14 +609,27 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setPlans(planList);
     }, effectiveCompanyId);
 
-    const unsubAllAffiliations = roleMode === 'afiliado'
-      ? (() => {
+    const needsCompanyAffiliations =
+      roleMode === 'admin' ||
+      (
+        roleMode === 'empresa' &&
+        (
+          activeTab === 'dashboard' ||
+          activeTab === 'minha_empresa' ||
+          activeTab === 'produtos' ||
+          activeTab === 'equipe' ||
+          activeTab === 'assinaturas'
+        )
+      );
+
+    const unsubAllAffiliations = needsCompanyAffiliations
+      ? subscribeAllAffiliations((allAffList) => {
+          setAllAffiliations(allAffList);
+        }, effectiveCompanyId)
+      : (() => {
           setAllAffiliations([]);
           return () => {};
-        })()
-      : subscribeAllAffiliations((allAffList) => {
-          setAllAffiliations(allAffList);
-        }, effectiveCompanyId);
+        })();
 
     const unsubSales = subscribeSales(
       (salesList) => {
@@ -633,7 +646,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       unsubAllAffiliations();
       unsubSales();
     };
-  }, [effectiveCompanyId, effectiveUserId, roleMode]);
+  }, [effectiveCompanyId, effectiveUserId, roleMode, activeTab]);
 
   useEffect(() => {
     if (!currentUser || roleMode === 'admin') {
