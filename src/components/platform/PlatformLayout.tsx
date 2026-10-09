@@ -2390,7 +2390,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
       {/* ===================== 3. LIVE TOAST NOTIFICATION ===================== */}
       {liveToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#080d1a] border-2 border-[#D9F22A] rounded-2xl p-4 shadow-[0_0_35px_rgba(217,242,42,0.4)] flex items-center gap-4 animate-in slide-in-from-bottom-5 duration-300 max-w-sm">
+        <div className="fixed bottom-20 left-3 right-3 z-50 bg-[#080d1a] border-2 border-[#D9F22A] rounded-2xl p-3 sm:p-4 shadow-[0_0_35px_rgba(217,242,42,0.4)] flex items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom-5 duration-300 sm:bottom-6 sm:left-auto sm:right-6 sm:w-full sm:max-w-sm">
           <div className="w-10 h-10 rounded-full bg-[#D9F22A] text-[#060A15] flex items-center justify-center flex-shrink-0 font-bold">
             <Zap className="w-5 h-5 fill-current" />
           </div>
