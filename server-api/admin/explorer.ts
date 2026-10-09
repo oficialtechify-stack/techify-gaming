@@ -1,3 +1,4 @@
+import { FieldValue } from 'firebase-admin/firestore';
 import { getServerAdminFirestore } from '../../lib/firebaseAdminServer.js';
 import { requireAdminIdentity } from '../../lib/adminAccess.js';
 
