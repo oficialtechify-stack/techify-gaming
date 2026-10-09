@@ -6,6 +6,7 @@ import {
   updateProfile,
   signInWithPopup,
   GoogleAuthProvider,
+  sendEmailVerification,
   User 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -45,6 +46,16 @@ export interface AuthResult {
   user: User;
   profile: UserSellerProfile;
   company?: CompanyStartup;
+  requiresEmailVerification?: boolean;
+}
+
+export const MIN_AUTH_PASSWORD_LENGTH = 12;
+
+export function validateStrongPassword(password: string): boolean {
+  return password.length >= MIN_AUTH_PASSWORD_LENGTH &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password);
 }
 
 /**
@@ -254,7 +265,10 @@ export function getAuthErrorMessage(error: any): string {
 
   // Firebase Authentication Errors
   if (code.includes('auth/email-already-in-use')) {
-    return 'Este e-mail já possui uma conta cadastrada no LeadsPay. Por favor, utilize a aba "Fazer Login" ou recupere sua senha.';
+    return 'Não foi possível concluir o cadastro com esses dados. Tente entrar ou use a recuperação de senha.';
+  }
+  if (code.includes('custom/email-not-verified')) {
+    return 'Confirme seu e-mail antes de entrar. Enviamos um novo link de verificação para sua caixa de entrada.';
   }
   if (code.includes('auth/invalid-email')) {
     return 'O formato do e-mail informado é inválido. Digite um e-mail válido (ex: seuemail@exemplo.com).';
@@ -359,19 +373,11 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     user = userCredential.user;
   } catch (authError: any) {
     if (authError.code === 'auth/email-already-in-use') {
-      // Se a conta já existe, tentar entrar com a senha fornecida pelo usuário
-      try {
-        const loginCredential = await signInWithEmailAndPassword(auth, normalizedEmail, data.password);
-        user = loginCredential.user;
-      } catch (loginError: any) {
-        // Se a senha estiver incorreta para a conta existente, lançar erro amigável
-        const err = new Error('auth/email-already-in-use');
-        (err as any).code = 'auth/email-already-in-use';
-        throw err;
-      }
-    } else {
-      throw authError;
+      const err = new Error('auth/email-already-in-use');
+      (err as any).code = 'auth/email-already-in-use';
+      throw err;
     }
+    throw authError;
   }
 
   // 2. Verificar se CPF está em uso por OUTRO usuário diferente
@@ -508,17 +514,11 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     user = userCredential.user;
   } catch (authError: any) {
     if (authError.code === 'auth/email-already-in-use') {
-      try {
-        const loginCredential = await signInWithEmailAndPassword(auth, normalizedEmail, data.password);
-        user = loginCredential.user;
-      } catch (loginError: any) {
-        const err = new Error('auth/email-already-in-use');
-        (err as any).code = 'auth/email-already-in-use';
-        throw err;
-      }
-    } else {
-      throw authError;
+      const err = new Error('auth/email-already-in-use');
+      (err as any).code = 'auth/email-already-in-use';
+      throw err;
     }
+    throw authError;
   }
 
   // 2. Obter perfil existente se houver
@@ -768,6 +768,14 @@ export async function loginUser(email: string, password: string, preferredRole?:
   const normalizedEmail = email.trim().toLowerCase();
   const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
   const user = userCredential.user;
+
+  if (!user.emailVerified) {
+    try { await sendEmailVerification(user); } catch {}
+    await signOut(auth);
+    const err = new Error('custom/email-not-verified');
+    (err as any).code = 'custom/email-not-verified';
+    throw err;
+  }
 
   // Buscar perfil no Firestore
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
@@ -1236,10 +1244,17 @@ export async function completeCompanyProfile(
  */
 export async function resetPassword(email: string): Promise<{ success: boolean; message: string }> {
   const normalizedEmail = email.trim().toLowerCase();
-  await sendPasswordResetEmail(auth, normalizedEmail);
+  try {
+    await sendPasswordResetEmail(auth, normalizedEmail);
+  } catch (error: any) {
+    const code = String(error?.code || '');
+    if (!code.includes('auth/user-not-found') && !code.includes('auth/invalid-email')) {
+      throw error;
+    }
+  }
   return {
     success: true,
-    message: `Link de redefinição enviado com sucesso para ${normalizedEmail}! Verifique sua caixa de entrada e pasta de spam.`
+    message: 'Se existir uma conta para esse e-mail, enviaremos as instruções de redefinição. Verifique sua caixa de entrada e spam.'
   };
 }
 
