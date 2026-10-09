@@ -549,6 +549,119 @@ export function subscribePlans(callback: (plans: CompanyPlan[]) => void, company
 export const subscribePlatforms = subscribePlans;
 
 /**
+ * One-shot loaders used by the main dashboard to avoid keeping large collections
+ * open with realtime listeners. Realtime is reserved for the few streams that
+ * materially benefit from instant updates.
+ */
+export async function fetchMarketplacePlansSnapshot(): Promise<CompanyPlan[]> {
+  try {
+    const response = await fetch('/api/plans', {
+      method: 'GET',
+      cache: 'default',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !Array.isArray(data.plans)) return [];
+    return data.plans as CompanyPlan[];
+  } catch (err) {
+    console.warn('Erro ao carregar marketplace:', err);
+    return [];
+  }
+}
+
+export async function fetchCompaniesSnapshot(companyId?: string, pageSize = 80): Promise<CompanyStartup[]> {
+  try {
+    if (companyId) {
+      const direct = await getDoc(doc(db, COLLECTIONS.COMPANIES, companyId));
+      if (direct.exists()) {
+        const data = direct.data() as Omit<CompanyStartup, 'id'> & { archived?: boolean; isArchived?: boolean };
+        if (data.archived !== true && data.isArchived !== true) return [{ id: direct.id, ...data }];
+      }
+      return [];
+    }
+
+    const snap = await getDocs(query(collection(db, COLLECTIONS.COMPANIES), limit(Math.max(1, Math.min(pageSize, 100)))));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) }))
+      .filter((item: any) => item.archived !== true && item.isArchived !== true)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  } catch (err) {
+    console.warn('Erro ao carregar empresas:', err);
+    return [];
+  }
+}
+
+export async function fetchPlansSnapshot(companyId?: string, pageSize = 120): Promise<CompanyPlan[]> {
+  try {
+    const base = companyId
+      ? query(collection(db, COLLECTIONS.PLANS), where('companyId', '==', companyId), limit(Math.max(1, Math.min(pageSize, 200))))
+      : query(collection(db, COLLECTIONS.PLANS), limit(Math.max(1, Math.min(pageSize, 200))));
+    const snap = await getDocs(base);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as Omit<CompanyPlan, 'id'>) }))
+      .filter((item: any) => item.archived !== true && item.isArchived !== true)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  } catch (err) {
+    console.warn('Erro ao carregar produtos:', err);
+    return [];
+  }
+}
+
+export async function fetchUserAffiliationsSnapshot(userId: string, pageSize = 120): Promise<UserAffiliation[]> {
+  if (!userId) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, COLLECTIONS.AFFILIATIONS),
+      where('userId', '==', userId),
+      limit(Math.max(1, Math.min(pageSize, 200)))
+    ));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as UserAffiliation) }))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  } catch (err) {
+    console.warn('Erro ao carregar afiliações do usuário:', err);
+    return [];
+  }
+}
+
+export async function fetchCompanyAffiliationsSnapshot(companyId: string, pageSize = 200): Promise<UserAffiliation[]> {
+  if (!companyId) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, COLLECTIONS.AFFILIATIONS),
+      where('companyId', '==', companyId),
+      limit(Math.max(1, Math.min(pageSize, 300)))
+    ));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as UserAffiliation) }))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  } catch (err) {
+    console.warn('Erro ao carregar afiliados da empresa:', err);
+    return [];
+  }
+}
+
+export async function fetchWithdrawalsSnapshot(
+  userId?: string,
+  companyId?: string,
+  pageSize = 100
+): Promise<WithdrawalRequest[]> {
+  try {
+    const base = companyId
+      ? query(collection(db, COLLECTIONS.WITHDRAWALS), where('companyId', '==', companyId), limit(Math.max(1, Math.min(pageSize, 150))))
+      : userId
+        ? query(collection(db, COLLECTIONS.WITHDRAWALS), where('userId', '==', userId), limit(Math.max(1, Math.min(pageSize, 150))))
+        : query(collection(db, COLLECTIONS.WITHDRAWALS), limit(Math.max(1, Math.min(pageSize, 150))));
+    const snap = await getDocs(base);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, 'id'>) }))
+      .sort((a, b) => (b.createdAt || b.completedAt || b.requestedAt || '').localeCompare(a.createdAt || a.completedAt || a.requestedAt || ''));
+  } catch (err) {
+    console.warn('Erro ao carregar saques:', err);
+    return [];
+  }
+}
+
+/**
  * Get a Plan by ID or Slug directly from Firestore
  */
 export async function getCompanyPlanByIdOrSlug(idOrSlug: string): Promise<CompanyPlan | null> {
@@ -816,10 +929,10 @@ export function subscribeSales(
   affiliateId?: string
 ) {
   const q = companyId
-    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId))
+    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId), limit(150))
     : affiliateId
-      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId))
-      : collection(db, COLLECTIONS.SALES);
+      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId), limit(150))
+      : query(collection(db, COLLECTIONS.SALES), limit(150));
   return onSnapshot(q, (snap) => {
     const list: SaleTransaction[] = [];
     snap.forEach((d) => {
