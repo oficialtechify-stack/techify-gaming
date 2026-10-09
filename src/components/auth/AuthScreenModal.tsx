@@ -1277,9 +1277,10 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                   >
                     Voltar para o login
                   </button>
-                  <div id="leadspay-login-mfa-recaptcha" />
                 </form>
               )}
+
+              <div id="leadspay-login-mfa-recaptcha" className="sr-only" aria-hidden="true" />
 
               {/* Footer Switcher */}
               <div className="text-center text-xs text-white/60 pt-1">
