@@ -34,7 +34,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   if (req.method !== 'POST') return fail(res, 405, 'Método não permitido.');
 
   try {
-    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined);
+    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined, { requireVerifiedEmail: true });
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const role = body.role as PlatformRole;
     if (role !== 'empresa' && role !== 'afiliado') return fail(res, 400, 'Selecione Empresa ou Afiliado.', 'INVALID_ROLE');
