@@ -706,8 +706,8 @@ async function processProductSubscriptionInvoice(
         availableAt: affiliateAvailableAt,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        is_test: !invoice.livemode,
         environment: invoice.livemode ? 'production' : 'development',
+        ...(!invoice.livemode ? { is_test: true } : {}),
       });
 
       tx.update(affiliateProfileRef, {
