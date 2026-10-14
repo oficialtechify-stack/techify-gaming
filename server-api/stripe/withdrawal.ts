@@ -231,24 +231,16 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }, { idempotencyKey: `leadspay-withdrawal-transfer-${withdrawalId}` });
       transferId = transfer.id;
     } catch (error) {
-      await db.runTransaction(async (tx) => {
-        const fresh = await tx.get(profileRef);
-        const withdrawal = await tx.get(withdrawalRef);
-        if (!fresh.exists || !withdrawal.exists || withdrawal.data()!.status !== 'PROCESSING') return;
-        const data = fresh.data()!;
-        const currentRoleAvailable = Number(data[availableField] || 0);
-        tx.set(profileRef, {
-          [availableField]: currentRoleAvailable + amountCents,
-          availableBalance: Number((Number(data.availableBalance || 0) + amountCents / 100).toFixed(2)),
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-        tx.set(withdrawalRef, {
-          status: 'FAILED',
-          failureReason: error instanceof Error ? error.message.slice(0, 250) : 'Falha na transferência Stripe',
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-      });
-      return fail(res, 503, 'A Stripe não conseguiu reservar a transferência. Seu saldo foi restaurado.', 'TRANSFER_FAILED');
+      // Uma falha de rede pode acontecer depois de a Stripe aceitar a transferência.
+      // Nunca restaurar o saldo automaticamente sem confirmar o resultado remoto:
+      // isso permitiria dois saques para o mesmo dinheiro.
+      await withdrawalRef.set({
+        status: 'MANUAL_REVIEW_REQUIRED',
+        failureReason: error instanceof Error ? error.message.slice(0, 250) : 'Resultado da transferência Stripe desconhecido',
+        needsStripeReconciliation: true,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      return fail(res, 503, 'O saque está em conferência. O saldo permanece reservado até a LeadsPay verificar o resultado na Stripe.', 'TRANSFER_REQUIRES_REVIEW');
     }
 
     let payoutId = '';
