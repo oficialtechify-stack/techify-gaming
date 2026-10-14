@@ -57,3 +57,20 @@ test('saque falho e estornado não consomem novamente o saldo', async () => {
   ]), 'affiliate_1');
   assert.equal(balances.afiliado.availableCents, 4000);
 });
+
+test('processa histórico sintético grande mantendo saldos por papel', async () => {
+  const releases = Array.from({ length: 10_000 }, (_, i) => ({
+    role: i % 2 === 0 ? 'afiliado' : 'empresa',
+    saleId: `load_${i}`,
+    status: 'available',
+    amountCents: 100,
+  }));
+  const withdrawals = Array.from({ length: 1_000 }, (_, i) => ({
+    role: i % 2 === 0 ? 'afiliado' : 'empresa',
+    status: 'COMPLETED',
+    amountCents: 100,
+  }));
+  const balances = await calculateUserLedgerBalances(mockDb(releases, withdrawals), 'affiliate_1');
+  assert.equal(balances.afiliado.availableCents, 450_000);
+  assert.equal(balances.empresa.availableCents, 450_000);
+});
