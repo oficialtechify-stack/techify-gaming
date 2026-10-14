@@ -316,6 +316,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
 
       const companyId = typeof req.query?.companyId === 'string' ? req.query.companyId.trim() : '';
+      if (!companyId) {
+        res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      }
       let queryRef: FirebaseFirestore.Query = db.collection('plans');
       if (companyId) queryRef = queryRef.where('companyId', '==', companyId);
       const snap = await queryRef.limit(200).get();
