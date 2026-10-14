@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - chore/firestore-scale-cleanup
+      - release/leadspay-unified-2026-10-14
   workflow_dispatch:
 jobs:
   check:
