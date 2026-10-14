@@ -20,18 +20,44 @@ function authorized(header: string | string[] | undefined) {
 export async function reconcileKnownStripePayouts() {
   const db = getServerAdminFirestore();
   const stripe = getStripeTestClient();
-  const snap = await db.collection('withdrawals')
-    .where('status', '==', 'PAYOUT_PENDING')
-    .limit(100).get();
+  // Consulta dois estados com limite por execução; não movimenta fundos.
+  const [pendingSnap, reviewSnap] = await Promise.all([
+    db.collection('withdrawals').where('status', '==', 'PAYOUT_PENDING').limit(100).get(),
+    db.collection('withdrawals').where('status', '==', 'MANUAL_REVIEW_REQUIRED').limit(100).get(),
+  ]);
+  const candidates = [...pendingSnap.docs, ...reviewSnap.docs];
   let checked = 0;
   let completed = 0;
   let stillPending = 0;
   let requiresReview = 0;
-  for (const doc of snap.docs) {
+  for (const doc of candidates) {
     const data = doc.data();
     const account = String(data.stripeAccountId || '');
     const payoutId = String(data.stripePayoutId || '');
-    if (!account.startsWith('acct_') || !payoutId.startsWith('po_')) {
+    if (!account.startsWith('acct_')) {
+      requiresReview++;
+      continue;
+    }
+    if (!payoutId.startsWith('po_')) {
+      // Transferências com resposta incerta: procurar uma correspondência por
+      // metadados para facilitar conciliação, SEM liberar saldo nem criar payout.
+      try {
+        const transferId = String(data.stripeTransferId || '');
+        const transfer = transferId.startsWith('tr_')
+          ? await stripe.transfers.retrieve(transferId)
+          : null;
+        if (transfer && transfer.destination === account &&
+            transfer.metadata?.leadspay_withdrawal_id === doc.id) {
+          await doc.ref.set({
+            stripeTransferId: transfer.id,
+            needsStripeReconciliation: true,
+            reconciliationNote: 'Transferência confirmada na Stripe; payout ainda requer conferência.',
+            lastReconciledAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+      } catch (error) {
+        console.error('[Transfer reconciliation]', doc.id, error instanceof Error ? error.message : 'unavailable');
+      }
       requiresReview++;
       continue;
     }
@@ -41,7 +67,7 @@ export async function reconcileKnownStripePayouts() {
       if (payout.status === 'paid') {
         await db.runTransaction(async (tx) => {
           const fresh = await tx.get(doc.ref);
-          if (!fresh.exists || fresh.data()?.status !== 'PAYOUT_PENDING' ||
+          if (!fresh.exists || !['PAYOUT_PENDING', 'MANUAL_REVIEW_REQUIRED'].includes(String(fresh.data()?.status || '')) ||
               fresh.data()?.stripePayoutId !== payoutId) return;
           tx.set(doc.ref, {
             status: 'COMPLETED',
