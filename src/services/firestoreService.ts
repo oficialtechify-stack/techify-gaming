@@ -243,7 +243,9 @@ export async function submitVerificationRequestInFirebase(
 
 
 export function subscribeVerifications(callback: (requests: VerificationRequest[]) => void) {
-  const q = collection(db, COLLECTIONS.VERIFICATIONS);
+  // Evita assinar toda a coleção de verificações no navegador do administrador.
+  // O histórico completo deve ser consultado com paginação no painel administrativo.
+  const q = query(collection(db, COLLECTIONS.VERIFICATIONS), limit(200));
   return onSnapshot(q, (snap) => {
     const list: VerificationRequest[] = [];
     snap.forEach((d) => {
