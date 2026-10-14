@@ -140,6 +140,14 @@ export const StripeConnectCompanyPanel: React.FC<{
                 ? 'A Stripe é usada para validar os dados de recebimento da empresa e encaminhar saques ao banco cadastrado. O dinheiro das vendas permanece na LeadsPay durante o prazo de liberação.'
                 : 'A Stripe é usada para validar seus dados de recebimento como afiliado e encaminhar saques ao banco cadastrado. Suas comissões permanecem na LeadsPay durante o prazo de liberação.'}
             </p>
+            {role === 'afiliado' && status !== 'connected' && (
+              <p className="mt-2 text-[11px] leading-5 text-white/65">
+                Seu cadastro é de pessoa física afiliada (CPF), para receber comissões de indicação.
+                A Stripe pode apresentar a seção genérica “Dados da empresa” e exigir setor,
+                estimativa de renda ou descrição da atividade por regras de verificação no Brasil.
+                Informe sua atividade real de divulgação e comissões; não é necessário inventar uma empresa.
+              </p>
+            )}
             {status === 'connected' && (
               <p className="mt-2 text-[11px] text-emerald-300/80">
                 Conta Stripe verificada e protegida. O saldo só é enviado depois que estiver disponível na LeadsPay e você solicitar o saque.
