@@ -88,6 +88,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     if (accountId) {
       let account = await stripe.accounts.retrieve(accountId);
+      // O afiliado é pessoa física. Uma conta já criada como PJ exige
+      // revisão/migração explícita, nunca alteração silenciosa de titularidade.
+      if (role === 'afiliado' && account.business_type === 'company') {
+        return fail(res, 409, 'Esta conta Stripe foi cadastrada como empresa. Solicite à administração a revisão do vínculo para cadastrar seus recebimentos como pessoa física.');
+      }
       if (
         account.metadata?.firebase_uid !== identity.uid ||
         account.metadata?.leadspay_role !== role ||
@@ -151,8 +156,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         },
         ...(role === 'afiliado'
           ? {
+              // O cadastro individual continua sujeito aos campos de análise
+              // regulatória exigidos pela Stripe no Brasil.
               business_profile: {
-                product_description: 'Recebimento de comissões de indicação e afiliação pela plataforma LeadsPay.',
+                product_description: 'Pessoa física afiliada que divulga ofertas e recebe comissões de indicação na LeadsPay. Não comercializa produtos diretamente neste cadastro.',
+                url: 'https://www.techify.sbs',
               },
             }
           : {}),
