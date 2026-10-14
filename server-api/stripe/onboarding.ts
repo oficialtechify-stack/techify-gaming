@@ -142,10 +142,21 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         country: 'BR',
         email: identity.email || undefined,
         ...(knownCompanyType ? { business_type: knownCompanyType } : {}),
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
+        // Afiliados recebem comissões da LeadsPay, não processam pagamentos
+        // dos compradores. Solicitar card_payments forçava onboarding de lojista.
+        capabilities: role === 'afiliado'
+          ? { transfers: { requested: true } }
+          : {
+              card_payments: { requested: true },
+              transfers: { requested: true },
+            },
+        ...(role === 'afiliado'
+          ? {
+              business_profile: {
+                product_description: 'Recebimento de comissões de indicação e afiliação pela plataforma LeadsPay.',
+              },
+            }
+          : {}),
         controller: {
           // New Connect configuration equivalent to an Express-style experience,
           // without relying on the legacy type='express' account model.
