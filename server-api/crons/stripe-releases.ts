@@ -23,6 +23,9 @@ export async function releaseStripeBalanceDocument(
     if (!latest.exists) return false;
     const release = latest.data()!;
     if (release.status !== 'pending') return false;
+    // Nunca liberar antes da data programada, mesmo por chamada direta.
+    const availableAtMs = Date.parse(String(release.availableAt || ''));
+    if (!Number.isFinite(availableAtMs) || availableAtMs > Date.now()) return false;
 
     const role = release.role as PlatformRole;
     if (role !== 'empresa' && role !== 'afiliado') throw new Error('Papel de saldo inválido.');
@@ -74,12 +77,21 @@ export async function releaseDueStripeBalances(
 ): Promise<{ examined: number; released: number; failed: number }> {
   // Query only by availableAt so Firestore's automatic single-field index is sufficient.
   // Status is revalidated transactionally in releaseStripeBalanceDocument.
-  const candidates = await db.collection('balance_releases')
-    .where('availableAt', '<=', now.toISOString())
-    .orderBy('availableAt', 'asc')
-    .limit(200)
-    .get();
-  const due = candidates.docs.filter((doc) => doc.data().status === 'pending').slice(0, 50);
+  // Avança pelas páginas: liberações já concluídas não podem bloquear as pendentes.
+  const due: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  for (let page = 0; page < 20 && due.length < 50; page++) {
+    let query = db.collection('balance_releases')
+      .where('availableAt', '<=', now.toISOString())
+      .orderBy('availableAt', 'asc')
+      .limit(200);
+    if (cursor) query = query.startAfter(cursor) as typeof query;
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    due.push(...snapshot.docs.filter((doc) => doc.data().status === 'pending').slice(0, 50 - due.length));
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < 200) break;
+  }
 
   let released = 0;
   let failed = 0;
