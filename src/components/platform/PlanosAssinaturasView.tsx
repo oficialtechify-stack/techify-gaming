@@ -23,8 +23,7 @@ import {
   Lock
 } from 'lucide-react';
 import { UserRoleMode, UserSellerProfile, CompanyStartup } from '../../types/platform';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../../lib/firebase';
+import { auth } from '../../lib/firebase';
 
 interface PlanosAssinaturasViewProps {
   roleMode: UserRoleMode;
@@ -90,72 +89,34 @@ export const PlanosAssinaturasView: React.FC<PlanosAssinaturasViewProps> = ({
   const currentUserId = userProfile.id || userProfile.userId || auth.currentUser?.uid || 'user_demo';
   const isAffiliate = roleMode === 'afiliado';
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // 4. ESCUTA EM TEMPO REAL NO FIRESTORE (onSnapshot)
-  // Sincroniza o estado do plano instantaneamente assim que o Webhook do Asaas atualiza o banco
-  // ──────────────────────────────────────────────────────────────────────────
+  // O AuthContext já mantém user_profiles sincronizado em tempo real.
+  // Esta tela reutiliza o perfil compartilhado para evitar dois listeners Firestore duplicados.
   useEffect(() => {
-    if (!currentUserId || currentUserId === 'user_demo') return;
+    const data = userProfile;
+    setLiveUserData({
+      plan: data.plan,
+      planStatus: data.planStatus,
+      subscriptionTier: data.subscriptionTier,
+      subscriptionName: data.subscriptionName,
+    });
 
-    try {
-      const handleDataUpdate = (data: any) => {
-        if (!data) return;
-        setLiveUserData((prev) => ({
-          ...prev,
-          plan: data.plan !== undefined ? data.plan : prev?.plan,
-          planStatus: data.planStatus !== undefined ? data.planStatus : prev?.planStatus,
-          subscriptionTier: data.subscriptionTier !== undefined ? data.subscriptionTier : prev?.subscriptionTier,
-          subscriptionName: data.subscriptionName !== undefined ? data.subscriptionName : prev?.subscriptionName
-        }));
-
-        // Se a janela de checkout estava aberta e o plano foi confirmado via webhook
-        if (data.planStatus === 'active' && data.plan) {
-          if (selectedPlanModal && (selectedPlanModal.id === data.plan || selectedPlanModal.id === data.subscriptionTier)) {
-            setActivationSuccess(`🎉 Pagamento confirmado via Webhook Asaas! Plano ${data.subscriptionName || selectedPlanModal.name} ativado com sucesso!`);
-            setTimeout(() => {
-              setSelectedPlanModal(null);
-              setCheckoutData(null);
-            }, 2500);
-          }
-
-          // Propaga atualização para o restante do applet
-          if (onUpdateProfile) {
-            onUpdateProfile({
-              plan: data.plan,
-              planStatus: 'active',
-              subscriptionTier: data.subscriptionTier || data.plan,
-              subscriptionName: data.subscriptionName
-            });
-          }
-        }
-      };
-
-      const userDocRef = doc(db, 'users', currentUserId);
-      const unsubUser = onSnapshot(userDocRef, (snapshot) => {
-        if (snapshot.exists()) {
-          handleDataUpdate(snapshot.data());
-        }
-      }, (err) => {
-        console.warn('[Planos onSnapshot users] Aviso:', err);
-      });
-
-      const profileDocRef = doc(db, 'user_profiles', currentUserId);
-      const unsubProfile = onSnapshot(profileDocRef, (snapshot) => {
-        if (snapshot.exists()) {
-          handleDataUpdate(snapshot.data());
-        }
-      }, (err) => {
-        console.warn('[Planos onSnapshot user_profiles] Aviso:', err);
-      });
-
-      return () => {
-        unsubUser();
-        unsubProfile();
-      };
-    } catch (err) {
-      console.warn('[Planos onSnapshot] Erro ao registrar listener:', err);
+    if (data.planStatus === 'active' && data.plan && selectedPlanModal) {
+      if (selectedPlanModal.id === data.plan || selectedPlanModal.id === data.subscriptionTier) {
+        setActivationSuccess(`🎉 Pagamento confirmado! Plano ${data.subscriptionName || selectedPlanModal.name} ativado com sucesso!`);
+        const timer = window.setTimeout(() => {
+          setSelectedPlanModal(null);
+          setCheckoutData(null);
+        }, 2500);
+        return () => window.clearTimeout(timer);
+      }
     }
-  }, [currentUserId, selectedPlanModal, onUpdateProfile]);
+  }, [
+    userProfile.plan,
+    userProfile.planStatus,
+    userProfile.subscriptionTier,
+    userProfile.subscriptionName,
+    selectedPlanModal,
+  ]);
 
   // Função para checar se determinado plano está ATIVO
   // REGRA: O plano pago (ex: Afiliado VIP) NUNCA vem ativado por padrão.
