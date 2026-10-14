@@ -257,73 +257,21 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       payoutId = payout.id;
       payoutStatus = payout.status === 'paid' ? 'COMPLETED' : 'PAYOUT_PENDING';
     } catch (payoutError) {
-      let reversed = false;
-      try {
-        await stripe.transfers.createReversal(
-          transferId,
-          {
-            amount: netAmountCents,
-            metadata: {
-              leadspay_withdrawal_id: withdrawalId,
-              reason: 'payout_creation_failed',
-            },
-          },
-          { idempotencyKey: `leadspay-withdrawal-reversal-${withdrawalId}` },
-        );
-        reversed = true;
-      } catch (reversalError) {
-        console.error(
-          '[Stripe withdrawal reversal] Falha crítica ao reverter transferência após erro no payout:',
-          reversalError instanceof Error ? reversalError.message : 'falha',
-        );
-      }
-
-      if (reversed) {
-        await db.runTransaction(async (tx) => {
-          const fresh = await tx.get(profileRef);
-          const withdrawal = await tx.get(withdrawalRef);
-          if (!fresh.exists || !withdrawal.exists) return;
-
-          const data = fresh.data()!;
-          const currentRoleAvailable = Number(data[availableField] || 0);
-          tx.set(profileRef, {
-            [availableField]: currentRoleAvailable + amountCents,
-            availableBalance: Number((Number(data.availableBalance || 0) + amountCents / 100).toFixed(2)),
-            updatedAt: new Date().toISOString(),
-          }, { merge: true });
-          tx.set(withdrawalRef, {
-            status: 'FAILED',
-            stripeTransferId: transferId,
-            transferReversed: true,
-            failureReason: payoutError instanceof Error
-              ? payoutError.message.slice(0, 250)
-              : 'Falha ao criar payout bancário',
-            updatedAt: new Date().toISOString(),
-          }, { merge: true });
-        });
-
-        return fail(
-          res,
-          503,
-          'Não foi possível enviar o saque ao banco. A transferência foi revertida e o saldo voltou para a LeadsPay.',
-          'PAYOUT_FAILED_REVERSED',
-        );
-      }
-
+      // Timeout / erro de rede após o request não prova que payout falhou.
+      // Nunca reverter a transferência nem devolver saldo sem reconciliação remota.
       await withdrawalRef.set({
         status: 'MANUAL_REVIEW_REQUIRED',
         stripeTransferId: transferId,
         stripePayoutId: null,
+        needsStripeReconciliation: true,
         failureReason: payoutError instanceof Error
           ? payoutError.message.slice(0, 250)
-          : 'Falha ao criar payout bancário',
+          : 'Resultado do payout Stripe desconhecido',
         updatedAt: new Date().toISOString(),
       }, { merge: true });
-
       return fail(
-        res,
-        503,
-        'O saque entrou em revisão de segurança. O saldo não será liberado novamente até a conferência da transferência.',
+        res, 503,
+        'O saque permanece reservado enquanto a LeadsPay confirma o resultado bancário na Stripe.',
         'PAYOUT_REQUIRES_REVIEW',
       );
     }
