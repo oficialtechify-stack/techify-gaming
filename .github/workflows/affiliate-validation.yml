@@ -18,5 +18,9 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - name: TypeScript check
         run: npm run lint
-      - name: Unit tests
-        run: node --import tsx --test lib/*.test.ts
+      - name: Isolated unit tests (no Firebase or Stripe credentials)
+        run: |
+          mapfile -t files < <(find lib -maxdepth 1 -name '*.test.ts' ! -name 'checkoutPersistence.test.ts' | sort)
+          node --import tsx --test "${files[@]}"
+      # checkoutPersistence.test.ts needs a Firestore emulator or explicit dependency
+      # injection; never run its real-database operations using production credentials.
