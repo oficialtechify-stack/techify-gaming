@@ -17,6 +17,7 @@ import stripeSubscriptionCheckoutHandler from './server-api/stripe/subscription-
 import stripeWebhookHandler from './server-api/stripe/webhook.js';
 import stripeWithdrawalHandler from './server-api/stripe/withdrawal.js';
 import stripeReleasesCronHandler from './server-api/crons/stripe-releases.js';
+import stripePayoutReconcileHandler from './server-api/crons/stripe-payout-reconcile.js';
 import plansHandler from './server-api/plans.js';
 import couponsHandler from './server-api/coupons.js';
 import companiesHandler from './server-api/companies.js';
@@ -91,6 +92,7 @@ app.all('/api/stripe/withdrawal', adapt(stripeWithdrawalHandler));
 app.all('/api/withdrawals/request', adapt(stripeWithdrawalHandler));
 app.all(['/api/stripe/webhook','/api/webhooks/stripe','/api/webhook/stripe'], adapt(stripeWebhookHandler));
 app.all(['/api/crons/stripe-releases','/api/cron/stripe-releases','/api/cron/release-balances'], adapt(stripeReleasesCronHandler));
+app.all('/api/crons/stripe-payout-reconcile', adapt(stripePayoutReconcileHandler));
 app.all('/api/plans', publicLookupRateLimit, adapt(plansHandler));
 app.all('/api/coupons', adapt(couponsHandler));
 app.all('/api/companies', adapt(companiesHandler));
