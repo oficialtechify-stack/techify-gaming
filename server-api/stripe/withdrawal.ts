@@ -164,9 +164,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         Object.prototype.hasOwnProperty.call(data, availableField) &&
         Number.isSafeInteger(Number(data[availableField])) &&
         Number(data[availableField]) >= 0;
-      const profileAvailableCents = hasRoleBalanceField
-        ? Number(data[availableField])
-        : authoritativeAvailableCents;
+      // Fail closed until role-specific balances have been initialized from
+      // the validated ledger. A missing field must never use a stale snapshot
+      // as spendable funds during concurrent withdrawals.
+      if (!hasRoleBalanceField) return false;
+      const profileAvailableCents = Number(data[availableField]);
       const availableCents = Math.min(profileAvailableCents, authoritativeAvailableCents);
       if (availableCents < MIN_WITHDRAWAL_CENTS) return false;
       if (availableCents < amountCents) return false;
