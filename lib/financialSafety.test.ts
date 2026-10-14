@@ -29,3 +29,12 @@ test('liberações exigem prazo vencido e status pendente na transação', () =>
   assert.match(release, /availableAtMs > Date\.now\(\)/);
   assert.match(release, /where\('status', '==', 'pending'\)/);
 });
+
+const reconciliation = readFileSync(new URL('../server-api/crons/stripe-payout-reconcile.ts', import.meta.url), 'utf8');
+
+test('reconciliação confere Stripe e não cria saques adicionais', () => {
+  assert.match(reconciliation, /stripe\.payouts\.retrieve/);
+  assert.match(reconciliation, /stripe\.transfers\.retrieve/);
+  assert.match(reconciliation, /MANUAL_REVIEW_REQUIRED/);
+  assert.doesNotMatch(reconciliation, /stripe\.payouts\.create|stripe\.transfers\.create\(/);
+});
