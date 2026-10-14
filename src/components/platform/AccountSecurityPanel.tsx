@@ -38,7 +38,13 @@ export const AccountSecurityPanel: React.FC = () => {
         text: 'Código SMS enviado. Digite o código recebido para concluir a ativação.',
       });
     } catch (error) {
-      setFeedback({ type: 'error', text: getAuthErrorMessage(error) });
+      const code = String((error as { code?: string })?.code || '');
+      setFeedback({
+        type: 'error',
+        text: code === 'auth/operation-not-allowed'
+          ? 'A verificação em duas etapas por SMS não está habilitada no projeto Firebase. O administrador precisa habilitar o provedor Telefone e a autenticação multifator SMS nas configurações do Firebase Authentication (Identity Platform).'
+          : getAuthErrorMessage(error),
+      });
     } finally {
       setBusy(false);
     }
