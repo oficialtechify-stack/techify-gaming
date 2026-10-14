@@ -117,6 +117,25 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         });
       }
 
+      if (role === 'afiliado' && account.business_type === 'individual' && !account.details_submitted) {
+        // Contas iniciadas antes desta atualização também recebem uma descrição
+        // de atividade de afiliado, sem apagar dados fornecidos pelo titular.
+        const expectedDescription = 'Pessoa física afiliada que divulga ofertas e recebe comissões de indicação na LeadsPay. Não comercializa produtos diretamente neste cadastro.';
+        if (!account.business_profile?.product_description ||
+            account.business_profile.product_description === 'Recebimento de comissões de indicação e afiliação pela plataforma LeadsPay.') {
+          try {
+            account = await stripe.accounts.update(accountId, {
+              business_profile: {
+                product_description: expectedDescription,
+                ...(!account.business_profile?.url ? { url: 'https://www.techify.sbs' } : {}),
+              },
+            });
+          } catch (profileError) {
+            console.warn('[Affiliate Stripe business profile]', profileError instanceof Error ? profileError.message : 'Falha');
+          }
+        }
+      }
+
       const alreadyVerified =
         account.details_submitted === true &&
         account.payouts_enabled === true &&
