@@ -75,20 +75,20 @@ export async function releaseDueStripeBalances(
   db = getServerAdminFirestore(),
   now = new Date(),
 ): Promise<{ examined: number; released: number; failed: number }> {
-  // Query only by availableAt so Firestore's automatic single-field index is sufficient.
-  // Status is revalidated transactionally in releaseStripeBalanceDocument.
-  // Avança pelas páginas: liberações já concluídas não podem bloquear as pendentes.
+  // O índice composto por status/availableAt evita reler registros já liberados.
+  // A transação ainda revalida status e data antes de alterar qualquer saldo.
   const due: FirebaseFirestore.QueryDocumentSnapshot[] = [];
   let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
   for (let page = 0; page < 20 && due.length < 50; page++) {
     let query = db.collection('balance_releases')
+      .where('status', '==', 'pending')
       .where('availableAt', '<=', now.toISOString())
       .orderBy('availableAt', 'asc')
       .limit(200);
     if (cursor) query = query.startAfter(cursor) as typeof query;
     const snapshot = await query.get();
     if (snapshot.empty) break;
-    due.push(...snapshot.docs.filter((doc) => doc.data().status === 'pending').slice(0, 50 - due.length));
+    due.push(...snapshot.docs.slice(0, 50 - due.length));
     cursor = snapshot.docs[snapshot.docs.length - 1];
     if (snapshot.size < 200) break;
   }
