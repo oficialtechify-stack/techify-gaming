@@ -14,7 +14,8 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
   const [voicePlaying, setVoicePlaying] = useState(false);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrls = ["https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_013723_f9a7dafa-06b2-47a4-b3f6-4eae06ff88a2.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014500_0d756aa4-0be5-4720-8282-70409d49eca3.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014812_794aae43-3d50-43ae-bb18-aaa445e8471c.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014601_b5acc4e3-f66d-438d-b638-8259f9d53e1f.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014712_ff8f9e5c-142a-4481-ba50-58bedd05362b.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014000_d2860df3-a116-4b2d-ba3d-069c4b181ccd.wav"];
   const questions = [
     { key: 'segment', text: 'Em qual área sua empresa atua?', options: ['Marketing e serviços', 'Educação', 'Tecnologia', 'Comércio', 'Outro'] },
     { key: 'audience', text: 'Quem você mais quer alcançar?', options: ['Empreendedores', 'Consumidores finais', 'Outras empresas', 'Ainda não sei'] },
@@ -23,23 +24,21 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
     { key: 'investment', text: 'Quanto pretende investir em anúncios inicialmente?', options: ['Até R$ 300', 'R$ 301 a R$ 1.000', 'Mais de R$ 1.000', 'Ainda não decidi'] }
   ];
   const intro = 'Olá! Eu sou a assistente de marketing da LeadsPay Growth. Vou ajudar sua empresa a planejar campanhas e encontrar oportunidades para vender mais. Primeiro, quero conhecer seu negócio. São só cinco perguntas rápidas.';
-  const speak = (message: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.03;
-    utterance.onend = () => setVoicePlaying(false);
-    utterance.onerror = () => setVoicePlaying(false);
-    speechRef.current = utterance;
-    setVoicePlaying(true);
-    window.speechSynthesis.speak(utterance);
+  const stopAudio = () => {
+    audioRef.current?.pause();
+    if (audioRef.current) audioRef.current.currentTime = 0;
+    setVoicePlaying(false);
   };
-  useEffect(() => {
-    // Navegadores podem bloquear áudio automático; o botão reproduzir permanece disponível.
-    if (voiceEnabled && step === 0) speak(intro);
-    return () => { if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel(); };
-  }, []);
+  const playAudio = (index: number) => {
+    stopAudio();
+    if (!voiceEnabled || !audioUrls[index]) return;
+    const audio = new Audio(audioUrls[index]);
+    audioRef.current = audio;
+    audio.onended = () => setVoicePlaying(false);
+    audio.onerror = () => setVoicePlaying(false);
+    audio.play().then(() => setVoicePlaying(true)).catch(() => setVoicePlaying(false));
+  };
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
   const nextAnswer = (answer: string) => {
     const q = questions[step - 1];
     if (!q) return;
@@ -50,6 +49,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
     setSaved(false);
   };
   const currentSpeech = step === 0 ? intro : step <= questions.length ? questions[step - 1].text : 'Obrigado! Agora você pode selecionar seu produto e preparar a primeira campanha.';
+  const currentAudioIndex = step === 0 ? 0 : step <= questions.length ? step : -1;
   const onboardingDone = step > questions.length;
   const selectedProduct = plans.find(p => p.id === productId);
   const saveDraft = () => {
@@ -68,20 +68,20 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
     </div>
     <section className="rounded-2xl border border-white/10 bg-[#101728] p-5 md:p-7 space-y-4" aria-label="Assistente de boas-vindas">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div><h2 className="text-xl font-bold">Conheça sua assistente Growth</h2><p className="text-xs text-white/60">Apresentação guiada · sem chamadas à IA · voz do dispositivo</p></div>
-        <button type="button" onClick={() => { setVoiceEnabled(!voiceEnabled); if (voiceEnabled) { window.speechSynthesis?.cancel(); setVoicePlaying(false); } }} className="flex items-center gap-2 text-sm border border-white/20 rounded-xl px-3 py-2">{voiceEnabled ? <Volume2 size={17}/> : <VolumeX size={17}/>} {voiceEnabled ? 'Som ligado' : 'Som desligado'}</button>
+        <div><h2 className="text-xl font-bold">Conheça sua assistente Growth</h2><p className="text-xs text-white/60">Apresentação guiada · sem chamadas à IA · voz Faye pré-gravada</p></div>
+        <button type="button" onClick={() => { setVoiceEnabled(!voiceEnabled); if (voiceEnabled) { stopAudio(); } }} className="flex items-center gap-2 text-sm border border-white/20 rounded-xl px-3 py-2">{voiceEnabled ? <Volume2 size={17}/> : <VolumeX size={17}/>} {voiceEnabled ? 'Som ligado' : 'Som desligado'}</button>
       </div>
       <div className="rounded-2xl bg-white/10 p-4 text-sm leading-relaxed">
         <span className="text-[#D9F22A] font-bold">Assistente Growth</span>
         <p className="mt-2">{currentSpeech}</p>
-        <button type="button" className="mt-3 flex items-center gap-2 text-[#D9F22A] font-semibold" onClick={() => { if (voicePlaying) { window.speechSynthesis?.cancel(); setVoicePlaying(false); } else speak(currentSpeech); }}>
+        <button type="button" className="mt-3 flex items-center gap-2 text-[#D9F22A] font-semibold" onClick={() => { if (voicePlaying) { window.speechSynthesis?.cancel(); setVoicePlaying(false); } else playAudio(currentAudioIndex); }}>
           {voicePlaying ? <Pause size={16}/> : <Play size={16}/>} {voicePlaying ? 'Parar áudio' : 'Ouvir mensagem'}
         </button>
       </div>
-      {step === 0 ? <button type="button" onClick={() => { setStep(1); if (voiceEnabled) speak(questions[0].text); }} className="rounded-xl bg-[#D9F22A] text-[#0a1017] px-5 py-3 font-bold">Começar conversa <ArrowRight size={16} className="inline"/></button> : !onboardingDone ?
-        <div className="space-y-3"><p className="text-xs text-white/60">Pergunta {step} de {questions.length}</p><div className="flex flex-wrap gap-2">{questions[step-1].options.map(option => <button type="button" key={option} onClick={() => { nextAnswer(option); if (voiceEnabled) speak(step < questions.length ? questions[step].text : 'Obrigado! Agora vamos preparar sua campanha.'); }} className="rounded-xl border border-white/20 hover:border-[#D9F22A] px-4 py-3 text-sm">{option}</button>)}</div></div> :
+      {step === 0 ? <button type="button" onClick={() => { setStep(1); if (voiceEnabled) playAudio(1); }} className="rounded-xl bg-[#D9F22A] text-[#0a1017] px-5 py-3 font-bold">Começar conversa <ArrowRight size={16} className="inline"/></button> : !onboardingDone ?
+        <div className="space-y-3"><p className="text-xs text-white/60">Pergunta {step} de {questions.length}</p><div className="flex flex-wrap gap-2">{questions[step-1].options.map(option => <button type="button" key={option} onClick={() => { nextAnswer(option); if (voiceEnabled) { if (step < questions.length) playAudio(step + 1); else stopAudio(); } }} className="rounded-xl border border-white/20 hover:border-[#D9F22A] px-4 py-3 text-sm">{option}</button>)}</div></div> :
         <p className="text-[#D9F22A] text-sm font-semibold">Perfil inicial preenchido. Agora prepare sua campanha abaixo. As respostas só serão incluídas no rascunho local quando você salvar.</p>}
-      <p className="text-xs text-white/50">A reprodução automática depende da permissão do navegador. Nenhum áudio é enviado a servidores. O questionário ainda não é enviado ao ADM.</p>
+      <p className="text-xs text-white/50">Áudios pré-gravados da Faye, reproduzidos sob demanda. O questionário ainda não é enviado ao ADM.</p>
     </section>
     <div className="grid md:grid-cols-2 gap-4">
       {([{id:'essential',title:'Growth Essencial',price:'R$ 149/mês',description:'Planejamento de campanhas, recomendações de IA e acompanhamento. Criativos não inclusos.'},{id:'designer',title:'Growth + Designer',price:'R$ 299/mês',description:'Inclui suporte de design da Agencius. Quantidade de peças e revisões serão definidas na contratação.'}] as const).map(item =>
