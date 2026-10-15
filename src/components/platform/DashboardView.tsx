@@ -1129,7 +1129,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* --------------------------------------------------------------------- */}
         {/* LEFT COLUMN: HERO SALES + MONTHLY PERFORMANCE + PAYMENT METHODS       */}
         {/* --------------------------------------------------------------------- */}
-        <div className="lg:col-span-8 flex flex-col gap-2.5 sm:gap-6 min-w-0">
+        <div className="lg:col-span-8 flex flex-col gap-3 sm:gap-4 min-w-0">
           
           {/* CARD 1: COMBINED "Visão geral de vendas" + "Desempenho mensal de vendas" */}
           <motion.div 
@@ -1402,7 +1402,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-7 shadow-2xl backdrop-blur-xl"
+            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-2xl backdrop-blur-xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-2.5 sm:mb-5">
@@ -1463,10 +1463,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* --------------------------------------------------------------------- */}
         {/* RIGHT COLUMN: REESTRUTURAÇÃO EM GRID DENSA (2 COLS NO MOBILE)         */}
         {/* --------------------------------------------------------------------- */}
-        <div className="lg:col-span-4 flex flex-col gap-2.5 sm:gap-6 min-w-0">
+        <div className="lg:col-span-4 flex flex-col gap-3 sm:gap-4 min-w-0">
 
-          {/* DENSE 2-COLUMN GRID ON MOBILE: "Disponível para saque" & "Saldo Futuro" lado a lado */}
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-6">
+          {/* Saldos em cartões responsivos, sem comprimir os valores no celular */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4">
             
             {/* CARD 1: "Disponível para saque" */}
             <motion.div
@@ -1525,7 +1525,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             </motion.div>
 
-            {/* CARD 2: "Saldo Futuro" (Matching reference layout with Purple Wallet) */}
+            {/* CARD 2: "Saldo pendente" (Matching reference layout with Purple Wallet) */}
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1540,7 +1540,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <Clock className="w-3.5 h-3.5" />
                     </div>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-white truncate">
-                      Saldo Futuro
+                      Saldo pendente
                     </h3>
                   </div>
 
