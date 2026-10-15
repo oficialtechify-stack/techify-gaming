@@ -146,7 +146,7 @@ function MainApp() {
         if (authParam === 'login' || hash === '#login') {
           setActiveModal('login');
         } else if (authParam === 'afiliado' || authParam === 'register_affiliate' || hash === '#afiliado' || hash === '#cadastro-afiliado') {
-          setActiveModal('register_affiliate');
+          setActiveModal('register_company');
         } else if (authParam === 'empresa' || authParam === 'register_company' || hash === '#empresa' || hash === '#cadastro-empresa') {
           setActiveModal('register_company');
         }
