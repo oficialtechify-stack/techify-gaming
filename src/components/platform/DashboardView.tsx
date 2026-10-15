@@ -330,7 +330,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [showValues, setShowValues] = useState<boolean>(true);
 
   // Timeframe selector for the chart (1D, 1S, 1M, 6M, 1A) - default 1D matching reference
-  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1D');
+  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1S');
 
   // Search filter query
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -473,7 +473,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return [
       {
         id: 'pix',
-        name: 'PIX',
+        name: 'Pix',
         icon: (
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#22d3ee] fill-current" stroke="none">
             <path d="M12 2L6 8l6 6 6-6-6-6zm0 8l-6 6 6 6 6-6-6-6z" />
@@ -507,7 +507,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       },
       {
         id: 'pix_auto',
-        name: 'PIX automático',
+        name: 'Pix recorrente',
         icon: (
           <RotateCcw className="w-4 h-4 text-[#22d3ee]" />
         ),
@@ -526,6 +526,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const approvedPercent = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0;
   const pendingPercent = totalCount > 0 ? Math.round((pendingCount / totalCount) * 100) : 0;
   const rejectedPercent = totalCount > 0 ? Math.round((rejectedCount / totalCount) * 100) : 0;
+  const refundedCount = filteredSales.filter(t => ['refunded', 'reembolsado', 'estornado'].includes(String(t.status || '').toLowerCase())).length;
+  const disputedCount = filteredSales.filter(t => ['disputed', 'chargeback', 'contestado'].includes(String(t.status || '').toLowerCase())).length;
+  const refundRate = totalCount ? (refundedCount / totalCount * 100).toFixed(1).replace('.', ',') + '%' : '0%';
+  const disputeRate = totalCount ? (disputedCount / totalCount * 100).toFixed(1).replace('.', ',') + '%' : '0%';
 
   // Dynamic Chart Points based on selectedTimeframe and real filtered sales
   // "nessa outra parte ele vem zerado em linha reta e so sobe e desce assim comforme as vendas dos usuarios"
@@ -1120,7 +1124,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 2. MAIN GRID (LEFT: 68% / RIGHT: 32%)                                     */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-6 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 min-w-0 items-start">
         
         {/* --------------------------------------------------------------------- */}
         {/* LEFT COLUMN: HERO SALES + MONTHLY PERFORMANCE + PAYMENT METHODS       */}
@@ -1225,7 +1229,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                   {/* Pills 1D, 1S, 1M, 6M, 1A */}
                   <div className="flex items-center gap-0.5 sm:gap-1 bg-[#040810] border border-white/10 p-0.5 sm:p-1 rounded-lg sm:rounded-xl">
-                    {['1D', '1S', '1M', '6M', '1A'].map((horizon) => (
+                    {[['1S', '7 dias'], ['1M', '30 dias'], ['1A', '12 meses']].map(([horizon, label]) => (
                       <button
                         key={horizon}
                         onClick={() => setSelectedTimeframe(horizon)}
@@ -1235,7 +1239,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             : 'text-white/60 hover:text-white'
                         }`}
                       >
-                        {horizon}
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -1824,7 +1828,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Reembolso</span>
                             </div>
                             <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                              {showValues ? '0%' : '•'}
+                              {showValues ? refundRate : '•'}
                             </div>
                             <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Taxa de estornos</span>
                           </div>
@@ -1836,7 +1840,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Chargeback</span>
                             </div>
                             <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                              {showValues ? '0%' : '•'}
+                              {showValues ? disputeRate : '•'}
                             </div>
                             <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Contestações</span>
                           </div>
@@ -1848,7 +1852,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">MED</span>
                             </div>
                             <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                              {showValues ? '0%' : '•'}
+                              {showValues ? 'Sem dados' : '•'}
                             </div>
                             <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">BACEN</span>
                           </div>
