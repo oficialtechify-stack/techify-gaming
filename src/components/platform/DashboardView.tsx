@@ -354,7 +354,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   // Safe user display name
-  const displayName = userName || userProfile?.name || (roleMode === 'afiliado' ? 'Afiliado' : 'Empresa');
+  const displayName = userName || userProfile?.name || 'Empresa';
   const userInitial = displayName.trim().charAt(0).toUpperCase() || 'M';
 
   const isApprovedTransaction = (status: unknown) =>
@@ -1008,26 +1008,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <button
                       onClick={() => {
                         setIsProfileMenuOpen(false);
-                        setActiveTab('comunidade');
+                        setActiveTab('carteira');
                       }}
                       className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
                     >
                       <HeartHandshake className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Comunidade VIP</span>
+                      <span>Carteira e recebíveis</span>
                     </button>
 
                     <button
                       onClick={() => {
                         setIsProfileMenuOpen(false);
-                        setActiveTab('vitrine');
+                        setActiveTab('vendas');
                       }}
                       className="w-full text-left px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
                     >
                       <Package className="w-3.5 h-3.5 text-white/50" />
-                      <span>Vitrine de Startups</span>
+                      <span>Transações</span>
                     </button>
 
-                    {onSwitchRole && (
+                    {false && onSwitchRole && (
                       <button
                         onClick={() => {
                           setIsProfileMenuOpen(false);
