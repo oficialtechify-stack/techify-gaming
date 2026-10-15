@@ -44,6 +44,7 @@ import publicMetricsHandler from '../server-api/public/metrics.js';
 import checkoutViewHandler from '../server-api/public/checkout-view.js';
 import balanceReleasesHandler from '../server-api/balance/releases.js';
 import publicMarketplaceHandler from '../server-api/marketplace/public.js';
+import companyStorefrontHandler from '../server-api/company/storefront.js';
 
 export const config = {
   api: {
@@ -266,6 +267,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         req.body = { ...(req.body || {}), action: cleanPath.replace(/^admin\//, '') };
       }
       return adminEntityActionHandler(req as any, res as any);
+    case 'company/storefront':
+      return companyStorefrontHandler(req as any, res as any);
     case 'marketplace/public':
       return publicMarketplaceHandler(req as any, res as any);
     default:
