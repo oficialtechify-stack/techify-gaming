@@ -510,12 +510,14 @@ async function processProductSubscriptionInvoice(
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   if (subscription.metadata?.leadspay_product_subscription !== '1') return false;
 
-  await syncProductSubscriptionStatus(subscription, 'active');
-
   const invoiceAny = invoice as any;
-  if (invoiceAny.status !== 'paid' && Number(invoiceAny.amount_paid || 0) <= 0) {
+  // A paid invoice with no collected funds must never credit a balance.
+  // Preserve the real Stripe subscription status instead of forcing activation.
+  if (invoiceAny.status !== 'paid' || !Number.isSafeInteger(Number(invoiceAny.amount_paid)) || Number(invoiceAny.amount_paid) <= 0) {
+    await syncProductSubscriptionStatus(subscription);
     return true;
   }
+  await syncProductSubscriptionStatus(subscription);
 
   const metadata = subscription.metadata || {};
   const planId = String(metadata.plan_id || '');
@@ -542,7 +544,7 @@ async function processProductSubscriptionInvoice(
     throw new Error('Assinatura de produto sem metadados financeiros obrigatórios.');
   }
 
-  const grossAmountCents = Number(invoiceAny.amount_paid || invoiceAny.total || 0);
+  const grossAmountCents = Number(invoiceAny.amount_paid);
   if (!Number.isSafeInteger(grossAmountCents) || grossAmountCents < 50) {
     throw new Error('Fatura recorrente paga com valor inválido.');
   }
