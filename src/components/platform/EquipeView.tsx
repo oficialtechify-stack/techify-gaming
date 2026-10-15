@@ -42,7 +42,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
   onRemoveAffiliate
 }) => {
   const { currentUser } = useAuth();
-  const [activeSection, setActiveSection] = useState<'afiliados' | 'equipe_interna'>('afiliados');
+  const [activeSection, setActiveSection] = useState<'afiliados' | 'equipe_interna'>('equipe_interna');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [name, setName] = useState('');
@@ -219,10 +219,10 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
             Gestão Comercial da Empresa
           </span>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
-            Afiliados & Equipe de Vendas
+            Equipe de Vendas e Colaboradores
           </h1>
           <p className="text-xs text-white/60 mt-1 max-w-2xl">
-            Acompanhe os afiliados vinculados aos produtos desta empresa, remova vínculos e organize os vendedores internos do mesmo tenant.
+            Cadastre vendedores, organize funções, acompanhe o status dos colaboradores e gerencie sua equipe de forma independente de outras empresas.
           </p>
         </div>
 
@@ -490,7 +490,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
         </div>
       )}
 
-      {/* SECTION 2: EQUIPE INTERNA & SUB-AFILIADOS */}
+      {/* EQUIPE INTERNA: sem afiliados, subafiliados ou bônus automáticos */}
       {activeSection === 'equipe_interna' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -500,30 +500,30 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                 {teamMembers.length} {teamMembers.length === 1 ? 'Vendedor' : 'Vendedores'}
               </div>
               <span className="text-[11px] text-[#D9F22A] mt-1 block">
-                {teamMembers.length > 0 ? 'Equipe sincronizada em tempo real' : 'Nenhum membro cadastrado ainda'}
+                {teamMembers.length > 0 ? 'Equipe carregada do cadastro da empresa' : 'Nenhum membro cadastrado ainda'}
               </span>
             </div>
 
             <div className="bg-[#080d1a] border border-white/10 p-5 rounded-2xl">
-              <span className="text-xs text-white/50 uppercase font-bold">Vendas Fechadas pelo Time</span>
+              <span className="text-xs text-white/50 uppercase font-bold">Vendas Atribuídas à Equipe</span>
               <div className="text-2xl font-black text-white font-['Syne'] mt-1">
-                {totalTeamSales} {totalTeamSales === 1 ? 'Plataforma' : 'Plataformas'}
+                {totalTeamSales} {totalTeamSales === 1 ? 'Venda' : 'Vendas'}
               </div>
-              <span className="text-[11px] text-white/50 mt-1 block">Volume em tempo real</span>
+              <span className="text-[11px] text-white/50 mt-1 block">Somente vendas registradas por colaborador</span>
             </div>
 
             <div className="bg-[#080d1a] border border-[#D9F22A]/30 bg-[#D9F22A]/5 p-5 rounded-2xl">
-              <span className="text-xs text-[#D9F22A] uppercase font-bold">Seu Bônus de Rede (5%)</span>
+              <span className="text-xs text-[#D9F22A] uppercase font-bold">Colaboradores Ativos</span>
               <div className="text-2xl font-black text-[#D9F22A] font-['Syne'] mt-1">
-                R$ 0,00
+                {teamMembers.filter((member) => member.status === 'Ativo').length}
               </div>
-              <span className="text-[11px] text-white/60 mt-1 block">Creditado automaticamente</span>
+              <span className="text-[11px] text-white/60 mt-1 block">Conforme cadastro da empresa</span>
             </div>
           </div>
 
           <div className="bg-[#080d1a] border border-white/10 rounded-2xl p-5 shadow-xl">
             <h3 className="text-base font-bold text-white font-['Syne'] mb-4">
-              Membros da Sua Rede Comercial ({teamMembers.length})
+              Colaboradores Cadastrados ({teamMembers.length})
             </h3>
 
             {teamLoading ? (
@@ -535,7 +535,7 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                 <UserCheck className="w-12 h-12 text-[#D9F22A]/40 mx-auto mb-3" />
                 <h4 className="text-sm font-bold text-white">Nenhum membro cadastrado na sua equipe</h4>
                 <p className="text-xs text-white/50 max-w-sm mx-auto mt-1 mb-4">
-                  Convide novos vendedores e afiliados para expandir sua operação e lucrar em escala.
+                  Cadastre colaboradores da empresa para organizar sua operação comercial. O cadastro não concede acesso ao painel automaticamente.
                 </p>
                 <button
                   onClick={() => setIsInviteModalOpen(true)}
@@ -553,8 +553,8 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                       <th className="py-3 px-4 font-bold">Nome & Cargo</th>
                       <th className="py-3 px-4 font-bold">Contato</th>
                       <th className="py-3 px-4 font-bold text-center">Vendas Feitas</th>
-                      <th className="py-3 px-4 font-bold">Comissões Geradas</th>
-                      <th className="py-3 px-4 font-bold text-[#D9F22A]">Seu Bônus (5%)</th>
+                      <th className="py-3 px-4 font-bold">Função</th>
+                      <th className="py-3 px-4 font-bold text-[#D9F22A]">Cadastro</th>
                       <th className="py-3 px-4 font-bold text-center">Status</th>
                       <th className="py-3 px-4 font-bold text-right">Ação</th>
                     </tr>
@@ -569,10 +569,10 @@ export const EquipeView: React.FC<EquipeViewProps> = ({
                         <td className="py-3.5 px-4 text-white/70 font-mono text-[11px]">{m.email}</td>
                         <td className="py-3.5 px-4 text-center font-bold text-white">{m.salesCount}</td>
                         <td className="py-3.5 px-4 font-bold text-white">
-                          R$ {(typeof m.commissionGenerated === 'number' ? m.commissionGenerated : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          {m.role}
                         </td>
                         <td className="py-3.5 px-4 font-black text-[#D9F22A]">
-                          R$ {(typeof m.bonus === 'number' ? m.bonus : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          {m.createdAt ? new Date(m.createdAt).toLocaleDateString('pt-BR') : '—'}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
