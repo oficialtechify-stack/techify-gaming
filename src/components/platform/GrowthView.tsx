@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Megaphone, Palette, ShieldCheck, ArrowRight, Volume2, VolumeX, Play, Pause } from 'lucide-react';
 import type { CompanyPlan } from '../../types/platform';
+import { submitGrowthCampaign, subscribeCompanyGrowthCampaigns, type GrowthCampaign } from '../../services/growthCampaignService';
 
 type GrowthViewProps = { companyId?: string; plans: CompanyPlan[] };
 export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
+  const [campaigns, setCampaigns] = useState<GrowthCampaign[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  useEffect(() => {
+    if (!companyId) return;
+    return subscribeCompanyGrowthCampaigns(companyId, setCampaigns, error => setSubmissionError('Não foi possível carregar as campanhas: ' + error.message));
+  }, [companyId]);
   const [selectedPlan, setSelectedPlan] = useState<'essential' | 'designer'>('essential');
   const [productId, setProductId] = useState('');
   const [goal, setGoal] = useState('Vender mais');
@@ -75,6 +84,16 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
     setShowReview(true);
     setCampaignStage('channels');
   };
+  const submitForReview = async () => {
+    if (!companyId || !selectedProduct || submitting || !saved) return;
+    setSubmitting(true); setSubmissionError('');
+    try {
+      await submitGrowthCampaign({ companyId, productId, productName: selectedProduct.name, goal, budget: Number(budget), brief, onboardingAnswers: answers, plan: selectedPlan, adChannel, adDestination, adRegion, adUrl });
+      setSubmitted(true); setSaved(false); setShowReview(false);
+      sessionStorage.removeItem('leadspay-growth-draft-' + companyId);
+    } catch (error) { setSubmissionError(error instanceof Error ? error.message : 'Falha ao enviar campanha.'); }
+    finally { setSubmitting(false); }
+  };
   const saveCampaignSetup = () => {
     if (!companyId || !saved) return;
     const key = 'leadspay-growth-draft-' + companyId;
@@ -132,7 +151,10 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
       <button disabled={!companyId || !productId || !(Number(budget)>0)} onClick={saveDraft} className="inline-flex items-center gap-2 rounded-xl bg-[#D9F22A] text-[#0a1017] font-bold px-5 py-3 disabled:opacity-40">Continuar para configuração da campanha <ArrowRight size={16}/></button>
       {saved && <p role="status" className="text-[#D9F22A] text-sm">Rascunho salvo neste navegador para demonstração. Ainda não foi enviado à equipe.</p>}
       {showReview && saved && campaignStage === 'channels' && <div className="rounded-2xl border border-white/20 bg-[#101728] p-5 space-y-4"><h3 className="text-lg font-bold">Etapa 2 · Configuração da campanha</h3><p className="text-sm text-white/65">Configure o destino e o público antes de conectar uma conta de anúncios. Nenhum anúncio será enviado nesta etapa.</p><div className="grid sm:grid-cols-2 gap-4"><label className="text-sm space-y-2">Onde anunciar<select value={adChannel} onChange={e=>setAdChannel(e.target.value)} className="w-full rounded-xl bg-[#101728] border border-white/20 p-3"><option>Instagram e Facebook</option><option>Instagram</option><option>Facebook</option></select></label><label className="text-sm space-y-2">Destino do anúncio<select value={adDestination} onChange={e=>setAdDestination(e.target.value)} className="w-full rounded-xl bg-[#101728] border border-white/20 p-3"><option>WhatsApp</option><option>Site</option><option>Formulário de leads</option></select></label><label className="text-sm space-y-2">Região de alcance<input value={adRegion} onChange={e=>setAdRegion(e.target.value)} placeholder="Cidade, estado ou Brasil" className="w-full rounded-xl bg-[#101728] border border-white/20 p-3"/></label><label className="text-sm space-y-2">{adDestination === 'WhatsApp' ? 'WhatsApp de contato (com DDD)' : adDestination === 'Site' ? 'URL do site' : 'Link do formulário (se houver)'}<input value={adUrl} onChange={e=>setAdUrl(e.target.value)} placeholder={adDestination === 'WhatsApp' ? '(11) 99999-9999' : 'https://'} className="w-full rounded-xl bg-[#101728] border border-white/20 p-3"/></label></div><p className="text-xs text-amber-200">A conexão oficial com a Meta será disponibilizada após implementação segura do OAuth, das permissões e da aprovação de campanhas. Não informe sua senha da Meta aqui.</p><div className="flex flex-wrap gap-3"><button type="button" onClick={saveCampaignSetup} disabled={!adRegion.trim() || !adUrl.trim()} className="rounded-xl bg-[#D9F22A] text-[#0a1017] px-4 py-3 font-bold disabled:opacity-40">Salvar configuração e revisar</button><button type="button" onClick={()=>setCampaignStage('brief')} className="rounded-xl border border-white/20 px-4 py-3">Voltar</button></div></div>}
-      {showReview && saved && campaignStage === 'brief' && <div className="rounded-2xl border border-[#D9F22A]/40 bg-[#101728] p-5 space-y-3" aria-label="Resumo do rascunho"><h3 className="text-lg font-bold">Resumo da primeira campanha</h3><p className="text-sm text-white/70">Confira as informações antes de solicitar a análise da equipe.</p><dl className="grid sm:grid-cols-2 gap-3 text-sm"><div><dt className="text-white/50">Produto</dt><dd>{selectedProduct?.name}</dd></div><div><dt className="text-white/50">Plano escolhido</dt><dd>{selectedPlanLabel}</dd></div><div><dt className="text-white/50">Objetivo</dt><dd>{goal}</dd></div><div><dt className="text-white/50">Orçamento de anúncios</dt><dd>R$ {Number(budget).toLocaleString('pt-BR')}</dd></div><div><dt className="text-white/50">Público</dt><dd>{brief || 'Não informado'}</dd></div><div><dt className="text-white/50">Maior desafio</dt><dd>{answers.challenge || 'Não informado'}</dd></div></dl><p className="text-xs text-amber-200">Próxima etapa: enviar o briefing para análise da equipe. O envio ainda depende da integração segura com Firebase e ADM; nenhuma campanha ou cobrança será iniciada por este rascunho.</p><button type="button" onClick={() => { setShowReview(false); setSaved(false); }} className="rounded-xl border border-white/20 px-4 py-2 text-sm">Editar campanha</button></div>}
+      {submissionError && <p role="alert" className="text-red-300 text-sm">{submissionError}</p>}
+      {submitted && <p role="status" className="text-[#D9F22A] text-sm">Campanha enviada para análise. Nenhum anúncio foi publicado e nenhuma cobrança foi iniciada.</p>}
+      {campaigns.length > 0 && <div className="rounded-2xl border border-white/20 p-4 space-y-2"><h3 className="font-bold">Minhas campanhas enviadas</h3>{campaigns.map(c => <div key={c.id} className="flex justify-between gap-3 text-sm border-t border-white/10 py-2"><span>{c.productName}</span><span>{c.status === 'aguardando_analise' ? 'Aguardando análise' : c.status === 'aprovada' ? 'Aprovada para próxima etapa' : 'Ajustes solicitados'}{c.reviewNote ? ': ' + c.reviewNote : ''}</span></div>)}</div>}
+      {showReview && saved && campaignStage === 'brief' && <div className="rounded-2xl border border-[#D9F22A]/40 bg-[#101728] p-5 space-y-3" aria-label="Resumo do rascunho"><h3 className="text-lg font-bold">Resumo da primeira campanha</h3><p className="text-sm text-white/70">Confira as informações antes de solicitar a análise da equipe.</p><dl className="grid sm:grid-cols-2 gap-3 text-sm"><div><dt className="text-white/50">Produto</dt><dd>{selectedProduct?.name}</dd></div><div><dt className="text-white/50">Plano escolhido</dt><dd>{selectedPlanLabel}</dd></div><div><dt className="text-white/50">Objetivo</dt><dd>{goal}</dd></div><div><dt className="text-white/50">Orçamento de anúncios</dt><dd>R$ {Number(budget).toLocaleString('pt-BR')}</dd></div><div><dt className="text-white/50">Público</dt><dd>{brief || 'Não informado'}</dd></div><div><dt className="text-white/50">Maior desafio</dt><dd>{answers.challenge || 'Não informado'}</dd></div></dl><p className="text-xs text-amber-200">O envio registra sua solicitação no Firebase para revisão da equipe. Não publica anúncios nem inicia cobranças.</p><div className="flex flex-wrap gap-3"><button type="button" disabled={submitting} onClick={submitForReview} className="rounded-xl bg-[#D9F22A] text-[#0a1017] px-4 py-2 font-bold disabled:opacity-50">{submitting ? 'Enviando...' : 'Enviar para análise'}</button><button type="button" onClick={() => { setShowReview(false); setSaved(false); }} className="rounded-xl border border-white/20 px-4 py-2 text-sm">Editar campanha</button></div></div>}
       {!companyId && <p className="text-amber-300 text-sm">É necessário vincular sua empresa para começar.</p>}
     </section>
     <div className="rounded-2xl border border-white/10 p-5 flex gap-3 items-start"><ShieldCheck className="text-[#D9F22A] shrink-0"/><div><h3 className="font-bold">AgênciaOS · Parceira oficial</h3><p className="text-sm text-white/65 mt-1">Solicitações de artes e serviços serão integradas à AgênciaOS em uma próxima etapa. Campanhas exigirão aprovação antes de qualquer publicação ou gasto.</p></div></div>

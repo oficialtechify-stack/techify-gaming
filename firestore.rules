@@ -20,6 +20,27 @@ service cloud.firestore {
         get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid;
     }
 
+
+    // Growth: empresas só leem suas próprias campanhas; somente o ADM revisa.
+    match /growthCampaigns/{campaignId} {
+      allow create: if isAuthenticated()
+        && isCompanyOwner(request.resource.data.companyId)
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'aguardando_analise'
+        && request.resource.data.keys().hasOnly(['companyId','ownerId','productId','productName','goal','budget','brief','onboardingAnswers','plan','adChannel','adDestination','adRegion','adUrl','status','createdAt'])
+        && request.resource.data.budget is number
+        && request.resource.data.budget > 0
+        && request.resource.data.productId is string
+        && request.resource.data.productName is string
+        && request.resource.data.adUrl is string
+        && request.resource.data.adRegion is string;
+      allow read: if isAdmin() || (isAuthenticated() && isCompanyOwner(resource.data.companyId) && resource.data.ownerId == request.auth.uid);
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewNote','reviewedAt','reviewedBy'])
+        && request.resource.data.status in ['aprovada','ajustes_solicitados']
+        && request.resource.data.reviewedBy == request.auth.uid;
+      allow delete: if false;
+    }
     // Documento raiz da empresa
     match /companies/{companyId} {
       allow read: if (isAuthenticated() && (
