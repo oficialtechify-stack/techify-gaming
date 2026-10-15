@@ -170,9 +170,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const [roleMode, setRoleMode] = useState<UserRoleMode>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      return 'afiliado';
+      return 'empresa';
     }
-    return userRole || 'afiliado';
+    return userRole === 'admin' ? 'admin' : 'empresa';
   });
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -1733,7 +1733,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         } ml-0`}
       >
         {/* TOPBAR */}
-        <header className={`h-16 sticky top-0 z-30 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-4 min-w-0 ${activeTab === 'dashboard' ? 'lg:hidden' : ''}`}>
+        <header className={`h-16 sticky top-0 z-30 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-4 min-w-0 `}>
           {/* Left Header: Mobile Menu Hamburger + Current Panel Indicator */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
             {/* Hamburger Button on Mobile */}
