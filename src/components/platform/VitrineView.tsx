@@ -91,15 +91,8 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     setLocalAffiliations(affiliations);
   }, [affiliations, isVerified]);
 
-  const categories = [
-    'all', 
-    'SaaS / B2B', 
-    'iGaming & Apostas', 
-    'Fintech & Pagamentos', 
-    'Marketing & Vendas', 
-    'IA & Automação', 
-    'Educação / Cursos'
-  ];
+  const categories = ['all', 'Gastronomia', 'Tecnologia', 'Moda e Beleza', 'Saúde e Bem-estar', 'Casa e Decoração', 'Marketing e Design', 'Serviços Profissionais', 'Automotivo', 'Pets', 'Turismo e Eventos', 'Esportes e Fitness', 'Finanças e Negócios', 'Produtos Digitais', 'SaaS / B2B', 'Fintech & Pagamentos', 'Marketing & Vendas', 'IA & Automação', 'E-commerce / Dropship'];
+  const blockedCategories = new Set(['iGaming & Apostas', 'Educação / Cursos']);
 
   const approvedCompanyIds = new Set(
     companies
@@ -115,6 +108,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
   const filteredPlatforms = platforms.filter(p => {
     if (
+      blockedCategories.has(p.category) ||
       p.active === false ||
       String(p.status || '').toLowerCase() !== 'ativo' ||
       (p as any).archived === true ||
@@ -280,15 +274,15 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           <div className="max-w-2xl flex flex-col items-start gap-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 text-[11px] font-bold text-[#D9F22A] uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5" />
-              {roleMode === 'afiliado' ? 'MODO AFILIADO • MARKETPLACE DE STARTUPS' : 'MODO EMPRESA • GESTÃO DE CATÁLOGO & PUBLICAÇÃO'}
+              {roleMode === 'afiliado' ? 'MODO AFILIADO • MARKETPLACE DE STARTUPS' : 'VITRINE DA LEADSPAY • EMPRESAS VERIFICADAS'}
             </div>
             <h1 className="text-2xl sm:text-4xl font-black text-white font-['Syne']">
-              {roleMode === 'afiliado' ? 'Vitrine de Startups & Afiliação Direta' : 'Marketplace & Publicação de Planos'}
+              {roleMode === 'afiliado' ? 'Vitrine de Startups & Afiliação Direta' : 'Marketplace de Produtos e Serviços'}
             </h1>
             <p className="text-sm text-white/70 leading-relaxed">
               {roleMode === 'afiliado'
                 ? 'Explore startups parceiras, afilie-se com 1 clique para receber seu código exclusivo de divulgação e divulgue seu link direto para o Checkout do produto com comissões de até 70% creditadas em tempo real.'
-                : 'Cadastre sua startup, publique planos e soluções comerciais e disponibilize seus produtos para a rede de afiliados parceiros venderem.'}
+                : 'Descubra empresas, produtos digitais, serviços e assinaturas. Publique suas ofertas e compartilhe sua vitrine com clientes, sem depender de afiliados.'}
             </p>
           </div>
 
@@ -309,7 +303,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                 }`}
               >
                 {isVerified ? <Plus className="w-4 h-4 stroke-[3]" /> : <Lock className="w-4 h-4 text-amber-400" />}
-                <span>{isVerified ? 'Criar Novo Plano' : 'Criar Novo Plano (Requer Verificação)'}</span>
+                <span>{isVerified ? 'Nova Oferta' : 'Nova Oferta (Requer Verificação)'}</span>
               </button>
             )}
             {roleMode === 'afiliado' && onSwitchToCompanyMode && (
@@ -377,7 +371,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                   : 'bg-[#050811] text-white/70 hover:text-white border border-white/10'
               }`}
             >
-              {cat === 'all' ? `Todos os Planos (${platforms.length})` : cat}
+              {cat === 'all' ? `Todas as Ofertas (${filteredPlatforms.length})` : cat}
             </button>
           ))}
         </div>
@@ -387,23 +381,14 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           <div className="relative">
             <input
               type="text"
-              placeholder="Buscar startup ou plano..."
+              placeholder="Buscar empresas, produtos ou serviços..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A] w-48 sm:w-56"
             />
           </div>
 
-          <select
-            value={minCommission}
-            onChange={(e) => setMinCommission(Number(e.target.value))}
-            className="bg-[#050811] border border-white/15 rounded-xl px-3 py-2 text-xs text-[#D9F22A] font-bold focus:outline-none focus:border-[#D9F22A]"
-          >
-            <option value={0}>Todas as Comissões</option>
-            <option value={20}>Mínimo 20%</option>
-            <option value={35}>Mínimo 35%</option>
-            <option value={50}>Mínimo 50%</option>
-          </select>
+
         </div>
       </div>
 
