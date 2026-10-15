@@ -295,7 +295,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const finalDoc = await withdrawalRef.get();
     return res.status(200).json({
       success: true,
-      message: 'Saque processado pela LeadsPay e encaminhado pela Stripe ao banco cadastrado.',
+      message: payoutStatus === 'COMPLETED'\n        ? 'A Stripe confirmou a conclusão do saque.'\n        : 'Transferência registrada; o pagamento bancário ainda está pendente de confirmação pela Stripe.',
       withdrawal: { id: withdrawalId, ...finalDoc.data() },
     });
   } catch (error) {
