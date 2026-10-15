@@ -63,6 +63,24 @@ export default async function handler(req: Req, res: Res) {
         : {};
       const action = clean(body.action, 40) || 'create';
 
+      if (action === 'update') {
+        const memberId = clean(body.memberId, 180);
+        if (!memberId) return res.status(400).json({ error: 'Colaborador inválido.' });
+        const ref = db.collection('team_members').doc(memberId);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Colaborador não encontrado.' });
+        if (String(snap.data()!.companyId || '') !== companyId) return res.status(403).json({ error: 'Colaborador de outra empresa.' });
+        const name = clean(body.name, 140);
+        const role = clean(body.role, 100);
+        const status = clean(body.status, 30);
+        if (name.length < 2 || !role || !['Ativo', 'Pendente', 'Inativo'].includes(status)) return res.status(400).json({ error: 'Dados inválidos.' });
+        const permissions = Array.isArray(body.permissions) ? body.permissions.filter((p): p is string => typeof p === 'string' && ['view_sales', 'view_clients', 'manage_products', 'manage_team', 'view_reports'].includes(p)) : [];
+        const updatedAt = new Date().toISOString();
+        await ref.update({ name, role, status, permissions: [...new Set(permissions)], updatedAt });
+        await db.collection('company_team_audit').add({ companyId, memberId, action: 'update', actorId: identity.uid, updatedAt });
+        return res.status(200).json({ success: true, member: { id: memberId, ...snap.data(), name, role, status, permissions, updatedAt } });
+      }
+
       if (action === 'delete') {
         const memberId = clean(body.memberId, 180);
         if (!memberId) return res.status(400).json({ error: 'Membro inválido.' });
@@ -75,6 +93,7 @@ export default async function handler(req: Req, res: Res) {
         }
 
         await ref.delete();
+        await db.collection('company_team_audit').add({ companyId, memberId, action: 'delete', actorId: identity.uid, updatedAt: new Date().toISOString() });
         return res.status(200).json({ success: true, deleted: memberId });
       }
 
@@ -108,7 +127,9 @@ export default async function handler(req: Req, res: Res) {
 
       const now = new Date().toISOString();
       const memberId = `team_${randomUUID().replace(/-/g, '')}`;
+      const permissions: string[] = [];
       const member = {
+        permissions,
         id: memberId,
         companyId,
         ownerId: identity.uid,
@@ -124,6 +145,7 @@ export default async function handler(req: Req, res: Res) {
       };
 
       await db.collection('team_members').doc(memberId).set(member);
+      await db.collection('company_team_audit').add({ companyId, memberId, action: 'create', actorId: identity.uid, updatedAt: now });
       return res.status(200).json({ success: true, member });
     }
 
