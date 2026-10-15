@@ -15,7 +15,7 @@ function periodOf(o: Offer) {
  return 'Outros planos';
 }
 export default function PublicMarketplace() {
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -38,7 +38,7 @@ export default function PublicMarketplace() {
     }).catch(err => setError(err.message || 'Vitrine indisponível.')).finally(() => setLoading(false));
   }, []);
   const company = companies.find(c => c.slug === companySlug || c.id === companySlug);
-  const canEdit = !!currentUser && !!company && company.ownerId === currentUser.uid;
+  const canEdit = !!currentUser && !!company && company.ownerId === currentUser.uid && userProfile.companyId === company.id && userProfile.hasCompanyProfile === true;
   const startEdit = () => { if (!company) return; setDraft({ logo: company.logo || '', bannerImage: company.bannerImage || '', tagline: company.tagline || '', description: company.description || '', website: company.website || '' }); setFeedback(''); setEditing(true); };
   const saveProfile = async () => { if (!company || !currentUser || !canEdit) return; setSaving(true); setFeedback(''); try { const token = await currentUser.getIdToken(); const response = await fetch('/api/company/storefront', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ companyId: company.id, ...draft }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Erro ao salvar.'); setCompanies(prev => prev.map(item => item.id === company.id ? { ...item, ...draft } : item)); setEditing(false); setFeedback('Perfil atualizado com sucesso.'); } catch (err) { setFeedback(err instanceof Error ? err.message : 'Falha ao salvar.'); } finally { setSaving(false); } };
   const shareProfile = async () => { const url = window.location.href; try { if (navigator.share) await navigator.share({ title: company?.name || 'LeadsPay', url }); else if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(url); setFeedback('Link do perfil copiado!'); } else { window.prompt('Copie o link do perfil:', url); } } catch (err) { if ((err as Error)?.name !== 'AbortError') window.prompt('Copie o link do perfil:', url); } };
