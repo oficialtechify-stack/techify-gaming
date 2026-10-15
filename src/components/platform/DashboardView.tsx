@@ -1141,7 +1141,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <BarChart2 className="w-3.5 h-3.5" />
                   </div>
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-white/90">
-                    {roleMode === 'afiliado' ? 'Visão geral de comissões' : 'Pagamentos da empresa'}
+                    Pagamentos da empresa
                   </h2>
                 </div>
                 <button
@@ -1166,8 +1166,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {approvedSalesCount > 0
                         ? roleMode === 'afiliado'
                           ? `${approvedSalesCount} vendas com comissão`
-                          : `${approvedSalesCount} vendas liquidadas`
-                        : 'Nenhuma venda no período'}
+                          : `${approvedSalesCount} pagamentos confirmados`
+                        : 'Nenhum pagamento no período'}
                     </span>
                   </div>
                 </div>
@@ -1181,7 +1181,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div className="text-sm sm:text-2xl font-bold text-white leading-tight">
                       {showValues ? approvedSalesCount : '••'}
                     </div>
-                    <span className="text-[10px] sm:text-xs text-gray-400 block">vendas</span>
+                    <span className="text-[10px] sm:text-xs text-gray-400 block">pagamentos</span>
                   </div>
                 </div>
 
@@ -1195,7 +1195,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {showValues ? `R$ ${(averageTicket).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••'}
                     </div>
                     <span className="text-[10px] sm:text-xs text-gray-400 block">
-                      {roleMode === 'afiliado' ? 'Comissão média' : 'Ticket médio'}
+                      Ticket médio
                     </span>
                   </div>
                 </div>
@@ -1214,13 +1214,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <BarChart3 className="w-3.5 h-3.5" />
                   </div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                    {roleMode === 'afiliado' ? 'Evolução das comissões' : 'Volume de pagamentos'}
+                    Volume de pagamentos
                   </h3>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-white/40 hidden md:inline">
-                    {roleMode === 'afiliado' ? 'Comissões confirmadas' : 'Pagamentos confirmados'}
+                    Pagamentos confirmados
                   </span>
 
                   {/* Pills 1D, 1S, 1M, 6M, 1A */}
@@ -1407,7 +1407,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <CreditCard className="w-3.5 h-3.5" />
                 </div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Métodos de pagamento'}
+                  Métodos de pagamento
                 </h3>
               </div>
               <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
@@ -1422,7 +1422,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <tr className="text-gray-400 uppercase tracking-wider text-[10px] border-b border-white/5">
                     <th className="pb-1.5 sm:pb-3 font-semibold">Meio de pagamento</th>
                     <th className="pb-1.5 sm:pb-3 font-semibold text-center">Participação</th>
-                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">{roleMode === 'afiliado' ? 'Comissão' : 'Valor'}</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">Valor</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
