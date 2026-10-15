@@ -88,17 +88,6 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
     }
 
-    const ledgerBalances = await calculateUserLedgerBalances(db, identity.uid);
-    const authoritativeAvailableCents = ledgerBalances[role].availableCents;
-    if (authoritativeAvailableCents < MIN_WITHDRAWAL_CENTS || authoritativeAvailableCents < amountCents) {
-      return fail(
-        res,
-        409,
-        'Saque não liberado. O valor solicitado precisa estar realmente liberado no livro-caixa da LeadsPay e o mínimo é R$ 10,00.',
-        'INSUFFICIENT_LEDGER_BALANCE',
-      );
-    }
-
     const accountId = String(profile.stripeAccounts?.[role] || '');
     if (!accountId) return fail(res, 409, 'Conecte sua conta Stripe para receber saques.', 'CONNECT_NOT_CONFIGURED');
 
@@ -124,25 +113,25 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
     }
 
+    const ledgerBalances = await calculateUserLedgerBalances(db, identity.uid, role === 'empresa' ? companyId : undefined);
+    const authoritativeAvailableCents = ledgerBalances[role].availableCents;
+    if (authoritativeAvailableCents < MIN_WITHDRAWAL_CENTS || authoritativeAvailableCents < amountCents) {
+      return fail(
+        res,
+        409,
+        'Saque não liberado. O valor solicitado precisa estar realmente liberado no livro-caixa da LeadsPay e o mínimo é R$ 10,00.',
+        'INSUFFICIENT_LEDGER_BALANCE',
+      );
+    }
+
     const stripe = getStripeTestClient();
     let account = await stripe.accounts.retrieve(accountId);
     if (
       account.metadata?.firebase_uid !== identity.uid ||
       account.metadata?.leadspay_role !== role ||
-      (role === 'empresa' && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
+      (role === 'empresa' && account.metadata?.leadspay_company_id !== companyId)
     ) {
       return fail(res, 409, 'A conta Stripe não corresponde a este perfil/empresa.', 'CONNECT_OWNERSHIP_MISMATCH');
-    }
-
-    if (role === 'empresa' && companyId && !account.metadata?.leadspay_company_id) {
-      account = await stripe.accounts.update(accountId, {
-        metadata: {
-          ...account.metadata,
-          firebase_uid: identity.uid,
-          leadspay_role: 'empresa',
-          leadspay_company_id: companyId,
-        },
-      });
     }
 
     if (
