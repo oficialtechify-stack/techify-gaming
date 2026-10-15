@@ -15,7 +15,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrls = ["https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_013723_f9a7dafa-06b2-47a4-b3f6-4eae06ff88a2.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014500_0d756aa4-0be5-4720-8282-70409d49eca3.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014812_794aae43-3d50-43ae-bb18-aaa445e8471c.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014601_b5acc4e3-f66d-438d-b638-8259f9d53e1f.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014712_ff8f9e5c-142a-4481-ba50-58bedd05362b.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014000_d2860df3-a116-4b2d-ba3d-069c4b181ccd.wav"];
+  const audioUrls = ["https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_013723_f9a7dafa-06b2-47a4-b3f6-4eae06ff88a2.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_015537_ba13213d-de0b-4b61-b7e6-5e54acaaf260.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014812_794aae43-3d50-43ae-bb18-aaa445e8471c.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014601_b5acc4e3-f66d-438d-b638-8259f9d53e1f.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014712_ff8f9e5c-142a-4481-ba50-58bedd05362b.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_014000_d2860df3-a116-4b2d-ba3d-069c4b181ccd.wav","https://d8j0ntlcm91z4.cloudfront.net/user_3JqVuPdFEj9sARrqtHWQDQ4T25A/hf_20261015_015807_7a96e775-117d-4434-ba58-dc7c2ff432a1.wav"];
   const questions = [
     { key: 'segment', text: 'Em qual área sua empresa atua?', options: ['Marketing e serviços', 'Educação', 'Tecnologia', 'Comércio', 'Outro'] },
     { key: 'audience', text: 'Quem você mais quer alcançar?', options: ['Empreendedores', 'Consumidores finais', 'Outras empresas', 'Ainda não sei'] },
@@ -48,8 +48,8 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
     setStep(prev => prev + 1);
     setSaved(false);
   };
-  const currentSpeech = step === 0 ? intro : step <= questions.length ? questions[step - 1].text : 'Obrigado! Agora você pode selecionar seu produto e preparar a primeira campanha.';
-  const currentAudioIndex = step === 0 ? 0 : step <= questions.length ? step : -1;
+  const currentSpeech = step === 0 ? intro : step <= questions.length ? questions[step - 1].text : 'Obrigada! Agora você pode selecionar seu produto e preparar sua primeira campanha. Vamos crescer juntos!';
+  const currentAudioIndex = step === 0 ? 0 : step <= questions.length ? step : questions.length + 1;
   const onboardingDone = step > questions.length;
   const selectedProduct = plans.find(p => p.id === productId);
   const saveDraft = () => {
@@ -79,7 +79,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
         </button>
       </div>
       {step === 0 ? <button type="button" onClick={() => { setStep(1); if (voiceEnabled) playAudio(1); }} className="rounded-xl bg-[#D9F22A] text-[#0a1017] px-5 py-3 font-bold">Começar conversa <ArrowRight size={16} className="inline"/></button> : !onboardingDone ?
-        <div className="space-y-3"><p className="text-xs text-white/60">Pergunta {step} de {questions.length}</p><div className="flex flex-wrap gap-2">{questions[step-1].options.map(option => <button type="button" key={option} onClick={() => { nextAnswer(option); if (voiceEnabled) { if (step < questions.length) playAudio(step + 1); else stopAudio(); } }} className="rounded-xl border border-white/20 hover:border-[#D9F22A] px-4 py-3 text-sm">{option}</button>)}</div></div> :
+        <div className="space-y-3"><p className="text-xs text-white/60">Pergunta {step} de {questions.length}</p><div className="flex flex-wrap gap-2">{questions[step-1].options.map(option => <button type="button" key={option} onClick={() => { nextAnswer(option); if (voiceEnabled) { playAudio(step + 1); } }} className="rounded-xl border border-white/20 hover:border-[#D9F22A] px-4 py-3 text-sm">{option}</button>)}</div></div> :
         <p className="text-[#D9F22A] text-sm font-semibold">Perfil inicial preenchido. Agora prepare sua campanha abaixo. As respostas só serão incluídas no rascunho local quando você salvar.</p>}
       <p className="text-xs text-white/50">Áudios pré-gravados da Faye, reproduzidos sob demanda. O questionário ainda não é enviado ao ADM.</p>
     </section>
