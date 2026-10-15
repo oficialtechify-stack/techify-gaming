@@ -42,6 +42,7 @@ import {
 } from '../../services/firestoreService';
 import { DashboardView } from './DashboardView';
 import { GrowthView } from './GrowthView';
+import { GrowthAdminReview } from './GrowthAdminReview';
 import { VitrineView } from './VitrineView';
 import { MinhaEmpresaView } from './MinhaEmpresaView';
 import { MinhasAfiliacoesView } from './MinhasAfiliacoesView';
@@ -2264,7 +2265,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               activeCompanyId={roleMode === 'afiliado' ? undefined : activeCompany?.id}
             />
           )}
-          {activeTab === 'database' && isSuperAdmin && <DatabaseManagerView />}
+          {activeTab === 'database' && isSuperAdmin && <><GrowthAdminReview /><DatabaseManagerView /></>}
           {activeTab === 'modal_backgrounds' && isSuperAdmin && <AdminModalImagesManager />}
             </>
           )}
