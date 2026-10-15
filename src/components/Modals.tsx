@@ -113,7 +113,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
 
   // Reset errors on tab change
   const handleSwitchTab = (tab: 'login' | 'register_affiliate' | 'register_company' | 'forgot_password') => {
-    setModalTab(tab);
+    setModalTab(tab === 'register_affiliate' ? 'register_company' : tab);
     setErrorMessage('');
     setSuccessMessage('');
   };
