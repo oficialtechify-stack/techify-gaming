@@ -191,6 +191,7 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       tx.create(db.collection('balance_releases').doc(releaseId), {
         id: releaseId,
         orderId,
+        companyId: order.companyId,
         saleId: saleRef.id,
         paymentIntentId: paymentIntent.id,
         chargeId,
@@ -671,6 +672,7 @@ async function processProductSubscriptionInvoice(
       id: companyReleaseId,
       subscriptionId: subscription.id,
       invoiceId,
+      companyId,
       saleId: saleRef.id,
       userId: companyOwnerId,
       role: 'empresa',
