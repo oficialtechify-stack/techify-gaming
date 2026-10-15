@@ -453,7 +453,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     approvedTransactions.forEach(s => {
       const val = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
       const m = (s.method || '').toLowerCase();
-      if (m.includes('automático') || m.includes('auto')) {
+      if (m.includes('pix') && (m.includes('automático') || m.includes('automatico') || m.includes('recorrente'))) {
         pixAutoVal += val;
         pixAutoCount++;
       } else if (m.includes('pix')) {
@@ -505,7 +505,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         conversion: totalApprovedCount > 0 ? `${Math.round((cardCount / totalApprovedCount) * 100)}%` : '0%',
         value: cardVal
       },
-      {
+      ...(pixAutoCount > 0 ? [{
         id: 'pix_auto',
         name: 'Pix recorrente',
         icon: (
@@ -513,7 +513,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         ),
         conversion: totalApprovedCount > 0 ? `${Math.round((pixAutoCount / totalApprovedCount) * 100)}%` : '0%',
         value: pixAutoVal
-      }
+      }] : [])
     ];
   }, [filteredSales, roleMode]);
 
@@ -522,14 +522,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const pendingCount = useMemo(() => filteredSales.filter(t => isPendingTransaction(t.status)).length, [filteredSales]);
   const rejectedCount = useMemo(() => filteredSales.filter(t => isRejectedTransaction(t.status)).length, [filteredSales]);
   const totalCount = approvedCount + pendingCount + rejectedCount;
+  const totalTransactions = filteredSales.length;
 
   const approvedPercent = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0;
   const pendingPercent = totalCount > 0 ? Math.round((pendingCount / totalCount) * 100) : 0;
   const rejectedPercent = totalCount > 0 ? Math.round((rejectedCount / totalCount) * 100) : 0;
   const refundedCount = filteredSales.filter(t => ['refunded', 'reembolsado', 'estornado'].includes(String(t.status || '').toLowerCase())).length;
   const disputedCount = filteredSales.filter(t => ['disputed', 'chargeback', 'contestado'].includes(String(t.status || '').toLowerCase())).length;
-  const refundRate = totalCount ? (refundedCount / totalCount * 100).toFixed(1).replace('.', ',') + '%' : '0%';
-  const disputeRate = totalCount ? (disputedCount / totalCount * 100).toFixed(1).replace('.', ',') + '%' : '0%';
+  const refundRate = totalTransactions ? (refundedCount / totalTransactions * 100).toFixed(1).replace('.', ',') + '%' : '0%';
+  const disputeRate = totalTransactions ? (disputedCount / totalTransactions * 100).toFixed(1).replace('.', ',') + '%' : '0%';
 
   // Dynamic Chart Points based on selectedTimeframe and real filtered sales
   // "nessa outra parte ele vem zerado em linha reta e so sobe e desce assim comforme as vendas dos usuarios"
@@ -1212,7 +1213,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* Lower Section: Desempenho mensal de vendas */}
             <div>
               {/* Header row with Title and Period Switcher (1D, 1S, 1M, 6M, 1A) */}
-              <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 sm:mb-5">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
                     <BarChart3 className="w-3.5 h-3.5" />
@@ -1405,7 +1406,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-2xl backdrop-blur-xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-2.5 sm:mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 sm:mb-5">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
                   <CreditCard className="w-3.5 h-3.5" />
