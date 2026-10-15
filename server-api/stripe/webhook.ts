@@ -514,14 +514,15 @@ async function processProductSubscriptionInvoice(
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   if (subscription.metadata?.leadspay_product_subscription !== '1') return false;
 
-  await syncProductSubscriptionStatus(subscription, 'active');
-
   const invoiceAny = invoice as any;
-  // Never credit a subscription from an unpaid invoice or a non-positive payment.
-  // invoice.paid can also be emitted for fully discounted invoices (R$ 0).
+  // A zero-value paid invoice can represent a trial or discount, not a collected payment.
+  // Sync the actual Stripe subscription status, but never force it to active.
   if (invoiceAny.status !== 'paid' || !Number.isSafeInteger(Number(invoiceAny.amount_paid)) || Number(invoiceAny.amount_paid) <= 0) {
+    await syncProductSubscriptionStatus(subscription);
     return true;
   }
+
+  await syncProductSubscriptionStatus(subscription);
 
   const metadata = subscription.metadata || {};
   const planId = String(metadata.plan_id || '');
