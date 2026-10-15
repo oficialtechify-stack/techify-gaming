@@ -29,6 +29,7 @@ export default async function handler(req: Req, res: Res) {
         category: clean(p.category), bannerImage: clean(p.bannerImage),
         price: Number(p.price ?? p.priceSetup ?? p.priceMonthly ?? 0),
         billingType: clean(p.billingType || p.paymentType),
+        billingCycle: clean(p.billingCycle || p.billingInterval),
       }];
     });
     return res.status(200).json({ offers, companies: Array.from(approved.entries()).map(([id, c]) => ({
