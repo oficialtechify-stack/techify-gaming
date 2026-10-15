@@ -19,6 +19,10 @@ export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
+  // Inscrições de afiliados pausadas nesta fase. Não altera perfis existentes.
+  return res.status(403).json({ error: 'Novos cadastros de afiliados estão temporariamente indisponíveis.', code: 'AFFILIATE_SIGNUP_PAUSED' });
+
+  /*
   try {
     const identity = await verifyFirebaseIdentity(
       typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
@@ -70,4 +74,5 @@ export default async function handler(req: Req, res: Res) {
     console.error('[Enable affiliate role]', error instanceof Error ? error.message : 'Falha');
     return res.status(503).json({ error: 'Não foi possível ativar o perfil de afiliado agora.' });
   }
+  */
 }
