@@ -808,7 +808,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Search className="w-3.5 h-3.5 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder={roleMode === 'afiliado' ? 'Buscar vendas ou produtos afiliados...' : 'Buscar vendas, produtos...'}
+              placeholder={roleMode === 'afiliado' ? 'Buscar vendas ou produtos afiliados...' : 'Buscar transações e pagamentos...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-[#070d18] hover:bg-[#0a1222] focus:bg-[#0a1222] border border-white/10 focus:border-[#a3e635]/50 rounded-full pl-9 pr-4 py-1.5 sm:py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all shadow-inner"
@@ -988,7 +988,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           ? 'bg-[#D9F22A]/15 text-[#D9F22A] border border-[#D9F22A]/30'
                           : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
                       }`}>
-                        {roleMode === 'afiliado' ? 'Afiliado LeadsPay' : 'Conta Empresa'}
+                        {roleMode === 'afiliado' ? 'Afiliado LeadsPay' : 'Gateway empresarial'}
                       </span>
                     </div>
                   </div>
@@ -1141,7 +1141,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <BarChart2 className="w-3.5 h-3.5" />
                   </div>
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-white/90">
-                    {roleMode === 'afiliado' ? 'Visão geral de comissões' : 'Visão geral de vendas'}
+                    {roleMode === 'afiliado' ? 'Visão geral de comissões' : 'Pagamentos da empresa'}
                   </h2>
                 </div>
                 <button
@@ -1214,13 +1214,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <BarChart3 className="w-3.5 h-3.5" />
                   </div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                    {roleMode === 'afiliado' ? 'Evolução das comissões' : 'Evolução das vendas'}
+                    {roleMode === 'afiliado' ? 'Evolução das comissões' : 'Volume de pagamentos'}
                   </h3>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-white/40 hidden md:inline">
-                    {roleMode === 'afiliado' ? 'Comissões confirmadas' : 'Vendas confirmadas'}
+                    {roleMode === 'afiliado' ? 'Comissões confirmadas' : 'Pagamentos confirmados'}
                   </span>
 
                   {/* Pills 1D, 1S, 1M, 6M, 1A */}
@@ -1407,11 +1407,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <CreditCard className="w-3.5 h-3.5" />
                 </div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Meios de pagamento'}
+                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Métodos de pagamento'}
                 </h3>
               </div>
               <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
-                {roleMode === 'afiliado' ? 'Distribuição das vendas aprovadas' : 'Distribuição das vendas aprovadas'}
+                {roleMode === 'afiliado' ? 'Distribuição dos pagamentos aprovados' : 'Distribuição dos pagamentos aprovados'}
               </span>
             </div>
 
