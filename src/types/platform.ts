@@ -635,4 +635,5 @@ export type PlatformTab =
   | 'database'
   | 'modal_backgrounds'
   | 'assistentes_ia'
-  | 'funcionarios_ia';
+  | 'funcionarios_ia'
+  | 'growth';
