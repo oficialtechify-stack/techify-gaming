@@ -34,6 +34,7 @@ import partnerSettingsHandler from './server-api/partner/settings.js';
 import partnerPaymentsHandler from './server-api/partner/payments.js';
 import mcpRestHandler from './server-api/mcp/rest.js';
 import mcpProtocolHandler from './server-api/mcp/protocol.js';
+import growthMetaHandler from './server-api/growth/meta.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -90,6 +91,7 @@ for (const action of ['approve-company','reject-entity','ban-entity','unban-enti
 app.all('/api/partner/api-key', adapt(partnerApiKeyHandler));
 app.all('/api/partner/settings', adapt(partnerSettingsHandler));
 app.all(['/api/partner/payments','/api/payments'], adapt(partnerPaymentsHandler));
+app.all('/api/growth/meta', adapt(growthMetaHandler));
 app.all('/api/mcp', adapt(mcpProtocolHandler));
 app.all('/api/mcp/v1', (req, res) => {
   (req as any).mcpRoute = '';
