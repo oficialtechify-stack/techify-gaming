@@ -10,6 +10,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
   const [budget, setBudget] = useState('300');
   const [brief, setBrief] = useState('');
   const [saved, setSaved] = useState(false);
+  const [showReview, setShowReview] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voicePlaying, setVoicePlaying] = useState(false);
   const [step, setStep] = useState(0);
@@ -44,7 +45,13 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
     if (!q) return;
     setAnswers(prev => ({ ...prev, [q.key]: answer }));
     if (q.key === 'audience') setBrief(answer);
-    if (q.key === 'investment' && answer === 'Até R$ 300') setBudget('300');
+    if (q.key === 'challenge') setGoal(answer === 'Conseguir clientes' ? 'Gerar leads' : answer === 'Divulgar minha marca' ? 'Aumentar reconhecimento' : 'Vender mais');
+    if (q.key === 'investment') {
+      if (answer === 'Até R$ 300') setBudget('300');
+      else if (answer === 'R$ 301 a R$ 1.000') setBudget('650');
+      else if (answer === 'Mais de R$ 1.000') setBudget('1500');
+      else setBudget('');
+    }
     setStep(prev => prev + 1);
     setSaved(false);
   };
@@ -52,6 +59,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
   const currentAudioIndex = step === 0 ? 0 : step <= questions.length ? step : questions.length + 1;
   const onboardingDone = step > questions.length;
   const selectedProduct = plans.find(p => p.id === productId);
+  const selectedPlanLabel = selectedPlan === 'designer' ? 'Growth + Designer' : 'Growth Essencial';
   const saveDraft = () => {
     if (!companyId || !selectedProduct || !Number.isFinite(Number(budget)) || Number(budget) <= 0) return;
     // Protótipo: dados locais apenas. Sem pagamentos ou disparos de anúncios.
@@ -59,6 +67,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
       companyId, productId, goal, budget: Number(budget), brief, onboardingAnswers: answers, plan: selectedPlan, status: 'rascunho', createdAt: new Date().toISOString()
     }));
     setSaved(true);
+    setShowReview(true);
   };
   return <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-7 text-white">
     <div className="rounded-3xl border border-[#D9F22A]/30 bg-gradient-to-br from-[#14251d] to-[#0b1020] p-6 md:p-9">
@@ -74,7 +83,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
       <div className="rounded-2xl bg-white/10 p-4 text-sm leading-relaxed">
         <span className="text-[#D9F22A] font-bold">Assistente Growth</span>
         <p className="mt-2">{currentSpeech}</p>
-        <button type="button" className="mt-3 flex items-center gap-2 text-[#D9F22A] font-semibold" onClick={() => { if (voicePlaying) { window.speechSynthesis?.cancel(); setVoicePlaying(false); } else playAudio(currentAudioIndex); }}>
+        <button type="button" className="mt-3 flex items-center gap-2 text-[#D9F22A] font-semibold" onClick={() => { if (voicePlaying) { stopAudio(); } else playAudio(currentAudioIndex); }}>
           {voicePlaying ? <Pause size={16}/> : <Play size={16}/>} {voicePlaying ? 'Parar áudio' : 'Ouvir mensagem'}
         </button>
       </div>
@@ -109,6 +118,7 @@ export const GrowthView: React.FC<GrowthViewProps> = ({ companyId, plans }) => {
       <p className="text-xs text-white/60">O orçamento de anúncios é pago separadamente à plataforma de anúncios. Este protótipo não cobra assinaturas nem conecta contas Meta Ads.</p>
       <button disabled={!companyId || !productId || !(Number(budget)>0)} onClick={saveDraft} className="inline-flex items-center gap-2 rounded-xl bg-[#D9F22A] text-[#0a1017] font-bold px-5 py-3 disabled:opacity-40">Salvar rascunho <ArrowRight size={16}/></button>
       {saved && <p role="status" className="text-[#D9F22A] text-sm">Rascunho salvo neste navegador para demonstração. Ainda não foi enviado à equipe.</p>}
+      {showReview && saved && <div className="rounded-2xl border border-[#D9F22A]/40 bg-[#101728] p-5 space-y-3" aria-label="Resumo do rascunho"><h3 className="text-lg font-bold">Resumo da primeira campanha</h3><p className="text-sm text-white/70">Confira as informações antes de solicitar a análise da equipe.</p><dl className="grid sm:grid-cols-2 gap-3 text-sm"><div><dt className="text-white/50">Produto</dt><dd>{selectedProduct?.name}</dd></div><div><dt className="text-white/50">Plano escolhido</dt><dd>{selectedPlanLabel}</dd></div><div><dt className="text-white/50">Objetivo</dt><dd>{goal}</dd></div><div><dt className="text-white/50">Orçamento de anúncios</dt><dd>R$ {Number(budget).toLocaleString('pt-BR')}</dd></div><div><dt className="text-white/50">Público</dt><dd>{brief || 'Não informado'}</dd></div><div><dt className="text-white/50">Maior desafio</dt><dd>{answers.challenge || 'Não informado'}</dd></div></dl><p className="text-xs text-amber-200">Próxima etapa: enviar o briefing para análise da equipe. O envio ainda depende da integração segura com Firebase e ADM; nenhuma campanha ou cobrança será iniciada por este rascunho.</p><button type="button" onClick={() => { setShowReview(false); setSaved(false); }} className="rounded-xl border border-white/20 px-4 py-2 text-sm">Editar campanha</button></div>}
       {!companyId && <p className="text-amber-300 text-sm">É necessário vincular sua empresa para começar.</p>}
     </section>
     <div className="rounded-2xl border border-white/10 p-5 flex gap-3 items-start"><ShieldCheck className="text-[#D9F22A] shrink-0"/><div><h3 className="font-bold">Agencius · Parceira oficial</h3><p className="text-sm text-white/65 mt-1">Solicitações de artes e serviços serão integradas à Agencius em uma próxima etapa. Campanhas exigirão aprovação antes de qualquer publicação ou gasto.</p></div></div>
