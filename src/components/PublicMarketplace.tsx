@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Search, Store, ExternalLink } from 'lucide-react';
 type Offer = { id: string; companyId: string; companyName: string; companySlug: string; companyLogo: string; name: string; description: string; category: string; bannerImage: string; price: number; billingType: string; billingCycle: string };
-type Company = { id: string; name: string; slug: string; tagline: string; logo: string; description: string; category: string };
+type Company = { id: string; name: string; slug: string; tagline: string; logo: string; bannerImage: string; website: string; description: string; category: string };
 const categories = ['Todos', 'Gastronomia', 'IA & Automação', 'Tecnologia', 'Varejo e E-commerce', 'Saúde e Clínicas', 'Beleza e Estética', 'Educação e Escolas', 'Imobiliário', 'Hotelaria e Turismo', 'Logística e Transportes', 'Construção Civil', 'Finanças e Contabilidade', 'Marketing e Vendas', 'Recursos Humanos', 'Jurídico', 'Agro e Agronegócio', 'Indústria', 'Atendimento e CRM', 'Gestão Empresarial', 'SaaS / B2B', 'Fintech & Pagamentos', 'Marketing & Vendas'];
 const periods = ['Todos', 'Mensal', 'Anual', 'Semanal', 'Pagamento único'];
 function periodOf(o: Offer) {
@@ -45,15 +45,38 @@ export default function PublicMarketplace() {
         <a href="/" className="text-2xl font-black tracking-tight">Leads<span className="text-[#D9F22A]">Pay</span></a>
         <a href={companySlug ? '/marketplace' : '/'} className="flex items-center gap-2 text-sm text-white/70 hover:text-white"><ArrowLeft size={16}/>{companySlug ? 'Explorar marketplace' : 'Página inicial'}</a>
       </header>
-      {companySlug && !loading && !company ? <p className="rounded-xl border border-amber-500/30 p-5">Esta empresa não está disponível ou não foi verificada.</p> :
-      <section className="rounded-3xl border border-white/10 bg-[#0e1423] p-6 sm:p-9">
-        <div className="mb-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A]">{companySlug ? 'Vitrine empresarial verificada' : 'Marketplace de Softwares LeadsPay'}</div>
-        <h1 className="text-3xl sm:text-5xl font-black">{companySlug ? company?.name || 'Empresa' : 'Encontre softwares para seu negócio'}</h1>
-        <p className="mt-3 max-w-2xl text-white/60">{companySlug ? company?.description || company?.tagline : 'Encontre softwares de empresas verificadas por setor, compare planos e contrate diretamente.'}</p>
+      {companySlug ? (!loading && !company ? <p className="rounded-xl border border-amber-500/30 p-5">Esta empresa não está disponível ou não foi verificada.</p> : <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#0e1423]">
+        <div className="relative h-44 sm:h-64 lg:h-72 bg-gradient-to-br from-[#172d26] via-[#0e1423] to-[#35431a]">
+          {company?.bannerImage && <img src={company.bannerImage} alt="Foto de capa da empresa" className="h-full w-full object-cover"/>}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0e1423]/70 to-transparent"/>
+        </div>
+        <div className="relative px-5 pb-7 sm:px-9">
+          <div className="-mt-12 sm:-mt-16 flex flex-wrap items-end justify-between gap-4">
+            <div className="flex items-end gap-4">
+              <div className="flex h-24 w-24 sm:h-32 sm:w-32 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-[#0e1423] bg-[#17222b] shadow-xl">
+                {company?.logo ? <img src={company.logo} alt={company.name} className="h-full w-full object-cover"/> : <Store size={40} className="text-[#D9F22A]"/>}
+              </div>
+              <div className="pb-1"><div className="text-[11px] font-bold uppercase tracking-widest text-[#D9F22A]">Empresa verificada</div><h1 className="mt-1 text-xl sm:text-3xl font-black">{company?.name || 'Empresa'}</h1></div>
+            </div>
+            <button onClick={() => { void navigator.clipboard?.writeText(window.location.href); }} className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold">Compartilhar perfil</button>
+          </div>
+          {company?.tagline && <p className="mt-5 font-semibold text-white/80">{company.tagline}</p>}
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/60">{company?.description || 'Conheça os softwares e planos desta empresa.'}</p>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm">
+            {company?.category && <span className="rounded-full bg-white/10 px-3 py-1">{company.category}</span>}
+            {company?.website && /^https:\/\//i.test(company.website) && <a href={company.website} target="_blank" rel="noopener noreferrer" className="rounded-full border border-white/20 px-3 py-1 text-[#D9F22A]">Site oficial ↗</a>}
+            <span className="rounded-full bg-white/10 px-3 py-1">{offers.filter(o => o.companyId === company?.id).length} planos publicados</span>
+          </div>
+        </div>
+      </section>) : <section className="rounded-3xl border border-white/10 bg-[#0e1423] p-6 sm:p-9">
+        <div className="mb-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A]">Marketplace de Softwares LeadsPay</div>
+        <h1 className="text-3xl sm:text-5xl font-black">Encontre softwares para seu negócio</h1>
+        <p className="mt-3 max-w-2xl text-white/60">Encontre softwares de empresas verificadas por setor, compare planos e contrate diretamente.</p>
       </section>}
       <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0e1423] px-4"><Search size={18} className="text-white/40"/><input aria-label="Buscar ofertas" className="w-full bg-transparent py-4 outline-none" placeholder="Buscar softwares, soluções ou empresas..." value={search} onChange={e => setSearch(e.target.value)}/></div>
       {!companySlug && <nav aria-label="Categorias" className="flex flex-wrap gap-2">{categories.map(c => <button key={c} onClick={() => setCategory(c)} className={`rounded-full border px-4 py-2 text-xs font-semibold ${category === c ? 'border-[#D9F22A] bg-[#D9F22A] text-[#060A15]' : 'border-white/15 bg-[#0e1423] text-white/70'}`}>{c}</button>)}</nav>}
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-white/50">Tipo de plano:</span>{periods.map(p => <button key={p} onClick={() => setPeriod(p)} className={period === p ? 'rounded-full border border-[#D9F22A] bg-[#D9F22A] px-4 py-2 text-xs font-semibold text-[#060A15]' : 'rounded-full border border-white/15 bg-[#0e1423] px-4 py-2 text-xs font-semibold text-white/70'}>{p}</button>)}</div>
+      {companySlug && <div className="flex flex-wrap gap-3 border-b border-white/10 pb-4"><span className="font-semibold text-[#D9F22A]">Planos e assinaturas</span><span className="text-sm text-white/50">Mensal · Anual · Semanal · Pagamento único</span></div>}
       {error && <p role="alert" className="rounded-xl border border-red-500/30 p-4 text-red-300">{error}</p>}
       {loading ? <p className="py-12 text-center text-white/50">Carregando ofertas verificadas...</p> : shown.length === 0 ? <div className="rounded-2xl border border-white/10 p-12 text-center text-white/50"><Store className="mx-auto mb-3"/>{companySlug ? 'Nenhuma oferta publicada nesta vitrine.' : 'Nenhuma oferta encontrada nesta categoria.'}</div> :
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">{shown.map(o => <article key={o.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#0e1423]">
