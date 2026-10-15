@@ -91,7 +91,8 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
     setLocalAffiliations(affiliations);
   }, [affiliations, isVerified]);
 
-  const categories = ['all', 'Gastronomia', 'Tecnologia', 'Moda e Beleza', 'Saúde e Bem-estar', 'Casa e Decoração', 'Marketing e Design', 'Serviços Profissionais', 'Automotivo', 'Pets', 'Turismo e Eventos', 'Esportes e Fitness', 'Finanças e Negócios', 'Produtos Digitais', 'SaaS / B2B', 'Fintech & Pagamentos', 'Marketing & Vendas', 'IA & Automação', 'E-commerce / Dropship'];
+  // Nichos representam o setor atendido pelo software, não produtos físicos.
+  const categories = ['all', 'Gastronomia', 'IA & Automação', 'Tecnologia', 'Varejo e E-commerce', 'Saúde e Clínicas', 'Beleza e Estética', 'Educação e Escolas', 'Imobiliário', 'Hotelaria e Turismo', 'Logística e Transportes', 'Construção Civil', 'Finanças e Contabilidade', 'Marketing e Vendas', 'Recursos Humanos', 'Jurídico', 'Agro e Agronegócio', 'Indústria', 'Atendimento e CRM', 'Gestão Empresarial', 'SaaS / B2B', 'Fintech & Pagamentos', 'Marketing & Vendas'];
   const blockedCategories = new Set(['iGaming & Apostas', 'Educação / Cursos']);
 
   const approvedCompanyIds = new Set(
@@ -277,12 +278,12 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
               {roleMode === 'afiliado' ? 'MODO AFILIADO • MARKETPLACE DE STARTUPS' : 'VITRINE DA LEADSPAY • EMPRESAS VERIFICADAS'}
             </div>
             <h1 className="text-2xl sm:text-4xl font-black text-white font-['Syne']">
-              {roleMode === 'afiliado' ? 'Vitrine de Startups & Afiliação Direta' : 'Marketplace de Produtos e Serviços'}
+              {roleMode === 'afiliado' ? 'Vitrine de Startups & Afiliação Direta' : 'Marketplace de Softwares e Soluções'}
             </h1>
             <p className="text-sm text-white/70 leading-relaxed">
               {roleMode === 'afiliado'
                 ? 'Explore startups parceiras, afilie-se com 1 clique para receber seu código exclusivo de divulgação e divulgue seu link direto para o Checkout do produto com comissões de até 70% creditadas em tempo real.'
-                : 'Descubra empresas, produtos digitais, serviços e assinaturas. Publique suas ofertas e compartilhe sua vitrine com clientes, sem depender de afiliados.'}
+                : 'Encontre softwares e soluções SaaS para cada setor. Publique planos do seu software e compartilhe a vitrine da empresa com seus clientes.'}
             </p>
           </div>
 
@@ -381,7 +382,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           <div className="relative">
             <input
               type="text"
-              placeholder="Buscar empresas, produtos ou serviços..."
+              placeholder="Buscar softwares, empresas ou soluções..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-[#050811] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#D9F22A] w-48 sm:w-56"
