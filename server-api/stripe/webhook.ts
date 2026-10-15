@@ -517,7 +517,9 @@ async function processProductSubscriptionInvoice(
   await syncProductSubscriptionStatus(subscription, 'active');
 
   const invoiceAny = invoice as any;
-  if (invoiceAny.status !== 'paid' && Number(invoiceAny.amount_paid || 0) <= 0) {
+  // Never credit a subscription from an unpaid invoice or a non-positive payment.
+  // invoice.paid can also be emitted for fully discounted invoices (R$ 0).
+  if (invoiceAny.status !== 'paid' || !Number.isSafeInteger(Number(invoiceAny.amount_paid)) || Number(invoiceAny.amount_paid) <= 0) {
     return true;
   }
 
@@ -546,7 +548,7 @@ async function processProductSubscriptionInvoice(
     throw new Error('Assinatura de produto sem metadados financeiros obrigatórios.');
   }
 
-  const grossAmountCents = Number(invoiceAny.amount_paid || invoiceAny.total || 0);
+  const grossAmountCents = Number(invoiceAny.amount_paid);
   if (!Number.isSafeInteger(grossAmountCents) || grossAmountCents < 50) {
     throw new Error('Fatura recorrente paga com valor inválido.');
   }
