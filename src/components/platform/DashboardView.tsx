@@ -475,9 +475,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         id: 'pix',
         name: 'Pix',
         icon: (
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#22d3ee] fill-current" stroke="none">
-            <path d="M12 2L6 8l6 6 6-6-6-6zm0 8l-6 6 6 6 6-6-6-6z" />
-          </svg>
+          <img src="https://www.bcb.gov.br/content/estabilidadefinanceira/pix/img/logo_pix.png" alt="Pix" className="w-5 h-5 object-contain" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
         ),
         conversion: totalApprovedCount > 0 ? `${Math.round((pixCount / totalApprovedCount) * 100)}%` : '0%',
         value: pixVal
@@ -1803,6 +1801,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         </div>
 
+      </div>
+
       {/* Meios de pagamento em largura total: sem coluna vazia abaixo do gráfico */}
       <section className="mt-3 sm:mt-4 min-w-0">
           {/* CARD 2: "Meios de pagamento" TABLE */}
@@ -1868,7 +1868,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       </section>
 
-      </div>
     </div>
   );
 };
