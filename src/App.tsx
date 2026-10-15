@@ -14,6 +14,7 @@ import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliat
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { BrowserInteractionGuard } from './components/security/BrowserInteractionGuard';
 import LeadspayLanding from './components/LeadspayLanding';
+import PublicMarketplace from './components/PublicMarketplace';
 import './styles/leadspay-landing.css';
 
 function MainApp() {
@@ -167,6 +168,10 @@ function MainApp() {
   const handleLoginSuccess = () => {
     setViewPlatform(true);
   };
+
+  if (appPath === '/marketplace' || appPath.startsWith('/empresa/')) {
+    return <PublicMarketplace />;
+  }
 
   // Se estiver carregando o checkout direto
   if (isLoadingCheckout) {
