@@ -42,6 +42,7 @@ function amountCentsFromWithdrawal(data: Record<string, any>): number {
 export async function calculateUserLedgerBalances(
   db: FirebaseFirestore.Firestore,
   userId: string,
+  companyId?: string,
 ): Promise<UserLedgerBalances> {
   const balances: UserLedgerBalances = {
     empresa: EMPTY(),
@@ -56,6 +57,7 @@ export async function calculateUserLedgerBalances(
   for (const doc of releaseSnap.docs) {
     const data = doc.data() as Record<string, any>;
     if (!isProductionMoney(data)) continue;
+    if (companyId && data.role === 'empresa' && String(data.companyId || '') !== companyId) continue;
 
     const role = data.role as PlatformRole;
     if (role !== 'empresa' && role !== 'afiliado') continue;
