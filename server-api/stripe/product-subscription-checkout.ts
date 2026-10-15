@@ -263,7 +263,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
     }
 
-    const productAmount = Number(plan.priceMonthly || plan.priceSetup || plan.price || 0);
+    // Select the amount for the configured billing period, not the monthly price
+    // for every recurring cycle. Never silently bill an annual subscription monthly pricing.
+    const periodPrice = cycle === 'YEARLY'
+      ? (plan.priceYearly ?? plan.priceAnnual ?? plan.annualPrice ?? plan.price)
+      : cycle === 'MONTHLY'
+        ? (plan.priceMonthly ?? plan.monthlyPrice ?? plan.price)
+        : (plan.priceWeekly ?? plan.weeklyPrice ?? plan.price);
+    const productAmount = Number(periodPrice ?? 0);
     if (!Number.isFinite(productAmount) || productAmount < 0.5) {
       return fail(res, 409, 'A assinatura não possui preço válido.', 'INVALID_SERVER_PRICE');
     }
