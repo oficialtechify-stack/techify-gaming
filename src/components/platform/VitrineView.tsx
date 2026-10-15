@@ -399,10 +399,10 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
           <PackageOpen className="w-16 h-16 text-[#D9F22A]/40" />
           <div className="max-w-md">
             <h3 className="text-xl font-bold text-white font-['Syne'] mb-2">
-              Nenhum plano ou produto encontrado
+              Nenhum software encontrado
             </h3>
             <p className="text-xs text-white/60 leading-relaxed mb-6">
-              Nenhuma startup encontrada para os filtros atuais. Tente selecionar outra categoria.
+              Nenhum software corresponde aos filtros atuais. Tente selecionar outro nicho.
             </p>
           </div>
         </div>
@@ -414,7 +414,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
             const pendingAffiliation = isPendingAffiliation(userAff);
             const checkoutUrl = affiliated && userAff
               ? formatAffiliatePlanUrl(product.id, userAff.affiliateCode)
-              : formatAffiliatePlanUrl(product.id, 'LEADS');
+              : `${getAppBaseUrl()}/checkout/${encodeURIComponent(product.id)}`;
 
             return (
               <div
@@ -518,20 +518,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
                       </span>
                     </div>
 
-                    {/* High-visibility Commission Box */}
-                    <div className="p-3 rounded-2xl bg-[#D9F22A]/10 border border-[#D9F22A]/35 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-[#D9F22A] block">
-                          Sua Comissão por Venda:
-                        </span>
-                        <span className="text-xs font-bold text-white/80">
-                          {product.commissionPercentage}% sobre a venda
-                        </span>
-                      </div>
-                      <span className="text-lg font-black text-[#D9F22A]">
-                        + R$ {product.commissionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
+                    <a href={`/empresa/${encodeURIComponent(product.companyId)}`} className="flex items-center justify-between rounded-xl border border-[#D9F22A]/30 bg-[#D9F22A]/10 p-3 text-xs font-bold text-[#D9F22A] hover:bg-[#D9F22A]/20"><span>Ver vitrine da empresa</span><ExternalLink className="h-4 w-4"/></a>
                   </div>
 
                   {/* Affiliate Status & Dedicated Box */}
