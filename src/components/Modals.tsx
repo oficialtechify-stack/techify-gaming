@@ -358,7 +358,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                   }`}
                 >
                   <UserCheck className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">Entrar como Afiliado</span>
+                  <span className="truncate">Acesso empresarial</span>
                 </button>
 
                 <button
@@ -1370,13 +1370,13 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
-                onClick={() => setModalTab('register_affiliate')}
+                onClick={() => setModalTab('register_company')}
                 className="p-5 rounded-2xl bg-[#050811] border border-white/10 hover:border-[#D9F22A] text-left flex flex-col gap-2 transition-all cursor-pointer group"
               >
                 <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center group-hover:scale-110 transition-transform">
                   <UserCheck className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white group-hover:text-[#D9F22A]">Quero Ser Afiliado</h4>
+                <h4 className="text-base font-bold text-white group-hover:text-[#D9F22A]">Cadastrar empresa</h4>
                 <p className="text-xs text-white/60">Venda softwares e planos com comissões de até 50% via PIX D+9.</p>
               </button>
 
