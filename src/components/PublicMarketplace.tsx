@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Search, Store, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Search, Store, ExternalLink, Pencil, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 type Offer = { id: string; companyId: string; companyName: string; companySlug: string; companyLogo: string; name: string; description: string; category: string; bannerImage: string; price: number; billingType: string; billingCycle: string };
-type Company = { id: string; name: string; slug: string; tagline: string; logo: string; bannerImage: string; website: string; description: string; category: string };
+type Company = { id: string; name: string; slug: string; tagline: string; logo: string; bannerImage: string; website: string; description: string; category: string; ownerId: string };
 const categories = ['Todos', 'Gastronomia', 'IA & Automação', 'Tecnologia', 'Varejo e E-commerce', 'Saúde e Clínicas', 'Beleza e Estética', 'Educação e Escolas', 'Imobiliário', 'Hotelaria e Turismo', 'Logística e Transportes', 'Construção Civil', 'Finanças e Contabilidade', 'Marketing e Vendas', 'Recursos Humanos', 'Jurídico', 'Agro e Agronegócio', 'Indústria', 'Atendimento e CRM', 'Gestão Empresarial', 'SaaS / B2B', 'Fintech & Pagamentos', 'Marketing & Vendas'];
 const periods = ['Todos', 'Mensal', 'Anual', 'Semanal', 'Pagamento único'];
 function periodOf(o: Offer) {
@@ -14,6 +15,11 @@ function periodOf(o: Offer) {
  return 'Outros planos';
 }
 export default function PublicMarketplace() {
+  const { currentUser } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [draft, setDraft] = useState({ logo: '', bannerImage: '', tagline: '', description: '', website: '' });
   const [offers, setOffers] = useState<Offer[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [error, setError] = useState('');
@@ -32,6 +38,10 @@ export default function PublicMarketplace() {
     }).catch(err => setError(err.message || 'Vitrine indisponível.')).finally(() => setLoading(false));
   }, []);
   const company = companies.find(c => c.slug === companySlug || c.id === companySlug);
+  const canEdit = !!currentUser && !!company && company.ownerId === currentUser.uid;
+  const startEdit = () => { if (!company) return; setDraft({ logo: company.logo || '', bannerImage: company.bannerImage || '', tagline: company.tagline || '', description: company.description || '', website: company.website || '' }); setFeedback(''); setEditing(true); };
+  const saveProfile = async () => { if (!company || !currentUser || !canEdit) return; setSaving(true); setFeedback(''); try { const token = await currentUser.getIdToken(); const response = await fetch('/api/company/storefront', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ companyId: company.id, ...draft }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Erro ao salvar.'); setCompanies(prev => prev.map(item => item.id === company.id ? { ...item, ...draft } : item)); setEditing(false); setFeedback('Perfil atualizado com sucesso.'); } catch (err) { setFeedback(err instanceof Error ? err.message : 'Falha ao salvar.'); } finally { setSaving(false); } };
+  const shareProfile = async () => { const url = window.location.href; try { if (navigator.share) await navigator.share({ title: company?.name || 'LeadsPay', url }); else if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(url); setFeedback('Link do perfil copiado!'); } else { window.prompt('Copie o link do perfil:', url); } } catch (err) { if ((err as Error)?.name !== 'AbortError') window.prompt('Copie o link do perfil:', url); } };
   const shown = useMemo(() => offers.filter(o => {
     if (companySlug && o.companyId !== company?.id) return false;
     if (category !== 'Todos' && o.category !== category) return false;
@@ -58,7 +68,7 @@ export default function PublicMarketplace() {
               </div>
               <div className="pb-1"><div className="text-[11px] font-bold uppercase tracking-widest text-[#D9F22A]">Empresa verificada</div><h1 className="mt-1 text-xl sm:text-3xl font-black">{company?.name || 'Empresa'}</h1></div>
             </div>
-            <button onClick={() => { void navigator.clipboard?.writeText(window.location.href); }} className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold">Compartilhar perfil</button>
+            <div className="flex flex-wrap gap-2">{canEdit && <button onClick={startEdit} className="flex items-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2 text-sm font-bold text-[#060A15]"><Pencil size={15}/> Editar perfil</button>}<button onClick={() => { void shareProfile(); }} className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold">Compartilhar perfil</button></div>
           </div>
           {company?.tagline && <p className="mt-5 font-semibold text-white/80">{company.tagline}</p>}
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/60">{company?.description || 'Conheça os softwares e planos desta empresa.'}</p>
@@ -73,6 +83,8 @@ export default function PublicMarketplace() {
         <h1 className="text-3xl sm:text-5xl font-black">Encontre softwares para seu negócio</h1>
         <p className="mt-3 max-w-2xl text-white/60">Encontre softwares de empresas verificadas por setor, compare planos e contrate diretamente.</p>
       </section>}
+      {feedback && <p role="status" className="rounded-xl border border-white/15 bg-[#0e1423] p-3 text-sm">{feedback}</p>}
+      {editing && canEdit && <section className="space-y-4 rounded-2xl border border-[#D9F22A]/30 bg-[#0e1423] p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-bold">Editar vitrine da empresa</h2><button onClick={() => setEditing(false)} aria-label="Fechar editor"><X size={18}/></button></div><p className="text-sm text-white/60">Use links HTTPS de imagens para a foto de perfil e a capa. O upload direto de arquivos será disponibilizado em outra etapa.</p>{([{key:'logo',label:'URL da foto de perfil (HTTPS)'},{key:'bannerImage',label:'URL da foto de capa (HTTPS)'},{key:'tagline',label:'Frase de destaque'},{key:'website',label:'Site oficial (HTTPS)'}] as const).map(f => <label key={f.key} className="block space-y-1 text-sm"><span>{f.label}</span><input className="w-full rounded-xl border border-white/15 bg-[#080c16] p-3 outline-none focus:border-[#D9F22A]" value={draft[f.key]} onChange={e => setDraft(prev => ({...prev,[f.key]:e.target.value}))}/></label>)}<label className="block space-y-1 text-sm"><span>Bio / descrição da empresa</span><textarea rows={5} maxLength={1500} className="w-full rounded-xl border border-white/15 bg-[#080c16] p-3 outline-none focus:border-[#D9F22A]" value={draft.description} onChange={e => setDraft(prev => ({...prev,description:e.target.value}))}/></label><button disabled={saving} onClick={() => { void saveProfile(); }} className="rounded-xl bg-[#D9F22A] px-5 py-3 font-bold text-[#060A15] disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar alterações'}</button></section>}
       <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0e1423] px-4"><Search size={18} className="text-white/40"/><input aria-label="Buscar ofertas" className="w-full bg-transparent py-4 outline-none" placeholder="Buscar softwares, soluções ou empresas..." value={search} onChange={e => setSearch(e.target.value)}/></div>
       {!companySlug && <nav aria-label="Categorias" className="flex flex-wrap gap-2">{categories.map(c => <button key={c} onClick={() => setCategory(c)} className={`rounded-full border px-4 py-2 text-xs font-semibold ${category === c ? 'border-[#D9F22A] bg-[#D9F22A] text-[#060A15]' : 'border-white/15 bg-[#0e1423] text-white/70'}`}>{c}</button>)}</nav>}
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-white/50">Tipo de plano:</span>{periods.map(p => <button key={p} onClick={() => setPeriod(p)} className={period === p ? 'rounded-full border border-[#D9F22A] bg-[#D9F22A] px-4 py-2 text-xs font-semibold text-[#060A15]' : 'rounded-full border border-white/15 bg-[#0e1423] px-4 py-2 text-xs font-semibold text-white/70'}>{p}</button>)}</div>
