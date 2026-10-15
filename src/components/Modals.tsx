@@ -123,7 +123,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
   // ----------------------------------------------------
   // HANDLERS
   // ----------------------------------------------------
-  const handleGoogleLogin = async (preferredRole: 'afiliado' | 'empresa' = 'afiliado') => {
+  const handleGoogleLogin = async (preferredRole: 'afiliado' | 'empresa' = 'empresa') => {
     setErrorMessage('');
     setSuccessMessage('');
     setIsSubmitting(true);
