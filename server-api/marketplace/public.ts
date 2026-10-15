@@ -35,7 +35,7 @@ export default async function handler(req: Req, res: Res) {
     return res.status(200).json({ offers, companies: Array.from(approved.entries()).map(([id, c]) => ({
       id, name: clean(c.name), slug: clean(c.slug), tagline: clean(c.tagline), logo: clean(c.logo),
       description: clean(c.description).slice(0,800), category: clean(c.category),
-      bannerImage: clean(c.bannerImage), website: clean(c.website),
+      bannerImage: clean(c.bannerImage), website: clean(c.website), ownerId: clean(c.ownerId || c.submittedBy),
     })) });
   } catch (error) {
     console.error('[Public marketplace]', error);
