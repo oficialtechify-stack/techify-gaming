@@ -468,7 +468,7 @@ export default function LeadspayLanding({
     if (link.getAttribute("href") === "#login") {
       onOpenPlatform();
     } else {
-      onOpenModal(link.getAttribute("href") === "#cadastro-afiliado" ? "register_affiliate" : "register_company");
+      onOpenModal("register_company");
     }
   };
 
