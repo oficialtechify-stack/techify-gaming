@@ -22,6 +22,11 @@ export default async function handler(req: Req, res: Res) {
     const company = snap.data()!;
     if (company.archived || company.isArchived) return res.status(403).json({ error: 'Empresa arquivada.' });
     if (String(company.ownerId || company.submittedBy || '') !== identity.uid) return res.status(403).json({ error: 'Apenas o proprietário pode editar esta vitrine.' });
+    const profileSnap = await db.collection('user_profiles').doc(identity.uid).get();
+    const profile = profileSnap.data();
+    if (!profileSnap.exists || String(profile?.companyId || '') !== companyId || profile?.hasCompanyProfile !== true) {
+      return res.status(403).json({ error: 'Esta conta não está vinculada à empresa proprietária.' });
+    }
     const update = { logo, bannerImage, tagline: field(body.tagline, 240), description: field(body.description, 1500), website, updatedAt: new Date().toISOString() };
     await ref.update(update);
     return res.status(200).json({ success: true, companyId, ...update });
