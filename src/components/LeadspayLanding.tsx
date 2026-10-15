@@ -21,57 +21,57 @@ import {
 } from "lucide-react";
 
 const signupUrl = "#cadastro-empresa";
-const affiliateUrl = "#cadastro-afiliado";
+
 const loginUrl = "#login";
 
 const benefits = [
   {
     number: "01",
     icon: Network,
-    title: "Distribuição que escala",
-    copy: "Aproxime seu produto de uma rede de afiliados pronta para divulgar soluções de tecnologia.",
+    title: "Checkout para sua empresa",
+    copy: "Crie links de pagamento para produtos digitais, serviços e assinaturas." ,
   },
   {
     number: "02",
     icon: BarChart3,
-    title: "Comissões organizadas",
-    copy: "Defina as regras da oferta e acompanhe a atribuição das vendas sem planilhas paralelas.",
+    title: "Assinaturas e cobranças",
+    copy: "Gerencie planos e acompanhe o histórico de pagamentos em um só lugar.",
   },
   {
     number: "03",
     icon: HandCoins,
-    title: "Split + PIX",
-    copy: "Conecte vendas e repasses em um fluxo de pagamento com divisão automática.",
+    title: "Integração simplificada",
+    copy: "Integre seu negócio com links de checkout, API e webhooks.",
   },
 ];
 
 const steps = [
   ["01", "Cadastre seu produto", "Crie o perfil da empresa e apresente seus planos na plataforma."],
-  ["02", "Defina as regras", "Configure as condições e comissões para cada oferta comercial."],
-  ["03", "Conecte afiliados", "Disponibilize a oferta para divulgação e acompanhe as vendas atribuídas."],
-  ["04", "Acompanhe repasses", "Visualize comissões e a operação de pagamento em um só painel."],
+  ["02", "Configure o checkout", "Defina o preço e o tipo de cobrança para sua oferta."],
+  ["03", "Compartilhe o link", "Use seu checkout na página de vendas ou integre com seu sistema."],
+  ["04", "Acompanhe pagamentos", "Consulte as cobranças e o histórico financeiro no painel."],
 ];
 
 const faqs = [
   [
     "O que é a LeadsPay?",
-    "A LeadsPay conecta empresas de tecnologia e SaaS a uma rede de afiliados e reúne a gestão de ofertas, comissões e pagamentos em uma única plataforma.",
+    "A LeadsPay oferece a empresas uma plataforma de checkout e gestão de pagamentos integrada à Stripe, com produtos e planos em um só lugar.",
   ],
   [
     "Como funciona para uma empresa?",
-    "A empresa apresenta seus produtos e planos, define as condições comerciais e acompanha a distribuição das ofertas e as vendas atribuídas.",
+    "A empresa cadastra seus produtos, configura o checkout e acompanha os pagamentos em seu painel.",
   ],
   [
-    "Como funciona para quem quer vender?",
-    "Afiliados podem explorar ofertas de tecnologia, divulgar seus links e acompanhar as comissões atribuídas às vendas.",
+    "Quem pode criar uma conta?",
+    "Nesta fase, o cadastro público é exclusivo para empresas. O programa de afiliados não está aberto para novas inscrições.",
   ],
   [
     "Quais integrações estão disponíveis?",
     "A plataforma apresenta integrações via API REST, webhooks e MCP para conectar o fluxo comercial a outras ferramentas.",
   ],
   [
-    "Quando as comissões são repassadas?",
-    "As condições e o calendário de repasse devem ser conferidos nos termos e nas informações vigentes da plataforma.",
+    "Como funcionam os recebimentos?",
+    "Os recebimentos dependem da configuração e verificação da conta Stripe, das condições da plataforma e dos prazos aplicáveis.",
   ],
 ];
 
@@ -109,9 +109,9 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
       <div className="announcement">
         <div className="container announcement-inner">
           <span className="announcement-dot" aria-hidden="true" />
-          <span>PAGAMENTOS</span><i aria-hidden="true">·</i><span>AFILIAÇÃO</span><i aria-hidden="true">·</i><span>ESCALA</span>
+          <span>CHECKOUT</span><i aria-hidden="true">·</i><span>ASSINATURAS</span><i aria-hidden="true">·</i><span>INTEGRAÇÕES</span>
           <span className="announcement-divider" aria-hidden="true" />
-          <span className="announcement-note">Uma nova forma de distribuir tecnologia</span>
+          <span className="announcement-note">Pagamentos para empresas digitais</span>
           <a className="announcement-link" href="#produto" aria-label="Saiba mais sobre a plataforma">
             <ArrowRight size={13} aria-hidden="true" />
           </a>
@@ -127,13 +127,13 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
             <a href="#tecnologia" onClick={closeMenu}>Tecnologia</a>
             <div className="mobile-nav-actions">
               <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
-              <a className="button button-primary mobile-cta" href={signupUrl}>Criar conta <ArrowUpRight size={15} aria-hidden="true" /></a>
+              <a className="button button-primary mobile-cta" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a>
             </div>
           </nav>
           <div className="desktop-nav-actions">
             <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
             <a className="login-link" href={loginUrl}>Entrar <ArrowUpRight size={14} aria-hidden="true" /></a>
-            <a className="button button-primary header-cta" href={signupUrl}>Criar conta <ArrowUpRight size={15} aria-hidden="true" /></a>
+            <a className="button button-primary header-cta" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a>
           </div>
           <button
             className="menu-toggle"
@@ -156,16 +156,16 @@ function Hero() {
     <section className="hero container" id="inicio">
       <div className="hero-grid">
         <div className="hero-copy">
-          <p className="eyebrow"><span className="eyebrow-icon"><Zap size={13} aria-hidden="true" /></span> PAGAMENTOS <i>•</i> AFILIAÇÃO <i>•</i> ESCALA</p>
-          <h1>Venda mais.<br /><span>Receba melhor.</span></h1>
-          <p className="hero-description">Pagamentos, afiliados e comissões em uma única plataforma — simples, rápida e segura.</p>
+          <p className="eyebrow"><span className="eyebrow-icon"><Zap size={13} aria-hidden="true" /></span> PAGAMENTOS <i>•</i> ASSINATURAS <i>•</i> INTEGRAÇÕES</p>
+          <h1>Pagamentos simples.<br /><span>Seu negócio cresce.</span></h1>
+          <p className="hero-description">Venda produtos digitais, serviços e assinaturas com checkout integrado e gestão de pagamentos em um só lugar.</p>
           <div className="hero-actions">
-            <a className="button button-primary button-large" href={signupUrl}>Começar agora <ArrowUpRight size={17} aria-hidden="true" /></a>
+            <a className="button button-primary button-large" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={17} aria-hidden="true" /></a>
             <a className="button button-secondary button-large" href={loginUrl}>Acessar painel <ArrowUpRight size={16} aria-hidden="true" /></a>
           </div>
           <ul className="hero-proof" aria-label="Recursos em destaque">
-            <li><Check size={14} aria-hidden="true" /> Split automático</li>
-            <li><Check size={14} aria-hidden="true" /> Saques via PIX</li>
+            <li><Check size={14} aria-hidden="true" /> Checkout integrado</li>
+            <li><Check size={14} aria-hidden="true" /> Produtos e assinaturas</li>
             <li><Check size={14} aria-hidden="true" /> Gestão em tempo real</li>
           </ul>
           <a className="scroll-cue" href="#produto"><span className="scroll-line" aria-hidden="true" /> Role para explorar <ArrowDown size={13} aria-hidden="true" /></a>
@@ -198,8 +198,8 @@ function Hero() {
       <div className="flow-strip" aria-label="Etapas conectadas do fluxo Leadspay">
         <div className="flow-intro"><span>UMA ESTRUTURA, UM FLUXO</span><strong>Da oferta ao repasse.<br />Sem perder a conexão.</strong></div>
         <div className="flow-step"><span className="flow-icon"><CreditCard size={17} aria-hidden="true" /></span><span><small>COBRANÇA</small><strong>Checkout integrado</strong></span></div>
-        <div className="flow-step"><span className="flow-icon"><Network size={17} aria-hidden="true" /></span><span><small>DISTRIBUIÇÃO</small><strong>Rede de afiliados</strong></span></div>
-        <div className="flow-step"><span className="flow-icon"><HandCoins size={17} aria-hidden="true" /></span><span><small>OPERAÇÃO</small><strong>Split + PIX</strong></span></div>
+        <div className="flow-step"><span className="flow-icon"><Network size={17} aria-hidden="true" /></span><span><small>PRODUTOS</small><strong>Planos e ofertas</strong></span></div>
+        <div className="flow-step"><span className="flow-icon"><HandCoins size={17} aria-hidden="true" /></span><span><small>GESTÃO</small><strong>Pagamentos e repasses</strong></span></div>
         <div className="flow-step"><span className="flow-icon"><Plug size={17} aria-hidden="true" /></span><span><small>INTEGRAÇÃO</small><strong>API · Webhooks · MCP</strong></span></div>
       </div>
     </section>
@@ -224,8 +224,8 @@ function ProductSection() {
       <SectionHeading
         kicker="O ECOSSISTEMA LEADSPAY — 01"
         title="Seu produto merece"
-        accent="uma rede de vendas."
-        copy="Uma infraestrutura comercial para conectar quem cria tecnologia a quem sabe vender."
+        accent="um checkout simples."
+        copy="Ferramentas de pagamento para empresas que vendem produtos e assinaturas digitais."
       />
       <div className="benefit-grid">
         {benefits.map(({ number, icon: Icon, title, copy }) => (
@@ -240,7 +240,7 @@ function ProductSection() {
       <div className="bridge-card">
         <div className="bridge-copy">
           <p className="eyebrow">MAIS QUE UM CHECKOUT</p>
-          <h3>Uma ponte entre<br /><span>produto e oportunidade.</span></h3>
+          <h3>Uma conexão entre<br /><span>seu produto e o pagamento.</span></h3>
           <a className="text-link" href="#para-quem">Descubra como funciona <ArrowRight size={15} aria-hidden="true" /></a>
         </div>
         <div className="bridge-art">
@@ -258,25 +258,25 @@ function AudienceSection() {
     <section className="section audience-section" id="para-quem">
       <div className="container">
         <SectionHeading
-          kicker="DOIS LADOS. UMA PLATAFORMA."
+          kicker="FEITA PARA EMPRESAS."
           title="Feita para quem"
-          accent="cria e quem vende."
-          copy="Organize sua operação, encontre oportunidades e faça a distribuição digital trabalhar junto com você."
+          accent="vende e recebe."
+          copy="Centralize produtos, checkouts e pagamentos em um único painel."
         />
         <div className="audience-grid">
           <article className="audience-card audience-business">
             <div className="audience-card-head"><span className="audience-label">01 / EMPRESAS</span><span className="audience-icon"><BarChart3 size={19} aria-hidden="true" /></span></div>
-            <h3>Você cria.<br /><span>Sua oferta alcança mais.</span></h3>
-            <p>Cadastre soluções e planos, defina as regras da comissão e acompanhe a operação de afiliados em um só lugar.</p>
-            <ul><li><Check size={15} aria-hidden="true" /> Cadastre seus planos comerciais</li><li><Check size={15} aria-hidden="true" /> Defina comissões e condições</li><li><Check size={15} aria-hidden="true" /> Acompanhe vendas e atribuições</li></ul>
+            <h3>Você vende.<br /><span>A LeadsPay organiza os pagamentos.</span></h3>
+            <p>Cadastre produtos e planos, configure links de checkout e acompanhe suas cobranças.</p>
+            <ul><li><Check size={15} aria-hidden="true" /> Cadastre seus planos comerciais</li><li><Check size={15} aria-hidden="true" /> Configure suas condições de pagamento</li><li><Check size={15} aria-hidden="true" /> Acompanhe suas vendas</li></ul>
             <a className="button button-primary" href={signupUrl}>Cadastrar minha empresa <ArrowUpRight size={15} aria-hidden="true" /></a>
           </article>
           <article className="audience-card audience-affiliate">
-            <div className="audience-card-head"><span className="audience-label">02 / AFILIADOS</span><span className="audience-icon"><ArrowUpRight size={19} aria-hidden="true" /></span></div>
-            <h3>Você indica.<br /><span>Acompanhe cada venda.</span></h3>
-            <p>Descubra soluções para divulgar, acesse ofertas de tecnologia e acompanhe os resultados da sua divulgação.</p>
-            <ul><li><Check size={15} aria-hidden="true" /> Explore ofertas na vitrine</li><li><Check size={15} aria-hidden="true" /> Divulgue com seu link</li><li><Check size={15} aria-hidden="true" /> Acompanhe comissões atribuídas</li></ul>
-            <a className="button button-secondary" href={affiliateUrl}>Quero ser afiliado <ArrowUpRight size={15} aria-hidden="true" /></a>
+            <div className="audience-card-head"><span className="audience-label">02 / INTEGRAÇÕES</span><span className="audience-icon"><ArrowUpRight size={19} aria-hidden="true" /></span></div>
+            <h3>Seu sistema.<br /><span>Conectado ao checkout.</span></h3>
+            <p>Use links de pagamento e webhooks para integrar o checkout à sua operação.</p>
+            <ul><li><Check size={15} aria-hidden="true" /> Crie links de pagamento</li><li><Check size={15} aria-hidden="true" /> Integre à sua página</li><li><Check size={15} aria-hidden="true" /> Acompanhe eventos de pagamento</li></ul>
+            <a className="button button-secondary" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a>
           </article>
         </div>
       </div>
@@ -290,8 +290,8 @@ function StepsSection() {
       <SectionHeading
         kicker="UM FLUXO CLARO — 02"
         title="Da oferta ao"
-        accent="split automático."
-        copy="Uma jornada simples para colocar produtos de tecnologia na mão de quem sabe vender."
+        accent="checkout integrado."
+        copy="Uma jornada para sua empresa começar a vender com links de pagamento."
       />
       <div className="steps-grid">
         {steps.map(([number, title, copy]) => (
@@ -302,7 +302,7 @@ function StepsSection() {
           </article>
         ))}
       </div>
-      <div className="steps-cta"><span><b>MENOS COMPLEXIDADE</b><strong>Mais energia para crescer.</strong></span><a className="button button-primary" href={signupUrl}>Começar agora <ArrowUpRight size={15} aria-hidden="true" /></a></div>
+      <div className="steps-cta"><span><b>MENOS COMPLEXIDADE</b><strong>Mais energia para crescer.</strong></span><a className="button button-primary" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a></div>
     </section>
   );
 }
@@ -315,13 +315,13 @@ function TechnologySection() {
           kicker="TECNOLOGIA QUE ACOMPANHA O SEU NEGÓCIO — 03"
           title="Do pagamento"
           accent="ao repasse."
-          copy="Visualize os componentes do fluxo comercial em uma experiência única — da cobrança à comissão atribuída."
+          copy="Conheça os componentes de checkout, integração e gestão de pagamentos."
         />
         <div className="technology-layout">
           <div className="technology-copy">
             <article className="tech-item"><span className="tech-item-icon"><CreditCard size={18} aria-hidden="true" /></span><div><h3>Checkout integrado</h3><p>Uma jornada de pagamento dentro da operação.</p></div></article>
-            <article className="tech-item"><span className="tech-item-icon"><Network size={18} aria-hidden="true" /></span><div><h3>Atribuição de vendas</h3><p>Links e regras para conectar indicação e conversão.</p></div></article>
-            <article className="tech-item"><span className="tech-item-icon"><HandCoins size={18} aria-hidden="true" /></span><div><h3>Split e comissões</h3><p>Visualize a divisão prevista para a oferta.</p></div></article>
+            <article className="tech-item"><span className="tech-item-icon"><Network size={18} aria-hidden="true" /></span><div><h3>Links de pagamento</h3><p>Compartilhe seu checkout com seus clientes.</p></div></article>
+            <article className="tech-item"><span className="tech-item-icon"><HandCoins size={18} aria-hidden="true" /></span><div><h3>Gestão de recebimentos</h3><p>Acompanhe cobranças e valores em seu painel.</p></div></article>
             <div className="integration-pills"><span>API REST</span><span>Webhooks</span><span>MCP</span></div>
             <a className="text-link" href="#tecnologia">Conhecer as integrações <ArrowRight size={15} aria-hidden="true" /></a>
           </div>
@@ -363,7 +363,7 @@ function FAQSection() {
       <div className="faq-intro">
         <p className="eyebrow">PERGUNTAS FREQUENTES</p>
         <h2>Ficou com<br /><span>alguma dúvida?</span></h2>
-        <p>O essencial para entender como a plataforma conecta produto, divulgação e pagamento.</p>
+        <p>O essencial sobre produtos, checkout, integrações e pagamentos.</p>
         <div className="faq-contact">Precisa de mais detalhes?<br /><strong>Fale com a equipe LeadsPay.</strong></div>
       </div>
       <div className="faq-list">
@@ -385,10 +385,10 @@ function FinalCta() {
       <div className="cta-content">
         <p className="eyebrow"><span className="eyebrow-dash" /> SUA PRÓXIMA VENDA PODE COMEÇAR AQUI</p>
         <h2>Seu próximo passo<br />é <span>conectar.</span></h2>
-        <p>Construa sua oferta. Encontre a sua rede. Faça a LeadsPay trabalhar com você.</p>
+        <p>Cadastre sua empresa, configure sua oferta e comece a preparar seu checkout.</p>
         <div className="hero-actions">
           <a className="button button-primary button-large" href={signupUrl}>Cadastrar minha empresa <ArrowUpRight size={16} aria-hidden="true" /></a>
-          <a className="button button-light button-large" href={affiliateUrl}>Quero divulgar <ArrowUpRight size={16} aria-hidden="true" /></a>
+          <a className="button button-light button-large" href={loginUrl}>Entrar na plataforma <ArrowUpRight size={16} aria-hidden="true" /></a>
         </div>
       </div>
       <div className="cta-monogram" aria-hidden="true"><TechifyLogo size="xl" surface="dark" /></div>
@@ -402,14 +402,14 @@ function Footer() {
       <div className="container footer-main">
         <div className="footer-brand-block">
           <Brand footer />
-          <p>Infraestrutura comercial para conectar soluções de tecnologia a quem sabe vender.</p>
+          <p>Plataforma de checkout e gestão de pagamentos para empresas digitais.</p>
           <span className="footer-country">BRASIL <i>·</i> DIGITAL BY NATURE</span>
         </div>
         <div className="footer-column"><h3>NAVEGAÇÃO</h3><a href="#inicio">Início</a><a href="#produto">Produto</a><a href="#como-funciona">Como funciona</a><a href="#para-quem">Para quem</a></div>
-        <div className="footer-column"><h3>ECOSSISTEMA</h3><a href="#tecnologia">Tecnologia &amp; Split</a><a href="#tecnologia">Integrações</a><a href="#duvidas">Perguntas frequentes</a><a href={signupUrl}>Cadastrar empresa</a></div>
+        <div className="footer-column"><h3>ECOSSISTEMA</h3><a href="#tecnologia">Tecnologia e pagamentos</a><a href="#tecnologia">Integrações</a><a href="#duvidas">Perguntas frequentes</a><a href={signupUrl}>Cadastrar empresa</a></div>
         <div className="footer-column"><h3>PORTAL &amp; JURÍDICO</h3><a href={loginUrl}>Entrar na plataforma <ArrowUpRight size={13} aria-hidden="true" /></a><a href="/legal.html">Termos de uso</a><a href="/legal.html">Privacidade</a><a href="/legal.html">Cookies</a></div>
       </div>
-      <div className="container footer-bottom"><span>© {new Date().getFullYear()} LEADSPAY PAGAMENTOS S/A. Todos os direitos reservados.</span><a href="#inicio">Voltar ao topo <ArrowUpRight size={13} aria-hidden="true" /></a></div>
+      <div className="container footer-bottom"><span>© {new Date().getFullYear()} LEADSPAY. Todos os direitos reservados.</span><a href="#inicio">Voltar ao topo <ArrowUpRight size={13} aria-hidden="true" /></a></div>
     </footer>
   );
 }
