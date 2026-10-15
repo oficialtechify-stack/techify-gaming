@@ -330,7 +330,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [showValues, setShowValues] = useState<boolean>(true);
 
   // Timeframe selector for the chart (1D, 1S, 1M, 6M, 1A) - default 1D matching reference
-  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1D');
+  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1S');
 
   // Search filter query
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -453,7 +453,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     approvedTransactions.forEach(s => {
       const val = roleMode === 'afiliado' ? (s.commissionEarned || 0) : (s.amount || 0);
       const m = (s.method || '').toLowerCase();
-      if (m.includes('automático') || m.includes('auto')) {
+      if (m.includes('pix') && (m.includes('automático') || m.includes('automatico') || m.includes('recorrente'))) {
         pixAutoVal += val;
         pixAutoCount++;
       } else if (m.includes('pix')) {
@@ -473,11 +473,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return [
       {
         id: 'pix',
-        name: 'PIX',
+        name: 'Pix',
         icon: (
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#22d3ee] fill-current" stroke="none">
-            <path d="M12 2L6 8l6 6 6-6-6-6zm0 8l-6 6 6 6 6-6-6-6z" />
-          </svg>
+          <img src="https://www.bcb.gov.br/content/estabilidadefinanceira/pix/img/logo_pix.png" alt="Pix" className="w-5 h-5 object-contain" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
         ),
         conversion: totalApprovedCount > 0 ? `${Math.round((pixCount / totalApprovedCount) * 100)}%` : '0%',
         value: pixVal
@@ -505,15 +503,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         conversion: totalApprovedCount > 0 ? `${Math.round((cardCount / totalApprovedCount) * 100)}%` : '0%',
         value: cardVal
       },
-      {
+      ...(pixAutoCount > 0 ? [{
         id: 'pix_auto',
-        name: 'PIX automático',
+        name: 'Pix recorrente',
         icon: (
           <RotateCcw className="w-4 h-4 text-[#22d3ee]" />
         ),
         conversion: totalApprovedCount > 0 ? `${Math.round((pixAutoCount / totalApprovedCount) * 100)}%` : '0%',
         value: pixAutoVal
-      }
+      }] : [])
     ];
   }, [filteredSales, roleMode]);
 
@@ -522,10 +520,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const pendingCount = useMemo(() => filteredSales.filter(t => isPendingTransaction(t.status)).length, [filteredSales]);
   const rejectedCount = useMemo(() => filteredSales.filter(t => isRejectedTransaction(t.status)).length, [filteredSales]);
   const totalCount = approvedCount + pendingCount + rejectedCount;
+  const totalTransactions = filteredSales.length;
 
   const approvedPercent = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0;
   const pendingPercent = totalCount > 0 ? Math.round((pendingCount / totalCount) * 100) : 0;
   const rejectedPercent = totalCount > 0 ? Math.round((rejectedCount / totalCount) * 100) : 0;
+  const refundedCount = filteredSales.filter(t => ['refunded', 'reembolsado', 'estornado'].includes(String(t.status || '').toLowerCase())).length;
+  const disputedCount = filteredSales.filter(t => ['disputed', 'chargeback', 'contestado'].includes(String(t.status || '').toLowerCase())).length;
+  const refundRate = totalTransactions ? (refundedCount / totalTransactions * 100).toFixed(1).replace('.', ',') + '%' : '0%';
+  const disputeRate = totalTransactions ? (disputedCount / totalTransactions * 100).toFixed(1).replace('.', ',') + '%' : '0%';
 
   // Dynamic Chart Points based on selectedTimeframe and real filtered sales
   // "nessa outra parte ele vem zerado em linha reta e so sobe e desce assim comforme as vendas dos usuarios"
@@ -1120,12 +1123,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 2. MAIN GRID (LEFT: 68% / RIGHT: 32%)                                     */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-6 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 min-w-0 items-start">
         
         {/* --------------------------------------------------------------------- */}
         {/* LEFT COLUMN: HERO SALES + MONTHLY PERFORMANCE + PAYMENT METHODS       */}
         {/* --------------------------------------------------------------------- */}
-        <div className="lg:col-span-8 flex flex-col gap-2.5 sm:gap-6 min-w-0">
+        <div className="lg:col-span-8 flex flex-col gap-3 sm:gap-4 min-w-0">
           
           {/* CARD 1: COMBINED "Visão geral de vendas" + "Desempenho mensal de vendas" */}
           <motion.div 
@@ -1208,7 +1211,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* Lower Section: Desempenho mensal de vendas */}
             <div>
               {/* Header row with Title and Period Switcher (1D, 1S, 1M, 6M, 1A) */}
-              <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 sm:mb-5">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
                     <BarChart3 className="w-3.5 h-3.5" />
@@ -1225,7 +1228,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                   {/* Pills 1D, 1S, 1M, 6M, 1A */}
                   <div className="flex items-center gap-0.5 sm:gap-1 bg-[#040810] border border-white/10 p-0.5 sm:p-1 rounded-lg sm:rounded-xl">
-                    {['1D', '1S', '1M', '6M', '1A'].map((horizon) => (
+                    {[['1S', '7 dias'], ['1M', '30 dias'], ['1A', '12 meses']].map(([horizon, label]) => (
                       <button
                         key={horizon}
                         onClick={() => setSelectedTimeframe(horizon)}
@@ -1235,7 +1238,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             : 'text-white/60 hover:text-white'
                         }`}
                       >
-                        {horizon}
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -1393,76 +1396,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </motion.div>
 
-          {/* CARD 2: "Meios de pagamento" TABLE */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-2.5 sm:p-7 shadow-2xl backdrop-blur-xl"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-2.5 sm:mb-5">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
-                  <CreditCard className="w-3.5 h-3.5" />
-                </div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Meios de pagamento'}
-                </h3>
-              </div>
-              <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
-                {roleMode === 'afiliado' ? 'Distribuição das vendas aprovadas' : 'Distribuição das vendas aprovadas'}
-              </span>
-            </div>
-
-            {/* Table with compact py-1.5 px-2 on mobile */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-gray-400 uppercase tracking-wider text-[10px] border-b border-white/5">
-                    <th className="pb-1.5 sm:pb-3 font-semibold">Meio de pagamento</th>
-                    <th className="pb-1.5 sm:pb-3 font-semibold text-center">Participação</th>
-                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">{roleMode === 'afiliado' ? 'Comissão' : 'Valor'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {paymentMethodRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-white/[0.02] transition-colors group">
-                      {/* Name with Icon */}
-                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 flex items-center gap-2 sm:gap-3 font-medium text-white/90 group-hover:text-white">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#080f1e] border border-white/10 flex items-center justify-center flex-shrink-0">
-                          {row.icon}
-                        </div>
-                        <span className="text-xs sm:text-sm">{row.name}</span>
-                      </td>
-
-                      {/* Conversion percentage pill */}
-                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-center">
-                        <span className="inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#080f1e] border border-white/10 text-white/80 font-bold text-[10px] sm:text-[11px]">
-                          {row.conversion}
-                        </span>
-                      </td>
-
-                      {/* Value formatted */}
-                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-right font-bold text-white text-xs sm:text-sm">
-                        {showValues ? `R$ ${(row.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
 
         </div>
 
         {/* --------------------------------------------------------------------- */}
         {/* RIGHT COLUMN: REESTRUTURAÇÃO EM GRID DENSA (2 COLS NO MOBILE)         */}
         {/* --------------------------------------------------------------------- */}
-        <div className="lg:col-span-4 flex flex-col gap-2.5 sm:gap-6 min-w-0">
+        <div className="lg:col-span-4 flex flex-col gap-3 sm:gap-4 min-w-0">
 
-          {/* DENSE 2-COLUMN GRID ON MOBILE: "Disponível para saque" & "Saldo Futuro" lado a lado */}
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-6">
+          {/* Saldos em cartões responsivos, sem comprimir os valores no celular */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4">
             
             {/* CARD 1: "Disponível para saque" */}
             <motion.div
@@ -1521,7 +1464,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             </motion.div>
 
-            {/* CARD 2: "Saldo Futuro" (Matching reference layout with Purple Wallet) */}
+            {/* CARD 2: "Saldo pendente" (Matching reference layout with Purple Wallet) */}
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1536,7 +1479,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <Clock className="w-3.5 h-3.5" />
                     </div>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-white truncate">
-                      Saldo Futuro
+                      Saldo pendente
                     </h3>
                   </div>
 
@@ -1824,7 +1767,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Reembolso</span>
                             </div>
                             <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                              {showValues ? '0%' : '•'}
+                              {showValues ? refundRate : '•'}
                             </div>
                             <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Taxa de estornos</span>
                           </div>
@@ -1836,7 +1779,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">Chargeback</span>
                             </div>
                             <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                              {showValues ? '0%' : '•'}
+                              {showValues ? disputeRate : '•'}
                             </div>
                             <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">Contestações</span>
                           </div>
@@ -1848,7 +1791,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <span className="text-[10px] sm:text-[11px] font-medium text-gray-400 truncate">MED</span>
                             </div>
                             <div className="text-base sm:text-2xl font-bold sm:font-black text-[#38bdf8] font-['Syne']">
-                              {showValues ? '0%' : '•'}
+                              {showValues ? 'Sem dados' : '•'}
                             </div>
                             <span className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 sm:mt-1 truncate">BACEN</span>
                           </div>
@@ -1859,6 +1802,72 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
       </div>
+
+      {/* Meios de pagamento em largura total: sem coluna vazia abaixo do gráfico */}
+      <section className="mt-3 sm:mt-4 min-w-0">
+          {/* CARD 2: "Meios de pagamento" TABLE */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-2xl backdrop-blur-xl"
+          >
+            {/* Header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 sm:mb-5">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
+                  <CreditCard className="w-3.5 h-3.5" />
+                </div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
+                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Meios de pagamento'}
+                </h3>
+              </div>
+              <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
+                {roleMode === 'afiliado' ? 'Distribuição das vendas aprovadas' : 'Distribuição das vendas aprovadas'}
+              </span>
+            </div>
+
+            {/* Table with compact py-1.5 px-2 on mobile */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-gray-400 uppercase tracking-wider text-[10px] border-b border-white/5">
+                    <th className="pb-1.5 sm:pb-3 font-semibold">Meio de pagamento</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-center">Participação</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">{roleMode === 'afiliado' ? 'Comissão' : 'Valor'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {paymentMethodRows.map((row) => (
+                    <tr key={row.id} className="hover:bg-white/[0.02] transition-colors group">
+                      {/* Name with Icon */}
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 flex items-center gap-2 sm:gap-3 font-medium text-white/90 group-hover:text-white">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#080f1e] border border-white/10 flex items-center justify-center flex-shrink-0">
+                          {row.icon}
+                        </div>
+                        <span className="text-xs sm:text-sm">{row.name}</span>
+                      </td>
+
+                      {/* Conversion percentage pill */}
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-center">
+                        <span className="inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#080f1e] border border-white/10 text-white/80 font-bold text-[10px] sm:text-[11px]">
+                          {row.conversion}
+                        </span>
+                      </td>
+
+                      {/* Value formatted */}
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-right font-bold text-white text-xs sm:text-sm">
+                        {showValues ? `R$ ${(row.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+
+      </section>
+
     </div>
   );
 };
