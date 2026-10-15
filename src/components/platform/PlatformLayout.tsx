@@ -41,6 +41,7 @@ import {
   findCompanyByOwnerId
 } from '../../services/firestoreService';
 import { DashboardView } from './DashboardView';
+import { GrowthView } from './GrowthView';
 import { VitrineView } from './VitrineView';
 import { MinhaEmpresaView } from './MinhaEmpresaView';
 import { MinhasAfiliacoesView } from './MinhasAfiliacoesView';
@@ -415,7 +416,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   useEffect(() => {
     if ((activeTab === 'database' || activeTab === 'modal_backgrounds') && !isSuperAdmin) {
       setActiveTab('dashboard');
-    } else if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes')) {
+    } else if (roleMode === 'afiliado' && (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes' || activeTab === 'growth')) {
       setActiveTab('dashboard');
     } else if (roleMode === 'empresa' && (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios' || activeTab === 'comunidade')) {
       setActiveTab('minha_empresa');
@@ -1317,6 +1318,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   ];
 
   const companyNavItems = [
+    { id: 'growth' as PlatformTab, label: 'LeadsPay Growth', icon: Sparkles, badge: 'Novo' },
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Visão Geral', icon: LayoutDashboard },
     { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
     { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
@@ -2005,6 +2007,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <div className="w-full">
               <LeadspayOfficeView />
             </div>
+          )}
+
+          {activeTab === 'growth' && roleMode === 'empresa' && (
+            <GrowthView companyId={effectiveCompanyId} plans={myCompanyPlans} />
           )}
 
           {(activeTab === 'minha_empresa' || activeTab === 'produtos') && (
