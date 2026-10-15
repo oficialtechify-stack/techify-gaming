@@ -1359,6 +1359,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const companyNavItems = [
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Visão Geral', icon: LayoutDashboard },
+    { id: 'equipe' as PlatformTab, label: 'Equipe de Vendas', icon: Users },
     // Programa de afiliados preservado, mas oculto enquanto não estiver disponível.
     { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
