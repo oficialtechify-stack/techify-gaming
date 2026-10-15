@@ -1398,66 +1398,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </motion.div>
 
-          {/* CARD 2: "Meios de pagamento" TABLE */}
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-2xl backdrop-blur-xl"
-          >
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 sm:mb-5">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
-                  <CreditCard className="w-3.5 h-3.5" />
-                </div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
-                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Meios de pagamento'}
-                </h3>
-              </div>
-              <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
-                {roleMode === 'afiliado' ? 'Distribuição das vendas aprovadas' : 'Distribuição das vendas aprovadas'}
-              </span>
-            </div>
-
-            {/* Table with compact py-1.5 px-2 on mobile */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-gray-400 uppercase tracking-wider text-[10px] border-b border-white/5">
-                    <th className="pb-1.5 sm:pb-3 font-semibold">Meio de pagamento</th>
-                    <th className="pb-1.5 sm:pb-3 font-semibold text-center">Participação</th>
-                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">{roleMode === 'afiliado' ? 'Comissão' : 'Valor'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {paymentMethodRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-white/[0.02] transition-colors group">
-                      {/* Name with Icon */}
-                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 flex items-center gap-2 sm:gap-3 font-medium text-white/90 group-hover:text-white">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#080f1e] border border-white/10 flex items-center justify-center flex-shrink-0">
-                          {row.icon}
-                        </div>
-                        <span className="text-xs sm:text-sm">{row.name}</span>
-                      </td>
-
-                      {/* Conversion percentage pill */}
-                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-center">
-                        <span className="inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#080f1e] border border-white/10 text-white/80 font-bold text-[10px] sm:text-[11px]">
-                          {row.conversion}
-                        </span>
-                      </td>
-
-                      {/* Value formatted */}
-                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-right font-bold text-white text-xs sm:text-sm">
-                        {showValues ? `R$ ${(row.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
 
         </div>
 
@@ -1862,6 +1802,71 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
 
         </div>
+
+      {/* Meios de pagamento em largura total: sem coluna vazia abaixo do gráfico */}
+      <section className="mt-3 sm:mt-4 min-w-0">
+          {/* CARD 2: "Meios de pagamento" TABLE */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-[#050b14] border border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-2xl backdrop-blur-xl"
+          >
+            {/* Header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 sm:mb-5">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-md bg-[#a3e635]/15 flex items-center justify-center text-[#a3e635]">
+                  <CreditCard className="w-3.5 h-3.5" />
+                </div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white">
+                  {roleMode === 'afiliado' ? 'Comissões por meio de pagamento' : 'Meios de pagamento'}
+                </h3>
+              </div>
+              <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium">
+                {roleMode === 'afiliado' ? 'Distribuição das vendas aprovadas' : 'Distribuição das vendas aprovadas'}
+              </span>
+            </div>
+
+            {/* Table with compact py-1.5 px-2 on mobile */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-gray-400 uppercase tracking-wider text-[10px] border-b border-white/5">
+                    <th className="pb-1.5 sm:pb-3 font-semibold">Meio de pagamento</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-center">Participação</th>
+                    <th className="pb-1.5 sm:pb-3 font-semibold text-right">{roleMode === 'afiliado' ? 'Comissão' : 'Valor'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {paymentMethodRows.map((row) => (
+                    <tr key={row.id} className="hover:bg-white/[0.02] transition-colors group">
+                      {/* Name with Icon */}
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 flex items-center gap-2 sm:gap-3 font-medium text-white/90 group-hover:text-white">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#080f1e] border border-white/10 flex items-center justify-center flex-shrink-0">
+                          {row.icon}
+                        </div>
+                        <span className="text-xs sm:text-sm">{row.name}</span>
+                      </td>
+
+                      {/* Conversion percentage pill */}
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-center">
+                        <span className="inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#080f1e] border border-white/10 text-white/80 font-bold text-[10px] sm:text-[11px]">
+                          {row.conversion}
+                        </span>
+                      </td>
+
+                      {/* Value formatted */}
+                      <td className="py-1.5 px-1 sm:py-3.5 sm:px-3 text-right font-bold text-white text-xs sm:text-sm">
+                        {showValues ? `R$ ${(row.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '••••••'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+
+      </section>
 
       </div>
     </div>
