@@ -563,7 +563,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   };
 
   return (
-    <div className="relative animate-in fade-in duration-200 pb-16" id="leadspay-meu-perfil-view">
+    <div className="relative animate-in fade-in duration-200 pb-16 px-1 sm:px-2" id="leadspay-meu-perfil-view">
       {showEditRequest && (roleMode === 'empresa' || roleMode === 'afiliado') && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-[26px] border border-white/10 bg-[#0A1220] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.6)]">
@@ -614,6 +614,67 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      {/* Identidade visual renovada da aba Geral: cartões amplos, marca horizontal e hierarquia Cakto-inspired. */}
+      <style>{`
+        #leadspay-meu-perfil-view { max-width: 1240px; }
+        #leadspay-meu-perfil-view .profile-settings-nav {
+          background: #0e1522; border: 1px solid #253044; border-radius: 16px;
+          box-shadow: 0 8px 28px rgba(0,0,0,.14); padding: 3px 12px;
+        }
+        #leadspay-meu-perfil-view .profile-identity-section {
+          background: linear-gradient(120deg,#151f2f 0%,#101827 68%,#172a24 100%);
+          border: 1px solid #354456; border-radius: 22px; padding: 30px;
+          box-shadow: 0 14px 40px rgba(0,0,0,.16);
+        }
+        #leadspay-meu-perfil-view .profile-identity-section h2 {
+          font-size: 25px; letter-spacing: -.04em; line-height: 1.25; margin-top: 10px;
+        }
+        #leadspay-meu-perfil-view .profile-identity-section button[aria-pressed] {
+          min-height: 102px; background: #0c1523; border: 1px solid #334155;
+          border-radius: 14px; padding: 20px; position: relative;
+        }
+        #leadspay-meu-perfil-view .profile-identity-section button[aria-pressed="true"] {
+          background: #1c2d26; border-color: #d9f22a;
+          box-shadow: inset 0 0 0 1px rgba(217,242,42,.16),0 4px 18px rgba(0,0,0,.12);
+        }
+        #leadspay-meu-perfil-view .profile-identity-section button[aria-pressed="true"]::after {
+          content: "✓"; position: absolute; top: 14px; right: 17px;
+          color: #d9f22a; font-weight: 800; font-size: 17px;
+        }
+        #leadspay-meu-perfil-view .profile-general-form { gap: 18px; }
+        #leadspay-meu-perfil-view .profile-brand-card {
+          background: linear-gradient(115deg,#172535 0%,#111d2d 65%,#152b29 100%);
+          border: 1px solid #33465a; border-radius: 22px; padding: 26px 32px;
+          min-height: 196px; box-shadow: 0 10px 34px rgba(0,0,0,.14);
+        }
+        #leadspay-meu-perfil-view .profile-brand-card > div:last-child { flex: 1; }
+        #leadspay-meu-perfil-view .profile-fields-stack > div {
+          background: #121d2c; border: 1px solid #2c3b50; border-radius: 20px;
+          padding: 28px 32px; box-shadow: 0 8px 26px rgba(0,0,0,.11);
+        }
+        #leadspay-meu-perfil-view .profile-fields-stack > div h4 {
+          font-size: 16px; letter-spacing: -.02em; font-weight: 750;
+        }
+        #leadspay-meu-perfil-view .profile-fields-stack label { color: #c1cad7; }
+        #leadspay-meu-perfil-view .profile-general-form input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+        #leadspay-meu-perfil-view .profile-general-form select,
+        #leadspay-meu-perfil-view .profile-general-form textarea {
+          background: #0b1422; border: 1px solid #334155; min-height: 48px;
+          border-radius: 11px; color: #f7f9fc; font-size: 14px;
+        }
+        #leadspay-meu-perfil-view .profile-general-form input:focus-visible,
+        #leadspay-meu-perfil-view .profile-general-form select:focus-visible,
+        #leadspay-meu-perfil-view .profile-general-form textarea:focus-visible {
+          outline: 2px solid #d9f22a; outline-offset: 1px;
+        }
+        @media(max-width:640px) {
+          #leadspay-meu-perfil-view .profile-identity-section { padding: 20px; border-radius: 16px; }
+          #leadspay-meu-perfil-view .profile-identity-section h2 { font-size: 21px; }
+          #leadspay-meu-perfil-view .profile-brand-card { padding: 20px; border-radius: 16px; }
+          #leadspay-meu-perfil-view .profile-fields-stack > div { padding: 20px; border-radius: 16px; }
+          #leadspay-meu-perfil-view .profile-general-form input:not([type="file"]):not([type="checkbox"]):not([type="radio"]) { font-size: 16px; }
+        }
+      `}</style>
       {/* Refinamento visual da área de configurações, sem alterar as integrações de cadastro e pagamento. */}
       <style>{`
         #leadspay-meu-perfil-view { max-width: 1320px; margin-inline: auto; color: #f4f6fa; }
@@ -649,7 +710,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           #leadspay-meu-perfil-view [role="tabpanel"] { padding: 18px; }
         }
       `}</style>
-      <div className="mb-7 rounded-2xl border border-white/10 bg-[#0a101b] px-3 sm:px-5 shadow-lg">
+      <div className="mb-7 rounded-2xl border border-white/10 bg-[#0a101b] px-3 sm:px-5 shadow-lg profile-settings-nav">
         <ProfileSectionTabs active={activeProfileSection} onChange={setActiveProfileSection} />
       </div>
       {activeProfileSection === 'senha' && (
@@ -1005,7 +1066,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       ) : (
       <>
-      <section className="mb-6 rounded-3xl border border-white/10 bg-[#0b1423] p-5 shadow-xl sm:p-7">
+      <section className="mb-6 rounded-3xl border border-white/10 bg-[#0b1423] p-5 shadow-xl sm:p-7 profile-identity-section">
         <p className="text-xs font-bold uppercase tracking-widest text-[#D9F22A]">Dados cadastrais</p>
         <h2 className="mt-2 text-xl font-bold text-white">Informações gerais</h2>
         <p className="mt-2 text-sm text-white/60">Confira os dados do titular, da marca e do endereço antes de solicitar a verificação.</p>
@@ -1022,9 +1083,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         )}
       </section>
-      <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start profile-general-form">
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
-        <div className="lg:col-span-4 bg-[#0f1929] border border-white/10 rounded-[24px] p-5 sm:p-7 flex flex-col items-center justify-center text-center shadow-lg relative lg:sticky lg:top-6">
+        <div className="lg:col-span-12 bg-[#0f1929] border border-white/10 rounded-[24px] p-5 sm:p-7 flex flex-col sm:flex-row items-center justify-start text-center sm:text-left gap-6 shadow-lg relative profile-brand-card">
           {/* Lock overlay if in analysis or approved */}
           {isLocked && !canEditBranding && (
             <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-bold text-white/70">
@@ -1033,7 +1094,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             </div>
           )}
 
-          <div className="relative group w-44 h-44 rounded-2xl overflow-hidden border-2 border-white/20 bg-black/60 shadow-2xl flex items-center justify-center mb-6">
+          <div className="relative group w-32 h-32 sm:w-36 sm:h-36 shrink-0 rounded-2xl overflow-hidden border-2 border-white/20 bg-black/60 shadow-2xl flex items-center justify-center mb-3 sm:mb-0">
             {(roleMode === 'empresa' ? companyLogo : avatar) ? (
               <img
                 src={roleMode === 'empresa' ? companyLogo : avatar}
@@ -1126,7 +1187,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
 
         {/* ================= RIGHT CARD: FORM FIELDS ================= */}
-        <div className="lg:col-span-8 flex flex-col gap-5">
+        <div className="lg:col-span-12 flex flex-col gap-5 profile-fields-stack">
           {/* SECTION 1: DADOS CADASTRAIS (EMPRESA OU AFILIADO) */}
           <div className="bg-[#0f1929] border border-white/10 rounded-[24px] p-5 sm:p-7 shadow-lg relative">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6 border-b border-white/10 pb-5">
