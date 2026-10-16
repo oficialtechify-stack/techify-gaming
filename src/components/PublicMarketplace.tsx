@@ -53,7 +53,7 @@ export default function PublicMarketplace() {
     <div className="mx-auto max-w-7xl space-y-7">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
         <a href="/" className="text-2xl font-black tracking-tight">Leads<span className="text-[#D9F22A]">Pay</span></a>
-        <a href={companySlug ? '/marketplace' : '/'} className="flex items-center gap-2 text-sm text-white/70 hover:text-white"><ArrowLeft size={16}/>{companySlug ? 'Explorar marketplace' : 'Página inicial'}</a>
+        <button type="button" onClick={() => { if (window.history.length > 1) window.history.back(); else window.location.assign(companySlug ? '/marketplace' : '/'); }} className="flex items-center gap-2 text-sm text-white/70 hover:text-white"><ArrowLeft size={16}/>{companySlug ? 'Voltar à página anterior' : 'Voltar'}</button>
       </header>
       {companySlug ? (!loading && !error && !company ? <p className="rounded-xl border border-amber-500/30 p-5">Esta empresa não está disponível ou não foi verificada.</p> : <section className="overflow-hidden rounded-3xl border border-white/10 bg-[#0e1423]">
         <div className="relative h-44 sm:h-64 lg:h-72 bg-gradient-to-br from-[#172d26] via-[#0e1423] to-[#35431a]">
