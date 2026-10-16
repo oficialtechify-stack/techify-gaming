@@ -38,7 +38,11 @@ import {
   isValidCPF, 
   isValidCNPJ, 
   cleanDigits,
-  getAuthErrorMessage 
+  getAuthErrorMessage,
+  validateStrongPassword,
+  startSmsMfaSignIn,
+  completeSmsMfaSignIn,
+  type SmsMfaSignInChallenge
 } from '../../services/authService';
 import {
   subscribeAuthModalSettings,
@@ -202,9 +206,11 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   const [basicCompanyOpen, setBasicCompanyOpen] = useState<boolean>(false); // Collapsed by default
 
   // 1. Login State (Screenshot 3)
-  const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('afiliado');
+  const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('empresa');
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
+  const [mfaChallenge, setMfaChallenge] = useState<SmsMfaSignInChallenge | null>(null);
+  const [mfaCode, setMfaCode] = useState<string>('');
 
   // 2. Affiliate Registration State (Screenshot 1)
   const [affName, setAffName] = useState<string>('');
@@ -215,7 +221,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   const [affPixKey, setAffPixKey] = useState<string>('');
   const [affPassword, setAffPassword] = useState<string>('');
   const [affConfirmPassword, setAffConfirmPassword] = useState<string>('');
-  const [affTermsAccepted, setAffTermsAccepted] = useState<boolean>(true);
+  const [affTermsAccepted, setAffTermsAccepted] = useState<boolean>(false);
 
   // 3. Company Registration State (Screenshot 2)
   const [compName, setCompName] = useState<string>('');
@@ -234,6 +240,9 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
 
   // Switch tab helper
   const handleSwitchTab = (tab: AuthModalType) => {
+    mfaChallenge?.verifier.clear();
+    setMfaChallenge(null);
+    setMfaCode('');
     setCurrentTab(tab);
     setManualAffiliateOpen(false);
     setBasicCompanyOpen(false);
@@ -287,8 +296,45 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         if (onLoginSuccess) onLoginSuccess();
       }, 1000);
     } catch (error: any) {
+      if (String(error?.code || '') === 'auth/multi-factor-auth-required') {
+        try {
+          const challenge = await startSmsMfaSignIn(error, 'leadspay-login-mfa-recaptcha');
+          setMfaChallenge(challenge);
+          setMfaCode('');
+          setSuccessMessage('Enviamos um código SMS para o segundo fator cadastrado.');
+          setErrorMessage('');
+        } catch (mfaError: any) {
+          setErrorMessage(getAuthErrorMessage(mfaError));
+        } finally {
+          setIsSubmitting(false);
+        }
+        return;
+      }
+
       setIsSubmitting(false);
       console.error('Erro no login:', error);
+      setErrorMessage(getAuthErrorMessage(error));
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+
+    setErrorMessage('');
+    setSuccessMessage('');
+    setIsSubmitting(true);
+
+    try {
+      await completeSmsMfaSignIn(mfaChallenge, mfaCode);
+      setMfaChallenge(null);
+      setMfaCode('');
+      setSuccessMessage('Segundo fator confirmado. Entrando na plataforma...');
+      setIsSubmitting(false);
+      onClose();
+      if (onLoginSuccess) onLoginSuccess();
+    } catch (error: any) {
+      setIsSubmitting(false);
       setErrorMessage(getAuthErrorMessage(error));
     }
   };
@@ -310,8 +356,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
       setErrorMessage('As senhas digitadas não coincidem.');
       return;
     }
-    if (affPassword.length < 6) {
-      setErrorMessage('A senha deve ter pelo menos 6 caracteres.');
+    if (!validateStrongPassword(affPassword)) {
+      setErrorMessage('Use uma senha com pelo menos 12 caracteres, incluindo letra maiúscula, minúscula e número.');
       return;
     }
     if (!affTermsAccepted) {
@@ -322,7 +368,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      await registerAffiliateUser({
+      const res = await registerAffiliateUser({
         name: affName,
         email: affEmail,
         password: affPassword,
@@ -332,12 +378,15 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         pixKeyType: affPixKeyType
       });
 
-      setSuccessMessage('Conta de Afiliado criada com sucesso! Redirecionando...');
-      setTimeout(() => {
+      if (res.requiresEmailVerification) {
         setIsSubmitting(false);
-        onClose();
-        if (onLoginSuccess) onLoginSuccess();
-      }, 1200);
+        setSuccessMessage('Conta criada. Enviamos um link de verificação para seu e-mail. Confirme o endereço antes de entrar.');
+        setLoginEmail(affEmail.trim().toLowerCase());
+        return;
+      }
+
+      setSuccessMessage('Conta de Afiliado criada com sucesso!');
+      setIsSubmitting(false);
     } catch (error: any) {
       setIsSubmitting(false);
       console.error('Erro no cadastro de afiliado:', error);
@@ -362,8 +411,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
       setErrorMessage('As senhas digitadas não coincidem.');
       return;
     }
-    if (compPassword.length < 6) {
-      setErrorMessage('A senha deve ter pelo menos 6 caracteres.');
+    if (!validateStrongPassword(compPassword)) {
+      setErrorMessage('Use uma senha com pelo menos 12 caracteres, incluindo letra maiúscula, minúscula e número.');
       return;
     }
 
@@ -382,16 +431,15 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
         category: compCategory
       });
 
-      const isExisting = res.company?.id && res.company.name !== compName;
-      setSuccessMessage(isExisting
-        ? `Conta conectada com sucesso! Acessando ${res.company?.name || 'sua empresa'}...`
-        : 'Acesso corporativo liberado com sucesso! Redirecionando para o painel...'
-      );
-      setTimeout(() => {
+      if (res.requiresEmailVerification) {
         setIsSubmitting(false);
-        onClose();
-        if (onLoginSuccess) onLoginSuccess();
-      }, 1200);
+        setSuccessMessage('Conta criada. Enviamos um link de verificação para seu e-mail. Confirme o endereço antes de entrar.');
+        setLoginEmail(compEmail.trim().toLowerCase());
+        return;
+      }
+
+      setSuccessMessage('Conta corporativa criada com sucesso!');
+      setIsSubmitting(false);
     } catch (error: any) {
       setIsSubmitting(false);
       console.error('Erro no cadastro de empresa:', error);
@@ -709,7 +757,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                           required
                           value={affPassword}
                           onChange={(e) => setAffPassword(e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="12+ caracteres, maiúscula, minúscula e número"
                           className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#09111b] border border-white/10 focus:border-[#a3e635] text-xs text-white placeholder:text-white/30 outline-none transition-all"
                         />
                         <button
@@ -978,7 +1026,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                           required
                           value={compPassword}
                           onChange={(e) => setCompPassword(e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="12+ caracteres, maiúscula, minúscula e número"
                           className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#09111b] border border-white/10 focus:border-[#a3e635] text-xs text-white placeholder:text-white/30 outline-none transition-all"
                         />
                         <button
@@ -1051,58 +1099,21 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
             <div className="flex flex-col gap-5">
               {/* Subhead label */}
               <div className="auth-kicker text-[10px] text-[#facc15] font-extrabold uppercase tracking-[0.2em] -mb-2">
-                ACESSO À PLATAFORMA
+                ACESSO EXCLUSIVO PARA EMPRESAS
               </div>
 
               {/* Title & Subtitle */}
               <div className="space-y-1.5">
                 <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  Entrar na sua <span className="text-[#a3e635]">conta</span>
+                  Acesse sua <span className="text-[#a3e635]">conta empresarial</span>
                 </h2>
                 <p className="text-xs text-white/60 font-normal leading-relaxed">
-                  Escolha como deseja acessar sua conta e continue com segurança.
+                  Área exclusiva para empresas cadastradas na LeadsPay. Entre com seu e-mail e senha para acessar seu painel.
                 </p>
               </div>
 
-              {/* Seletor de perfil permanece disponível também no celular. */}
-              <div className="auth-role-switcher grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={loginRole === 'afiliado'}
-                    onClick={() => {
-                      setLoginRole('afiliado');
-                      setErrorMessage('');
-                    }}
-                    className={`auth-role-option py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      loginRole === 'afiliado'
-                        ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    <User className="w-4 h-4" />
-                    <span>Entrar como Afiliado</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    aria-pressed={loginRole === 'empresa'}
-                    onClick={() => {
-                      setLoginRole('empresa');
-                      setErrorMessage('');
-                    }}
-                    className={`auth-role-option py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      loginRole === 'empresa'
-                        ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    <Briefcase className="w-4 h-4" />
-                    <span>Entrar como Empresa</span>
-                  </button>
-              </div>
-
               {/* Login Form */}
-              <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleLoginSubmit} className={`${mfaChallenge ? 'hidden' : 'flex'} flex-col gap-4`}>
                 {/* E-mail */}
                 <div className="space-y-1.5">
                   <label htmlFor="leadspay-login-email" className="text-[10px] font-bold text-white/70 uppercase tracking-wider">
@@ -1186,15 +1197,63 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                 </button>
               </form>
 
+              {mfaChallenge && (
+                <form onSubmit={handleMfaSubmit} className="flex flex-col gap-4 rounded-2xl border border-[#D9F22A]/25 bg-[#09111b] p-4">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#D9F22A]" />
+                    <div>
+                      <h3 className="text-sm font-black text-white">Verificação em duas etapas</h3>
+                      <p className="mt-1 text-xs leading-5 text-white/55">
+                        Digite o código enviado por SMS para {mfaChallenge.phoneHint}.
+                      </p>
+                    </div>
+                  </div>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                    placeholder="Código SMS"
+                    className="w-full rounded-xl border border-white/10 bg-[#060a15] px-4 py-3.5 text-sm text-white outline-none transition focus:border-[#D9F22A]"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || mfaCode.length < 4}
+                    className="w-full rounded-xl bg-[#D9F22A] px-5 py-3.5 text-xs font-black uppercase tracking-wider text-[#060A15] transition hover:bg-[#c8e217] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Confirmando...' : 'Confirmar código'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      mfaChallenge.verifier.clear();
+                      setMfaChallenge(null);
+                      setMfaCode('');
+                      setSuccessMessage('');
+                    }}
+                    className="text-xs font-bold text-white/55 hover:text-white"
+                  >
+                    Voltar para o login
+                  </button>
+                </form>
+              )}
+
+              <div id="leadspay-login-mfa-recaptcha" className="sr-only" aria-hidden="true" />
+
               {/* Footer Switcher */}
               <div className="text-center text-xs text-white/60 pt-1">
-                Ainda não possui conta?{' '}
+                Sua empresa ainda não tem conta?{' '}
                 <button
                   type="button"
-                  onClick={() => handleSwitchTab(loginRole === 'empresa' ? 'register_company' : 'register_affiliate')}
+                  onClick={() => handleSwitchTab('register_company')}
                   className="text-[#a3e635] font-bold hover:underline cursor-pointer ml-1"
                 >
-                  {loginRole === 'empresa' ? 'Cadastre sua Empresa' : 'Cadastre-se como Afiliado'}
+                  Cadastre sua empresa
                 </button>
               </div>
             </div>

@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DocumentReference } from 'firebase-admin/firestore';
+import { getApps, initializeApp } from 'firebase-admin/app';
 import checkout from '../server-api/stripe/checkout';
 import { getStripeTestClient, resetStripeClientForTests } from './stripeServer';
+
+// The checkout uses the named Firebase Admin app. Unit tests mock Firestore
+// document methods, so initialize the app without real service credentials.
+// No network calls or production credentials are required for these tests.
+if (!getApps().some(app => app.name === 'leadspay-server')) {
+  initializeApp({ projectId: 'techify-gaming-106fe' }, 'leadspay-server');
+}
 
 for (const failedWrite of [1, 2]) {
   test(`checkout não entrega client secret quando a gravação ${failedWrite} falha`, async (t) => {
@@ -25,6 +33,13 @@ for (const failedWrite of [1, 2]) {
     t.mock.method(stripe.accounts, 'retrieve', async () => ({
       id: 'acct_company',
       metadata: { firebase_uid: 'owner_1', leadspay_role: 'empresa' },
+      details_submitted: true,
+      payouts_enabled: true,
+      capabilities: { transfers: 'active' },
+    }) as any);
+    t.mock.method(stripe.accounts, 'update', async () => ({
+      id: 'acct_company',
+      metadata: { firebase_uid: 'owner_1', leadspay_role: 'empresa', leadspay_company_id: 'company_1' },
       details_submitted: true,
       payouts_enabled: true,
       capabilities: { transfers: 'active' },
@@ -72,7 +87,7 @@ for (const failedWrite of [1, 2]) {
       buyerEmail: 'test@example.com',
     } }, res as any);
 
-    assert.equal(code, 503);
+    assert.equal(code, 503, `Checkout failure response: ${JSON.stringify(response)}`);
     assert.equal(response.code, 'ORDER_STORAGE_UNAVAILABLE');
     assert.equal(response.clientSecret, undefined);
     assert.equal(stripeCalls, failedWrite === 1 ? 0 : 1);

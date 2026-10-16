@@ -17,7 +17,11 @@ export async function requireAdminIdentity(
 ) {
   const authorization = typeof headers.authorization === 'string' ? headers.authorization : undefined;
   const identity = await verifyFirebaseIdentity(authorization);
-  if (!identity.email || !configuredAdminEmails().has(identity.email.toLowerCase())) {
+  if (
+    !identity.email ||
+    identity.emailVerified !== true ||
+    !configuredAdminEmails().has(identity.email.toLowerCase())
+  ) {
     throw Object.assign(new Error('Acesso administrativo não autorizado.'), { statusCode: 403 });
   }
   return identity;

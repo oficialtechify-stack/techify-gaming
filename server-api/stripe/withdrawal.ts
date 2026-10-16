@@ -34,7 +34,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   if (req.method !== 'POST') return fail(res, 405, 'Método não permitido.');
 
   try {
-    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined);
+    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined, { requireVerifiedEmail: true });
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     const role = body.role as PlatformRole;
     if (role !== 'empresa' && role !== 'afiliado') return fail(res, 400, 'Selecione Empresa ou Afiliado.', 'INVALID_ROLE');
@@ -59,6 +59,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     // A rotina transacional nunca libera antes do availableAt.
     const dueSnapshot = await db.collection('balance_releases')
       .where('userId', '==', identity.uid)
+      .where('role', '==', role)
+      .where('status', '==', 'pending')
+      .where('availableAt', '<=', new Date().toISOString())
+      .orderBy('availableAt', 'asc')
+      .limit(200)
       .get();
 
     const nowMs = Date.now();
@@ -81,17 +86,6 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           );
         }
       }
-    }
-
-    const ledgerBalances = await calculateUserLedgerBalances(db, identity.uid);
-    const authoritativeAvailableCents = ledgerBalances[role].availableCents;
-    if (authoritativeAvailableCents < MIN_WITHDRAWAL_CENTS || authoritativeAvailableCents < amountCents) {
-      return fail(
-        res,
-        409,
-        'Saque não liberado. O valor solicitado precisa estar realmente liberado no livro-caixa da LeadsPay e o mínimo é R$ 10,00.',
-        'INSUFFICIENT_LEDGER_BALANCE',
-      );
     }
 
     const accountId = String(profile.stripeAccounts?.[role] || '');
@@ -119,25 +113,25 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }
     }
 
+    const ledgerBalances = await calculateUserLedgerBalances(db, identity.uid, role === 'empresa' ? companyId : undefined);
+    const authoritativeAvailableCents = ledgerBalances[role].availableCents;
+    if (authoritativeAvailableCents < MIN_WITHDRAWAL_CENTS || authoritativeAvailableCents < amountCents) {
+      return fail(
+        res,
+        409,
+        'Saque não liberado. O valor solicitado precisa estar realmente liberado no livro-caixa da LeadsPay e o mínimo é R$ 10,00.',
+        'INSUFFICIENT_LEDGER_BALANCE',
+      );
+    }
+
     const stripe = getStripeTestClient();
     let account = await stripe.accounts.retrieve(accountId);
     if (
       account.metadata?.firebase_uid !== identity.uid ||
       account.metadata?.leadspay_role !== role ||
-      (role === 'empresa' && account.metadata?.leadspay_company_id && account.metadata.leadspay_company_id !== companyId)
+      (role === 'empresa' && account.metadata?.leadspay_company_id !== companyId)
     ) {
       return fail(res, 409, 'A conta Stripe não corresponde a este perfil/empresa.', 'CONNECT_OWNERSHIP_MISMATCH');
-    }
-
-    if (role === 'empresa' && companyId && !account.metadata?.leadspay_company_id) {
-      account = await stripe.accounts.update(accountId, {
-        metadata: {
-          ...account.metadata,
-          firebase_uid: identity.uid,
-          leadspay_role: 'empresa',
-          leadspay_company_id: companyId,
-        },
-      });
     }
 
     if (
@@ -163,9 +157,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         Object.prototype.hasOwnProperty.call(data, availableField) &&
         Number.isSafeInteger(Number(data[availableField])) &&
         Number(data[availableField]) >= 0;
-      const profileAvailableCents = hasRoleBalanceField
-        ? Number(data[availableField])
-        : authoritativeAvailableCents;
+      // Fail closed until role-specific balances have been initialized from
+      // the validated ledger. A missing field must never use a stale snapshot
+      // as spendable funds during concurrent withdrawals.
+      if (!hasRoleBalanceField) return false;
+      const profileAvailableCents = Number(data[availableField]);
       const availableCents = Math.min(profileAvailableCents, authoritativeAvailableCents);
       if (availableCents < MIN_WITHDRAWAL_CENTS) return false;
       if (availableCents < amountCents) return false;
@@ -193,8 +189,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         status: 'PROCESSING',
         createdAt: now,
         requestedAt: now,
-        is_test: stripeIsTest,
         environment: stripeIsTest ? 'development' : 'production',
+        ...(stripeIsTest ? { is_test: true } : {}),
       });
       return true;
     });
@@ -224,24 +220,16 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       }, { idempotencyKey: `leadspay-withdrawal-transfer-${withdrawalId}` });
       transferId = transfer.id;
     } catch (error) {
-      await db.runTransaction(async (tx) => {
-        const fresh = await tx.get(profileRef);
-        const withdrawal = await tx.get(withdrawalRef);
-        if (!fresh.exists || !withdrawal.exists || withdrawal.data()!.status !== 'PROCESSING') return;
-        const data = fresh.data()!;
-        const currentRoleAvailable = Number(data[availableField] || 0);
-        tx.set(profileRef, {
-          [availableField]: currentRoleAvailable + amountCents,
-          availableBalance: Number((Number(data.availableBalance || 0) + amountCents / 100).toFixed(2)),
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-        tx.set(withdrawalRef, {
-          status: 'FAILED',
-          failureReason: error instanceof Error ? error.message.slice(0, 250) : 'Falha na transferência Stripe',
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-      });
-      return fail(res, 503, 'A Stripe não conseguiu reservar a transferência. Seu saldo foi restaurado.', 'TRANSFER_FAILED');
+      // Uma falha de rede pode acontecer depois de a Stripe aceitar a transferência.
+      // Nunca restaurar o saldo automaticamente sem confirmar o resultado remoto:
+      // isso permitiria dois saques para o mesmo dinheiro.
+      await withdrawalRef.set({
+        status: 'MANUAL_REVIEW_REQUIRED',
+        failureReason: error instanceof Error ? error.message.slice(0, 250) : 'Resultado da transferência Stripe desconhecido',
+        needsStripeReconciliation: true,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      return fail(res, 503, 'O saque está em conferência. O saldo permanece reservado até a LeadsPay verificar o resultado na Stripe.', 'TRANSFER_REQUIRES_REVIEW');
     }
 
     let payoutId = '';
@@ -258,73 +246,21 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       payoutId = payout.id;
       payoutStatus = payout.status === 'paid' ? 'COMPLETED' : 'PAYOUT_PENDING';
     } catch (payoutError) {
-      let reversed = false;
-      try {
-        await stripe.transfers.createReversal(
-          transferId,
-          {
-            amount: netAmountCents,
-            metadata: {
-              leadspay_withdrawal_id: withdrawalId,
-              reason: 'payout_creation_failed',
-            },
-          },
-          { idempotencyKey: `leadspay-withdrawal-reversal-${withdrawalId}` },
-        );
-        reversed = true;
-      } catch (reversalError) {
-        console.error(
-          '[Stripe withdrawal reversal] Falha crítica ao reverter transferência após erro no payout:',
-          reversalError instanceof Error ? reversalError.message : 'falha',
-        );
-      }
-
-      if (reversed) {
-        await db.runTransaction(async (tx) => {
-          const fresh = await tx.get(profileRef);
-          const withdrawal = await tx.get(withdrawalRef);
-          if (!fresh.exists || !withdrawal.exists) return;
-
-          const data = fresh.data()!;
-          const currentRoleAvailable = Number(data[availableField] || 0);
-          tx.set(profileRef, {
-            [availableField]: currentRoleAvailable + amountCents,
-            availableBalance: Number((Number(data.availableBalance || 0) + amountCents / 100).toFixed(2)),
-            updatedAt: new Date().toISOString(),
-          }, { merge: true });
-          tx.set(withdrawalRef, {
-            status: 'FAILED',
-            stripeTransferId: transferId,
-            transferReversed: true,
-            failureReason: payoutError instanceof Error
-              ? payoutError.message.slice(0, 250)
-              : 'Falha ao criar payout bancário',
-            updatedAt: new Date().toISOString(),
-          }, { merge: true });
-        });
-
-        return fail(
-          res,
-          503,
-          'Não foi possível enviar o saque ao banco. A transferência foi revertida e o saldo voltou para a LeadsPay.',
-          'PAYOUT_FAILED_REVERSED',
-        );
-      }
-
+      // Timeout / erro de rede após o request não prova que payout falhou.
+      // Nunca reverter a transferência nem devolver saldo sem reconciliação remota.
       await withdrawalRef.set({
         status: 'MANUAL_REVIEW_REQUIRED',
         stripeTransferId: transferId,
         stripePayoutId: null,
+        needsStripeReconciliation: true,
         failureReason: payoutError instanceof Error
           ? payoutError.message.slice(0, 250)
-          : 'Falha ao criar payout bancário',
+          : 'Resultado do payout Stripe desconhecido',
         updatedAt: new Date().toISOString(),
       }, { merge: true });
-
       return fail(
-        res,
-        503,
-        'O saque entrou em revisão de segurança. O saldo não será liberado novamente até a conferência da transferência.',
+        res, 503,
+        'O saque permanece reservado enquanto a LeadsPay confirma o resultado bancário na Stripe.',
         'PAYOUT_REQUIRES_REVIEW',
       );
     }
@@ -348,7 +284,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const finalDoc = await withdrawalRef.get();
     return res.status(200).json({
       success: true,
-      message: 'Saque processado pela LeadsPay e encaminhado pela Stripe ao banco cadastrado.',
+      message: payoutStatus === 'COMPLETED'
+        ? 'A Stripe confirmou a conclusão do saque.'
+        : 'Transferência registrada; o pagamento bancário ainda está pendente de confirmação pela Stripe.',
       withdrawal: { id: withdrawalId, ...finalDoc.data() },
     });
   } catch (error) {

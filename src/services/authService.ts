@@ -6,6 +6,15 @@ import {
   updateProfile,
   signInWithPopup,
   GoogleAuthProvider,
+  sendEmailVerification,
+  deleteUser,
+  getMultiFactorResolver,
+  PhoneAuthProvider,
+  PhoneMultiFactorGenerator,
+  RecaptchaVerifier,
+  multiFactor,
+  type MultiFactorResolver,
+  type MultiFactorInfo,
   User 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -45,6 +54,177 @@ export interface AuthResult {
   user: User;
   profile: UserSellerProfile;
   company?: CompanyStartup;
+  requiresEmailVerification?: boolean;
+}
+
+export const MIN_AUTH_PASSWORD_LENGTH = 12;
+
+export function validateStrongPassword(password: string): boolean {
+  return password.length >= MIN_AUTH_PASSWORD_LENGTH &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password);
+}
+
+
+export interface SmsMfaSignInChallenge {
+  resolver: MultiFactorResolver;
+  verificationId: string;
+  phoneHint: string;
+  verifier: RecaptchaVerifier;
+}
+
+export interface SmsMfaEnrollmentChallenge {
+  verificationId: string;
+  phoneNumber: string;
+  verifier: RecaptchaVerifier;
+}
+
+export function getEnrolledSecondFactors(): MultiFactorInfo[] {
+  const user = auth.currentUser;
+  return user ? [...multiFactor(user).enrolledFactors] : [];
+}
+
+export async function startSmsMfaSignIn(
+  error: any,
+  recaptchaContainerId: string,
+): Promise<SmsMfaSignInChallenge> {
+  if (String(error?.code || '') !== 'auth/multi-factor-auth-required') {
+    throw error;
+  }
+
+  const resolver = getMultiFactorResolver(auth, error);
+  const phoneHint = resolver.hints.find(
+    (hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID,
+  );
+
+  if (!phoneHint) {
+    const err = new Error('custom/mfa-phone-unavailable');
+    (err as any).code = 'custom/mfa-phone-unavailable';
+    throw err;
+  }
+
+  const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
+    size: 'invisible',
+  });
+
+  try {
+    const provider = new PhoneAuthProvider(auth);
+    const verificationId = await provider.verifyPhoneNumber({
+      multiFactorHint: phoneHint,
+      session: resolver.session,
+    }, verifier);
+
+    return {
+      resolver,
+      verificationId,
+      phoneHint: phoneHint.displayName || 'telefone cadastrado',
+      verifier,
+    };
+  } catch (err) {
+    verifier.clear();
+    throw err;
+  }
+}
+
+export async function completeSmsMfaSignIn(
+  challenge: SmsMfaSignInChallenge,
+  code: string,
+): Promise<User> {
+  try {
+    const credential = PhoneAuthProvider.credential(
+      challenge.verificationId,
+      code.trim(),
+    );
+    const assertion = PhoneMultiFactorGenerator.assertion(credential);
+    const result = await challenge.resolver.resolveSignIn(assertion);
+    return result.user;
+  } finally {
+    challenge.verifier.clear();
+  }
+}
+
+export async function startSmsMfaEnrollment(
+  phoneNumber: string,
+  recaptchaContainerId: string,
+): Promise<SmsMfaEnrollmentChallenge> {
+  const user = auth.currentUser;
+  if (!user) {
+    const err = new Error('custom/auth-required');
+    (err as any).code = 'custom/auth-required';
+    throw err;
+  }
+  if (!user.emailVerified) {
+    const err = new Error('custom/email-not-verified');
+    (err as any).code = 'custom/email-not-verified';
+    throw err;
+  }
+
+  const normalizedPhone = phoneNumber.replace(/[^+\d]/g, '');
+  if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) {
+    const err = new Error('custom/invalid-phone-e164');
+    (err as any).code = 'custom/invalid-phone-e164';
+    throw err;
+  }
+
+  const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
+    size: 'invisible',
+  });
+
+  try {
+    const session = await multiFactor(user).getSession();
+    const provider = new PhoneAuthProvider(auth);
+    const verificationId = await provider.verifyPhoneNumber({
+      phoneNumber: normalizedPhone,
+      session,
+    }, verifier);
+
+    return {
+      verificationId,
+      phoneNumber: normalizedPhone,
+      verifier,
+    };
+  } catch (err) {
+    verifier.clear();
+    throw err;
+  }
+}
+
+export async function completeSmsMfaEnrollment(
+  challenge: SmsMfaEnrollmentChallenge,
+  code: string,
+  displayName = 'SMS',
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) {
+    challenge.verifier.clear();
+    throw new Error('Faça login novamente para ativar a verificação em duas etapas.');
+  }
+
+  try {
+    const credential = PhoneAuthProvider.credential(
+      challenge.verificationId,
+      code.trim(),
+    );
+    const assertion = PhoneMultiFactorGenerator.assertion(credential);
+    await multiFactor(user).enroll(assertion, displayName);
+    await user.getIdToken(true);
+  } finally {
+    challenge.verifier.clear();
+  }
+}
+
+export async function disableSmsMfa(factorUid: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Faça login novamente para alterar a segurança da conta.');
+
+  const factor = multiFactor(user).enrolledFactors.find(
+    (item) => item.uid === factorUid,
+  );
+  if (!factor) return;
+
+  await multiFactor(user).unenroll(factor);
+  await user.getIdToken(true);
 }
 
 /**
@@ -249,24 +429,40 @@ export function getAuthErrorMessage(error: any): string {
     return 'Este e-mail já está cadastrado como EMPRESA. Por segurança e regras da plataforma, contas corporativas não podem ser usadas para atuar como afiliado. Utilize um e-mail pessoal diferente para sua conta de Afiliado.';
   }
   if (code.includes('custom/email-already-in-use')) {
-    return 'Este e-mail já possui uma conta no LeadsPay. Você pode fazer login diretamente com sua senha.';
+    return 'Não foi possível concluir o cadastro com esses dados. Tente entrar ou use a recuperação de senha.';
   }
 
   // Firebase Authentication Errors
   if (code.includes('auth/email-already-in-use')) {
-    return 'Este e-mail já possui uma conta cadastrada no LeadsPay. Por favor, utilize a aba "Fazer Login" ou recupere sua senha.';
+    return 'Não foi possível concluir o cadastro com esses dados. Tente entrar ou use a recuperação de senha.';
+  }
+  if (code.includes('custom/email-not-verified')) {
+    return 'Confirme seu e-mail antes de entrar. Enviamos um novo link de verificação para sua caixa de entrada.';
+  }
+  if (code.includes('custom/mfa-phone-unavailable')) {
+    return 'A conta exige verificação em duas etapas, mas não há um telefone SMS disponível.';
+  }
+  if (code.includes('custom/invalid-phone-e164')) {
+    return 'Informe o telefone com código do país, por exemplo +5581999999999.';
+  }
+  if (code.includes('auth/invalid-verification-code')) {
+    return 'O código de verificação está incorreto ou expirou.';
+  }
+  if (code.includes('auth/code-expired')) {
+    return 'O código SMS expirou. Solicite um novo código.';
   }
   if (code.includes('auth/invalid-email')) {
     return 'O formato do e-mail informado é inválido. Digite um e-mail válido (ex: seuemail@exemplo.com).';
   }
-  if (code.includes('auth/weak-password')) {
-    return 'A senha é muito fraca. Digite pelo menos 6 caracteres seguros.';
+  if (code.includes('custom/weak-password-policy') || code.includes('auth/weak-password')) {
+    return 'Use uma senha com pelo menos 12 caracteres, incluindo letra maiúscula, minúscula e número.';
   }
-  if (code.includes('auth/user-not-found')) {
-    return 'Nenhuma conta encontrada com este e-mail. Crie sua conta gratuitamente.';
-  }
-  if (code.includes('auth/wrong-password') || code.includes('auth/invalid-credential')) {
-    return 'E-mail ou senha incorretos. Verifique suas credenciais ou utilize a recuperação de senha.';
+  if (
+    code.includes('auth/user-not-found') ||
+    code.includes('auth/wrong-password') ||
+    code.includes('auth/invalid-credential')
+  ) {
+    return 'Não foi possível entrar com essas credenciais. Confira os dados ou use a recuperação de senha.';
   }
   if (code.includes('auth/too-many-requests')) {
     return 'Muitas tentativas em sequência. Por segurança, aguarde alguns instantes e tente novamente.';
@@ -312,11 +508,16 @@ export function getAuthErrorMessage(error: any): string {
 }
 
 /**
- * Cadastrar Afiliado Real no Firebase Auth e Firestore
- * Se o usuário já existir no Auth com a mesma senha (ex: recadastro ou teste), efetua login e atualiza perfil sem erro.
+ * Cadastrar Afiliado Real no Firebase Auth e Firestore.
+ * Contas existentes nunca são autenticadas automaticamente durante o cadastro.
  */
 export async function registerAffiliate(data: RegisterAffiliateData): Promise<AuthResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
+  if (!validateStrongPassword(data.password)) {
+    const err = new Error('custom/weak-password-policy');
+    (err as any).code = 'custom/weak-password-policy';
+    throw err;
+  }
   const cleanCpf = data.cpf ? cleanDigits(data.cpf) : '';
   const formattedCpf = cleanCpf ? formatCPF(cleanCpf) : '';
 
@@ -359,25 +560,18 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     user = userCredential.user;
   } catch (authError: any) {
     if (authError.code === 'auth/email-already-in-use') {
-      // Se a conta já existe, tentar entrar com a senha fornecida pelo usuário
-      try {
-        const loginCredential = await signInWithEmailAndPassword(auth, normalizedEmail, data.password);
-        user = loginCredential.user;
-      } catch (loginError: any) {
-        // Se a senha estiver incorreta para a conta existente, lançar erro amigável
-        const err = new Error('auth/email-already-in-use');
-        (err as any).code = 'auth/email-already-in-use';
-        throw err;
-      }
-    } else {
-      throw authError;
+      const err = new Error('auth/email-already-in-use');
+      (err as any).code = 'auth/email-already-in-use';
+      throw err;
     }
+    throw authError;
   }
 
   // 2. Verificar se CPF está em uso por OUTRO usuário diferente
   if (cleanCpf && cleanCpf.length === 11) {
     const cpfExists = await checkCpfAlreadyExists(cleanCpf, user.uid);
     if (cpfExists) {
+      await deleteUser(user).catch(() => undefined);
       const err = new Error('custom/cpf-already-in-use');
       (err as any).code = 'custom/cpf-already-in-use';
       throw err;
@@ -468,7 +662,9 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
     console.warn('Erro ao registrar verificação de afiliado:', verifErr);
   }
 
-  return { user, profile };
+  await sendEmailVerification(user);
+  await signOut(auth);
+  return { user, profile, requiresEmailVerification: true };
 }
 
 /**
@@ -476,6 +672,11 @@ export async function registerAffiliate(data: RegisterAffiliateData): Promise<Au
  */
 export async function registerCompany(data: RegisterCompanyData): Promise<AuthResult> {
   const normalizedEmail = data.email.trim().toLowerCase();
+  if (!validateStrongPassword(data.password)) {
+    const err = new Error('custom/weak-password-policy');
+    (err as any).code = 'custom/weak-password-policy';
+    throw err;
+  }
   
   const docType = data.documentType || (data.cnpj ? 'CNPJ' : data.cpf ? 'CPF' : data.hasNoCnpj ? 'SEM_CNPJ' : 'CNPJ');
   const cleanCnpj = data.cnpj ? cleanDigits(data.cnpj) : '';
@@ -508,17 +709,11 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     user = userCredential.user;
   } catch (authError: any) {
     if (authError.code === 'auth/email-already-in-use') {
-      try {
-        const loginCredential = await signInWithEmailAndPassword(auth, normalizedEmail, data.password);
-        user = loginCredential.user;
-      } catch (loginError: any) {
-        const err = new Error('auth/email-already-in-use');
-        (err as any).code = 'auth/email-already-in-use';
-        throw err;
-      }
-    } else {
-      throw authError;
+      const err = new Error('auth/email-already-in-use');
+      (err as any).code = 'auth/email-already-in-use';
+      throw err;
     }
+    throw authError;
   }
 
   // 2. Obter perfil existente se houver
@@ -621,6 +816,7 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
   if (docType === 'CNPJ' && cleanCnpj && cleanCnpj.length === 14) {
     const cnpjExists = await checkCnpjAlreadyExists(cleanCnpj, user.uid);
     if (cnpjExists) {
+      await deleteUser(user).catch(() => undefined);
       const err = new Error('custom/cnpj-already-in-use');
       (err as any).code = 'custom/cnpj-already-in-use';
       throw err;
@@ -758,7 +954,9 @@ export async function registerCompany(data: RegisterCompanyData): Promise<AuthRe
     console.warn('Erro ao salvar registro de verificação de empresa:', vErr);
   }
 
-  return { user, profile, company };
+  await sendEmailVerification(user);
+  await signOut(auth);
+  return { user, profile, company, requiresEmailVerification: true };
 }
 
 /**
@@ -768,6 +966,14 @@ export async function loginUser(email: string, password: string, preferredRole?:
   const normalizedEmail = email.trim().toLowerCase();
   const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
   const user = userCredential.user;
+
+  if (!user.emailVerified) {
+    try { await sendEmailVerification(user); } catch {}
+    await signOut(auth);
+    const err = new Error('custom/email-not-verified');
+    (err as any).code = 'custom/email-not-verified';
+    throw err;
+  }
 
   // Buscar perfil no Firestore
   const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
@@ -1236,10 +1442,17 @@ export async function completeCompanyProfile(
  */
 export async function resetPassword(email: string): Promise<{ success: boolean; message: string }> {
   const normalizedEmail = email.trim().toLowerCase();
-  await sendPasswordResetEmail(auth, normalizedEmail);
+  try {
+    await sendPasswordResetEmail(auth, normalizedEmail);
+  } catch (error: any) {
+    const code = String(error?.code || '');
+    if (!code.includes('auth/user-not-found') && !code.includes('auth/invalid-email')) {
+      throw error;
+    }
+  }
   return {
     success: true,
-    message: `Link de redefinição enviado com sucesso para ${normalizedEmail}! Verifique sua caixa de entrada e pasta de spam.`
+    message: 'Se existir uma conta para esse e-mail, enviaremos as instruções de redefinição. Verifique sua caixa de entrada e spam.'
   };
 }
 

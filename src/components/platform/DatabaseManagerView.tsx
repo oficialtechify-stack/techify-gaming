@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
 import { 
   COLLECTIONS, 
   clearAllFirestoreData,
   fetchAdminCollectionInFirebase,
   deleteAdminTestDocumentInFirebase,
-  subscribeVerifications,
-  subscribeCompanies,
   approveVerificationInFirebase,
   rejectVerificationInFirebase,
   approveCompanyInFirebase,
@@ -222,31 +218,52 @@ export const DatabaseManagerView: React.FC = () => {
   const [deletedEntityIds, setDeletedEntityIds] = useState<Set<string>>(new Set());
   const [recentlyApprovedIds, setRecentlyApprovedIds] = useState<Set<string>>(new Set());
 
-  // Assinatura em Tempo Real para Solicitações de Verificação, Empresas e Perfis
+  // Aprovações e cadastros são carregados somente quando a respectiva aba é aberta.
+  // Isso evita manter coleções administrativas inteiras em realtime no painel global.
   useEffect(() => {
     if (!isSuperAdmin) return;
-    const unsubVerifs = subscribeVerifications((reqs) => {
-      setVerifications(reqs);
-    });
-    const unsubComps = subscribeCompanies((comps) => {
-      setCompanies(comps);
-    });
-    const unsubProfiles = onSnapshot(collection(db, COLLECTIONS.PROFILES), (snap) => {
-      const pList: any[] = [];
-      snap.forEach((d) => {
-        pList.push({ id: d.id, ...d.data() });
-      });
-      setRegisteredProfiles(pList);
-    }, (err) => {
-      console.warn('Erro ao carregar perfis para o admin:', err);
-    });
+    if (mainTab !== 'affiliates_approval' && mainTab !== 'companies_approval') return;
 
-    return () => {
-      unsubVerifs();
-      unsubComps();
-      unsubProfiles();
+    let cancelled = false;
+    setLoading(true);
+
+    const loadApprovalLists = async () => {
+      try {
+        if (mainTab === 'affiliates_approval') {
+          const [verificationDocs, profileDocs] = await Promise.all([
+            fetchAdminCollectionInFirebase(COLLECTIONS.VERIFICATIONS),
+            fetchAdminCollectionInFirebase(COLLECTIONS.PROFILES),
+          ]);
+          if (cancelled) return;
+          setVerifications(verificationDocs as VerificationRequest[]);
+          setRegisteredProfiles(profileDocs);
+          return;
+        }
+
+        const [verificationDocs, companyDocs, profileDocs] = await Promise.all([
+          fetchAdminCollectionInFirebase(COLLECTIONS.VERIFICATIONS),
+          fetchAdminCollectionInFirebase(COLLECTIONS.COMPANIES),
+          fetchAdminCollectionInFirebase(COLLECTIONS.PROFILES),
+        ]);
+        if (cancelled) return;
+        setVerifications(verificationDocs as VerificationRequest[]);
+        setCompanies(companyDocs as CompanyStartup[]);
+        setRegisteredProfiles(profileDocs);
+      } catch (err: any) {
+        if (!cancelled) {
+          console.error('[Admin approvals]', err);
+          setErrorMessage(err?.message || 'Não foi possível carregar as aprovações.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-  }, [isSuperAdmin]);
+
+    void loadApprovalLists();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperAdmin, mainTab]);
 
   const loadAdminSummary = async () => {
     if (!isSuperAdmin || !currentUser) return;

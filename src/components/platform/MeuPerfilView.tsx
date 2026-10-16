@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
+import { AccountSecurityPanel } from './AccountSecurityPanel';
 import { StripeConnectCompanyPanel, type ConnectStatus } from './StripeConnectCompanyPanel';
 import { requestProfileEditInFirebase } from '../../services/firestoreService';
 
@@ -114,6 +115,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [isSavingDraft, setIsSavingDraft] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [stripeStatus, setStripeStatus] = useState<ConnectStatus>('loading');
+  const [showSecuritySettings, setShowSecuritySettings] = useState(false);
+  const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [showEditRequest, setShowEditRequest] = useState(false);
   const [editRequestReason, setEditRequestReason] = useState('');
   const [isRequestingEdit, setIsRequestingEdit] = useState(false);
@@ -217,9 +220,25 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     }
   };
 
+  // Branding is editable independently of protected KYC fields.
+  const canEditBranding = roleMode === 'empresa' && isApproved;
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
+  const saveBranding = async () => {
+    if (!canEditBranding || !companyLogo || companyLogo === userProfile.companyLogo) return;
+    setIsSavingBranding(true);
+    try {
+      await onSaveProfile({ companyLogo });
+      setToastMessage({ type: 'success', text: 'Logotipo atualizado com sucesso.' });
+    } catch {
+      setToastMessage({ type: 'error', text: 'Não foi possível salvar o logotipo. Tente novamente.' });
+    } finally {
+      setIsSavingBranding(false);
+    }
+  };
+
   // Image Upload Handler (Avatar or Company Logo)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'avatar' | 'companyLogo') => {
-    if (isLocked) return;
+    if (isLocked && !(target === 'companyLogo' && canEditBranding)) return;
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 3.1 * 1024 * 1024) {
@@ -607,17 +626,17 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
           {roleMode === 'empresa' 
-            ? 'Perfil da Empresa & Verificação Cadastral' 
-            : 'Meu Perfil & Verificação de Afiliado'}
+            ? 'Meu Perfil' 
+            : 'Meu Perfil'}
         </h1>
         <p className="text-xs text-white/60 mt-1 max-w-2xl">
           {roleMode === 'empresa'
-            ? 'Ative sua empresa em um fluxo seguro: primeiro valide a Stripe, depois complete o perfil LeadsPay e envie para aprovação administrativa.'
+            ? 'Gerencie seus dados cadastrais, a situação da empresa e as configurações da sua conta em um só lugar.'
             : 'Mantenha seus dados pessoais e de recebimento atualizados para garantir a homologação de sua conta e saques via PIX instantâneos.'}
         </p>
       </div>
 
-      {roleMode === 'empresa' && (
+      {roleMode === 'empresa' && !isApproved && (
         <div className="mb-6 rounded-[28px] border border-white/10 bg-gradient-to-br from-[#0d1626] via-[#09111d] to-[#070c14] p-4 sm:p-5 shadow-2xl">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -826,14 +845,39 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         )}
       </div>
 
+      {roleMode === 'empresa' && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#0A1220] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-white">Minha Vitrine</h2>
+            <p className="mt-1 text-xs text-white/50">Foto, capa e descrição pública ficam na área da sua empresa.</p>
+          </div>
+          <button type="button" onClick={() => onNavigateToTab?.('minha_empresa')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2.5 text-xs font-bold text-[#061014]">
+            Personalizar minha vitrine <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className="mb-6 rounded-2xl border border-white/10 bg-[#0A1220] p-4">
+        <button type="button" aria-expanded={showSecuritySettings} onClick={() => setShowSecuritySettings(value => !value)} className="flex w-full items-center justify-between gap-3 text-left">
+          <span><span className="block text-sm font-bold text-white">Segurança da conta</span><span className="mt-1 block text-xs text-white/50">Senha, sessões e proteção do acesso</span></span>
+          <span className="text-xs font-bold text-[#D9F22A]">{showSecuritySettings ? 'Ocultar' : 'Gerenciar'}</span>
+        </button>
+        {showSecuritySettings && <div className="mt-4"><AccountSecurityPanel /></div>}
+      </div>
+
       {(roleMode === 'empresa' || roleMode === 'afiliado') && (
         <div className="mb-6">
+          <button type="button" aria-expanded={showFinancialDetails || !stripeReady} onClick={() => setShowFinancialDetails(value => !value)} className="mb-3 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0A1220] p-4 text-left">
+            <span><span className="block text-sm font-bold text-white">Conta de recebimentos</span><span className="mt-1 block text-xs text-white/50">{stripeReady ? 'Conectada • configurações financeiras' : 'Configuração financeira necessária'}</span></span>
+            <span className="text-xs font-bold text-[#D9F22A]">{showFinancialDetails || !stripeReady ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
+          </button>
+          <div className={showFinancialDetails || !stripeReady ? '' : 'hidden'}>
           <StripeConnectCompanyPanel
             companyId={roleMode === 'empresa' ? (company?.id || userProfile.companyId) : undefined}
             role={roleMode}
             onboardingMode={!isApproved}
             onStatusChange={setStripeStatus}
           />
+          </div>
         </div>
       )}
 
@@ -859,7 +903,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
         <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl backdrop-blur-md relative">
           {/* Lock overlay if in analysis or approved */}
-          {isLocked && (
+          {isLocked && !canEditBranding && (
             <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-bold text-white/70">
               <Lock className="w-3 h-3 text-amber-400" />
               Bloqueado
@@ -890,7 +934,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             )}
 
             {/* Hover overlay with upload icon (only if NOT locked) */}
-            {!isLocked && (
+            {(!isLocked || canEditBranding) && (
               <label className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-200">
                 <Camera className="w-7 h-7 text-[#D9F22A] mb-1.5" />
                 <span className="text-[11px] font-black uppercase tracking-wider text-white">
@@ -901,13 +945,13 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   className="hidden"
                   onChange={(e) => handleImageUpload(e, roleMode === 'empresa' ? 'companyLogo' : 'avatar')}
-                  disabled={isLocked}
+                  disabled={isLocked && !canEditBranding}
                 />
               </label>
             )}
           </div>
 
-          {!isLocked ? (
+          {(!isLocked || canEditBranding) ? (
             <label className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer border border-white/15 mb-3">
               <Upload className="w-3.5 h-3.5" />
               <span>{roleMode === 'empresa' ? 'Logotipo da Empresa' : 'Escolher da Galeria'}</span>
@@ -923,6 +967,12 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               <Lock className="w-3.5 h-3.5" />
               <span>{roleMode === 'empresa' ? 'Logo Bloqueado' : 'Foto Bloqueada'}</span>
             </div>
+          )}
+
+          {canEditBranding && companyLogo !== userProfile.companyLogo && (
+            <button type="button" disabled={isSavingBranding} onClick={saveBranding} className="mb-3 rounded-xl bg-[#D9F22A] px-4 py-2 text-xs font-bold text-[#061014] disabled:opacity-50">
+              {isSavingBranding ? 'Salvando...' : 'Salvar novo logotipo'}
+            </button>
           )}
 
           <p className="text-[12px] text-white/50 leading-relaxed max-w-[240px]">

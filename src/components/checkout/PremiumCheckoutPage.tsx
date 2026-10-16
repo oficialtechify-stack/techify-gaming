@@ -461,10 +461,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
     const completed = currentStep > step;
 
     return (
-      <div className="flex min-w-[58px] flex-col items-center gap-1 sm:min-w-[82px] sm:gap-1.5">
+      <div className="flex min-w-[46px] flex-col items-center gap-0.5 sm:min-w-[82px] sm:gap-1.5">
         <div
           className={cx(
-            'flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-all sm:h-11 sm:w-11 sm:text-sm',
+            'flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-semibold transition-all sm:h-11 sm:w-11 sm:text-sm',
             active && 'border-[#B8F128] bg-[#B8F128] text-black shadow-[0_0_24px_rgba(184,241,40,0.18)]',
             completed && 'border-emerald-500 bg-emerald-500 text-white',
             !active && !completed && (isDark
@@ -474,7 +474,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         >
           {completed ? <CheckCircle2 className="h-5 w-5" /> : step}
         </div>
-        <span className={cx('text-[9px] font-medium leading-none sm:text-xs sm:leading-normal', active ? (isDark ? 'text-white' : 'text-[#111827]') : mutedClass)}>
+        <span className={cx('text-[8px] font-medium leading-none sm:text-xs sm:leading-normal', active ? (isDark ? 'text-white' : 'text-[#111827]') : mutedClass)}>
           {label}
         </span>
       </div>
@@ -554,11 +554,11 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             </div>
           </div>
 
-          <div className="col-span-2 row-start-2 flex items-start justify-center gap-1 sm:gap-4 lg:col-span-1 lg:row-start-auto">
+          <div className="col-span-2 row-start-2 flex items-start justify-center gap-0.5 sm:gap-4 lg:col-span-1 lg:row-start-auto">
             {renderStep(1, 'Seus dados')}
-            <div className={cx('mt-4 h-px w-7 sm:mt-5 sm:w-24', isDark ? 'bg-[#33495d]' : 'bg-[#dce1e7]')} />
+            <div className={cx('mt-3.5 h-px w-5 sm:mt-5 sm:w-24', isDark ? 'bg-[#33495d]' : 'bg-[#dce1e7]')} />
             {renderStep(2, 'Pagamento')}
-            <div className={cx('mt-5 h-px w-12 sm:w-24', isDark ? 'bg-[#33495d]' : 'bg-[#dce1e7]')} />
+            <div className={cx('mt-3.5 h-px w-5 sm:mt-5 sm:w-24', isDark ? 'bg-[#33495d]' : 'bg-[#dce1e7]')} />
             {renderStep(3, 'Confirmação')}
           </div>
 
@@ -568,11 +568,11 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           </div>
         </header>
 
-        <div className="mb-5 mt-5 text-center sm:mb-9 sm:mt-10">
-          <h1 className="mx-auto max-w-[360px] text-[26px] font-black leading-[1.08] tracking-[-0.04em] sm:max-w-none sm:text-[42px] sm:leading-normal lg:text-[48px]">
+        <div className="mb-3 mt-3 text-center sm:mb-9 sm:mt-10">
+          <h1 className="mx-auto max-w-[320px] text-[22px] font-black leading-[1.08] tracking-[-0.04em] sm:max-w-none sm:text-[42px] sm:leading-normal lg:text-[48px]">
             {currentStep === 1 ? 'Falta pouco para concluir sua compra' : 'Escolha como deseja pagar'}
           </h1>
-          <p className={cx('mx-auto mt-2 max-w-[340px] text-[13px] leading-relaxed sm:max-w-3xl sm:text-[20px]', mutedClass)}>
+          <p className={cx('mx-auto mt-1.5 max-w-[310px] text-[12px] leading-relaxed sm:mt-2 sm:max-w-3xl sm:text-[20px]', mutedClass)}>
             {currentStep === 1
               ? 'Confira seu pedido e preencha seus dados para continuar.'
               : 'Selecione uma forma de pagamento segura para finalizar sua compra.'}
@@ -580,7 +580,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
         </div>
 
         {offerCountdownSeconds > 0 && (
-          <div className="mx-auto mb-3 flex w-fit items-center gap-2 rounded-full border border-[#B8F128]/30 bg-[#B8F128]/10 px-3 py-1.5 text-[11px] font-bold text-[#B8F128] sm:mb-5 sm:px-4 sm:py-2 sm:text-xs">
+          <div className="mx-auto mb-2 flex max-w-full items-center justify-center gap-1.5 rounded-full border border-[#B8F128]/30 bg-[#B8F128]/10 px-2.5 py-1.5 text-[10px] font-bold text-[#B8F128] sm:mb-5 sm:w-fit sm:px-4 sm:py-2 sm:text-xs">
             <span>Condição deste checkout reservada por</span>
             <span className="font-black tabular-nums">
               {String(Math.floor(offerCountdownSeconds / 60)).padStart(2, '0')}:{String(offerCountdownSeconds % 60).padStart(2, '0')}
@@ -588,8 +588,8 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
           </div>
         )}
 
-        <div className="grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1.78fr)_minmax(330px,1fr)] lg:items-start">
-          <section className={cx('rounded-2xl border p-4 backdrop-blur-xl sm:rounded-[22px] sm:p-7', cardClass)}>
+        <div className="grid min-w-0 gap-2 sm:gap-5 lg:grid-cols-[minmax(0,1.78fr)_minmax(330px,1fr)] lg:items-start">
+          <section className={cx('rounded-2xl border p-3 backdrop-blur-xl sm:rounded-[22px] sm:p-7', cardClass)}>
             <div className="mb-4 sm:mb-5">
               <span className={cx('text-[11px] font-bold uppercase tracking-[0.06em]', mutedClass)}>
                 Sua compra
@@ -599,10 +599,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 <img
                   src={productImage}
                   alt={productName}
-                  className="h-[58px] w-[66px] shrink-0 rounded-lg border border-white/5 object-cover sm:h-[82px] sm:w-[102px] sm:rounded-xl"
+                  className="h-[50px] w-[56px] shrink-0 rounded-lg border border-white/5 object-cover sm:h-[82px] sm:w-[102px] sm:rounded-xl"
                 />
                 <div className="min-w-0">
-                  <h2 className="truncate text-[17px] font-black tracking-[-0.02em] sm:text-[27px]">
+                  <h2 className="truncate text-[15px] font-black tracking-[-0.02em] sm:text-[27px]">
                     {productName}
                   </h2>
                   <p className={cx('mt-0.5 truncate text-xs sm:mt-1 sm:text-base', mutedClass)}>
@@ -732,7 +732,7 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
                 <button
                   type="submit"
                   disabled={isProcessing}
-                  className="group relative mt-4 inline-flex min-h-[52px] w-full items-center justify-center gap-3 rounded-xl bg-[#B8F128] px-10 text-sm font-black text-black shadow-[0_10px_30px_rgba(184,241,40,0.13)] transition hover:bg-[#aee725] active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 sm:mt-5 sm:min-h-[58px] sm:px-5 sm:text-[17px]"
+                  className="group relative mt-3 inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl bg-[#B8F128] px-4 text-[13px] font-black text-black shadow-[0_10px_30px_rgba(184,241,40,0.13)] transition hover:bg-[#aee725] active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 sm:mt-5 sm:min-h-[58px] sm:px-5 sm:text-[17px]"
                 >
                   {isProcessing ? (
                     <>
@@ -822,10 +822,10 @@ export const CustomCheckoutPage: React.FC<CustomCheckoutPageProps> = ({
             </h2>
 
             <div className="mt-4 flex items-center gap-3 sm:mt-5 sm:gap-4">
-              <img src={productImage} alt={plan.name} className="h-[58px] w-[66px] shrink-0 rounded-lg object-cover sm:h-[82px] sm:w-[94px] sm:rounded-xl" />
+              <img src={productImage} alt={plan.name} className="h-[50px] w-[56px] shrink-0 rounded-lg object-cover sm:h-[82px] sm:w-[94px] sm:rounded-xl" />
 
               <div className="min-w-0">
-                <h3 className="truncate text-[16px] font-black sm:text-[21px]">{productName}</h3>
+                <h3 className="truncate text-[15px] font-black sm:text-[21px]">{productName}</h3>
                 <p className={cx('mt-0.5 text-xs sm:mt-1 sm:text-sm', mutedClass)}>
                   {isRecurring ? 'Assinatura • a cada ' + billingCycleLabel : 'Cobrança única'}
                 </p>

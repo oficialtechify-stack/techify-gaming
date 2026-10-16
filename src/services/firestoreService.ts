@@ -11,7 +11,8 @@ import {
   query,
   where,
   orderBy,
-  limit
+  limit,
+  deleteField
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { 
@@ -243,7 +244,7 @@ export async function submitVerificationRequestInFirebase(
 
 
 export function subscribeVerifications(callback: (requests: VerificationRequest[]) => void) {
-  const q = collection(db, COLLECTIONS.VERIFICATIONS);
+  const q = query(collection(db, COLLECTIONS.VERIFICATIONS), limit(200));
   return onSnapshot(q, (snap) => {
     const list: VerificationRequest[] = [];
     snap.forEach((d) => {
@@ -313,7 +314,7 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
       if (docSnap.exists() && docSnap.data()?.archived !== true && docSnap.data()?.isArchived !== true) {
         callback([{ id: docSnap.id, ...(docSnap.data() as Omit<CompanyStartup, 'id'>) }]);
       } else {
-        const q = query(collection(db, COLLECTIONS.COMPANIES), where("companyId", "==", companyId));
+        const q = query(collection(db, COLLECTIONS.COMPANIES), where("companyId", "==", companyId), limit(1));
         getDocs(q).then((snap) => {
           const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<CompanyStartup, 'id'>) }));
           callback(list);
@@ -325,7 +326,7 @@ export function subscribeCompanies(callback: (companies: CompanyStartup[]) => vo
     });
   }
 
-  const q = collection(db, COLLECTIONS.COMPANIES);
+  const q = query(collection(db, COLLECTIONS.COMPANIES), limit(200));
   return onSnapshot(q, (snap) => {
     const list: CompanyStartup[] = [];
     snap.forEach((d) => {
@@ -358,7 +359,7 @@ export async function findCompanyByOwnerId(userId: string, companyId?: string): 
 
   if (userId) {
     try {
-      const q = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId));
+      const q = query(collection(db, COLLECTIONS.COMPANIES), where('ownerId', '==', userId), limit(1));
       const snap = await getDocs(q);
       if (!snap.empty) {
         const d = snap.docs[0];
@@ -528,8 +529,8 @@ export async function deleteCompanyInFirebase(companyId: string) {
  */
 export function subscribePlans(callback: (plans: CompanyPlan[]) => void, companyId?: string) {
   const q = companyId 
-    ? query(collection(db, COLLECTIONS.PLANS), where("companyId", "==", companyId))
-    : collection(db, COLLECTIONS.PLANS);
+    ? query(collection(db, COLLECTIONS.PLANS), where("companyId", "==", companyId), limit(200))
+    : query(collection(db, COLLECTIONS.PLANS), limit(200));
   return onSnapshot(q, (snap) => {
     const list: CompanyPlan[] = [];
     snap.forEach((d) => {
@@ -675,7 +676,7 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
     callback([]);
     return () => {};
   }
-  const q = query(collection(db, COLLECTIONS.AFFILIATIONS), where("userId", "==", userId));
+  const q = query(collection(db, COLLECTIONS.AFFILIATIONS), where("userId", "==", userId), limit(200));
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
@@ -695,8 +696,8 @@ export function subscribeUserAffiliations(callback: (affiliations: UserAffiliati
  */
 export function subscribeAllAffiliations(callback: (affiliations: UserAffiliation[]) => void, companyId?: string) {
   const q = companyId 
-    ? query(collection(db, COLLECTIONS.AFFILIATIONS), where("companyId", "==", companyId))
-    : collection(db, COLLECTIONS.AFFILIATIONS);
+    ? query(collection(db, COLLECTIONS.AFFILIATIONS), where("companyId", "==", companyId), orderBy("createdAt", "desc"), limit(200))
+    : query(collection(db, COLLECTIONS.AFFILIATIONS), orderBy("createdAt", "desc"), limit(200));
   return onSnapshot(q, (snap) => {
     const list: UserAffiliation[] = [];
     snap.forEach((d) => {
@@ -784,13 +785,13 @@ export async function findAffiliationByCode(code: string): Promise<UserAffiliati
   try {
     const clean = code.trim();
     if (!clean) return null;
-    const q1 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliateCode", "==", clean));
+    const q1 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliateCode", "==", clean), limit(1));
     const snap1 = await getDocs(q1);
     if (!snap1.empty) {
       const docData = snap1.docs[0].data() as UserAffiliation;
       return { id: snap1.docs[0].id, ...docData };
     }
-    const q2 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliate_code", "==", clean));
+    const q2 = query(collection(db, COLLECTIONS.AFFILIATIONS), where("affiliate_code", "==", clean), limit(1));
     const snap2 = await getDocs(q2);
     if (!snap2.empty) {
       const docData = snap2.docs[0].data() as UserAffiliation;
@@ -816,10 +817,10 @@ export function subscribeSales(
   affiliateId?: string
 ) {
   const q = companyId
-    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId))
+    ? query(collection(db, COLLECTIONS.SALES), where("companyId", "==", companyId), orderBy("createdAt", "desc"), limit(250))
     : affiliateId
-      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId))
-      : collection(db, COLLECTIONS.SALES);
+      ? query(collection(db, COLLECTIONS.SALES), where("affiliateId", "==", affiliateId), orderBy("createdAt", "desc"), limit(250))
+      : query(collection(db, COLLECTIONS.SALES), orderBy("createdAt", "desc"), limit(250));
   return onSnapshot(q, (snap) => {
     const list: SaleTransaction[] = [];
     snap.forEach((d) => {
@@ -841,11 +842,11 @@ export function subscribeSales(
  * Realtime Withdrawals Listener (Filtered strictly by user unless superadmin)
  */
 export function subscribeWithdrawals(callback: (withdrawals: WithdrawalRequest[]) => void, userId?: string, companyId?: string) {
-  let q: any = collection(db, COLLECTIONS.WITHDRAWALS);
+  let q: any = query(collection(db, COLLECTIONS.WITHDRAWALS), orderBy("createdAt", "desc"), limit(200));
   if (companyId) {
-    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("companyId", "==", companyId));
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("companyId", "==", companyId), orderBy("createdAt", "desc"), limit(200));
   } else if (userId) {
-    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("userId", "==", userId));
+    q = query(collection(db, COLLECTIONS.WITHDRAWALS), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(200));
   }
 
   return onSnapshot(q, (snap: any) => {
@@ -1108,8 +1109,8 @@ export function subscribeClients(
 
   const clientsColl = collection(db, COLLECTIONS.CLIENTS);
   const q = storeId 
-    ? query(clientsColl, where("companyId", "==", storeId))
-    : query(clientsColl, orderBy('created_at', 'desc'));
+    ? query(clientsColl, where("companyId", "==", storeId), limit(200))
+    : query(clientsColl, orderBy('created_at', 'desc'), limit(200));
 
   return onSnapshot(q, (snapshot) => {
     const clients: PlatformClient[] = [];
@@ -1177,8 +1178,11 @@ export async function createOrUpdateClientInFirebase(clientData: {
   const cleanDoc = (clientData.document || '').replace(/\D/g, '');
   const cleanPhone = (clientData.phone || '').trim();
   const targetStoreId = clientData.store_id || 'store_default';
-  const isTest = clientData.is_test ?? true;
+  const isTest = clientData.is_test === true;
   const env = clientData.environment || (isTest ? 'development' : 'production');
+  if (env === 'production' && isTest) {
+    throw new Error('Registro de teste não pode ser gravado no ambiente de produção.');
+  }
   const statusCompra = clientData.status_compra || clientData.status || 'PIX_GERADO';
 
   // ID previsível e seguro baseado na loja + email/doc
@@ -1193,41 +1197,48 @@ export async function createOrUpdateClientInFirebase(clientData: {
       const updatedTotal = (Number(prevData.total_spent) || 0) + (Number(clientData.total_spent) || 0);
       const updatedCount = (Number(prevData.orders_count) || 1) + 1;
 
-      const payload: Partial<PlatformClient> = {
-        name: clientData.name || prevData.name,
-        nome_completo: clientData.name || prevData.name,
-        email: cleanEmail || prevData.email,
-        phone: cleanPhone || prevData.phone,
-        celular: cleanPhone || prevData.phone,
-        document: cleanDoc || prevData.document,
-        cpf_cnpj: cleanDoc || prevData.document,
+      const payload = {
+        companyId: targetStoreId,
+        name: clientData.name || prevData.name || prevData.nome_completo || 'Cliente Sem Nome',
+        email: cleanEmail || prevData.email || '',
+        phone: cleanPhone || prevData.phone || prevData.celular || '',
+        document: cleanDoc || prevData.document || prevData.cpf_cnpj || '',
         total_spent: updatedTotal,
-        valor_pedido: Number(clientData.total_spent) || updatedTotal,
         orders_count: updatedCount,
         last_order_at: now,
-        last_plan_name: clientData.last_plan_name || prevData.last_plan_name,
-        status_compra: statusCompra,
+        last_plan_name: clientData.last_plan_name || prevData.last_plan_name || '',
         status: statusCompra,
-        is_test: isTest,
-        environment: env
+        environment: env,
+        updatedAt: now,
+        // Remove aliases legados quando o registro for atualizado.
+        store_id: deleteField(),
+        empresa_id: deleteField(),
+        nome_completo: deleteField(),
+        celular: deleteField(),
+        cpf_cnpj: deleteField(),
+        valor_pedido: deleteField(),
+        status_compra: deleteField(),
+        is_test: deleteField(),
+        data_criacao: deleteField()
       };
 
-      await updateDoc(clientDocRef, sanitizeForFirestore(payload));
+      await updateDoc(clientDocRef, payload);
       return {
         id: clientId,
+        companyId: targetStoreId,
         store_id: targetStoreId,
         empresa_id: targetStoreId,
-        name: payload.name!,
-        nome_completo: payload.name!,
-        email: payload.email!,
-        phone: payload.phone,
-        celular: payload.phone,
-        document: payload.document,
-        cpf_cnpj: payload.document,
+        name: String(payload.name),
+        nome_completo: String(payload.name),
+        email: String(payload.email),
+        phone: String(payload.phone || ''),
+        celular: String(payload.phone || ''),
+        document: String(payload.document || ''),
+        cpf_cnpj: String(payload.document || ''),
         created_at: prevData.created_at || now,
         data_criacao: prevData.created_at || now,
         total_spent: updatedTotal,
-        valor_pedido: payload.valor_pedido,
+        valor_pedido: updatedTotal,
         orders_count: updatedCount,
         last_order_at: now,
         last_plan_name: payload.last_plan_name,
@@ -1237,31 +1248,49 @@ export async function createOrUpdateClientInFirebase(clientData: {
         environment: env
       };
     } else {
-      const newClient: PlatformClient = {
-        id: clientId,
-        store_id: targetStoreId,
-        empresa_id: targetStoreId,
+      const persistedClient = {
+        companyId: targetStoreId,
         name: clientData.name.trim(),
-        nome_completo: clientData.name.trim(),
         email: cleanEmail,
         phone: cleanPhone,
-        celular: cleanPhone,
         document: cleanDoc,
-        cpf_cnpj: cleanDoc,
         created_at: now,
-        data_criacao: now,
         total_spent: Number(clientData.total_spent) || 0,
-        valor_pedido: Number(clientData.total_spent) || 0,
         orders_count: 1,
         last_order_at: now,
         last_plan_name: clientData.last_plan_name || '',
+        status: statusCompra,
+        environment: env,
+        updatedAt: now
+      };
+
+      await setDoc(clientDocRef, sanitizeForFirestore(persistedClient));
+
+      const newClient: PlatformClient = {
+        id: clientId,
+        companyId: targetStoreId,
+        store_id: targetStoreId,
+        empresa_id: targetStoreId,
+        name: persistedClient.name,
+        nome_completo: persistedClient.name,
+        email: persistedClient.email,
+        phone: persistedClient.phone,
+        celular: persistedClient.phone,
+        document: persistedClient.document,
+        cpf_cnpj: persistedClient.document,
+        created_at: persistedClient.created_at,
+        data_criacao: persistedClient.created_at,
+        total_spent: persistedClient.total_spent,
+        valor_pedido: persistedClient.total_spent,
+        orders_count: persistedClient.orders_count,
+        last_order_at: persistedClient.last_order_at,
+        last_plan_name: persistedClient.last_plan_name,
         status_compra: statusCompra,
         status: statusCompra,
-        is_test: isTest,
+        is_test: false,
         environment: env
       };
 
-      await setDoc(clientDocRef, sanitizeForFirestore(newClient));
       return newClient;
     }
   } catch (error: any) {

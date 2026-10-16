@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion } from 'motion/react';
 import { 
   PlatformTab, 
   CompanyStartup,
@@ -120,7 +121,12 @@ import {
   CreditCard,
   ArrowUpRight,
   Share2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Home,
+  BadgeDollarSign,
+  WalletCards,
+  ReceiptText,
+  Grid2X2,
 } from 'lucide-react';
 import { TechifyLogo } from '../TechifyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -165,9 +171,9 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   const [roleMode, setRoleMode] = useState<UserRoleMode>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      return 'afiliado';
+      return 'empresa';
     }
-    return userRole || 'afiliado';
+    return userRole === 'admin' ? 'admin' : 'empresa';
   });
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -610,15 +616,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       setPlans(planList);
     }, effectiveCompanyId);
 
-    const unsubAllAffiliations = roleMode === 'afiliado'
-      ? (() => {
-          setAllAffiliations([]);
-          return () => {};
-        })()
-      : subscribeAllAffiliations((allAffList) => {
-          setAllAffiliations(allAffList);
-        }, effectiveCompanyId);
-
     const unsubSales = subscribeSales(
       (salesList) => {
         setTransactions(salesList);
@@ -631,10 +628,38 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return () => {
       unsubCompanies();
       unsubPlans();
-      unsubAllAffiliations();
       unsubSales();
     };
   }, [effectiveCompanyId, effectiveUserId, roleMode]);
+
+  useEffect(() => {
+    const needsCompanyAffiliations =
+      roleMode === 'admin' ||
+      (
+        roleMode === 'empresa' &&
+        (
+          activeTab === 'dashboard' ||
+          activeTab === 'minha_empresa' ||
+          activeTab === 'produtos' ||
+          activeTab === 'equipe' ||
+          activeTab === 'assinaturas'
+        )
+      );
+
+    if (!needsCompanyAffiliations) {
+      setAllAffiliations([]);
+      return;
+    }
+
+    if (roleMode === 'empresa' && !effectiveCompanyId) {
+      setAllAffiliations([]);
+      return;
+    }
+
+    return subscribeAllAffiliations((allAffList) => {
+      setAllAffiliations(allAffList);
+    }, effectiveCompanyId);
+  }, [roleMode, activeTab, effectiveCompanyId]);
 
   useEffect(() => {
     if (!currentUser || roleMode === 'admin') {
@@ -673,20 +698,36 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   useEffect(() => {
     if (!effectiveUserId) return;
 
-    // In Test Mode (Sandbox), users can freely test and access affiliations without restrictions!
-    const unsubAffiliations = subscribeUserAffiliations((affList) => {
-      setAffiliations(affList);
-    }, effectiveUserId);
+    // Afiliações pessoais só existem no modo Afiliado. Empresa/Admin não devem
+    // manter esse listener aberto, pois ele gera leituras sem utilidade.
+    const unsubAffiliations = roleMode === 'afiliado'
+      ? subscribeUserAffiliations((affList) => {
+          setAffiliations(affList);
+        }, effectiveUserId)
+      : (() => {
+          setAffiliations([]);
+          return () => {};
+        })();
 
-    const unsubWith = subscribeWithdrawals((withList) => {
-      setWithdrawals(withList);
-    }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId, effectiveCompanyId);
+    const needsWithdrawals =
+      activeTab === 'financeiro' ||
+      activeTab === 'carteira' ||
+      activeTab === 'saques';
+
+    const unsubWith = needsWithdrawals
+      ? subscribeWithdrawals((withList) => {
+          setWithdrawals(withList);
+        }, (isSuperAdmin && roleMode === 'admin') ? undefined : effectiveUserId, effectiveCompanyId)
+      : (() => {
+          setWithdrawals([]);
+          return () => {};
+        })();
 
     return () => {
       unsubAffiliations();
       unsubWith();
     };
-  }, [effectiveUserId, isSuperAdmin, roleMode, effectiveCompanyId]);
+  }, [effectiveUserId, isSuperAdmin, roleMode, effectiveCompanyId, activeTab]);
 
   // Affiliate Codes belonging strictly to THIS user
   const userAffiliationCodes = useMemo(() => {
@@ -1320,7 +1361,8 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   const companyNavItems = [
     { id: 'growth' as PlatformTab, label: 'LeadsPay Growth', icon: Sparkles, badge: 'Novo' },
     { id: 'dashboard' as PlatformTab, label: 'Dashboard & Visão Geral', icon: LayoutDashboard },
-    { id: 'equipe' as PlatformTab, label: 'Afiliados da Empresa', icon: Users, badge: `${myCompanyAffiliations.length}` },
+    { id: 'equipe' as PlatformTab, label: 'Equipe de Vendas', icon: Users },
+    // Programa de afiliados preservado, mas oculto enquanto não estiver disponível.
     { id: 'assistentes_ia' as PlatformTab, label: 'Assistentes de IA & MCP', icon: Bot, badge: 'Dev' },
     { id: 'meu_perfil' as PlatformTab, label: 'Meu Perfil', icon: User },
     { id: 'vitrine' as PlatformTab, label: 'Explorar Marketplace', icon: Store, badge: `${plans.length}` },
@@ -1694,7 +1736,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         } ml-0`}
       >
         {/* TOPBAR */}
-        <header className={`h-16 sticky top-0 z-30 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-4 min-w-0 ${activeTab === 'dashboard' ? 'lg:hidden' : ''}`}>
+        <header className={`h-16 sticky top-0 z-30 bg-[#060A15]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-4 min-w-0 `}>
           {/* Left Header: Mobile Menu Hamburger + Current Panel Indicator */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
             {/* Hamburger Button on Mobile */}
@@ -1703,7 +1745,13 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               className="lg:hidden p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 cursor-pointer flex-shrink-0 flex items-center justify-center"
               aria-label="Abrir menu de navegação"
             >
-              <Menu className="w-5 h-5" />
+              <motion.span
+            className="inline-flex"
+            animate={isMobileMenuOpen ? { rotate: 90, scale: 1.06 } : { rotate: 0, scale: 1 }}
+            transition={{ duration: 0.22 }}
+          >
+            <Grid2X2 className="w-[18px] h-[18px]" />
+          </motion.span>
             </button>
 
             {/* Current Panel Status Badge */}
@@ -1882,7 +1930,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                         </button>
                       )}
 
-                      {!isMobileScreen && (
+                      {false && !isMobileScreen && (
                         <button
                           onClick={() => {
                             setIsUserMenuOpen(false);
@@ -2177,13 +2225,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
 
           {activeTab === 'equipe' && (
-            <EquipeView
-              companies={myCompanies}
-              plans={myCompanyPlans}
-              affiliations={myCompanyAffiliations}
-              currentUserId={effectiveUserId}
-              onRemoveAffiliate={handleCompanyRemoveAffiliate}
-            />
+            <EquipeView />
           )}
           {activeTab === 'relatorios' && <RelatoriosView roleMode={roleMode} transactions={userVisibleTransactions} />}
           {activeTab === 'integracoes' && (
@@ -2271,36 +2313,54 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
         </main>
 
         {/* MOBILE BOTTOM NAVIGATION BAR */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 h-14 bg-[#060A15]/95 backdrop-blur-xl border-t border-white/10 px-1.5 flex items-center justify-around shadow-2xl safe-area-inset-bottom">
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 min-h-[58px] bg-[#060A15]/96 backdrop-blur-xl border-t border-white/10 px-1.5 pb-[max(env(safe-area-inset-bottom),4px)] pt-1 flex items-stretch justify-around shadow-2xl">
           <button
             onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
-            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'dashboard' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-0.5">Início</span>
+            <motion.span
+              className="inline-flex"
+              animate={activeTab === 'dashboard' ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+              transition={{ duration: 0.35 }}
+            >
+              <Home className="w-[18px] h-[18px]" />
+            </motion.span>
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">Início</span>
           </button>
 
           {roleMode === 'afiliado' ? (
             <button
               onClick={() => { setActiveTab('afiliados'); setIsMobileMenuOpen(false); }}
-              className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+              className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'afiliados' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
-              <Share2 className="w-5 h-5" />
-              <span className="text-[10px] font-semibold mt-0.5">Links</span>
+              <motion.span
+                className="inline-flex"
+                animate={activeTab === 'afiliados' ? { rotate: [0, -7, 7, 0] } : { rotate: 0 }}
+                transition={{ duration: 0.42 }}
+              >
+                <Link2 className="w-[18px] h-[18px]" />
+              </motion.span>
+              <span className="max-w-full truncate text-[9px] font-semibold leading-none">Links</span>
             </button>
           ) : (
             <button
               onClick={() => { setActiveTab('minha_empresa'); setIsMobileMenuOpen(false); }}
-              className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+              className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'minha_empresa' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
               }`}
             >
-              <Building2 className="w-5 h-5" />
-              <span className="text-[10px] font-semibold mt-0.5">Startup</span>
+              <motion.span
+                className="inline-flex"
+                animate={activeTab === 'minha_empresa' ? { y: [0, -2, 0] } : { y: 0 }}
+                transition={{ duration: 0.34 }}
+              >
+                <Store className="w-[18px] h-[18px]" />
+              </motion.span>
+              <span className="max-w-full truncate text-[9px] font-semibold leading-none">Startup</span>
             </button>
           )}
 
@@ -2309,12 +2369,18 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               setActiveTab(roleMode === 'empresa' ? 'cobrancas' : 'vitrine');
               setIsMobileMenuOpen(false);
             }}
-            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'vitrine' || activeTab === 'cobrancas' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            {roleMode === 'empresa' ? <CreditCard className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-0.5">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
+            <motion.span
+              className="inline-flex"
+              animate={activeTab === 'vitrine' || activeTab === 'cobrancas' ? { scale: [1, 0.9, 1.06, 1] } : { scale: 1 }}
+              transition={{ duration: 0.34 }}
+            >
+              {roleMode === 'empresa' ? <BadgeDollarSign className="w-[18px] h-[18px]" /> : <Sparkles className="w-[18px] h-[18px]" />}
+            </motion.span>
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">{roleMode === 'empresa' ? 'Cobranças' : 'Startups'}</span>
           </button>
 
           <button
@@ -2322,20 +2388,26 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
               setActiveTab(roleMode === 'empresa' ? 'carteira' : 'vendas');
               setIsMobileMenuOpen(false);
             }}
-            className={`h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[50px] ${
+            className={`min-w-0 flex-1 min-h-[50px] flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all cursor-pointer ${
               activeTab === 'vendas' || activeTab === 'carteira' ? 'text-[#D9F22A]' : 'text-white/50 hover:text-white'
             }`}
           >
-            {roleMode === 'empresa' ? <Wallet className="w-5 h-5" /> : <Receipt className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-0.5">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
+            <motion.span
+              className="inline-flex"
+              animate={activeTab === 'vendas' || activeTab === 'carteira' ? { y: [0, -3, 0], scale: [1, 1.05, 1] } : { y: 0, scale: 1 }}
+              transition={{ duration: 0.38 }}
+            >
+              {roleMode === 'empresa' ? <WalletCards className="w-[18px] h-[18px]" /> : <ReceiptText className="w-[18px] h-[18px]" />}
+            </motion.span>
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">{roleMode === 'empresa' ? 'Carteira' : 'Vendas'}</span>
           </button>
 
           <button
             onClick={() => setIsMobileMenuOpen(true)}
             className="h-full flex flex-col items-center justify-center py-1 px-2 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer min-w-[50px]"
           >
-            <Menu className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-0.5">Menu</span>
+            <Menu className="w-[18px] h-[18px]" />
+            <span className="max-w-full truncate text-[9px] font-semibold leading-none">Menu</span>
           </button>
         </nav>
       </div>
@@ -2361,7 +2433,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
       {/* ===================== 3. LIVE TOAST NOTIFICATION ===================== */}
       {liveToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#080d1a] border-2 border-[#D9F22A] rounded-2xl p-4 shadow-[0_0_35px_rgba(217,242,42,0.4)] flex items-center gap-4 animate-in slide-in-from-bottom-5 duration-300 max-w-sm">
+        <div className="fixed bottom-20 left-3 right-3 z-50 bg-[#080d1a] border-2 border-[#D9F22A] rounded-2xl p-3 sm:p-4 shadow-[0_0_35px_rgba(217,242,42,0.4)] flex items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom-5 duration-300 sm:bottom-6 sm:left-auto sm:right-6 sm:w-full sm:max-w-sm">
           <div className="w-10 h-10 rounded-full bg-[#D9F22A] text-[#060A15] flex items-center justify-center flex-shrink-0 font-bold">
             <Zap className="w-5 h-5 fill-current" />
           </div>

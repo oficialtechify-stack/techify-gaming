@@ -10,7 +10,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido.' });
   try {
     const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined;
-    const identity = await verifyFirebaseIdentity(authHeader);
+    const identity = await verifyFirebaseIdentity(authHeader, { requireVerifiedEmail: true });
     const role = req.query?.role;
     if (role !== 'empresa' && role !== 'afiliado') return res.status(400).json({ error: 'Papel inválido.' });
     const db = getServerAdminFirestore();

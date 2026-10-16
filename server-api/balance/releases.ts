@@ -41,6 +41,14 @@ export default async function handler(req: Req, res: Res) {
         : profile.hasAffiliateProfile === true || profile.accountType === 'afiliado' || profile.accountType === 'ambos';
 
     if (!hasRole) return res.status(403).json({ error: 'Este perfil não possui o saldo solicitado.' });
+    const companyId = role === 'empresa' ? String(profile.companyId || '').trim() : '';
+    if (role === 'empresa' && !companyId) return res.status(409).json({ error: 'Empresa não vinculada ao perfil.' });
+    if (role === 'empresa') {
+      const companySnap = await db.collection('companies').doc(companyId).get();
+      if (!companySnap.exists || String(companySnap.data()?.ownerId || companySnap.data()?.submittedBy || '') !== identity.uid) {
+        return res.status(403).json({ error: 'Acesso financeiro da empresa não autorizado.' });
+      }
+    }
 
     // Query only by userId to avoid composite-index dependency. Role/status are filtered in memory.
     let snapshot = await db.collection('balance_releases')
@@ -53,6 +61,7 @@ export default async function handler(req: Req, res: Res) {
       const availableAtMs = Date.parse(String(data.availableAt || ''));
       return (
         data.role === role &&
+        (role !== 'empresa' || String(data.companyId || '') === companyId) &&
         data.status === 'pending' &&
         Number.isFinite(availableAtMs) &&
         availableAtMs <= nowMs
@@ -77,7 +86,7 @@ export default async function handler(req: Req, res: Res) {
 
     const releases = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
-      .filter((item) => item.role === role)
+      .filter((item) => item.role === role && (role !== 'empresa' || String(item.companyId || '') === companyId))
       .sort((a, b) => Date.parse(String(a.availableAt || '')) - Date.parse(String(b.availableAt || '')));
 
     const visibleReleases = process.env.VERCEL_ENV === 'production'
@@ -85,7 +94,7 @@ export default async function handler(req: Req, res: Res) {
       : releases;
 
     const pending = visibleReleases.filter((item) => item.status === 'pending');
-    const ledger = await calculateUserLedgerBalances(db, identity.uid);
+    const ledger = await calculateUserLedgerBalances(db, identity.uid, role === 'empresa' ? companyId : undefined);
     const roleLedger = ledger[role];
 
     // Reconciliamos os campos salvos do perfil com o livro-caixa real.

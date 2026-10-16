@@ -23,7 +23,7 @@ export default async function handler(req:Req,res:Res){
   res.setHeader('X-Content-Type-Options','nosniff');
 
   try{
-    const identity=await verifyFirebaseIdentity(typeof req.headers.authorization==='string'?req.headers.authorization:undefined);
+    const identity=await verifyFirebaseIdentity(typeof req.headers.authorization==='string'?req.headers.authorization:undefined,{requireVerifiedEmail:true});
     const db=getServerAdminFirestore();
     const [profileSnap,requestSnap]=await Promise.all([
       db.collection('user_profiles').doc(identity.uid).get(),

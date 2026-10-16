@@ -351,3 +351,71 @@ body[data-leadspay-theme="light"] * {
 .leadspay-thankyou[data-theme="light"] [class~="text-emerald-400"] {
   color: #067647 !important;
 }
+
+
+/* =========================================================
+   GLOBAL RESPONSIVE SAFETY NET
+   Prevent individual views from forcing horizontal overflow on phones,
+   tablets, notebooks and wide displays without constraining intentional
+   scroll containers.
+   ========================================================= */
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+video,
+picture {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+.leadspay-site,
+.leadspay-platform,
+.leadspay-auth-screen,
+.leadspay-checkout,
+.leadspay-thankyou {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.leadspay-platform main,
+.leadspay-platform header,
+.leadspay-platform section,
+.leadspay-platform article,
+.leadspay-platform aside,
+.leadspay-platform form,
+.leadspay-platform [class*="grid"],
+.leadspay-platform [class*="flex"] {
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .leadspay-platform main {
+    margin-inline: auto;
+  }
+}

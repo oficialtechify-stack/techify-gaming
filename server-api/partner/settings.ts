@@ -9,7 +9,7 @@ type Res={setHeader(name:string,value:string):void;status(code:number):Res;json(
 export default async function handler(req:Req,res:Res){
   res.setHeader('Cache-Control','no-store');
   try{
-    const identity=await verifyFirebaseIdentity(typeof req.headers.authorization==='string'?req.headers.authorization:undefined);
+    const identity=await verifyFirebaseIdentity(typeof req.headers.authorization==='string'?req.headers.authorization:undefined,{requireVerifiedEmail:true});
     const db=getServerAdminFirestore();
     const profileSnap=await db.collection('user_profiles').doc(identity.uid).get();
     if(!profileSnap.exists) return res.status(404).json({error:'Perfil não encontrado.'});

@@ -510,3 +510,77 @@
   .leadspay-auth-screen .auth-card-topbar { gap: 10px; }
   .leadspay-auth-screen .auth-theme-toggle { min-width: 76px; min-height: 38px; padding-inline: 10px; }
 }
+
+/* Dark-mode contrast fixes for auth actions. Keep Google label/icon legible even
+   when generic text utility overrides are active inside the modal. */
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button {
+  border-color: #465c4c !important;
+  background: #f7faf6 !important;
+  color: #173d31 !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button > span {
+  color: #173d31 !important;
+  opacity: 1 !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button:hover {
+  border-color: #83bd65 !important;
+  background: #ffffff !important;
+}
+.leadspay-auth-screen[data-theme="dark"] .auth-card .auth-google-button svg {
+  opacity: 1 !important;
+}
+
+
+@media (max-width: 420px) {
+  .leadspay-auth-screen {
+    padding: 10px !important;
+  }
+
+  .leadspay-auth-screen .auth-shell {
+    margin-block: 16px;
+  }
+
+  .leadspay-auth-screen .auth-card {
+    gap: 15px;
+    padding: 18px 14px;
+    border-radius: 18px;
+  }
+
+  .leadspay-auth-screen .auth-card-topbar {
+    gap: 8px;
+  }
+
+  .leadspay-auth-screen .auth-theme-toggle {
+    min-width: 0;
+    min-height: 38px;
+    padding-inline: 9px;
+  }
+
+  .leadspay-auth-screen .auth-card h2 {
+    font-size: 24px;
+  }
+
+  .leadspay-auth-screen .auth-card h3 {
+    font-size: 22px;
+  }
+
+  .leadspay-auth-screen .auth-role-switcher {
+    grid-template-columns: 1fr !important;
+  }
+
+  .leadspay-auth-screen .auth-card .auth-role-option {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .leadspay-auth-screen .auth-card input:not([type="checkbox"]):not([type="file"]),
+  .leadspay-auth-screen .auth-card select,
+  .leadspay-auth-screen .auth-card .auth-google-button,
+  .leadspay-auth-screen .auth-card .auth-submit-button {
+    width: 100%;
+  }
+
+  .leadspay-auth-screen .auth-network-node {
+    display: none;
+  }
+}

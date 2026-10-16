@@ -12,7 +12,9 @@ import { CompanyPlan } from './types/platform';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { handleAffiliateTracking, getActiveAffiliateRef } from './utils/affiliateTracking';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
+import { BrowserInteractionGuard } from './components/security/BrowserInteractionGuard';
 import LeadspayLanding from './components/LeadspayLanding';
+import PublicMarketplace from './components/PublicMarketplace';
 import './styles/leadspay-landing.css';
 
 function MainApp() {
@@ -145,7 +147,7 @@ function MainApp() {
         if (authParam === 'login' || hash === '#login') {
           setActiveModal('login');
         } else if (authParam === 'afiliado' || authParam === 'register_affiliate' || hash === '#afiliado' || hash === '#cadastro-afiliado') {
-          setActiveModal('register_affiliate');
+          setActiveModal('register_company');
         } else if (authParam === 'empresa' || authParam === 'register_company' || hash === '#empresa' || hash === '#cadastro-empresa') {
           setActiveModal('register_company');
         }
@@ -166,6 +168,10 @@ function MainApp() {
   const handleLoginSuccess = () => {
     setViewPlatform(true);
   };
+
+  if (appPath === '/marketplace' || appPath.startsWith('/empresa/')) {
+    return <PublicMarketplace />;
+  }
 
   // Se estiver carregando o checkout direto
   if (isLoadingCheckout) {
@@ -320,6 +326,7 @@ export default function App() {
   return (
     <ErrorBoundary fallbackTitle="Erro ao carregar ecossistema LeadsPay">
       <AuthProvider>
+        <BrowserInteractionGuard />
         <MainApp />
       </AuthProvider>
     </ErrorBoundary>

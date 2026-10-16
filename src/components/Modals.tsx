@@ -50,7 +50,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
   // Synchronize modalTab when activeModal changes and pre-fill user info if logged in
   useEffect(() => {
     if (activeModal === 'login') setModalTab('login');
-    else if (activeModal === 'register_affiliate') setModalTab('register_affiliate');
+    else if (activeModal === 'register_affiliate') setModalTab('register_company');
     else if (activeModal === 'register_company') {
       setModalTab('register_company');
       if (currentUser?.email && !compEmail) {
@@ -79,7 +79,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
   const [showCompConfirmPassword, setShowCompConfirmPassword] = useState<boolean>(false);
 
   // 1. Login State
-  const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('afiliado');
+  const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('empresa');
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
 
@@ -113,7 +113,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
 
   // Reset errors on tab change
   const handleSwitchTab = (tab: 'login' | 'register_affiliate' | 'register_company' | 'forgot_password') => {
-    setModalTab(tab);
+    setModalTab(tab === 'register_affiliate' ? 'register_company' : tab);
     setErrorMessage('');
     setSuccessMessage('');
   };
@@ -123,7 +123,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
   // ----------------------------------------------------
   // HANDLERS
   // ----------------------------------------------------
-  const handleGoogleLogin = async (preferredRole: 'afiliado' | 'empresa' = 'afiliado') => {
+  const handleGoogleLogin = async (preferredRole: 'afiliado' | 'empresa' = 'empresa') => {
     setErrorMessage('');
     setSuccessMessage('');
     setIsSubmitting(true);
@@ -343,7 +343,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
             </div>
 
             {/* Navigation Tabs when in Login mode: only show options to enter as Afiliado or Empresa */}
-            {modalTab === 'login' && (
+            {false && modalTab === 'login' && (
               <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-[#050811] border border-white/10">
                 <button
                   type="button"
@@ -358,7 +358,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                   }`}
                 >
                   <UserCheck className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">Entrar como Afiliado</span>
+                  <span className="truncate">Acesso empresarial</span>
                 </button>
 
                 <button
@@ -416,7 +416,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
 
                     <button
                       type="button"
-                      onClick={() => handleGoogleLogin(modalTab === 'register_company' ? 'empresa' : 'afiliado')}
+                      onClick={() => handleGoogleLogin('empresa')}
                       className="px-3 py-1.5 rounded-lg bg-white/10 text-white font-bold text-[11px] hover:bg-white/20 transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
@@ -441,7 +441,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
             )}
 
             {/* 1. LOGIN TAB */}
-            {modalTab === 'login' && (
+            {false && modalTab === 'login' && (
               <div>
                 <div className="mb-4">
                   <h3 className="text-2xl font-black text-white font-['Syne']">
@@ -548,10 +548,10 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
                     Ainda não possui conta?{' '}
                     <button
                       type="button"
-                      onClick={() => handleSwitchTab(loginRole === 'empresa' ? 'register_company' : 'register_affiliate')}
+                      onClick={() => handleSwitchTab('register_company')}
                       className="text-[#D9F22A] font-bold hover:underline cursor-pointer"
                     >
-                      Cadastre-se como {loginRole === 'empresa' ? 'Empresa / Startup' : 'Afiliado'}
+                      Cadastre-se como Empresa
                     </button>
                   </div>
                 </form>
@@ -559,7 +559,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
             )}
 
             {/* 2. REGISTER AFFILIATE TAB */}
-            {modalTab === 'register_affiliate' && (
+            {false && modalTab === 'register_affiliate' && (
               <div>
                 <div className="mb-4">
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#D9F22A]/10 border border-[#D9F22A]/30 text-[#D9F22A] text-[10px] font-bold uppercase mb-2">
@@ -1353,7 +1353,7 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
         {/* ========================================================= */}
 
         {/* CAREERS / TRABALHE CONOSCO */}
-        {activeModal === 'careers' && (
+        {false && activeModal === 'careers' && (
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A]">
               <span className="w-2 h-2 rounded-full bg-[#D9F22A]" />
@@ -1370,13 +1370,13 @@ export const Modals: React.FC<ModalsProps> = ({ activeModal, onClose, onLoginSuc
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
-                onClick={() => setModalTab('register_affiliate')}
+                onClick={() => setModalTab('register_company')}
                 className="p-5 rounded-2xl bg-[#050811] border border-white/10 hover:border-[#D9F22A] text-left flex flex-col gap-2 transition-all cursor-pointer group"
               >
                 <div className="w-10 h-10 rounded-xl bg-[#D9F22A]/10 text-[#D9F22A] flex items-center justify-center group-hover:scale-110 transition-transform">
                   <UserCheck className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white group-hover:text-[#D9F22A]">Quero Ser Afiliado</h4>
+                <h4 className="text-base font-bold text-white group-hover:text-[#D9F22A]">Cadastrar empresa</h4>
                 <p className="text-xs text-white/60">Venda softwares e planos com comissões de até 50% via PIX D+9.</p>
               </button>
 

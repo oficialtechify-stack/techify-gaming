@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { loadConnectAndInitialize } from '@stripe/connect-js';
+import { ConnectComponentsProvider, ConnectAccountOnboarding } from '@stripe/react-connect-js';
 
 export type ConnectStatus =
   | 'loading'
@@ -22,6 +24,8 @@ export const StripeConnectCompanyPanel: React.FC<{
   const [message, setMessage] = useState('');
   const [requirementMessage, setRequirementMessage] = useState('');
   const [starting, setStarting] = useState(false);
+  const [embeddedError, setEmbeddedError] = useState('');
+  const [embeddedInstance, setEmbeddedInstance] = useState<ReturnType<typeof loadConnectAndInitialize> | null>(null);
 
   const loadStatus = useCallback(async () => {
     if (!currentUser) {
@@ -103,7 +107,31 @@ export const StripeConnectCompanyPanel: React.FC<{
         setStarting(false);
         return;
       }
-      if (!response.ok || !data.url) throw new Error(data.error || 'Não foi possível iniciar a configuração Stripe.');
+      if (!response.ok) throw new Error(data.error || 'Não foi possível iniciar a configuração Stripe.');
+      if (role === 'empresa') {
+        if (!data.embedded || !data.accountId) throw new Error('Cadastro integrado indisponível para esta empresa.');
+        const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+        if (!publishableKey) throw new Error('Chave pública Stripe não configurada no ambiente.');
+        setEmbeddedError('');
+        setEmbeddedInstance(loadConnectAndInitialize({
+          publishableKey,
+          fetchClientSecret: async () => {
+            const freshToken = await currentUser.getIdToken();
+            const embeddedResponse = await fetch('/api/stripe/embedded-session', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${freshToken}` },
+            });
+            const embeddedData = await embeddedResponse.json().catch(() => ({}));
+            if (!embeddedResponse.ok || !embeddedData.clientSecret) {
+              throw new Error(embeddedData.error || 'Não foi possível abrir o cadastro integrado.');
+            }
+            return String(embeddedData.clientSecret);
+          },
+        }));
+        setStarting(false);
+        return;
+      }
+      if (!data.url) throw new Error('Link de cadastro indisponível.');
       window.location.assign(String(data.url));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Não foi possível abrir a Stripe.');
@@ -120,18 +148,18 @@ export const StripeConnectCompanyPanel: React.FC<{
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-black text-white">{onboardingMode ? 'Etapa 1 · Validar conta na Stripe' : 'Conta bancária para receber saques'}</h3>
+              <h3 className="text-sm font-black text-white">{onboardingMode ? 'Configurar recebimentos' : 'Conta bancária para receber saques'}</h3>
               {status === 'pending_verification' && (
             <div className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 text-xs font-bold text-sky-300">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Em análise pela Stripe
+              Verificação em andamento
             </div>
           )}
 
           {status === 'connected' && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-400">
                   <CheckCircle2 className="h-3 w-3" />
-                  Stripe conectada
+                  Recebimentos habilitados
                 </span>
               )}
             </div>
@@ -140,6 +168,14 @@ export const StripeConnectCompanyPanel: React.FC<{
                 ? 'A Stripe é usada para validar os dados de recebimento da empresa e encaminhar saques ao banco cadastrado. O dinheiro das vendas permanece na LeadsPay durante o prazo de liberação.'
                 : 'A Stripe é usada para validar seus dados de recebimento como afiliado e encaminhar saques ao banco cadastrado. Suas comissões permanecem na LeadsPay durante o prazo de liberação.'}
             </p>
+            {role === 'afiliado' && status !== 'connected' && (
+              <p className="mt-2 text-[11px] leading-5 text-white/65">
+                Seu cadastro é de pessoa física afiliada (CPF), para receber comissões de indicação.
+                A Stripe pode apresentar a seção genérica “Dados da empresa” e exigir setor,
+                estimativa de renda ou descrição da atividade por regras de verificação no Brasil.
+                Informe sua atividade real de divulgação e comissões; não é necessário inventar uma empresa.
+              </p>
+            )}
             {status === 'connected' && (
               <p className="mt-2 text-[11px] text-emerald-300/80">
                 Conta Stripe verificada e protegida. O saldo só é enviado depois que estiver disponível na LeadsPay e você solicitar o saque.
@@ -157,7 +193,7 @@ export const StripeConnectCompanyPanel: React.FC<{
             )}
             {status === 'not_connected' && (
               <p className="mt-2 text-[11px] text-white/40">
-                Configure seus dados bancários pela Stripe. Isso não libera nem transfere saldo ou comissão antecipadamente.
+                Configure os dados necessários para receber pagamentos. Isso não libera nem transfere saldo ou comissão antecipadamente.
               </p>
             )}
             {message && <p className="mt-2 text-[11px] text-red-400">{message}</p>}
@@ -175,16 +211,16 @@ export const StripeConnectCompanyPanel: React.FC<{
             Atualizar
           </button>
 
-          {status !== 'connected' && status !== 'pending_verification' && (
+          {status !== 'connected' && (status !== 'pending_verification' || Boolean(requirementMessage && !requirementMessage.includes('Nenhuma ação'))) && (
             <button
               type="button"
               onClick={startOnboarding}
               disabled={starting || status === 'loading'}
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-4 text-xs font-black text-[#07100A] transition hover:bg-[#cde71f] disabled:opacity-40"
             >
-              {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
               {status === 'action_required'
-                ? 'Corrigir dados na Stripe'
+                ? 'Corrigir dados de recebimento'
                 : status === 'onboarding_incomplete'
                   ? 'Continuar configuração bancária'
                   : 'Configurar recebimentos'}
@@ -199,6 +235,14 @@ export const StripeConnectCompanyPanel: React.FC<{
           )}
         </div>
       </div>
+      {role === 'empresa' && embeddedError && <p className="mt-4 text-sm text-red-400">{embeddedError}</p>}
+      {role === 'empresa' && embeddedInstance && (
+        <div className="mt-5 rounded-xl bg-white p-3 text-slate-900">
+          <ConnectComponentsProvider connectInstance={embeddedInstance}>
+            <ConnectAccountOnboarding onExit={() => { setEmbeddedInstance(null); void loadStatus(); }} />
+          </ConnectComponentsProvider>
+        </div>
+      )}
     </section>
   );
 };

@@ -48,7 +48,7 @@ test('não inicializa Stripe sem segredo nem aceita chave live na variável de t
     delete process.env.VERCEL_ENV;
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.STRIPE_TEST_SECRET_KEY;
-    assert.throws(() => getStripeTestClient(), /configure STRIPE_SECRET_KEY ou STRIPE_TEST_SECRET_KEY/);
+    assert.throws(() => getStripeTestClient(), /configure uma chave secreta no servidor/);
     process.env.STRIPE_TEST_SECRET_KEY = 'sk_live_should_never_be_used';
     assert.throws(() => getStripeTestClient(), /STRIPE_TEST_SECRET_KEY aceita somente chaves/);
   } finally {

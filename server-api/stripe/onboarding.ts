@@ -39,7 +39,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   }
 
   try {
-    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined);
+    const identity = await verifyFirebaseIdentity(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined, { requireVerifiedEmail: true });
     const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
     const role = body.role as Role;
     if (role !== 'empresa' && role !== 'afiliado') return fail(res, 400, 'Selecione a conta de Empresa ou Afiliado.');
@@ -88,6 +88,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
     if (accountId) {
       let account = await stripe.accounts.retrieve(accountId);
+      // O afiliado é pessoa física. Uma conta já criada como PJ exige
+      // revisão/migração explícita, nunca alteração silenciosa de titularidade.
+      if (role === 'afiliado' && account.business_type === 'company') {
+        return fail(res, 409, 'Esta conta Stripe foi cadastrada como empresa. Solicite à administração a revisão do vínculo para cadastrar seus recebimentos como pessoa física.');
+      }
       if (
         account.metadata?.firebase_uid !== identity.uid ||
         account.metadata?.leadspay_role !== role ||
@@ -110,6 +115,25 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
             leadspay_company_id: companyId,
           },
         });
+      }
+
+      if (role === 'afiliado' && account.business_type === 'individual' && !account.details_submitted) {
+        // Contas iniciadas antes desta atualização também recebem uma descrição
+        // de atividade de afiliado, sem apagar dados fornecidos pelo titular.
+        const expectedDescription = 'Pessoa física afiliada que divulga ofertas e recebe comissões de indicação na LeadsPay. Não comercializa produtos diretamente neste cadastro.';
+        if (!account.business_profile?.product_description ||
+            account.business_profile.product_description === 'Recebimento de comissões de indicação e afiliação pela plataforma LeadsPay.') {
+          try {
+            account = await stripe.accounts.update(accountId, {
+              business_profile: {
+                product_description: expectedDescription,
+                ...(!account.business_profile?.url ? { url: 'https://www.techify.sbs' } : {}),
+              },
+            });
+          } catch (profileError) {
+            console.warn('[Affiliate Stripe business profile]', profileError instanceof Error ? profileError.message : 'Falha');
+          }
+        }
       }
 
       const alreadyVerified =
@@ -142,10 +166,23 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         country: 'BR',
         email: identity.email || undefined,
         ...(knownCompanyType ? { business_type: knownCompanyType } : {}),
+        // Para contas conectadas no Brasil, a Stripe exige card_payments
+        // em conjunto com transfers, inclusive quando o afiliado recebe
+        // apenas comissões. Isso não autoriza cobranças pelo afiliado.
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
+        ...(role === 'afiliado'
+          ? {
+              // O cadastro individual continua sujeito aos campos de análise
+              // regulatória exigidos pela Stripe no Brasil.
+              business_profile: {
+                product_description: 'Pessoa física afiliada que divulga ofertas e recebe comissões de indicação na LeadsPay. Não comercializa produtos diretamente neste cadastro.',
+                url: 'https://www.techify.sbs',
+              },
+            }
+          : {}),
         controller: {
           // New Connect configuration equivalent to an Express-style experience,
           // without relying on the legacy type='express' account model.
@@ -159,7 +196,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           leadspay_role: role,
           ...(role === 'empresa' && companyId ? { leadspay_company_id: companyId } : {}),
         },
-      } as any, { idempotencyKey: `leadspay-connect-stripe-first-v1-${role}-${identity.uid}` });
+      } as any, { idempotencyKey: `leadspay-connect-stripe-br-capabilities-v2-${role}-${identity.uid}` });
       accountId = account.id;
       const updatedAccounts = { ...roleAccounts, [role]: accountId };
       await profileRef.set({
@@ -183,6 +220,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       } as any);
     } catch (scheduleError) {
       console.warn('[Stripe Connect onboarding] Não foi possível definir payout manual:', scheduleError instanceof Error ? scheduleError.message : 'falha');
+    }
+
+    // Empresas usam exclusivamente o onboarding incorporado na LeadsPay.
+    // Não gere Account Link hospedado nem solicite URL externa nesse fluxo.
+    if (role === 'empresa') {
+      return res.status(200).json({ role, accountId, embedded: true });
     }
 
     const baseUrl = getLeadspayBaseUrl();

@@ -385,13 +385,13 @@
   .announcement-note, .announcement-divider, .announcement-link { display: none; }
   .announcement-inner { justify-content: center; }
   .leadspay-site .container { width: min(100% - 30px, 1280px); }
-  .hero h1 { font-size: clamp(49px, 13vw, 63px); }
+  .hero h1 { font-size: clamp(40px, 12vw, 56px); overflow-wrap: anywhere; }
   .hero-actions { gap: 8px; }
   .hero-actions .button-large { min-height: 47px; padding-inline: 14px; font-size: 10px; }
   .hero-proof { gap: 9px 12px; }
   .hero-proof li { font-size: 8px; }
-  .hero-visual { margin-inline: 3px; }
-  .float-card { max-width: 190px; }
+  .hero-visual { margin-inline: 0; overflow: hidden; }
+  .float-card { max-width: min(190px, calc(100% - 16px)); }
   .payment-float { left: -3px; }
   .split-float { right: -3px; }
   .flow-strip { gap: 14px 8px; }
@@ -409,11 +409,11 @@
   .technology-copy { grid-template-columns: 1fr; }
   .integration-pills, .technology-copy > .text-link { grid-column: auto; }
   .pricing-panel { padding: 20px 15px; }
-  .pricing-values { gap: 6px; }
-  .pricing-values article { min-height: 120px; padding: 11px 8px; }
-  .pricing-values article > span { font-size: 6px; letter-spacing: .04em; }
+  .pricing-values { grid-template-columns: 1fr; gap: 8px; }
+  .pricing-values article { min-height: 104px; padding: 14px 12px; }
+  .pricing-values article > span { font-size: 7px; letter-spacing: .06em; }
   .pricing-values article strong { font-size: 19px; }
-  .pricing-values article p { font-size: 7px; }
+  .pricing-values article p { font-size: 8px; }
   .final-cta { padding: 27px 20px; }
   .final-cta h2 { font-size: 40px; }
   .final-cta .hero-actions { flex-direction: column; align-items: flex-start; }
@@ -432,4 +432,34 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .leadspay-site *, .leadspay-site *::before, .leadspay-site *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Prevent horizontal layout breakage on narrow/mobile displays. */
+@media (max-width: 780px) {
+  .leadspay-site { overflow-x: clip; }
+  .hero-grid,
+  .technology-layout,
+  .audience-grid,
+  .pricing-panel,
+  .faq-section,
+  .footer-main { min-width: 0; }
+  .hero-copy,
+  .hero-visual,
+  .dashboard-showcase,
+  .bridge-art,
+  .pricing-values { min-width: 0; max-width: 100%; }
+  .hero-image,
+  .dashboard-showcase img,
+  .bridge-art img { max-width: 100%; }
+  .main-nav { z-index: 50; }
+}
+
+@media (max-width: 430px) {
+  .hero-actions,
+  .mobile-nav-actions { width: 100%; }
+  .hero-actions .button-large { flex: 1 1 145px; }
+  .payment-float { left: 4px; }
+  .split-float { right: 4px; }
+  .visual-caption { width: calc(100% - 24px); justify-content: center; white-space: normal; text-align: center; }
+  .pricing-values article strong { margin-top: 12px; }
 }

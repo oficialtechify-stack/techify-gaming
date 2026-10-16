@@ -161,8 +161,8 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       createdAt: now.toISOString(),
       paidAt: now.toISOString(),
-      is_test: !paymentIntent.livemode,
       environment: paymentIntent.livemode ? 'production' : 'development',
+      ...(!paymentIntent.livemode ? { is_test: true } : {}),
       couponCode: order.couponCode || null,
       utmSource: order.utmSource || null,
       utmMedium: order.utmMedium || null,
@@ -191,6 +191,7 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       tx.create(db.collection('balance_releases').doc(releaseId), {
         id: releaseId,
         orderId,
+        companyId: order.companyId,
         saleId: saleRef.id,
         paymentIntentId: paymentIntent.id,
         chargeId,
@@ -203,8 +204,8 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
         availableAt: participant.availableAt,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        is_test: !paymentIntent.livemode,
         environment: paymentIntent.livemode ? 'production' : 'development',
+        ...(!paymentIntent.livemode ? { is_test: true } : {}),
       });
     }
 
@@ -269,21 +270,17 @@ async function applyPaymentIntentPaid(stripe: Stripe, event: Stripe.Event, event
       tx.set(db.collection('clients').doc(clientId), {
         id: clientId,
         companyId: order.companyId,
-        store_id: order.companyId,
-        empresa_id: order.companyId,
         name: order.buyerName,
-        nome_completo: order.buyerName,
         email: order.buyerEmail,
         total_spent: FieldValue.increment(Number(order.productAmountCents || 0) / 100),
         orders_count: FieldValue.increment(1),
         last_order_at: now.toISOString(),
         last_plan_name: order.planName,
-        status_compra: 'PAGO',
         status: 'active',
         updatedAt: now.toISOString(),
         created_at: now.toISOString(),
         environment: paymentIntent.livemode ? 'production' : 'development',
-        is_test: !paymentIntent.livemode,
+        ...(!paymentIntent.livemode ? { is_test: true } : {}),
       }, { merge: true });
     }
 
@@ -514,12 +511,14 @@ async function processProductSubscriptionInvoice(
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   if (subscription.metadata?.leadspay_product_subscription !== '1') return false;
 
-  await syncProductSubscriptionStatus(subscription, 'active');
-
   const invoiceAny = invoice as any;
-  if (invoiceAny.status !== 'paid' && Number(invoiceAny.amount_paid || 0) <= 0) {
+  // A paid invoice with no collected funds must never credit a balance.
+  // Preserve the real Stripe subscription status instead of forcing activation.
+  if (invoiceAny.status !== 'paid' || !Number.isSafeInteger(Number(invoiceAny.amount_paid)) || Number(invoiceAny.amount_paid) <= 0) {
+    await syncProductSubscriptionStatus(subscription);
     return true;
   }
+  await syncProductSubscriptionStatus(subscription);
 
   const metadata = subscription.metadata || {};
   const planId = String(metadata.plan_id || '');
@@ -546,7 +545,7 @@ async function processProductSubscriptionInvoice(
     throw new Error('Assinatura de produto sem metadados financeiros obrigatórios.');
   }
 
-  const grossAmountCents = Number(invoiceAny.amount_paid || invoiceAny.total || 0);
+  const grossAmountCents = Number(invoiceAny.amount_paid);
   if (!Number.isSafeInteger(grossAmountCents) || grossAmountCents < 50) {
     throw new Error('Fatura recorrente paga com valor inválido.');
   }
@@ -650,8 +649,8 @@ async function processProductSubscriptionInvoice(
       }),
       createdAt: now.toISOString(),
       paidAt: now.toISOString(),
-      is_test: !invoice.livemode,
       environment: invoice.livemode ? 'production' : 'development',
+      ...(!invoice.livemode ? { is_test: true } : {}),
       utmSource: metadata.utm_source || null,
       utmMedium: metadata.utm_medium || null,
       utmCampaign: metadata.utm_campaign || null,
@@ -673,6 +672,7 @@ async function processProductSubscriptionInvoice(
       id: companyReleaseId,
       subscriptionId: subscription.id,
       invoiceId,
+      companyId,
       saleId: saleRef.id,
       userId: companyOwnerId,
       role: 'empresa',
@@ -683,8 +683,8 @@ async function processProductSubscriptionInvoice(
       availableAt: companyAvailableAt,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
-      is_test: !invoice.livemode,
       environment: invoice.livemode ? 'production' : 'development',
+      ...(!invoice.livemode ? { is_test: true } : {}),
     });
 
     tx.update(companyProfileRef, {
@@ -710,8 +710,8 @@ async function processProductSubscriptionInvoice(
         availableAt: affiliateAvailableAt,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        is_test: !invoice.livemode,
         environment: invoice.livemode ? 'production' : 'development',
+        ...(!invoice.livemode ? { is_test: true } : {}),
       });
 
       tx.update(affiliateProfileRef, {
@@ -759,20 +759,16 @@ async function processProductSubscriptionInvoice(
       tx.set(db.collection('clients').doc(clientId), {
         id: clientId,
         companyId,
-        store_id: companyId,
-        empresa_id: companyId,
         name: buyerName,
-        nome_completo: buyerName,
         email: buyerEmail,
         total_spent: FieldValue.increment(productAmountCents / 100),
         orders_count: FieldValue.increment(1),
         last_order_at: now.toISOString(),
         last_plan_name: sale.platformName,
-        status_compra: 'PAGO',
         status: 'active',
         subscriptionId: subscription.id,
         updatedAt: now.toISOString(),
-        ...(firstCharge ? { created_at: now.toISOString(), data_criacao: now.toISOString() } : {}),
+        ...(firstCharge ? { createdAt: now.toISOString(), created_at: now.toISOString() } : {}),
       }, { merge: true });
     }
 

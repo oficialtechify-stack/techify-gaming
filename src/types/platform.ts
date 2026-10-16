@@ -569,6 +569,7 @@ export interface AffiliateLinkItem {
 
 export interface TeamMember {
   id: string;
+  permissions?: string[];
   companyId?: string;
   ownerId?: string;
   name: string;
