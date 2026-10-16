@@ -222,6 +222,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       console.warn('[Stripe Connect onboarding] Não foi possível definir payout manual:', scheduleError instanceof Error ? scheduleError.message : 'falha');
     }
 
+    // Empresas usam exclusivamente o onboarding incorporado na LeadsPay.
+    // Não gere Account Link hospedado nem solicite URL externa nesse fluxo.
+    if (role === 'empresa') {
+      return res.status(200).json({ role, accountId, embedded: true });
+    }
+
     const baseUrl = getLeadspayBaseUrl();
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
