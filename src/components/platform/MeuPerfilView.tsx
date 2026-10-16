@@ -1098,7 +1098,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 {roleMode === 'empresa' ? (
                   <>
                     <Building2 className="w-4 h-4 text-[#D9F22A]" />
-                    Dados da Empresa & Responsável Legal
+                    {companyDocType === 'CPF' ? 'Dados do titular e da marca' : 'Dados da empresa e do responsável legal'}
                   </>
                 ) : (
                   <>
@@ -1131,7 +1131,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         disabled={isLocked}
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
-                        placeholder="Ex: LeadsPay Soluções Digitais Ltda"
+                        placeholder={companyDocType === 'CPF' ? 'Ex: Minha marca digital' : 'Ex: LeadsPay Soluções Digitais'}
                         className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
@@ -1142,7 +1142,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                        Nome do Fundador / Responsável Legal <span className="text-rose-400">*</span>
+                        {companyDocType === 'CPF' ? 'Nome completo do titular' : 'Nome do responsável legal'} <span className="text-rose-400">*</span>
                       </label>
                       <input
                         type="text"
@@ -1163,7 +1163,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   {/* E-mail Corporativo Oficial */}
                   <div className="relative">
                     <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                      E-mail Corporativo Oficial <span className="text-rose-400">*</span>
+                      {companyDocType === 'CPF' ? 'E-mail de contato' : 'E-mail corporativo'} <span className="text-rose-400">*</span>
                     </label>
                     <input
                       type="email"
