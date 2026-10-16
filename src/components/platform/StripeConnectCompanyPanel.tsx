@@ -210,16 +210,16 @@ export const StripeConnectCompanyPanel: React.FC<{
             Atualizar
           </button>
 
-          {status !== 'connected' && status !== 'pending_verification' && (
+          {status !== 'connected' && (status !== 'pending_verification' || Boolean(requirementMessage && !requirementMessage.includes('Nenhuma ação'))) && (
             <button
               type="button"
               onClick={startOnboarding}
               disabled={starting || status === 'loading'}
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-4 text-xs font-black text-[#07100A] transition hover:bg-[#cde71f] disabled:opacity-40"
             >
-              {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
               {status === 'action_required'
-                ? 'Corrigir dados na Stripe'
+                ? 'Corrigir dados de recebimento'
                 : status === 'onboarding_incomplete'
                   ? 'Continuar configuração bancária'
                   : 'Configurar recebimentos'}
