@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
+import { ProfileSectionTabs, type ProfileSection } from './ProfileSectionTabs';
 import { StripeConnectCompanyPanel, type ConnectStatus } from './StripeConnectCompanyPanel';
 import { requestProfileEditInFirebase } from '../../services/firestoreService';
 
@@ -106,6 +107,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [estado, setEstado] = useState<string>(userProfile.companyState || userProfile.state || '');
   const [cidade, setCidade] = useState<string>(userProfile.companyCity || userProfile.city || '');
   const [endereco, setEndereco] = useState<string>(userProfile.companyAddress || userProfile.address || '');
+
+  const [activeProfileSection, setActiveProfileSection] = useState<ProfileSection>('geral');
 
   // UI & Validation States
   const [cepError, setCepError] = useState<boolean>(false);
@@ -572,6 +575,34 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      <div className="mb-7 rounded-2xl border border-white/10 bg-[#0a101b] px-3 sm:px-5 shadow-lg">
+        <ProfileSectionTabs active={activeProfileSection} onChange={setActiveProfileSection} />
+      </div>
+      {activeProfileSection === 'senha' && (
+        <section id="profile-panel-senha" role="tabpanel" aria-labelledby="profile-tab-senha" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
+          <h2 className="text-lg font-bold">Alterar senha</h2>
+          <p className="mt-2 text-sm text-white/60">A alteração de senha será integrada à autenticação da conta. Nenhuma senha é solicitada ou armazenada nesta tela por enquanto.</p>
+        </section>
+      )}
+      {activeProfileSection === 'seguranca' && (
+        <section id="profile-panel-seguranca" role="tabpanel" aria-labelledby="profile-tab-seguranca" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
+          <h2 className="text-lg font-bold">Segurança</h2>
+          <p className="mt-2 text-sm text-white/60">Seus dados financeiros e cadastrais continuam protegidos pelas regras atuais de verificação e autorização de alterações.</p>
+        </section>
+      )}
+      {activeProfileSection === 'planos' && (
+        <section id="profile-panel-planos" role="tabpanel" aria-labelledby="profile-tab-planos" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
+          <h2 className="text-lg font-bold">Planos e taxas</h2>
+          <p className="mt-2 text-sm text-white/60">As condições do seu plano e as taxas serão exibidas aqui após integração com os dados reais da LeadsPay.</p>
+        </section>
+      )}
+      {activeProfileSection === 'notificacoes' && (
+        <section id="profile-panel-notificacoes" role="tabpanel" aria-labelledby="profile-tab-notificacoes">
+          <NotificationPreferencesPanel userProfile={userProfile} onSaveProfile={onSaveProfile} />
+        </section>
+      )}
+      <div id="profile-panel-geral" role="tabpanel" aria-labelledby="profile-tab-geral" className={activeProfileSection === 'geral' ? '' : 'hidden'}>
+
       {/* Toast feedback */}
       {toastMessage && (
         <div 
@@ -855,9 +886,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         </div>
       ) : (
-      <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
-        <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl backdrop-blur-md relative">
+        <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-start text-center shadow-xl backdrop-blur-md relative">
           {/* Lock overlay if in analysis or approved */}
           {isLocked && (
             <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-bold text-white/70">
@@ -866,7 +897,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             </div>
           )}
 
-          <div className="relative group w-44 h-44 rounded-2xl overflow-hidden border-2 border-white/20 bg-black/60 shadow-2xl flex items-center justify-center mb-6">
+          <div className="relative group w-full max-w-[290px] h-[340px] sm:h-[390px] rounded-2xl overflow-hidden border border-white/20 bg-black/60 shadow-2xl flex items-center justify-center mb-6">
             {(roleMode === 'empresa' ? companyLogo : avatar) ? (
               <img
                 src={roleMode === 'empresa' ? companyLogo : avatar}
@@ -953,7 +984,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
 
         {/* ================= RIGHT CARD: FORM FIELDS ================= */}
-        <div className="lg:col-span-8 flex flex-col gap-6">
+        <div className="lg:col-span-8 flex flex-col gap-4">
           {/* SECTION 1: DADOS CADASTRAIS (EMPRESA OU AFILIADO) */}
           <div className="bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl backdrop-blur-md relative">
             <div className="flex items-center justify-between mb-5">
@@ -1543,7 +1574,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       </form>
       )}
 
-      <NotificationPreferencesPanel userProfile={userProfile} onSaveProfile={onSaveProfile} />
+      </div>
 
       {/* Floating Chat Support Widget */}
       <a
