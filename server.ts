@@ -10,6 +10,7 @@ dotenv.config();
 
 import stripeCheckoutHandler from './server-api/stripe/checkout.js';
 import stripeOnboardingHandler from './server-api/stripe/onboarding.js';
+import stripeEmbeddedSessionHandler from './server-api/stripe/embedded-session.js';
 import stripeConnectStatusHandler from './server-api/stripe/connect-status.js';
 import stripeExpressDashboardHandler from './server-api/stripe/express-dashboard.js';
 import stripeStatusHandler from './server-api/stripe/status.js';
@@ -83,6 +84,7 @@ app.get('/api/health', (_req, res) => {
 
 app.all('/api/stripe/checkout', checkoutRateLimit, adapt(stripeCheckoutHandler));
 app.all('/api/stripe/onboarding', adapt(stripeOnboardingHandler));
+app.all('/api/stripe/embedded-session', adapt(stripeEmbeddedSessionHandler));
 app.all('/api/stripe/connect-status', adapt(stripeConnectStatusHandler));
 app.all('/api/stripe/express-dashboard', adapt(stripeExpressDashboardHandler));
 app.all('/api/stripe/status', adapt(stripeStatusHandler));
