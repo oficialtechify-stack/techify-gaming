@@ -85,9 +85,29 @@ export default function PublicMarketplace() {
       </section>}
       {feedback && <p role="status" className="rounded-xl border border-white/15 bg-[#0e1423] p-3 text-sm">{feedback}</p>}
       {editing && canEdit && <section className="space-y-4 rounded-2xl border border-[#D9F22A]/30 bg-[#0e1423] p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-bold">Editar vitrine da empresa</h2><button onClick={() => setEditing(false)} aria-label="Fechar editor"><X size={18}/></button></div><p className="text-sm text-white/60">Use links HTTPS de imagens para a foto de perfil e a capa. O upload direto de arquivos será disponibilizado em outra etapa.</p>{([{key:'logo',label:'URL da foto de perfil (HTTPS)'},{key:'bannerImage',label:'URL da foto de capa (HTTPS)'},{key:'tagline',label:'Frase de destaque'},{key:'website',label:'Site oficial (HTTPS)'}] as const).map(f => <label key={f.key} className="block space-y-1 text-sm"><span>{f.label}</span><input className="w-full rounded-xl border border-white/15 bg-[#080c16] p-3 outline-none focus:border-[#D9F22A]" value={draft[f.key]} onChange={e => setDraft(prev => ({...prev,[f.key]:e.target.value}))}/></label>)}<label className="block space-y-1 text-sm"><span>Bio / descrição da empresa</span><textarea rows={5} maxLength={1500} className="w-full rounded-xl border border-white/15 bg-[#080c16] p-3 outline-none focus:border-[#D9F22A]" value={draft.description} onChange={e => setDraft(prev => ({...prev,description:e.target.value}))}/></label><button disabled={saving} onClick={() => { void saveProfile(); }} className="rounded-xl bg-[#D9F22A] px-5 py-3 font-bold text-[#060A15] disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar alterações'}</button></section>}
-      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0e1423] px-4"><Search size={18} className="text-white/40"/><input aria-label="Buscar ofertas" className="w-full bg-transparent py-4 outline-none" placeholder="Buscar softwares, soluções ou empresas..." value={search} onChange={e => setSearch(e.target.value)}/></div>
-      {!companySlug && <nav aria-label="Categorias" className="flex flex-wrap gap-2">{categories.map(c => <button key={c} onClick={() => setCategory(c)} className={`rounded-full border px-4 py-2 text-xs font-semibold ${category === c ? 'border-[#D9F22A] bg-[#D9F22A] text-[#060A15]' : 'border-white/15 bg-[#0e1423] text-white/70'}`}>{c}</button>)}</nav>}
-      <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-white/50">Tipo de plano:</span>{periods.map(p => <button key={p} onClick={() => setPeriod(p)} className={period === p ? 'rounded-full border border-[#D9F22A] bg-[#D9F22A] px-4 py-2 text-xs font-semibold text-[#060A15]' : 'rounded-full border border-white/15 bg-[#0e1423] px-4 py-2 text-xs font-semibold text-white/70'}>{p}</button>)}</div>
+      <section aria-label="Buscar e filtrar ofertas" className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-4 text-slate-900 shadow-sm sm:p-6">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-lime-500 focus-within:ring-2 focus-within:ring-lime-100">
+          <Search size={20} className="shrink-0 text-slate-400"/>
+          <input aria-label="Buscar ofertas" className="min-w-0 w-full bg-transparent py-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400" placeholder="Busque um software, empresa ou solução..." value={search} onChange={e => setSearch(e.target.value)}/>
+          {search && <button type="button" onClick={() => setSearch('')} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200">Limpar</button>}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {!companySlug && <label className="flex min-w-0 flex-col gap-1.5 text-xs font-bold text-slate-600">Categoria
+            <select aria-label="Filtrar por categoria" value={category} onChange={e => setCategory(e.target.value)} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-lime-500">
+              {categories.map(c => <option key={c} value={c}>{c === 'Todos' ? 'Todas as categorias' : c}</option>)}
+            </select>
+          </label>}
+          <label className="flex min-w-0 flex-col gap-1.5 text-xs font-bold text-slate-600">Tipo de plano
+            <select aria-label="Filtrar por tipo de plano" value={period} onChange={e => setPeriod(e.target.value)} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-lime-500">
+              {periods.map(p => <option key={p} value={p}>{p === 'Todos' ? 'Todos os planos' : p}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+          <span>{loading ? 'Buscando ofertas...' : `${shown.length} ${shown.length === 1 ? 'oferta encontrada' : 'ofertas encontradas'}`}</span>
+          {(search || category !== 'Todos' || period !== 'Todos') && <button type="button" onClick={() => { setSearch(''); setCategory('Todos'); setPeriod('Todos'); }} className="font-bold text-slate-700 underline-offset-2 hover:underline">Limpar filtros</button>}
+        </div>
+      </section>
       {companySlug && <div className="flex flex-wrap gap-3 border-b border-white/10 pb-4"><span className="font-semibold text-[#D9F22A]">Planos e assinaturas</span><span className="text-sm text-white/50">Mensal · Anual · Semanal · Pagamento único</span></div>}
       {error && <p role="alert" className="rounded-xl border border-red-500/30 p-4 text-red-300">{error}</p>}
       {loading ? <p className="py-12 text-center text-white/50">Carregando ofertas verificadas...</p> : error ? null : shown.length === 0 ? <div className="rounded-2xl border border-white/10 p-12 text-center text-white/50"><Store className="mx-auto mb-3"/>{companySlug ? 'Nenhuma oferta publicada nesta vitrine.' : 'Nenhuma oferta encontrada nesta categoria.'}</div> :
