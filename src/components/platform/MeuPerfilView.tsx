@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
+import { LeadsPaySupportWidget } from './LeadsPaySupportWidget';
 import { AccountSecurityPanel } from './AccountSecurityPanel';
 import { StripeConnectCompanyPanel, type ConnectStatus } from './StripeConnectCompanyPanel';
 import { requestProfileEditInFirebase } from '../../services/firestoreService';
@@ -1780,16 +1781,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
       </div>
 
-      {/* Floating Chat Support Widget */}
-      <a
-        href="https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20a%20valida%C3%A7%C3%A3o%20do%20meu%20perfil"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-[#1b7e5a] hover:bg-[#23996f] text-white flex items-center justify-center shadow-[0_4px_25px_rgba(27,126,90,0.6)] hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-        title="Suporte via Chat"
-      >
-        <MessageCircle className="w-6 h-6 fill-current" />
-      </a>
+      <LeadsPaySupportWidget />
     </div>
   );
 };
