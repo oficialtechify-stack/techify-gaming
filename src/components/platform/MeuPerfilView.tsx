@@ -115,6 +115,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [isSavingDraft, setIsSavingDraft] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [stripeStatus, setStripeStatus] = useState<ConnectStatus>('loading');
+  const [showSecuritySettings, setShowSecuritySettings] = useState(false);
+  const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [showEditRequest, setShowEditRequest] = useState(false);
   const [editRequestReason, setEditRequestReason] = useState('');
   const [isRequestingEdit, setIsRequestingEdit] = useState(false);
@@ -608,17 +610,17 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">
           {roleMode === 'empresa' 
-            ? 'Perfil da Empresa & Verificação Cadastral' 
-            : 'Meu Perfil & Verificação de Afiliado'}
+            ? 'Meu Perfil' 
+            : 'Meu Perfil'}
         </h1>
         <p className="text-xs text-white/60 mt-1 max-w-2xl">
           {roleMode === 'empresa'
-            ? 'Ative sua empresa em um fluxo seguro: primeiro valide a Stripe, depois complete o perfil LeadsPay e envie para aprovação administrativa.'
+            ? 'Gerencie seus dados cadastrais, a situação da empresa e as configurações da sua conta em um só lugar.'
             : 'Mantenha seus dados pessoais e de recebimento atualizados para garantir a homologação de sua conta e saques via PIX instantâneos.'}
         </p>
       </div>
 
-      {roleMode === 'empresa' && (
+      {roleMode === 'empresa' && !isApproved && (
         <div className="mb-6 rounded-[28px] border border-white/10 bg-gradient-to-br from-[#0d1626] via-[#09111d] to-[#070c14] p-4 sm:p-5 shadow-2xl">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -827,16 +829,39 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         )}
       </div>
 
-      <AccountSecurityPanel />
+      {roleMode === 'empresa' && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#0A1220] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-white">Minha Vitrine</h2>
+            <p className="mt-1 text-xs text-white/50">Foto, capa e descrição pública ficam na área da sua empresa.</p>
+          </div>
+          <button type="button" onClick={() => onNavigateToTab?.('minha_empresa')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-4 py-2.5 text-xs font-bold text-[#061014]">
+            Personalizar minha vitrine <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className="mb-6 rounded-2xl border border-white/10 bg-[#0A1220] p-4">
+        <button type="button" aria-expanded={showSecuritySettings} onClick={() => setShowSecuritySettings(value => !value)} className="flex w-full items-center justify-between gap-3 text-left">
+          <span><span className="block text-sm font-bold text-white">Segurança da conta</span><span className="mt-1 block text-xs text-white/50">Senha, sessões e proteção do acesso</span></span>
+          <span className="text-xs font-bold text-[#D9F22A]">{showSecuritySettings ? 'Ocultar' : 'Gerenciar'}</span>
+        </button>
+        {showSecuritySettings && <div className="mt-4"><AccountSecurityPanel /></div>}
+      </div>
 
       {(roleMode === 'empresa' || roleMode === 'afiliado') && (
         <div className="mb-6">
+          <button type="button" aria-expanded={showFinancialDetails || !stripeReady} onClick={() => setShowFinancialDetails(value => !value)} className="mb-3 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0A1220] p-4 text-left">
+            <span><span className="block text-sm font-bold text-white">Conta de recebimentos</span><span className="mt-1 block text-xs text-white/50">{stripeReady ? 'Conectada • configurações financeiras' : 'Configuração financeira necessária'}</span></span>
+            <span className="text-xs font-bold text-[#D9F22A]">{showFinancialDetails || !stripeReady ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
+          </button>
+          <div className={showFinancialDetails || !stripeReady ? '' : 'hidden'}>
           <StripeConnectCompanyPanel
             companyId={roleMode === 'empresa' ? (company?.id || userProfile.companyId) : undefined}
             role={roleMode}
             onboardingMode={!isApproved}
             onStatusChange={setStripeStatus}
           />
+          </div>
         </div>
       )}
 
