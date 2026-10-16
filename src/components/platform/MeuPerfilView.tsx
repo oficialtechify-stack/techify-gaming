@@ -618,6 +618,29 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      <style>{`
+        /* Cakto-inspired profile: remove LeadsPay dashboard chrome from Geral */
+        #leadspay-meu-perfil-view:has(.profile-general-form) { background: #0d0e0f; }
+        #leadspay-meu-perfil-view .profile-general-form .profile-brand-card { position: relative; }
+        @media(min-width:1024px) {
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card {
+            min-height: 630px !important;
+            background: linear-gradient(180deg,transparent 22%,rgba(0,0,0,.9) 100%),
+              linear-gradient(150deg,#343a3c 0%,#1a1d1f 40%,#070809 100%) !important;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:first-of-type {
+            width: 100% !important; height: 100% !important;
+            position: absolute !important; inset: 0 !important;
+            border: 0 !important; border-radius: 0 !important; opacity: .85;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:first-of-type img {
+            object-fit: cover !important; filter: grayscale(1) contrast(1.1);
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:not(:first-of-type) {
+            position: relative; z-index: 1;
+          }
+        }
+      `}</style>
       {/* Layout de referência: um único cartão, foto vertical e formulário compacto. */}
       <style>{`
         #leadspay-meu-perfil-view .profile-identity-section { display: none !important; }
@@ -916,7 +939,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       )}
 
       {/* ================= HEADER BREADCRUMB ================= */}
-      <div className="mb-6">
+      <div className={activeProfileSection === 'geral' ? 'hidden' : 'mb-6'}>
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#D9F22A] mb-1">
           {roleMode === 'empresa' ? (
             <>
@@ -995,7 +1018,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       )}
 
       {/* ================= STATUS BANNER ================= */}
-      <div className="mb-6">
+      <div className={activeProfileSection === 'geral' && isApproved ? 'hidden' : 'mb-6'}>
         {isApproved ? (
           /* APPROVED / VERIFIED BANNER */
           <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-[#0a261a] to-emerald-950/70 border border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1151,7 +1174,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         )}
       </div>
 
-      {roleMode === 'empresa' && (
+      {roleMode === 'empresa' && activeProfileSection !== 'geral' && (
         <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#0A1220] p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-sm font-bold text-white">Minha Vitrine</h2>
@@ -1162,7 +1185,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </button>
         </div>
       )}
-      <div className="mb-6 rounded-2xl border border-white/10 bg-[#0A1220] p-4">
+      <div className={activeProfileSection === 'geral' ? 'hidden' : 'mb-6 rounded-2xl border border-white/10 bg-[#0A1220] p-4'}>
         <button type="button" aria-expanded={showSecuritySettings} onClick={() => setShowSecuritySettings(value => !value)} className="flex w-full items-center justify-between gap-3 text-left">
           <span><span className="block text-sm font-bold text-white">Segurança da conta</span><span className="mt-1 block text-xs text-white/50">Senha, sessões e proteção do acesso</span></span>
           <span className="text-xs font-bold text-[#D9F22A]">{showSecuritySettings ? 'Ocultar' : 'Gerenciar'}</span>
@@ -1171,7 +1194,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       </div>
 
       {(roleMode === 'empresa' || roleMode === 'afiliado') && (
-        <div className="mb-6">
+        <div className={activeProfileSection === 'geral' && stripeReady ? 'hidden' : 'mb-6'}>
           <button type="button" aria-expanded={showFinancialDetails || !stripeReady} onClick={() => setShowFinancialDetails(value => !value)} className="mb-3 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0A1220] p-4 text-left">
             <span><span className="block text-sm font-bold text-white">Conta de recebimentos</span><span className="mt-1 block text-xs text-white/50">{stripeReady ? 'Conectada • configurações financeiras' : 'Configuração financeira necessária'}</span></span>
             <span className="text-xs font-bold text-[#D9F22A]">{showFinancialDetails || !stripeReady ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
