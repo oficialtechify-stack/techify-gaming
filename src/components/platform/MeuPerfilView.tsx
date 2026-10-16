@@ -614,6 +614,41 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      {/* Refinamento visual da área de configurações, sem alterar as integrações de cadastro e pagamento. */}
+      <style>{`
+        #leadspay-meu-perfil-view { max-width: 1320px; margin-inline: auto; color: #f4f6fa; }
+        #leadspay-meu-perfil-view form { align-items: start; gap: 20px; }
+        #leadspay-meu-perfil-view form > div,
+        #leadspay-meu-perfil-view form > section { border-radius: 18px; }
+        #leadspay-meu-perfil-view form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+        #leadspay-meu-perfil-view form textarea,
+        #leadspay-meu-perfil-view form select {
+          min-height: 46px; border-radius: 10px; font-size: 14px; line-height: 1.4;
+          background-color: #0b1422; border-color: rgba(181,195,216,.2);
+          color: #f6f8fc; transition: border-color .2s, box-shadow .2s;
+        }
+        #leadspay-meu-perfil-view form input:focus-visible,
+        #leadspay-meu-perfil-view form textarea:focus-visible,
+        #leadspay-meu-perfil-view form select:focus-visible {
+          outline: none; border-color: #d9f22a;
+          box-shadow: 0 0 0 3px rgba(217,242,42,.13);
+        }
+        #leadspay-meu-perfil-view form input:disabled,
+        #leadspay-meu-perfil-view form textarea:disabled { opacity: .7; cursor: not-allowed; }
+        #leadspay-meu-perfil-view form label { font-size: 12px; font-weight: 600; letter-spacing: .01em; }
+        #leadspay-meu-perfil-view form button { transition: transform .18s, background-color .18s, border-color .18s; }
+        #leadspay-meu-perfil-view form button:not(:disabled):active { transform: scale(.985); }
+        #leadspay-meu-perfil-view [role="tabpanel"] { border-radius: 18px; }
+        @media (max-width: 640px) {
+          #leadspay-meu-perfil-view { padding-bottom: 64px; }
+          #leadspay-meu-perfil-view form { gap: 14px; }
+          #leadspay-meu-perfil-view form > div,
+          #leadspay-meu-perfil-view form > section { padding: 18px; border-radius: 14px; }
+          #leadspay-meu-perfil-view form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+          #leadspay-meu-perfil-view form textarea { font-size: 16px; }
+          #leadspay-meu-perfil-view [role="tabpanel"] { padding: 18px; }
+        }
+      `}</style>
       <div className="mb-7 rounded-2xl border border-white/10 bg-[#0a101b] px-3 sm:px-5 shadow-lg">
         <ProfileSectionTabs active={activeProfileSection} onChange={setActiveProfileSection} />
       </div>
