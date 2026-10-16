@@ -1099,16 +1099,16 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
             <div className="flex flex-col gap-5">
               {/* Subhead label */}
               <div className="auth-kicker text-[10px] text-[#facc15] font-extrabold uppercase tracking-[0.2em] -mb-2">
-                ACESSO À PLATAFORMA
+                ACESSO EXCLUSIVO PARA EMPRESAS
               </div>
 
               {/* Title & Subtitle */}
               <div className="space-y-1.5">
                 <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  Entrar na sua <span className="text-[#a3e635]">conta</span>
+                  Acesse sua <span className="text-[#a3e635]">conta empresarial</span>
                 </h2>
                 <p className="text-xs text-white/60 font-normal leading-relaxed">
-                  Acesse sua conta empresarial com segurança.
+                  Área exclusiva para empresas cadastradas na LeadsPay. Entre com seu e-mail e senha para acessar seu painel.
                 </p>
               </div>
 
@@ -1247,13 +1247,13 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
 
               {/* Footer Switcher */}
               <div className="text-center text-xs text-white/60 pt-1">
-                Ainda não possui conta?{' '}
+                Sua empresa ainda não tem conta?{' '}
                 <button
                   type="button"
                   onClick={() => handleSwitchTab('register_company')}
                   className="text-[#a3e635] font-bold hover:underline cursor-pointer ml-1"
                 >
-                  Cadastre sua Empresa
+                  Cadastre sua empresa
                 </button>
               </div>
             </div>
