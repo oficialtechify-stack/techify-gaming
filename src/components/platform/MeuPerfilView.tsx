@@ -618,6 +618,52 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      {/* Layout unificado inspirado na referência: painel de marca lateral e dados em duas colunas. */}
+      <style>{`
+        @media (min-width: 1024px) {
+          #leadspay-meu-perfil-view .profile-general-form {
+            display: grid; grid-template-columns: minmax(250px, 30%) minmax(0, 1fr);
+            align-items: stretch; gap: 0; overflow: hidden;
+            border-radius: 22px; background: #1b1b1d; border: 1px solid #313238;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card {
+            grid-column: 1; display: flex; flex-direction: column; justify-content: flex-end;
+            align-items: flex-start; text-align: left; gap: 12px; height: 100%;
+            min-height: 570px; position: relative; top: auto; border: 0; border-radius: 0;
+            background: linear-gradient(180deg,rgba(11,12,19,.05) 0%,rgba(11,12,19,.85) 100%),linear-gradient(140deg,#29213d,#121f22 65%,#0a0e13);
+            padding: 32px;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:last-child { flex: 0 1 auto; width: 100%; }
+          #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack { grid-column: 2; gap: 0; }
+          #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack > div {
+            border: 0; border-radius: 0; background: #1b1b1d; box-shadow: none;
+            padding: 28px 30px;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack > div + div {
+            border-top: 1px solid #35373a;
+          }
+          #leadspay-meu-perfil-view .profile-identity-section {
+            background: transparent; border: 0; box-shadow: none;
+            padding: 0 0 18px; margin-bottom: 8px;
+          }
+          #leadspay-meu-perfil-view .profile-identity-section button[aria-pressed] {
+            min-height: 60px; padding: 14px 18px; border-radius: 12px;
+          }
+        }
+        #leadspay-meu-perfil-view .profile-settings-nav {
+          border: 0; border-bottom: 1px solid #29313a; background: transparent;
+          border-radius: 0; box-shadow: none;
+        }
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack select {
+          background: #17191d; border-color: #3c4149;
+        }
+        @media (max-width: 640px) {
+          #leadspay-meu-perfil-view .profile-general-form { gap: 12px; }
+          #leadspay-meu-perfil-view .profile-brand-card { min-height: 180px; }
+          #leadspay-meu-perfil-view .profile-identity-section { padding: 16px; }
+        }
+      `}</style>
       {/* Identidade visual renovada da aba Geral: cartões amplos, marca horizontal e hierarquia Cakto-inspired. */}
       <style>{`
         #leadspay-meu-perfil-view { max-width: 1240px; }
