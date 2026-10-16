@@ -206,7 +206,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
   const [basicCompanyOpen, setBasicCompanyOpen] = useState<boolean>(false); // Collapsed by default
 
   // 1. Login State (Screenshot 3)
-  const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('afiliado');
+  const [loginRole, setLoginRole] = useState<'afiliado' | 'empresa'>('empresa');
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [mfaChallenge, setMfaChallenge] = useState<SmsMfaSignInChallenge | null>(null);
@@ -1108,45 +1108,8 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                   Entrar na sua <span className="text-[#a3e635]">conta</span>
                 </h2>
                 <p className="text-xs text-white/60 font-normal leading-relaxed">
-                  Escolha como deseja acessar sua conta e continue com segurança.
+                  Acesse sua conta empresarial com segurança.
                 </p>
-              </div>
-
-              {/* Seletor de perfil permanece disponível também no celular. */}
-              <div className="auth-role-switcher grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={loginRole === 'afiliado'}
-                    onClick={() => {
-                      setLoginRole('afiliado');
-                      setErrorMessage('');
-                    }}
-                    className={`auth-role-option py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      loginRole === 'afiliado'
-                        ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    <User className="w-4 h-4" />
-                    <span>Entrar como Afiliado</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    aria-pressed={loginRole === 'empresa'}
-                    onClick={() => {
-                      setLoginRole('empresa');
-                      setErrorMessage('');
-                    }}
-                    className={`auth-role-option py-2.5 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      loginRole === 'empresa'
-                        ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264] text-slate-950 shadow-md shadow-lime-500/25 font-black'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    <Briefcase className="w-4 h-4" />
-                    <span>Entrar como Empresa</span>
-                  </button>
               </div>
 
               {/* Login Form */}
@@ -1287,10 +1250,10 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                 Ainda não possui conta?{' '}
                 <button
                   type="button"
-                  onClick={() => handleSwitchTab(loginRole === 'empresa' ? 'register_company' : 'register_affiliate')}
+                  onClick={() => handleSwitchTab('register_company')}
                   className="text-[#a3e635] font-bold hover:underline cursor-pointer ml-1"
                 >
-                  {loginRole === 'empresa' ? 'Cadastre sua Empresa' : 'Cadastre-se como Afiliado'}
+                  Cadastre sua Empresa
                 </button>
               </div>
             </div>
