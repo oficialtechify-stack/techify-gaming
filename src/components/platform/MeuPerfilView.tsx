@@ -305,7 +305,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const hasCompanyPhone = cleanPhoneDigits.length >= 10;
   const hasCompanyDoc = companyDocType === 'CNPJ' 
     ? cleanCnpjDigits.length === 14 
-    : (cleanCnpjDigits.length === 11 || cleanCnpjDigits.length === 14);
+    : cleanCnpjDigits.length === 11;
 
   const isCompanyFormComplete = (
     hasCompanyName &&
