@@ -120,18 +120,18 @@ export const StripeConnectCompanyPanel: React.FC<{
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-black text-white">{onboardingMode ? 'Etapa 1 · Validar conta na Stripe' : 'Conta bancária para receber saques'}</h3>
+              <h3 className="text-sm font-black text-white">{onboardingMode ? 'Configurar recebimentos' : 'Conta bancária para receber saques'}</h3>
               {status === 'pending_verification' && (
             <div className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 text-xs font-bold text-sky-300">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Em análise pela Stripe
+              Verificação em andamento
             </div>
           )}
 
           {status === 'connected' && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-400">
                   <CheckCircle2 className="h-3 w-3" />
-                  Stripe conectada
+                  Recebimentos habilitados
                 </span>
               )}
             </div>
@@ -165,7 +165,7 @@ export const StripeConnectCompanyPanel: React.FC<{
             )}
             {status === 'not_connected' && (
               <p className="mt-2 text-[11px] text-white/40">
-                Configure seus dados bancários pela Stripe. Isso não libera nem transfere saldo ou comissão antecipadamente.
+                Configure os dados necessários para receber pagamentos. Isso não libera nem transfere saldo ou comissão antecipadamente.
               </p>
             )}
             {message && <p className="mt-2 text-[11px] text-red-400">{message}</p>}
