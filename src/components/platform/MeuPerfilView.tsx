@@ -29,7 +29,9 @@ import {
   Phone,
   Briefcase,
   Edit3,
-  ArrowRight
+  ArrowRight,
+  CreditCard,
+  Wallet
 } from 'lucide-react';
 import { formatCPF, formatCNPJ, formatPhone, isValidCPF, isValidCNPJ } from '../../services/authService';
 import { NotificationPreferencesPanel } from './NotificationPreferencesPanel';
@@ -113,6 +115,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [endereco, setEndereco] = useState<string>(userProfile.companyAddress || userProfile.address || '');
 
   const [activeProfileSection, setActiveProfileSection] = useState<ProfileSection>('geral');
+  const [feeSimulation, setFeeSimulation] = useState('100');
   const [passwordResetLoading, setPasswordResetLoading] = useState(false);
   const [passwordResetFeedback, setPasswordResetFeedback] = useState('');
 
@@ -715,40 +718,78 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         <ProfileSectionTabs active={activeProfileSection} onChange={setActiveProfileSection} />
       </div>
       {activeProfileSection === 'senha' && (
-        <section id="profile-panel-senha" role="tabpanel" aria-labelledby="profile-tab-senha" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
-          <h2 className="text-lg font-bold">Alterar senha</h2>
-          <p className="mt-2 text-sm text-white/60">Para proteger sua conta, enviaremos um link de redefinição ao e-mail autenticado no Firebase. Sua senha nunca é armazenada neste formulário.</p>
-          <button type="button" onClick={handlePasswordReset} disabled={passwordResetLoading} className="mt-5 rounded-xl bg-[#D9F22A] px-5 py-3 text-sm font-bold text-[#060A15] hover:bg-[#c8e217] disabled:opacity-50">{passwordResetLoading ? 'Enviando...' : 'Enviar link para alterar senha'}</button>
-          {passwordResetFeedback && <p role="status" aria-live="polite" className="mt-4 text-sm text-white/80">{passwordResetFeedback}</p>}
+        <section id="profile-panel-senha" role="tabpanel" aria-labelledby="profile-tab-senha" className="overflow-hidden rounded-3xl border border-white/10 bg-[#191b20] text-white shadow-2xl">
+          <div className="grid lg:grid-cols-[42%_58%]">
+            <aside className="bg-gradient-to-br from-[#152e2a] via-[#10201e] to-[#11131a] p-7 sm:p-10">
+              <div className="mb-7 h-1 w-14 rounded-full bg-[#D9F22A]" />
+              <h2 className="max-w-xs text-2xl font-bold leading-snug">Mantenha sua conta <span className="text-[#D9F22A]">sempre segura</span></h2>
+              <p className="mt-4 text-sm leading-6 text-white/65">Use uma senha forte e única para proteger seus dados e evitar acessos não autorizados.</p>
+              <div className="my-7 border-t border-white/15" />
+              <h3 className="text-sm font-semibold">Sua senha deve conter:</h3>
+              <ul className="mt-4 space-y-3 text-sm text-white/65">
+                <li>Ao menos 8 caracteres</li><li>Letras maiúsculas e minúsculas</li><li>Pelo menos um número</li><li>Um caractere especial</li>
+              </ul>
+            </aside>
+            <div className="p-7 sm:p-10">
+              <h2 className="text-xl font-bold">Alterar Senha</h2>
+              <p className="mt-2 text-sm leading-6 text-white/60">Para sua segurança, a alteração é feita por um link enviado ao e-mail autenticado. Não solicitamos sua senha atual neste painel.</p>
+              <div className="mt-8 rounded-xl border border-white/15 bg-black/20 p-4">
+                <p className="text-xs font-semibold text-white/60">E-mail da conta</p>
+                <p className="mt-2 break-all text-sm">{auth.currentUser?.email || 'Não identificado'}</p>
+              </div>
+              <div className="mt-6 rounded-xl border border-[#D9F22A]/20 bg-[#D9F22A]/5 p-4 text-sm leading-6 text-white/70">Ao receber o e-mail, abra o link de recuperação e defina sua nova senha. Se não encontrar a mensagem, verifique a pasta de spam.</div>
+              <div className="mt-8 flex flex-wrap justify-end gap-3">
+                <button type="button" onClick={() => setActiveProfileSection('geral')} className="rounded-xl border border-white/20 px-5 py-3 text-sm font-semibold hover:bg-white/5">Cancelar</button>
+                <button type="button" onClick={handlePasswordReset} disabled={passwordResetLoading} className="rounded-xl bg-[#D9F22A] px-5 py-3 text-sm font-bold text-[#060A15] hover:bg-[#c8e217] disabled:opacity-50">{passwordResetLoading ? 'Enviando...' : 'Enviar link de alteração'}</button>
+              </div>
+              {passwordResetFeedback && <p role="status" aria-live="polite" className="mt-4 text-sm text-white/80">{passwordResetFeedback}</p>}
+            </div>
+          </div>
         </section>
       )}
       {activeProfileSection === 'seguranca' && (
-        <section id="profile-panel-seguranca" role="tabpanel" aria-labelledby="profile-tab-seguranca" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
-          <h2 className="text-lg font-bold">Segurança</h2>
-          <p className="mt-2 text-sm text-white/60">Acompanhe o estado de proteção do seu perfil e os requisitos para editar seus dados.</p>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs font-bold text-white/50">Conta autenticada</p>
-              <p className="mt-2 break-all text-sm text-white">{auth.currentUser?.email || 'Sessão não identificada'}</p>
-              <p className="mt-2 text-xs text-white/50">Provedor: {auth.currentUser?.providerData?.map(provider => provider.providerId).join(', ') || 'Não informado'}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs font-bold text-white/50">Verificação de pagamentos</p>
-              <p className="mt-2 text-sm font-semibold text-white">{stripeStatus === 'connected' ? 'Conectada' : stripeStatus === 'loading' ? 'Consultando' : 'Aguardando conclusão'}</p>
-              <p className="mt-2 text-xs text-white/50">A Stripe confirma a habilitação financeira; não substitui a aprovação cadastral.</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4 sm:col-span-2">
-              <p className="text-xs font-bold text-white/50">Proteção de alterações</p>
-              <p className="mt-2 text-sm text-white">{isLocked ? 'Edição bloqueada pelas regras atuais de verificação.' : 'Edição permitida conforme o estado cadastral atual.'}</p>
-              {isLocked && <button type="button" onClick={() => setActiveProfileSection('geral')} className="mt-3 text-sm font-semibold text-[#D9F22A] hover:underline">Ver situação no perfil →</button>}
+        <section id="profile-panel-seguranca" role="tabpanel" aria-labelledby="profile-tab-seguranca" className="overflow-hidden rounded-3xl border border-white/10 bg-[#191b20] text-white shadow-2xl">
+          <div className="grid lg:grid-cols-[42%_58%]">
+            <aside className="bg-gradient-to-br from-[#15332d] via-[#10201e] to-[#11131a] p-7 sm:p-10">
+              <div className="mb-7 h-1 w-14 rounded-full bg-[#D9F22A]" />
+              <h2 className="max-w-xs text-2xl font-bold leading-snug">Mais segurança <span className="text-[#D9F22A]">para sua conta</span></h2>
+              <p className="mt-4 text-sm leading-6 text-white/65">Proteja seus dados com verificação de e-mail e autenticação multifator quando disponível para a sua conta.</p>
+            </aside>
+            <div className="p-6 sm:p-9">
+              <h2 className="text-xl font-bold">Autenticação de dois fatores (2FA)</h2>
+              <p className="mt-2 text-sm text-white/60">Confira e configure os fatores efetivamente suportados pela sua conta.</p>
+              <div className="mt-5"><AccountSecurityPanel /></div>
+              <div className="mt-4 rounded-xl border border-white/10 p-4">
+                <p className="text-sm font-semibold">Status da conta</p>
+                <p className="mt-2 break-all text-sm text-white/60">{auth.currentUser?.email || 'Sessão não identificada'}</p>
+                <p className="mt-2 text-xs text-white/50">Dados cadastrais: {isLocked ? 'edição protegida' : 'edição permitida'} · Recebimentos: {stripeStatus === 'connected' ? 'conectados' : stripeStatus === 'loading' ? 'verificando' : 'pendentes'}</p>
+              </div>
             </div>
           </div>
         </section>
       )}
       {activeProfileSection === 'planos' && (
-        <section id="profile-panel-planos" role="tabpanel" aria-labelledby="profile-tab-planos" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
-          <h2 className="text-lg font-bold">Planos e taxas</h2>
-          <p className="mt-2 text-sm text-white/60">As condições do seu plano e as taxas serão exibidas aqui após integração com os dados reais da LeadsPay.</p>
+        <section id="profile-panel-planos" role="tabpanel" aria-labelledby="profile-tab-planos" className="space-y-4 text-white">
+          <div className="rounded-2xl border border-white/10 bg-[#191b20] p-6">
+            <h2 className="text-lg font-bold">Planos</h2>
+            <p className="mt-2 text-sm text-white/55">Consulte os planos e condições contratadas com a LeadsPay. Não há informações de assinatura disponíveis nesta área.</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#191b20] p-6">
+            <h2 className="text-lg font-bold">Taxas e prazos</h2>
+            <p className="mt-2 text-sm text-white/55">Valores informados para a plataforma; encargos do processador, prazos e condições podem variar conforme a operação.</p>
+            <div className="mt-6 divide-y divide-white/10">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 py-5 sm:grid-cols-[1fr_1fr_auto]"><div className="flex items-center gap-3"><CreditCard className="h-5 w-5 text-[#D9F22A]" /><strong className="text-sm">Checkout LeadsPay</strong></div><span className="text-sm text-white/75">R$ 0,99 por checkout</span><span className="text-xs text-white/45">Taxa da plataforma</span></div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 py-5 sm:grid-cols-[1fr_1fr_auto]"><div className="flex items-center gap-3"><Wallet className="h-5 w-5 text-[#D9F22A]" /><strong className="text-sm">Solicitação de saque</strong></div><span className="text-sm text-white/75">R$ 2,00</span><span className="text-xs text-white/45">Sujeito a saldo e liberação</span></div>
+              {['Pix', 'Cartão de crédito', 'Boleto'].map(method => <div key={method} className="grid grid-cols-2 items-center gap-3 py-5"><strong className="text-sm">{method}</strong><span className="text-right text-xs text-white/55">Consulte as condições aplicáveis no checkout e no processador de pagamentos</span></div>)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#191b20] p-6">
+            <h3 className="text-base font-bold">Simular taxas da plataforma</h3>
+            <p className="mt-2 text-sm text-white/55">Simulação ilustrativa somente da tarifa fixa de checkout, sem incluir taxas do processador ou tributos.</p>
+            <label className="mt-4 block text-xs font-semibold text-white/70" htmlFor="profile-fee-simulator">Valor da venda (R$)</label>
+            <input id="profile-fee-simulator" type="number" min="0" step="0.01" value={feeSimulation} onChange={e => setFeeSimulation(e.target.value)} className="mt-2 w-full max-w-sm rounded-xl border border-white/20 bg-[#0b1422] p-3 text-white" />
+            <p className="mt-4 text-sm">Valor após a tarifa fixa: <strong className="text-[#D9F22A]">{Number.isFinite(Number(feeSimulation)) && Number(feeSimulation) > 0 ? Math.max(0, Number(feeSimulation) - 0.99).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00'}</strong></p>
+          </div>
         </section>
       )}
       {activeProfileSection === 'notificacoes' && (
