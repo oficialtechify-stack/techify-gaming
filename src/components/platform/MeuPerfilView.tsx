@@ -962,6 +962,18 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             tamanho máximo de 3.1 MB
           </p>
 
+          <div className="w-full max-w-[290px] border-t border-white/10 pt-5 text-left">
+            <p className="truncate text-base font-bold text-white">
+              {roleMode === 'empresa' ? (companyName || 'Nome da empresa') : ([firstName, lastName].filter(Boolean).join(' ') || 'Seu nome')}
+            </p>
+            <p className="mt-1 truncate text-xs text-white/50">
+              {roleMode === 'empresa' ? (companyEmail || email) : email}
+            </p>
+            <p className="mt-3 text-[11px] leading-5 text-white/40">
+              {roleMode === 'empresa' ? 'Perfil da empresa na LeadsPay' : 'Perfil de afiliado na LeadsPay'}
+            </p>
+          </div>
+
           {/* Quick Company Info Pill in Left Card */}
           {roleMode === 'empresa' && companyName && (
             <div className="mt-5 pt-5 border-t border-white/10 w-full text-left">
