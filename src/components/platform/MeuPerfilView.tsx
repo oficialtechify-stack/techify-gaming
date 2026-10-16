@@ -998,8 +998,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         {/* ================= RIGHT CARD: FORM FIELDS ================= */}
         <div className="lg:col-span-8 flex flex-col gap-4">
           {/* SECTION 1: DADOS CADASTRAIS (EMPRESA OU AFILIADO) */}
-          <div className="bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl backdrop-blur-md relative">
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-[#0a1222]/90 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative">
+            <div className="flex items-center justify-between mb-4">
               <h4 className="text-sm font-bold text-white/90 flex items-center gap-2">
                 {roleMode === 'empresa' ? (
                   <>
@@ -1026,7 +1026,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 /* ================= EMPRESA FIELDS ================= */
                 <>
                   {/* Razão Social / Nome da Empresa & Responsável */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         Nome da Empresa / Startup (Razão Social ou Fantasia) <span className="text-rose-400">*</span>
@@ -1038,7 +1038,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
                         placeholder="Ex: LeadsPay Soluções Digitais Ltda"
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1057,7 +1057,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         value={companyOwnerName}
                         onChange={(e) => setCompanyOwnerName(e.target.value)}
                         placeholder="Nome completo do responsável"
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1078,7 +1078,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                       value={companyEmail}
                       onChange={(e) => setCompanyEmail(e.target.value)}
                       placeholder="contato@suaempresa.com"
-                      className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                      className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                         isLocked 
                           ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                           : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1087,7 +1087,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   </div>
 
                   {/* Tipo de Documento e Número Fiscal */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <div>
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         Tipo de Documento Fiscal <span className="text-rose-400">*</span>
@@ -1137,7 +1137,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                           }
                         }}
                         placeholder={companyDocType === 'CNPJ' ? '00.000.000/0000-00' : '000.000.000-00'}
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1147,7 +1147,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   </div>
 
                   {/* WhatsApp Comercial e Categoria da Empresa */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         WhatsApp Comercial / Atendimento <span className="text-rose-400">*</span>
@@ -1186,7 +1186,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         disabled={isLocked}
                         value={companyCategory}
                         onChange={(e) => setCompanyCategory(e.target.value)}
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1205,7 +1205,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   </div>
 
                   {/* Tagline / Slogan e Website Oficial */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         Slogan / Tagline Resumida
@@ -1216,7 +1216,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         value={companyTagline}
                         onChange={(e) => setCompanyTagline(e.target.value)}
                         placeholder="Ex: Plataforma líder em automação de vendas"
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1234,7 +1234,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         value={companyWebsite}
                         onChange={(e) => setCompanyWebsite(e.target.value)}
                         placeholder="https://minhaempresa.com"
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1247,7 +1247,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                 /* ================= AFILIADO FIELDS ================= */
                 <>
                   {/* Row: Nome e Sobrenome */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         Nome <span className="text-rose-400">*</span>
@@ -1259,7 +1259,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         placeholder="Seu primeiro nome"
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1278,7 +1278,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         placeholder="Seu sobrenome completo"
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1299,7 +1299,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="exemplo@gmail.com"
-                      className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                      className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                         isLocked 
                           ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                           : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1308,7 +1308,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   </div>
 
                   {/* Row: CPF e Celular com WhatsApp */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         CPF <span className="text-rose-400">*</span>
@@ -1321,7 +1321,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         value={cpf}
                         onChange={(e) => setCpf(formatCPF(e.target.value))}
                         placeholder="000.000.000-00"
-                        className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                        className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                             : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1365,8 +1365,8 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
 
           {/* SECTION 2: ENDEREÇO DA SEDE / PESSOAL */}
-          <div className="bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl backdrop-blur-md relative">
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-[#0a1222]/90 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative">
+            <div className="flex items-center justify-between mb-4">
               <h4 className="text-sm font-bold text-white/90 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-[#D9F22A]" />
                 {roleMode === 'empresa' ? 'Endereço da Sede & Operação' : 'Endereço'}
@@ -1381,7 +1381,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
             <div className="flex flex-col gap-4">
               {/* Row: CEP & País */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 <div className="relative">
                   <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                     CEP <span className="text-rose-400">*</span>
@@ -1394,7 +1394,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                     value={cep}
                     onChange={(e) => handleCepChange(e.target.value)}
                     placeholder="00000-000"
-                    className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                    className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                       isLocked 
                         ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                         : cepError 
@@ -1422,7 +1422,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                     disabled={isLocked}
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
-                    className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white transition-colors ${
+                    className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white transition-colors ${
                       isLocked 
                         ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                         : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1438,7 +1438,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               </div>
 
               {/* Row: Estado & Cidade */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                 <div className="relative">
                   <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                     Estado (UF) <span className="text-rose-400">*</span>
@@ -1450,7 +1450,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                     value={estado}
                     onChange={(e) => setEstado(e.target.value)}
                     placeholder="Ex: SP"
-                    className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                    className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                       isLocked 
                         ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                         : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1469,7 +1469,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                     value={cidade}
                     onChange={(e) => setCidade(e.target.value)}
                     placeholder="Ex: São Paulo"
-                    className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 transition-colors ${
+                    className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                       isLocked 
                         ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                         : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
@@ -1491,7 +1491,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   value={endereco}
                   onChange={(e) => setEndereco(e.target.value)}
                   placeholder="Rua, número, bairro e complemento"
-                  className={`w-full bg-[#060a15] border rounded-xl px-4 py-3 text-xs text-white placeholder-white/30 resize-none transition-colors ${
+                  className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 resize-none transition-colors ${
                     isLocked 
                       ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
                       : 'border-white/15 focus:outline-none focus:border-[#D9F22A]'
