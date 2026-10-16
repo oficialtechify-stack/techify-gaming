@@ -618,6 +618,58 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
       )}
 
+      {/* Layout de referência: um único cartão, foto vertical e formulário compacto. */}
+      <style>{`
+        #leadspay-meu-perfil-view .profile-identity-section { display: none !important; }
+        #leadspay-meu-perfil-view .profile-settings-nav { max-width: 1120px; margin: 0 auto 28px; padding-left: 0; }
+        #leadspay-meu-perfil-view .profile-general-form { max-width: 1120px; margin-inline: auto; }
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack > div:first-child > div:first-child { display: none; }
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack > div:first-child > div:nth-child(2) { display: flex; }
+        @media (min-width: 1024px) {
+          #leadspay-meu-perfil-view .profile-general-form {
+            grid-template-columns: 29% minmax(0, 71%) !important;
+            border: 0 !important; border-radius: 20px !important;
+            background: #1b1b1b !important; min-height: 540px;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card {
+            background: linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.92)),
+                        linear-gradient(140deg,#22252a,#454a50 48%,#15191c) !important;
+            justify-content: flex-end !important; align-items: flex-start !important;
+            padding: 24px !important; border-radius: 20px 0 0 20px !important;
+            min-height: 540px !important;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack {
+            background: #1b1b1b !important; border-radius: 0 20px 20px 0;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack > div {
+            background: transparent !important; padding: 24px 26px !important;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:last-child {
+            flex: 0 1 auto !important; margin-top: 8px;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:first-of-type {
+            margin-top: auto;
+          }
+        }
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack h3 { letter-spacing: -.02em; }
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack input,
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack select,
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack textarea {
+          background: #1b1b1b !important; border: 1px solid #3a3c40 !important;
+          border-radius: 8px !important; min-height: 48px !important;
+        }
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack label {
+          color: #98a3ae; font-size: 12px;
+        }
+        @media(max-width:1023px) {
+          #leadspay-meu-perfil-view .profile-general-form { border-radius: 16px; overflow: hidden; }
+          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card {
+            background: linear-gradient(120deg,#232730,#12191d) !important;
+            border-radius: 16px 16px 0 0 !important;
+          }
+          #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack > div { border-radius: 0 !important; }
+        }
+      `}</style>
       {/* Layout unificado inspirado na referência: painel de marca lateral e dados em duas colunas. */}
       <style>{`
         @media (min-width: 1024px) {
@@ -1300,6 +1352,16 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               )}
             </div>
 
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">{roleMode === 'empresa' && companyDocType === 'CNPJ' ? 'Informações empresariais' : 'Informações pessoais'}</h3>
+                <p className="mt-1 text-sm text-white/50">{roleMode === 'empresa' && companyDocType === 'CNPJ' ? 'Confira os dados da sua pessoa jurídica.' : 'Mantenha seus dados sempre atualizados.'}</p>
+              </div>
+              {roleMode === 'empresa' && <div role="group" aria-label="Tipo de pessoa" className="flex shrink-0 gap-5 border-b border-white/10">
+                <button type="button" disabled={isLocked} aria-pressed={companyDocType === 'CPF'} onClick={() => setCompanyDocType('CPF')} className={`border-b-2 px-1 pb-3 text-sm transition ${companyDocType === 'CPF' ? 'border-[#D9F22A] font-bold text-white' : 'border-transparent text-white/50 hover:text-white'} disabled:cursor-not-allowed`}>Pessoa Física</button>
+                <button type="button" disabled={isLocked} aria-pressed={companyDocType === 'CNPJ'} onClick={() => setCompanyDocType('CNPJ')} className={`border-b-2 px-1 pb-3 text-sm transition ${companyDocType === 'CNPJ' ? 'border-[#D9F22A] font-bold text-white' : 'border-transparent text-white/50 hover:text-white'} disabled:cursor-not-allowed`}>Pessoa Jurídica</button>
+              </div>}
+            </div>
             <div className="flex flex-col gap-4">
               {roleMode === 'empresa' ? (
                 /* ================= EMPRESA FIELDS ================= */
