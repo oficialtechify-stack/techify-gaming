@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DocumentReference } from 'firebase-admin/firestore';
+import { getApps, initializeApp } from 'firebase-admin/app';
 import checkout from '../server-api/stripe/checkout';
 import { getStripeTestClient, resetStripeClientForTests } from './stripeServer';
+
+// The checkout uses the named Firebase Admin app. Unit tests mock Firestore
+// document methods, so initialize the app without real service credentials.
+// No network calls or production credentials are required for these tests.
+if (!getApps().some(app => app.name === 'leadspay-server')) {
+  initializeApp({ projectId: 'techify-gaming-106fe' }, 'leadspay-server');
+}
 
 for (const failedWrite of [1, 2]) {
   test(`checkout não entrega client secret quando a gravação ${failedWrite} falha`, async (t) => {
