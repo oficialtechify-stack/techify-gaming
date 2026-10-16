@@ -107,6 +107,13 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
       .map((company) => company.id)
   );
 
+  // Publicação depende da aprovação da empresa vinculada ao usuário, não da verificação pessoal.
+  const ownedCompany = companies.find(company =>
+    company.ownerId === currentUser?.uid ||
+    (Boolean(userProfile?.companyId) && company.id === userProfile.companyId)
+  );
+  const canPublishCompanyOffer = Boolean(ownedCompany && approvedCompanyIds.has(ownedCompany.id));
+
   const filteredPlatforms = platforms.filter(p => {
     if (
       blockedCategories.has(p.category) ||
@@ -289,23 +296,22 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
           <div className="flex items-center gap-3 self-start sm:self-auto flex-shrink-0 flex-wrap">
             {roleMode === 'empresa' && onOpenCreatePlan && (
-              <button
-                onClick={() => {
-                  if (!isVerified) {
-                    setShowCompanyVerificationModal(true);
-                    return;
-                  }
-                  onOpenCreatePlan();
-                }}
-                className={`px-5 py-3 rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
-                  isVerified
-                    ? 'bg-[#D9F22A] hover:bg-[#c8e217] text-[#060A15] font-black shadow-[0_0_25px_rgba(217,242,42,0.35)]'
-                    : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold'
-                }`}
-              >
-                {isVerified ? <Plus className="w-4 h-4 stroke-[3]" /> : <Lock className="w-4 h-4 text-amber-400" />}
-                <span>{isVerified ? 'Nova Oferta' : 'Nova Oferta (Requer Verificação)'}</span>
-              </button>
+              <div className="flex items-center gap-3">
+                {canPublishCompanyOffer && <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D9F22A]/30 bg-[#D9F22A]/10 px-3 py-1.5 text-[11px] font-bold text-[#D9F22A]"><ShieldCheck className="h-3.5 w-3.5"/> Verificada</span>}
+                <button
+                  onClick={() => {
+                    if (!canPublishCompanyOffer) {
+                      setShowCompanyVerificationModal(true);
+                      return;
+                    }
+                    onOpenCreatePlan();
+                  }}
+                  className="flex items-center gap-2 rounded-2xl bg-[#D9F22A] px-5 py-3 text-xs font-black uppercase tracking-wider text-[#060A15] shadow-[0_0_25px_rgba(217,242,42,0.25)] transition-all hover:bg-[#c8e217]"
+                >
+                  <Plus className="h-4 w-4 stroke-[3]"/>
+                  Nova Oferta
+                </button>
+              </div>
             )}
             {roleMode === 'afiliado' && onSwitchToCompanyMode && (
               <div className="p-3.5 rounded-2xl bg-[#050811]/90 border border-white/15 flex items-center gap-3">
