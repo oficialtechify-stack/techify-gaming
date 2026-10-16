@@ -139,7 +139,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       if (!nonEmpty(body, 'name')) return res.status(400).json({ error: 'Informe seu nome completo.' });
     } else {
       if (!nonEmpty(body, 'companyName') || !nonEmpty(body, 'name')) return res.status(400).json({ error: 'Informe o nome da empresa e da pessoa responsável.' });
-      const validDocument = companyDocument.length === 11 ? validCpf(companyDocument) : validCnpj(companyDocument);
+      const validDocument = docType === 'CPF' ? validCpf(companyDocument) : docType === 'CNPJ' ? validCnpj(companyDocument) : false;
       if (!validDocument) return res.status(400).json({ error: 'O CPF/CNPJ informado para a empresa é inválido.' });
       if (!['CNPJ', 'CPF', 'MEI', 'SEM_CNPJ'].includes(docType)) return res.status(400).json({ error: 'Selecione um tipo de documento válido.' });
     }
