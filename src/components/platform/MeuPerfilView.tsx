@@ -969,6 +969,23 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         </div>
       ) : (
+      <section className="mb-6 rounded-3xl border border-white/10 bg-[#0b1423] p-5 shadow-xl sm:p-7">
+        <p className="text-xs font-bold uppercase tracking-widest text-[#D9F22A]">Dados cadastrais</p>
+        <h2 className="mt-2 text-xl font-bold text-white">Informações gerais</h2>
+        <p className="mt-2 text-sm text-white/60">Confira os dados do titular, da marca e do endereço antes de solicitar a verificação.</p>
+        {roleMode === 'empresa' && (
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button type="button" disabled={isLocked} onClick={() => setCompanyDocType('CPF')} aria-pressed={companyDocType === 'CPF'} className={`rounded-2xl border p-4 text-left transition ${companyDocType === 'CPF' ? 'border-[#D9F22A] bg-[#D9F22A]/10' : 'border-white/10 bg-white/5 hover:border-white/30'} disabled:cursor-not-allowed disabled:opacity-50`}>
+              <span className="flex items-center gap-2 text-sm font-bold text-white"><User className="h-4 w-4" /> Pessoa física</span>
+              <span className="mt-2 block text-xs text-white/60">CPF, nome do titular e marca pública.</span>
+            </button>
+            <button type="button" disabled={isLocked} onClick={() => setCompanyDocType('CNPJ')} aria-pressed={companyDocType === 'CNPJ'} className={`rounded-2xl border p-4 text-left transition ${companyDocType === 'CNPJ' ? 'border-[#D9F22A] bg-[#D9F22A]/10' : 'border-white/10 bg-white/5 hover:border-white/30'} disabled:cursor-not-allowed disabled:opacity-50`}>
+              <span className="flex items-center gap-2 text-sm font-bold text-white"><Building2 className="h-4 w-4" /> Pessoa jurídica</span>
+              <span className="mt-2 block text-xs text-white/60">CNPJ, dados da empresa e responsável legal.</span>
+            </button>
+          </div>
+        )}
+      </section>
       <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
         <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl backdrop-blur-md relative">
