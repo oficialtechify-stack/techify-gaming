@@ -109,6 +109,7 @@ export const StripeConnectCompanyPanel: React.FC<{
       }
       if (!response.ok) throw new Error(data.error || 'Não foi possível iniciar a configuração Stripe.');
       if (role === 'empresa') {
+        if (!data.embedded || !data.accountId) throw new Error('Cadastro integrado indisponível para esta empresa.');
         const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
         if (!publishableKey) throw new Error('Chave pública Stripe não configurada no ambiente.');
         setEmbeddedError('');
