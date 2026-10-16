@@ -367,9 +367,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
 
       // A aprovação cadastral é separada da configuração financeira.
       // Stripe Connect só é iniciado após a aprovação do perfil/empresa.
-      const resolvedDocType: 'CNPJ' | 'MEI' | 'CPF' = cleanCnpjDigits.length === 14
-        ? (companyDocType === 'CPF' ? 'MEI' : 'CNPJ')
-        : 'CPF';
+      const resolvedDocType: 'CNPJ' | 'CPF' = companyDocType;
 
       updates = {
         name: companyOwnerName.trim() || userProfile.name,
