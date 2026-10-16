@@ -31,7 +31,9 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "stripe": "^22.6.2",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "@stripe/connect-js": "^3.3.0",
+    "@stripe/react-connect-js": "^3.3.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
