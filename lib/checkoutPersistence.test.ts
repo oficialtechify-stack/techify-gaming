@@ -37,6 +37,13 @@ for (const failedWrite of [1, 2]) {
       payouts_enabled: true,
       capabilities: { transfers: 'active' },
     }) as any);
+    t.mock.method(stripe.accounts, 'update', async () => ({
+      id: 'acct_company',
+      metadata: { firebase_uid: 'owner_1', leadspay_role: 'empresa', leadspay_company_id: 'company_1' },
+      details_submitted: true,
+      payouts_enabled: true,
+      capabilities: { transfers: 'active' },
+    }) as any);
     t.mock.method(stripe.paymentIntents, 'create', async () => {
       stripeCalls++;
       return { id: 'pi_test', client_secret: 'test_secret' } as any;
