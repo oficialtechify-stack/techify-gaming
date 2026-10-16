@@ -986,9 +986,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         )}
       </section>
-      <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <form onSubmit={handleSubmitForVerification} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
-        <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl backdrop-blur-md relative">
+        <div className="lg:col-span-4 bg-[#0f1929] border border-white/10 rounded-[24px] p-5 sm:p-7 flex flex-col items-center justify-center text-center shadow-lg relative lg:sticky lg:top-6">
           {/* Lock overlay if in analysis or approved */}
           {isLocked && !canEditBranding && (
             <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-bold text-white/70">
@@ -1090,10 +1090,10 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         </div>
 
         {/* ================= RIGHT CARD: FORM FIELDS ================= */}
-        <div className="lg:col-span-8 flex flex-col gap-6">
+        <div className="lg:col-span-8 flex flex-col gap-5">
           {/* SECTION 1: DADOS CADASTRAIS (EMPRESA OU AFILIADO) */}
-          <div className="bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl backdrop-blur-md relative">
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-[#0f1929] border border-white/10 rounded-[24px] p-5 sm:p-7 shadow-lg relative">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6 border-b border-white/10 pb-5">
               <h4 className="text-sm font-bold text-white/90 flex items-center gap-2">
                 {roleMode === 'empresa' ? (
                   <>
