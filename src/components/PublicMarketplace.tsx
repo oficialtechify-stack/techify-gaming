@@ -91,11 +91,20 @@ export default function PublicMarketplace() {
       {companySlug && <div className="flex flex-wrap gap-3 border-b border-white/10 pb-4"><span className="font-semibold text-[#D9F22A]">Planos e assinaturas</span><span className="text-sm text-white/50">Mensal · Anual · Semanal · Pagamento único</span></div>}
       {error && <p role="alert" className="rounded-xl border border-red-500/30 p-4 text-red-300">{error}</p>}
       {loading ? <p className="py-12 text-center text-white/50">Carregando ofertas verificadas...</p> : error ? null : shown.length === 0 ? <div className="rounded-2xl border border-white/10 p-12 text-center text-white/50"><Store className="mx-auto mb-3"/>{companySlug ? 'Nenhuma oferta publicada nesta vitrine.' : 'Nenhuma oferta encontrada nesta categoria.'}</div> :
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">{shown.map(o => <article key={o.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#0e1423]">
-        {o.bannerImage ? <img src={o.bannerImage} alt="" className="h-44 w-full object-cover" loading="lazy"/> : <div className="flex h-32 items-center justify-center bg-[#131d2d]"><Store size={35} className="text-[#D9F22A]"/></div>}
-        <div className="space-y-3 p-5"><div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#D9F22A]"><span>{o.category}</span><span className="rounded-full border border-white/15 px-2 py-1 text-white/70">{periodOf(o)}</span></div><h2 className="text-xl font-bold">{o.name}</h2><p className="line-clamp-3 text-sm text-white/60">{o.description}</p>
-          <a className="block text-xs text-white/70 hover:text-[#D9F22A]" href={`/empresa/${encodeURIComponent(o.companySlug || o.companyId)}`}>{o.companyName} ↗</a>
-          <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-3"><span className="font-bold">{o.price > 0 ? o.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Consulte condições'}</span><a href={`/checkout/${encodeURIComponent(o.id)}`} className="flex items-center gap-1 rounded-xl bg-[#D9F22A] px-4 py-2 text-sm font-bold text-[#060A15]">Ver oferta <ExternalLink size={14}/></a></div>
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">{shown.map(o => <article key={o.id} className="group flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-lime-300 hover:shadow-xl">
+        <div className="relative h-44 overflow-hidden bg-gradient-to-br from-slate-100 via-lime-50 to-slate-200 sm:h-48">
+          {o.bannerImage ? <img src={o.bannerImage} alt={o.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy"/> : <div className="flex h-full items-center justify-center"><Store size={40} className="text-slate-400"/></div>}
+          <span className="absolute left-4 top-4 max-w-[calc(100%-2rem)] truncate rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-bold text-slate-700 shadow-sm">{o.category || 'Software e soluções'}</span>
+        </div>
+        <div className="flex flex-1 flex-col gap-3 p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3"><span className="rounded-full bg-lime-100 px-3 py-1 text-[11px] font-bold text-lime-900">{periodOf(o)}</span><span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Empresa verificada</span></div>
+          <h2 className="line-clamp-2 text-xl font-extrabold leading-tight tracking-tight text-slate-950">{o.name}</h2>
+          <p className="line-clamp-3 min-h-[3.75rem] text-sm leading-relaxed text-slate-600">{o.description || 'Conheça os benefícios e condições desta solução.'}</p>
+          <a className="mt-auto inline-flex items-center gap-1 text-sm font-semibold text-slate-600 transition-colors hover:text-lime-700" href={`/empresa/${encodeURIComponent(o.companySlug || o.companyId)}`}>{o.companyName} <ExternalLink size={13}/></a>
+          <div className="mt-1 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Valor do plano</span><span className="text-xl font-black text-slate-950">{o.price > 0 ? o.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Consulte condições'}</span></div>
+            <a href={`/checkout/${encodeURIComponent(o.id)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#D9F22A] px-5 py-3 text-sm font-extrabold text-[#111827] transition-colors hover:bg-lime-300">Ver oferta <ExternalLink size={15}/></a>
+          </div>
         </div>
       </article>)}</div>}
     </div>
