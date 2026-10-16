@@ -299,7 +299,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const hasCompanyPhone = cleanPhoneDigits.length >= 10;
   const hasCompanyDoc = companyDocType === 'CNPJ' 
     ? cleanCnpjDigits.length === 14 
-    : (cleanCnpjDigits.length === 11 || cleanCnpjDigits.length === 14);
+    : cleanCnpjDigits.length === 11;
 
   const isCompanyFormComplete = (
     hasCompanyName &&
@@ -1036,7 +1036,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                        Nome da Empresa / Startup (Razão Social ou Fantasia) <span className="text-rose-400">*</span>
+                        {companyDocType === 'CPF' ? 'Nome público da marca (exibido no checkout)' : 'Nome fantasia / marca da empresa'} <span className="text-rose-400">*</span>
                       </label>
                       <input
                         type="text"
@@ -1117,7 +1117,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                                   : 'bg-[#060a15] text-white/70 hover:text-white border-white/10 hover:border-white/20'
                             }`}
                           >
-                            {type === 'CNPJ' ? 'CNPJ' : 'CPF / MEI'}
+                            {type === 'CNPJ' ? 'Pessoa jurídica (CNPJ)' : 'Pessoa física (CPF)'}
                           </button>
                         ))}
                       </div>
@@ -1127,7 +1127,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         {companyDocType === 'CNPJ' 
                           ? 'CNPJ da Empresa' 
-                          : 'CPF / MEI do Titular'}{' '}
+                          : 'CPF do Titular'}{' '}
                         <span className="text-rose-400">*</span>
                       </label>
                       <input
