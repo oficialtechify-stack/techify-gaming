@@ -2219,13 +2219,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
 
           {activeTab === 'equipe' && (
-            <EquipeView
-              companies={myCompanies}
-              plans={myCompanyPlans}
-              affiliations={myCompanyAffiliations}
-              currentUserId={effectiveUserId}
-              onRemoveAffiliate={handleCompanyRemoveAffiliate}
-            />
+            <EquipeView />
           )}
           {activeTab === 'relatorios' && <RelatoriosView roleMode={roleMode} transactions={userVisibleTransactions} />}
           {activeTab === 'integracoes' && (
