@@ -619,25 +619,43 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       )}
 
       <style>{`
-        /* Cakto-inspired profile: remove LeadsPay dashboard chrome from Geral */
-        #leadspay-meu-perfil-view:has(.profile-general-form) { background: #0d0e0f; }
-        #leadspay-meu-perfil-view .profile-general-form .profile-brand-card { position: relative; }
+        /* Logo is a small brand asset, never a full-bleed cover photo. */
+        #leadspay-meu-perfil-view .profile-general-form .profile-brand-card {
+          background: linear-gradient(145deg,#34383b 0%,#202326 35%,#101213 70%,#08090a 100%) !important;
+          overflow: hidden;
+        }
+        #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div.relative.group {
+          position: relative !important;
+          inset: auto !important;
+          width: 116px !important;
+          height: 116px !important;
+          flex: none !important;
+          border: 1px solid rgba(255,255,255,.18) !important;
+          border-radius: 12px !important;
+          opacity: 1 !important;
+          overflow: hidden !important;
+          margin-top: auto !important;
+          background: #090909 !important;
+        }
+        #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div.relative.group img {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: contain !important;
+          filter: none !important;
+          transform: none !important;
+        }
+        #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div.relative.group label {
+          inset: 0 !important;
+        }
+        #leadspay-meu-perfil-view .profile-general-form .profile-fields-stack > div:last-child > div:last-child {
+          border-radius: 0 !important;
+        }
         @media(min-width:1024px) {
           #leadspay-meu-perfil-view .profile-general-form .profile-brand-card {
             min-height: 630px !important;
-            background: linear-gradient(180deg,transparent 22%,rgba(0,0,0,.9) 100%),
-              linear-gradient(150deg,#343a3c 0%,#1a1d1f 40%,#070809 100%) !important;
-          }
-          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:first-of-type {
-            width: 100% !important; height: 100% !important;
-            position: absolute !important; inset: 0 !important;
-            border: 0 !important; border-radius: 0 !important; opacity: .85;
-          }
-          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:first-of-type img {
-            object-fit: cover !important; filter: grayscale(1) contrast(1.1);
-          }
-          #leadspay-meu-perfil-view .profile-general-form .profile-brand-card > div:not(:first-of-type) {
-            position: relative; z-index: 1;
+            justify-content: flex-end !important;
+            align-items: flex-start !important;
+            padding: 24px !important;
           }
         }
       `}</style>
