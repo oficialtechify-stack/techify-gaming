@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
 import { UserSellerProfile, CompanyStartup, UserRoleMode } from '../../types/platform';
 import { 
   User, 
@@ -109,6 +111,26 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [endereco, setEndereco] = useState<string>(userProfile.companyAddress || userProfile.address || '');
 
   const [activeProfileSection, setActiveProfileSection] = useState<ProfileSection>('geral');
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [passwordResetFeedback, setPasswordResetFeedback] = useState('');
+
+  const handlePasswordReset = async () => {
+    const accountEmail = auth.currentUser?.email;
+    if (!accountEmail) {
+      setPasswordResetFeedback('Não foi possível identificar o e-mail da sessão. Entre novamente e tente outra vez.');
+      return;
+    }
+    setPasswordResetLoading(true);
+    setPasswordResetFeedback('');
+    try {
+      await sendPasswordResetEmail(auth, accountEmail);
+      setPasswordResetFeedback('Enviamos um link de redefinição para o e-mail da sua conta. Confira também a caixa de spam.');
+    } catch {
+      setPasswordResetFeedback('Não foi possível enviar o link agora. Tente novamente mais tarde.');
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  };
 
   // UI & Validation States
   const [cepError, setCepError] = useState<boolean>(false);
@@ -581,7 +603,9 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       {activeProfileSection === 'senha' && (
         <section id="profile-panel-senha" role="tabpanel" aria-labelledby="profile-tab-senha" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
           <h2 className="text-lg font-bold">Alterar senha</h2>
-          <p className="mt-2 text-sm text-white/60">A alteração de senha será integrada à autenticação da conta. Nenhuma senha é solicitada ou armazenada nesta tela por enquanto.</p>
+          <p className="mt-2 text-sm text-white/60">Para proteger sua conta, enviaremos um link de redefinição ao e-mail autenticado no Firebase. Sua senha nunca é armazenada neste formulário.</p>
+          <button type="button" onClick={handlePasswordReset} disabled={passwordResetLoading} className="mt-5 rounded-xl bg-[#D9F22A] px-5 py-3 text-sm font-bold text-[#060A15] hover:bg-[#c8e217] disabled:opacity-50">{passwordResetLoading ? 'Enviando...' : 'Enviar link para alterar senha'}</button>
+          {passwordResetFeedback && <p role="status" aria-live="polite" className="mt-4 text-sm text-white/80">{passwordResetFeedback}</p>}
         </section>
       )}
       {activeProfileSection === 'seguranca' && (
