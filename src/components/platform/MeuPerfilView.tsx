@@ -220,9 +220,25 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
     }
   };
 
+  // Branding is editable independently of protected KYC fields.
+  const canEditBranding = roleMode === 'empresa' && isApproved;
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
+  const saveBranding = async () => {
+    if (!canEditBranding || !companyLogo || companyLogo === userProfile.companyLogo) return;
+    setIsSavingBranding(true);
+    try {
+      await onSaveProfile({ companyLogo });
+      setToastMessage({ type: 'success', text: 'Logotipo atualizado com sucesso.' });
+    } catch {
+      setToastMessage({ type: 'error', text: 'Não foi possível salvar o logotipo. Tente novamente.' });
+    } finally {
+      setIsSavingBranding(false);
+    }
+  };
+
   // Image Upload Handler (Avatar or Company Logo)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'avatar' | 'companyLogo') => {
-    if (isLocked) return;
+    if (isLocked && !(target === 'companyLogo' && canEditBranding)) return;
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 3.1 * 1024 * 1024) {
@@ -887,7 +903,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
         {/* ================= LEFT CARD: USER PHOTO / LOGO ================= */}
         <div className="lg:col-span-4 bg-[#0a1222]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center shadow-xl backdrop-blur-md relative">
           {/* Lock overlay if in analysis or approved */}
-          {isLocked && (
+          {isLocked && !canEditBranding && (
             <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-bold text-white/70">
               <Lock className="w-3 h-3 text-amber-400" />
               Bloqueado
@@ -918,7 +934,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
             )}
 
             {/* Hover overlay with upload icon (only if NOT locked) */}
-            {!isLocked && (
+            {(!isLocked || canEditBranding) && (
               <label className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-200">
                 <Camera className="w-7 h-7 text-[#D9F22A] mb-1.5" />
                 <span className="text-[11px] font-black uppercase tracking-wider text-white">
@@ -929,13 +945,13 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   className="hidden"
                   onChange={(e) => handleImageUpload(e, roleMode === 'empresa' ? 'companyLogo' : 'avatar')}
-                  disabled={isLocked}
+                  disabled={isLocked && !canEditBranding}
                 />
               </label>
             )}
           </div>
 
-          {!isLocked ? (
+          {(!isLocked || canEditBranding) ? (
             <label className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-[#D9F22A] hover:text-[#060A15] text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer border border-white/15 mb-3">
               <Upload className="w-3.5 h-3.5" />
               <span>{roleMode === 'empresa' ? 'Logotipo da Empresa' : 'Escolher da Galeria'}</span>
@@ -951,6 +967,12 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               <Lock className="w-3.5 h-3.5" />
               <span>{roleMode === 'empresa' ? 'Logo Bloqueado' : 'Foto Bloqueada'}</span>
             </div>
+          )}
+
+          {canEditBranding && companyLogo !== userProfile.companyLogo && (
+            <button type="button" disabled={isSavingBranding} onClick={saveBranding} className="mb-3 rounded-xl bg-[#D9F22A] px-4 py-2 text-xs font-bold text-[#061014] disabled:opacity-50">
+              {isSavingBranding ? 'Salvando...' : 'Salvar novo logotipo'}
+            </button>
           )}
 
           <p className="text-[12px] text-white/50 leading-relaxed max-w-[240px]">
