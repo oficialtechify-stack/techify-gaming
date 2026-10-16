@@ -341,10 +341,10 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           return;
         }
       } else {
-        // CPF ou MEI
-        const isValid = cleanCnpjDigits.length === 14 ? isValidCNPJ(cleanCnpjDigits) : isValidCPF(cleanCnpjDigits);
+        // Pessoa física: exigir CPF válido, sem aceitar CNPJ nesta modalidade.
+        const isValid = isValidCPF(cleanCnpjDigits);
         if (!isValid) {
-          setToastMessage({ type: 'error', text: 'Documento informado (CPF ou CNPJ MEI) é inválido. Verifique os dígitos.' });
+          setToastMessage({ type: 'error', text: 'CPF informado é inválido. Verifique os dígitos.' });
           setTimeout(() => setToastMessage(null), 4500);
           return;
         }
@@ -380,10 +380,11 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       updates = {
         name: companyOwnerName.trim() || userProfile.name,
         companyName: companyName.trim(),
-        companyLegalName: companyName.trim(),
+        companyLegalName: companyDocType === 'CPF' ? companyOwnerName.trim() : companyName.trim(),
         companyCnpj: formattedDoc,
         cleanCnpj: cleanCnpjDigits,
-        companyDocType: companyDocType,        documentType: resolvedDocType,
+        companyDocType: companyDocType,
+        documentType: resolvedDocType,
         companyPhone: formattedCompanyPhone,
         whatsapp: formattedCompanyPhone,
         phone: formattedCompanyPhone,
@@ -468,7 +469,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       if (roleMode === 'empresa') {
         await onSaveProfile({
           companyName: companyName.trim(),
-          companyLegalName: companyName.trim(),
+          companyLegalName: companyDocType === 'CPF' ? companyOwnerName.trim() : companyName.trim(),
           companyCnpj: companyDocType === 'CNPJ' ? formatCNPJ(cleanCnpjDigits) : formatCPF(cleanCnpjDigits),
           cleanCnpj: cleanCnpjDigits,
           companyDocType: companyDocType,
@@ -1066,11 +1067,12 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
               {roleMode === 'empresa' ? (
                 /* ================= EMPRESA FIELDS ================= */
                 <>
+                  <p className="text-xs leading-relaxed text-white/60">{companyDocType === 'CPF' ? 'Pessoa física: informe seu nome verdadeiro para verificação e escolha uma marca para aparecer na loja e no checkout. O nome da marca não substitui o titular legal nem determina o nome exibido pelo banco.' : 'Pessoa jurídica: informe o CNPJ da empresa e o nome público que os clientes verão no checkout.'}</p>
                   {/* Razão Social / Nome da Empresa & Responsável */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <div className="relative">
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
-                        Nome da Empresa / Startup (Razão Social ou Fantasia) <span className="text-rose-400">*</span>
+                        {companyDocType === 'CPF' ? 'Nome público da marca (exibido no checkout)' : 'Nome fantasia / marca da empresa'} <span className="text-rose-400">*</span>
                       </label>
                       <input
                         type="text"
@@ -1078,7 +1080,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                         disabled={isLocked}
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
-                        placeholder="Ex: LeadsPay Soluções Digitais Ltda"
+                        placeholder={companyDocType === 'CPF' ? 'Ex: Minha Tech' : 'Ex: LeadsPay'}
                         className={`w-full bg-[#060a15] border rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-white/30 transition-colors ${
                           isLocked 
                             ? 'opacity-70 cursor-not-allowed border-white/10 bg-[#040710]' 
@@ -1151,7 +1153,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                                   : 'bg-[#060a15] text-white/70 hover:text-white border-white/10 hover:border-white/20'
                             }`}
                           >
-                            {type === 'CNPJ' ? 'CNPJ' : 'CPF / MEI'}
+                            {type === 'CNPJ' ? 'Pessoa jurídica (CNPJ)' : 'Pessoa física (CPF)'}
                           </button>
                         ))}
                       </div>
@@ -1161,7 +1163,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
                       <label className="block text-[11px] font-medium text-white/60 mb-1.5 ml-1">
                         {companyDocType === 'CNPJ' 
                           ? 'CNPJ da Empresa' 
-                          : 'CPF / MEI do Titular'}{' '}
+                          : 'CPF do Titular'}{' '}
                         <span className="text-rose-400">*</span>
                       </label>
                       <input
