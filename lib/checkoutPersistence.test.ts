@@ -80,7 +80,7 @@ for (const failedWrite of [1, 2]) {
       buyerEmail: 'test@example.com',
     } }, res as any);
 
-    assert.equal(code, 503);
+    assert.equal(code, 503, `Checkout failure response: ${JSON.stringify(response)}`);
     assert.equal(response.code, 'ORDER_STORAGE_UNAVAILABLE');
     assert.equal(response.clientSecret, undefined);
     assert.equal(stripeCalls, failedWrite === 1 ? 0 : 1);
