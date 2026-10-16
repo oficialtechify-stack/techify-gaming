@@ -1004,6 +1004,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         </div>
       ) : (
+      <>
       <section className="mb-6 rounded-3xl border border-white/10 bg-[#0b1423] p-5 shadow-xl sm:p-7">
         <p className="text-xs font-bold uppercase tracking-widest text-[#D9F22A]">Dados cadastrais</p>
         <h2 className="mt-2 text-xl font-bold text-white">Informações gerais</h2>
@@ -1713,6 +1714,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         </div>
       </form>
+      </>
       )}
 
       </div>
