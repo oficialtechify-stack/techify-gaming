@@ -1,3 +1,6 @@
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
+import { ProfileSectionTabs, type ProfileSection } from './ProfileSectionTabs';
 import React, { useState, useEffect } from 'react';
 import { UserSellerProfile, CompanyStartup, UserRoleMode } from '../../types/platform';
 import { 
@@ -107,6 +110,28 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [estado, setEstado] = useState<string>(userProfile.companyState || userProfile.state || '');
   const [cidade, setCidade] = useState<string>(userProfile.companyCity || userProfile.city || '');
   const [endereco, setEndereco] = useState<string>(userProfile.companyAddress || userProfile.address || '');
+
+  const [activeProfileSection, setActiveProfileSection] = useState<ProfileSection>('geral');
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [passwordResetFeedback, setPasswordResetFeedback] = useState('');
+
+  const handlePasswordReset = async () => {
+    const accountEmail = auth.currentUser?.email;
+    if (!accountEmail) {
+      setPasswordResetFeedback('Não foi possível identificar o e-mail da sessão. Entre novamente e tente outra vez.');
+      return;
+    }
+    setPasswordResetLoading(true);
+    setPasswordResetFeedback('');
+    try {
+      await sendPasswordResetEmail(auth, accountEmail);
+      setPasswordResetFeedback('Enviamos um link de redefinição para o e-mail da sua conta. Confira também a caixa de spam.');
+    } catch {
+      setPasswordResetFeedback('Não foi possível enviar o link agora. Tente novamente mais tarde.');
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  };
 
   // UI & Validation States
   const [cepError, setCepError] = useState<boolean>(false);
@@ -588,6 +613,53 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
           </div>
         </div>
       )}
+
+      <div className="mb-7 rounded-2xl border border-white/10 bg-[#0a101b] px-3 sm:px-5 shadow-lg">
+        <ProfileSectionTabs active={activeProfileSection} onChange={setActiveProfileSection} />
+      </div>
+      {activeProfileSection === 'senha' && (
+        <section id="profile-panel-senha" role="tabpanel" aria-labelledby="profile-tab-senha" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
+          <h2 className="text-lg font-bold">Alterar senha</h2>
+          <p className="mt-2 text-sm text-white/60">Para proteger sua conta, enviaremos um link de redefinição ao e-mail autenticado no Firebase. Sua senha nunca é armazenada neste formulário.</p>
+          <button type="button" onClick={handlePasswordReset} disabled={passwordResetLoading} className="mt-5 rounded-xl bg-[#D9F22A] px-5 py-3 text-sm font-bold text-[#060A15] hover:bg-[#c8e217] disabled:opacity-50">{passwordResetLoading ? 'Enviando...' : 'Enviar link para alterar senha'}</button>
+          {passwordResetFeedback && <p role="status" aria-live="polite" className="mt-4 text-sm text-white/80">{passwordResetFeedback}</p>}
+        </section>
+      )}
+      {activeProfileSection === 'seguranca' && (
+        <section id="profile-panel-seguranca" role="tabpanel" aria-labelledby="profile-tab-seguranca" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
+          <h2 className="text-lg font-bold">Segurança</h2>
+          <p className="mt-2 text-sm text-white/60">Acompanhe o estado de proteção do seu perfil e os requisitos para editar seus dados.</p>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-bold text-white/50">Conta autenticada</p>
+              <p className="mt-2 break-all text-sm text-white">{auth.currentUser?.email || 'Sessão não identificada'}</p>
+              <p className="mt-2 text-xs text-white/50">Provedor: {auth.currentUser?.providerData?.map(provider => provider.providerId).join(', ') || 'Não informado'}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-bold text-white/50">Verificação de pagamentos</p>
+              <p className="mt-2 text-sm font-semibold text-white">{stripeStatus === 'connected' ? 'Conectada' : stripeStatus === 'loading' ? 'Consultando' : 'Aguardando conclusão'}</p>
+              <p className="mt-2 text-xs text-white/50">A Stripe confirma a habilitação financeira; não substitui a aprovação cadastral.</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 sm:col-span-2">
+              <p className="text-xs font-bold text-white/50">Proteção de alterações</p>
+              <p className="mt-2 text-sm text-white">{isLocked ? 'Edição bloqueada pelas regras atuais de verificação.' : 'Edição permitida conforme o estado cadastral atual.'}</p>
+              {isLocked && <button type="button" onClick={() => setActiveProfileSection('geral')} className="mt-3 text-sm font-semibold text-[#D9F22A] hover:underline">Ver situação no perfil →</button>}
+            </div>
+          </div>
+        </section>
+      )}
+      {activeProfileSection === 'planos' && (
+        <section id="profile-panel-planos" role="tabpanel" aria-labelledby="profile-tab-planos" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
+          <h2 className="text-lg font-bold">Planos e taxas</h2>
+          <p className="mt-2 text-sm text-white/60">As condições do seu plano e as taxas serão exibidas aqui após integração com os dados reais da LeadsPay.</p>
+        </section>
+      )}
+      {activeProfileSection === 'notificacoes' && (
+        <section id="profile-panel-notificacoes" role="tabpanel" aria-labelledby="profile-tab-notificacoes">
+          <NotificationPreferencesPanel userProfile={userProfile} onSaveProfile={onSaveProfile} />
+        </section>
+      )}
+      <div id="profile-panel-geral" role="tabpanel" aria-labelledby="profile-tab-geral" className={activeProfileSection === 'geral' ? '' : 'hidden'}>
 
       {/* Toast feedback */}
       {toastMessage && (
@@ -1591,7 +1663,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       </form>
       )}
 
-      <NotificationPreferencesPanel userProfile={userProfile} onSaveProfile={onSaveProfile} />
+      </div>
 
       {/* Floating Chat Support Widget */}
       <a
