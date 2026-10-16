@@ -611,7 +611,24 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       {activeProfileSection === 'seguranca' && (
         <section id="profile-panel-seguranca" role="tabpanel" aria-labelledby="profile-tab-seguranca" className="rounded-2xl border border-white/10 bg-[#0a1222] p-6 text-white">
           <h2 className="text-lg font-bold">Segurança</h2>
-          <p className="mt-2 text-sm text-white/60">Seus dados financeiros e cadastrais continuam protegidos pelas regras atuais de verificação e autorização de alterações.</p>
+          <p className="mt-2 text-sm text-white/60">Acompanhe o estado de proteção do seu perfil e os requisitos para editar seus dados.</p>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-bold text-white/50">Conta autenticada</p>
+              <p className="mt-2 break-all text-sm text-white">{auth.currentUser?.email || 'Sessão não identificada'}</p>
+              <p className="mt-2 text-xs text-white/50">Provedor: {auth.currentUser?.providerData?.map(provider => provider.providerId).join(', ') || 'Não informado'}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-bold text-white/50">Verificação de pagamentos</p>
+              <p className="mt-2 text-sm font-semibold text-white">{stripeStatus === 'connected' ? 'Conectada' : stripeStatus === 'loading' ? 'Consultando' : 'Aguardando conclusão'}</p>
+              <p className="mt-2 text-xs text-white/50">A Stripe confirma a habilitação financeira; não substitui a aprovação cadastral.</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 sm:col-span-2">
+              <p className="text-xs font-bold text-white/50">Proteção de alterações</p>
+              <p className="mt-2 text-sm text-white">{isLocked ? 'Edição bloqueada pelas regras atuais de verificação.' : 'Edição permitida conforme o estado cadastral atual.'}</p>
+              {isLocked && <button type="button" onClick={() => setActiveProfileSection('geral')} className="mt-3 text-sm font-semibold text-[#D9F22A] hover:underline">Ver situação no perfil →</button>}
+            </div>
+          </div>
         </section>
       )}
       {activeProfileSection === 'planos' && (
