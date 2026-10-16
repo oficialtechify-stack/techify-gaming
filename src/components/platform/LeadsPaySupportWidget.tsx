@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Bell, BookOpen, CheckCircle2, ChevronRight, CircleHelp, Headphones, Home, LifeBuoy, MessageCircle, Megaphone, Search, Send, ShieldCheck, ShoppingBag, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronRight, CircleHelp, Headphones, Home, MessageCircle, Megaphone, Search, Send, ShieldCheck, X } from 'lucide-react';
 
 type Section = 'inicio' | 'mensagens' | 'noticias' | 'roteiro' | 'ajuda';
 const helpArticles = [
@@ -16,7 +16,7 @@ const news = [
   { title: 'Central de ajuda da LeadsPay', body: 'Consulte orientações sobre cadastro, checkout, recebimentos e segurança diretamente neste painel.' },
   { title: 'Segurança da sua conta', body: 'Utilize a aba Segurança para revisar os recursos de proteção disponíveis e Alterar Senha para recuperar o acesso.' },
 ];
-export const LeadsPaySupportWidget: React.FC<{ onNavigateToTab?: (tab: any) => void }> = ({ onNavigateToTab }) => {
+export const LeadsPaySupportWidget: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<Section>('inicio');
   const [search, setSearch] = useState('');
