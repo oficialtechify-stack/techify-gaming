@@ -24,7 +24,6 @@ export const StripeConnectCompanyPanel: React.FC<{
   const [message, setMessage] = useState('');
   const [requirementMessage, setRequirementMessage] = useState('');
   const [starting, setStarting] = useState(false);
-  const [embeddedSecret, setEmbeddedSecret] = useState('');
   const [embeddedError, setEmbeddedError] = useState('');
   const [embeddedInstance, setEmbeddedInstance] = useState<ReturnType<typeof loadConnectAndInitialize> | null>(null);
 
@@ -86,20 +85,6 @@ export const StripeConnectCompanyPanel: React.FC<{
     loadStatus();
   }, [loadStatus]);
 
-  useEffect(() => {
-    if (!embeddedSecret) return;
-    const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
-    if (!publishableKey) {
-      setEmbeddedError('Chave pública da Stripe não configurada para o cadastro integrado.');
-      return;
-    }
-    setEmbeddedError('');
-    setEmbeddedInstance(loadConnectAndInitialize({
-      publishableKey,
-      fetchClientSecret: async () => embeddedSecret,
-    }));
-  }, [embeddedSecret]);
-
   const startOnboarding = async () => {
     if (!currentUser || starting || status === 'connected') return;
     setStarting(true);
@@ -122,20 +107,30 @@ export const StripeConnectCompanyPanel: React.FC<{
         setStarting(false);
         return;
       }
-      if (!response.ok || !data.url) throw new Error(data.error || 'Não foi possível iniciar a configuração Stripe.');
+      if (!response.ok) throw new Error(data.error || 'Não foi possível iniciar a configuração Stripe.');
       if (role === 'empresa') {
-        const embeddedResponse = await fetch('/api/stripe/embedded-session', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const embeddedData = await embeddedResponse.json().catch(() => ({}));
-        if (!embeddedResponse.ok || !embeddedData.clientSecret) {
-          throw new Error(embeddedData.error || 'Não foi possível abrir o cadastro integrado.');
-        }
-        setEmbeddedSecret(String(embeddedData.clientSecret));
+        const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+        if (!publishableKey) throw new Error('Chave pública Stripe não configurada no ambiente.');
+        setEmbeddedError('');
+        setEmbeddedInstance(loadConnectAndInitialize({
+          publishableKey,
+          fetchClientSecret: async () => {
+            const freshToken = await currentUser.getIdToken();
+            const embeddedResponse = await fetch('/api/stripe/embedded-session', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${freshToken}` },
+            });
+            const embeddedData = await embeddedResponse.json().catch(() => ({}));
+            if (!embeddedResponse.ok || !embeddedData.clientSecret) {
+              throw new Error(embeddedData.error || 'Não foi possível abrir o cadastro integrado.');
+            }
+            return String(embeddedData.clientSecret);
+          },
+        }));
         setStarting(false);
         return;
       }
+      if (!data.url) throw new Error('Link de cadastro indisponível.');
       window.location.assign(String(data.url));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Não foi possível abrir a Stripe.');
@@ -243,7 +238,7 @@ export const StripeConnectCompanyPanel: React.FC<{
       {role === 'empresa' && embeddedInstance && (
         <div className="mt-5 rounded-xl bg-white p-3 text-slate-900">
           <ConnectComponentsProvider connectInstance={embeddedInstance}>
-            <ConnectAccountOnboarding onExit={() => { setEmbeddedSecret(''); setEmbeddedInstance(null); void loadStatus(); }} />
+            <ConnectAccountOnboarding onExit={() => { setEmbeddedInstance(null); void loadStatus(); }} />
           </ConnectComponentsProvider>
         </div>
       )}
