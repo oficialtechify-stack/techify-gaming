@@ -374,7 +374,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       updates = {
         name: companyOwnerName.trim() || userProfile.name,
         companyName: companyName.trim(),
-        companyLegalName: companyName.trim(),
+        companyLegalName: companyDocType === 'CPF' ? companyOwnerName.trim() : companyName.trim(),
         companyCnpj: formattedDoc,
         cleanCnpj: cleanCnpjDigits,
         companyDocType: companyDocType,        documentType: resolvedDocType,
@@ -462,7 +462,7 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
       if (roleMode === 'empresa') {
         await onSaveProfile({
           companyName: companyName.trim(),
-          companyLegalName: companyName.trim(),
+          companyLegalName: companyDocType === 'CPF' ? companyOwnerName.trim() : companyName.trim(),
           companyCnpj: companyDocType === 'CNPJ' ? formatCNPJ(cleanCnpjDigits) : formatCPF(cleanCnpjDigits),
           cleanCnpj: cleanCnpjDigits,
           companyDocType: companyDocType,
