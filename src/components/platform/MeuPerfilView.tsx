@@ -1,3 +1,4 @@
+import { profileRoleStatus } from '../../../lib/profileEligibility';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { ProfileSectionTabs, type ProfileSection } from './ProfileSectionTabs';
@@ -154,21 +155,10 @@ export const MeuPerfilView: React.FC<MeuPerfilViewProps> = ({
   const [isEditingRejected, setIsEditingRejected] = useState<boolean>(false);
 
   // Determine verification status by role. Company approval is independent from affiliate approval.
-  const verificationStatus = roleMode === 'empresa'
-    ? (
-        userProfile.empresaVerificationStatus ||
-        userProfile.companyVerificationStatus ||
-        userProfile.verificationStatus ||
-        (userProfile.verified ? 'approved' : 'unsubmitted')
-      )
-    : (
-        userProfile.affiliateVerificationStatus ||
-        userProfile.verificationStatus ||
-        (userProfile.verified ? 'approved' : 'unsubmitted')
-      );
+  const verificationStatus = profileRoleStatus(userProfile as any, roleMode === 'empresa' ? 'empresa' : 'afiliado');
 
   const isPending = verificationStatus === 'pending' || verificationStatus === 'submitted';
-  const isApproved = verificationStatus === 'approved' || (roleMode !== 'empresa' && userProfile.verified === true);
+  const isApproved = verificationStatus === 'approved';
   const isRejected = verificationStatus === 'rejected';
   // Empresa e Afiliado seguem o mesmo onboarding financeiro: Stripe primeiro.
   const stripeReady = stripeStatus === 'connected';

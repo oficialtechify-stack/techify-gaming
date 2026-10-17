@@ -1,3 +1,4 @@
+import { UnifiedAccountRegistration } from './UnifiedAccountRegistration';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   User, 
@@ -467,6 +468,10 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
     }
   };
 
+  if (activeModal && (currentTab === 'register_company' || currentTab === 'register_affiliate')) {
+    return <UnifiedAccountRegistration onClose={onClose} onLogin={() => setCurrentTab('login')} />;
+  }
+
   return (
     <div className="leadspay-auth-screen fixed inset-0 z-[60] overflow-y-auto flex items-center justify-center p-3 sm:p-6 lg:p-10" data-has-image={activeImageUrl ? 'true' : 'false'} data-theme={isDark ? 'dark' : 'light'}>
       {/* 🖼️ IMAGEM REAL DE FUNDO DA TELA (FULLSCREEN COVER) */}
@@ -572,7 +577,7 @@ export const AuthScreenModal: React.FC<AuthScreenModalProps> = ({
                 className={`auth-role-option flex items-center justify-center gap-2 ${currentTab === 'register_company' ? 'bg-gradient-to-r from-[#a3e635] to-[#bef264]' : ''}`}
               >
                 <Building2 className="w-4 h-4" aria-hidden="true" />
-                Cadastro de Empresa
+                Criar conta
               </button>
             </div>
           )}

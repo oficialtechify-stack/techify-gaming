@@ -63,7 +63,7 @@ const faqs = [
   ],
   [
     "Quem pode criar uma conta?",
-    "Nesta fase, o cadastro público é exclusivo para empresas. O programa de afiliados não está aberto para novas inscrições.",
+    "Crie uma conta para vender seus produtos. A área de afiliado pode ser ativada com convite pessoal, no mesmo acesso.",
   ],
   [
     "Quais integrações estão disponíveis?",
@@ -127,13 +127,13 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
             <a href="#tecnologia" onClick={closeMenu}>Tecnologia</a>
             <div className="mobile-nav-actions">
               <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
-              <a className="button button-primary mobile-cta" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a>
+              <a className="button button-primary mobile-cta" href={signupUrl}>Criar conta <ArrowUpRight size={15} aria-hidden="true" /></a>
             </div>
           </nav>
           <div className="desktop-nav-actions">
             <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
             <a className="login-link" href={loginUrl}>Entrar <ArrowUpRight size={14} aria-hidden="true" /></a>
-            <a className="button button-primary header-cta" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a>
+            <a className="button button-primary header-cta" href={signupUrl}>Criar conta <ArrowUpRight size={15} aria-hidden="true" /></a>
           </div>
           <button
             className="menu-toggle"
@@ -160,7 +160,7 @@ function Hero() {
           <h1>Pagamentos simples.<br /><span>Seu negócio cresce.</span></h1>
           <p className="hero-description">Venda produtos digitais, serviços e assinaturas com checkout integrado e gestão de pagamentos em um só lugar.</p>
           <div className="hero-actions">
-            <a className="button button-primary button-large" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={17} aria-hidden="true" /></a>
+            <a className="button button-primary button-large" href={signupUrl}>Criar conta <ArrowUpRight size={17} aria-hidden="true" /></a>
             <a className="button button-secondary button-large" href={loginUrl}>Acessar painel <ArrowUpRight size={16} aria-hidden="true" /></a>
           </div>
           <ul className="hero-proof" aria-label="Recursos em destaque">
@@ -269,14 +269,14 @@ function AudienceSection() {
             <h3>Você vende.<br /><span>A LeadsPay organiza os pagamentos.</span></h3>
             <p>Cadastre produtos e planos, configure links de checkout e acompanhe suas cobranças.</p>
             <ul><li><Check size={15} aria-hidden="true" /> Cadastre seus planos comerciais</li><li><Check size={15} aria-hidden="true" /> Configure suas condições de pagamento</li><li><Check size={15} aria-hidden="true" /> Acompanhe suas vendas</li></ul>
-            <a className="button button-primary" href={signupUrl}>Cadastrar minha empresa <ArrowUpRight size={15} aria-hidden="true" /></a>
+            <a className="button button-primary" href={signupUrl}>Criar conta <ArrowUpRight size={15} aria-hidden="true" /></a>
           </article>
           <article className="audience-card audience-affiliate">
             <div className="audience-card-head"><span className="audience-label">02 / INTEGRAÇÕES</span><span className="audience-icon"><ArrowUpRight size={19} aria-hidden="true" /></span></div>
             <h3>Seu sistema.<br /><span>Conectado ao checkout.</span></h3>
             <p>Use links de pagamento e webhooks para integrar o checkout à sua operação.</p>
             <ul><li><Check size={15} aria-hidden="true" /> Crie links de pagamento</li><li><Check size={15} aria-hidden="true" /> Integre à sua página</li><li><Check size={15} aria-hidden="true" /> Acompanhe eventos de pagamento</li></ul>
-            <a className="button button-secondary" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a>
+            <a className="button button-secondary" href={signupUrl}>Criar conta <ArrowUpRight size={15} aria-hidden="true" /></a>
           </article>
         </div>
       </div>
@@ -302,7 +302,7 @@ function StepsSection() {
           </article>
         ))}
       </div>
-      <div className="steps-cta"><span><b>MENOS COMPLEXIDADE</b><strong>Mais energia para crescer.</strong></span><a className="button button-primary" href={signupUrl}>Criar conta empresarial <ArrowUpRight size={15} aria-hidden="true" /></a></div>
+      <div className="steps-cta"><span><b>MENOS COMPLEXIDADE</b><strong>Mais energia para crescer.</strong></span><a className="button button-primary" href={signupUrl}>Criar conta <ArrowUpRight size={15} aria-hidden="true" /></a></div>
     </section>
   );
 }
@@ -387,7 +387,7 @@ function FinalCta() {
         <h2>Seu próximo passo<br />é <span>conectar.</span></h2>
         <p>Cadastre sua empresa, configure sua oferta e comece a preparar seu checkout.</p>
         <div className="hero-actions">
-          <a className="button button-primary button-large" href={signupUrl}>Cadastrar minha empresa <ArrowUpRight size={16} aria-hidden="true" /></a>
+          <a className="button button-primary button-large" href={signupUrl}>Criar conta <ArrowUpRight size={16} aria-hidden="true" /></a>
           <a className="button button-light button-large" href={loginUrl}>Entrar na plataforma <ArrowUpRight size={16} aria-hidden="true" /></a>
         </div>
       </div>

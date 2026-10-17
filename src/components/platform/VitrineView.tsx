@@ -1,3 +1,4 @@
+import { AccountAreaDialog } from './AccountAreaDialog';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyPlan, CompanyStartup, UserAffiliation, UserRoleMode } from '../../types/platform';
@@ -71,6 +72,7 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
   onSwitchToCompanyMode,
   onOpenCheckout
 }) => {
+  const [companyInviteOpen, setCompanyInviteOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [minCommission, setMinCommission] = useState<number>(0);
@@ -276,6 +278,10 @@ export const VitrineView: React.FC<VitrineViewProps> = ({
 
   return (
     <div className="flex flex-col gap-8" id="leadspay-vitrine-view">
+      {roleMode === 'afiliado' && <section className="rounded-2xl border border-white/15 p-4 text-white"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm">Recebeu um convite de uma empresa?</p><button onClick={() => setCompanyInviteOpen(true)} className="rounded-xl border border-lime-300/40 px-4 py-2 text-sm text-lime-300">Usar convite</button></div>
+        {companies.filter(company => Array.isArray((userProfile as any).affiliateInvitedCompanyIds) && (userProfile as any).affiliateInvitedCompanyIds.includes(company.id)).map(company => <p key={company.id} className="mt-3 text-sm text-white/65">Convite de {company.name}. Encontre as ofertas dessa empresa abaixo e solicite sua afiliação após concluir seu perfil.</p>)}
+      </section>}
+      {companyInviteOpen && <AccountAreaDialog area="afiliado" onClose={() => setCompanyInviteOpen(false)} onActivated={() => setCompanyInviteOpen(false)} />}
       {/* Header Banner */}
       <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#070d1c] via-[#0b162c] to-[#070d1c] p-6 sm:p-8 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">

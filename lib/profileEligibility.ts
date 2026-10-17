@@ -13,10 +13,11 @@ export function applyVerificationRequest(profile: ProfileLike, request?: Profile
   const otherRole = requestRole === 'afiliado' ? 'empresa' : 'afiliado';
   const otherStatus = asText(profile[roleStatusField(otherRole)]);
   const hasOtherApprovedProfile = otherStatus === 'approved';
+  const hasOtherEnabledProfile = currentType === 'ambos' && profile[otherRole === 'empresa' ? 'hasCompanyProfile' : 'hasAffiliateProfile'] === true;
   const preserveAdmin = currentType === 'admin';
   const correctedType = preserveAdmin
     ? 'admin'
-    : hasOtherApprovedProfile || currentType === 'ambos'
+    : hasOtherApprovedProfile || hasOtherEnabledProfile || currentType === 'ambos'
       ? 'ambos'
       : requestRole;
 
@@ -92,6 +93,8 @@ export function resolveProfileRole(
   if (accountType === 'empresa' || accountType === 'afiliado') return accountType;
   if (accountType === 'ambos') {
     if (preferredRole) return preferredRole;
+    const active = asText(profile.activeRoleMode);
+    if (active === 'empresa' || active === 'afiliado') return active;
     if ((verificationRole === 'empresa' || verificationRole === 'afiliado') && profileHasRole(profile, verificationRole)) return verificationRole;
     const activeRole = asText(profile.activeRoleMode);
     return activeRole === 'empresa' ? 'empresa' : 'afiliado';

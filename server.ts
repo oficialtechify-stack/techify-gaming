@@ -22,6 +22,7 @@ import stripePayoutReconcileHandler from './server-api/crons/stripe-payout-recon
 import plansHandler from './server-api/plans.js';
 import couponsHandler from './server-api/coupons.js';
 import companiesHandler from './server-api/companies.js';
+import accountAreaHandler from './server-api/profile/account-area.js';
 import enableAffiliateHandler from './server-api/profile/enable-affiliate.js';
 import affiliateJoinHandler from './server-api/affiliates/join.js';
 import affiliateSubscriptionsHandler from './server-api/affiliates/subscriptions.js';
@@ -98,6 +99,7 @@ app.all('/api/crons/stripe-payout-reconcile', adapt(stripePayoutReconcileHandler
 app.all('/api/plans', publicLookupRateLimit, adapt(plansHandler));
 app.all('/api/coupons', adapt(couponsHandler));
 app.all('/api/companies', adapt(companiesHandler));
+app.all('/api/profile/account-area', adapt(accountAreaHandler));
 app.all('/api/profile/enable-affiliate', adapt(enableAffiliateHandler));
 app.all('/api/affiliates/join', adapt(affiliateJoinHandler));
 app.all('/api/affiliates/subscriptions', adapt(affiliateSubscriptionsHandler));
