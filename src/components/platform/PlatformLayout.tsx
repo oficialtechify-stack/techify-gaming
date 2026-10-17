@@ -1,3 +1,6 @@
+import { AccountAreaDialog } from './AccountAreaDialog';
+import { activateArea } from '../../services/accountAreaService';
+import { hasAccountArea, type AccountArea } from '../../../lib/accountAreas';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -168,12 +171,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const [roleMode, setRoleMode] = useState<UserRoleMode>(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      return 'empresa';
-    }
-    return userRole === 'admin' ? 'admin' : 'empresa';
-  });
+  const [roleMode, setRoleMode] = useState<UserRoleMode>(userRole);
+  const [activationArea, setActivationArea] = useState<AccountArea | null>(null);
+  const [inviteDialog, setInviteDialog] = useState(false);
+  const [areaSwitchBusy, setAreaSwitchBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<PlatformTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -195,6 +196,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       return;
     }
 
+    setLedgerSidebarAvailableCents(0);
     let cancelled = false;
     currentUser.getIdToken()
       .then((token) => fetch('/api/office/workers?accessOnly=1', {
@@ -407,12 +409,6 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
   useEffect(() => {
     if (isSuperAdmin) return;
 
-    if (isMobileScreen) {
-      if (roleMode !== 'afiliado') {
-        setRoleMode('afiliado');
-      }
-      return;
-    }
     if (userRole && userRole !== roleMode) {
       setRoleMode(userRole);
     }
@@ -428,92 +424,24 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
     }
   }, [roleMode, activeTab, isSuperAdmin]);
 
-  // Robust Role Switcher with Strict Role Separation
-  const handleSwitchRole = (targetRole: UserRoleMode) => {
-    if (targetRole === roleMode) return;
-
-    if (isMobileScreen && targetRole === 'empresa') {
-      alert('O acesso e gerenciamento de conta Empresa estão disponíveis exclusivamente em computadores e desktops.');
+  // One identity, distinct workspaces; area activation is authorized on the server.
+  const handleSwitchRole = async (targetRole: UserRoleMode) => {
+    if (targetRole === roleMode || targetRole === 'admin' || areaSwitchBusy) return;
+    if (!hasAccountArea(userProfile as any, targetRole)) {
+      setActivationArea(targetRole);
       return;
     }
-
-    // Estrita separação de papéis: conta criada como afiliado não pode virar empresa e vice-versa
-    const isAffiliateAccount = userProfile?.accountType === 'afiliado' || 
-      (userProfile?.hasAffiliateProfile && !userProfile?.hasCompanyProfile && !userProfile?.companyId);
-    const isCompanyAccount = userProfile?.accountType === 'empresa' || 
-      userProfile?.hasCompanyProfile || 
-      Boolean(userProfile?.companyId);
-
-    if (targetRole === 'empresa' && isAffiliateAccount) {
-      alert('Esta conta foi registrada exclusivamente como AFILIADO. Por regras de segurança da plataforma, uma conta de afiliado não pode criar ou virar empresa. Utilize um e-mail diferente para cadastrar sua Empresa ou Startup.');
-      return;
-    }
-
-    if (targetRole === 'afiliado' && isCompanyAccount) {
-      alert('Esta conta foi registrada exclusivamente como EMPRESA. Por regras de segurança da plataforma, contas corporativas não podem atuar como afiliado. Utilize um e-mail diferente para cadastrar sua conta de Afiliado.');
-      return;
-    }
-
-    if (targetRole === 'afiliado') {
-      const hasAffiliate = userProfile?.hasAffiliateProfile || (userProfile?.cpf && userProfile?.cleanCpf?.length === 11);
-      if (!hasAffiliate) {
-        setIsRegisterAffiliateModalOpen(true);
-        return;
-      }
-      setRoleMode('afiliado');
-      setUserRole('afiliado');
-      if (activeTab === 'minha_empresa' || activeTab === 'equipe' || activeTab === 'integracoes') {
-        setActiveTab('dashboard');
-      }
-      setLiveToast({
-        message: 'Modo Afiliado Ativado',
-        sub: 'Painel de comissões e marketplace',
-        amount: 'Afiliado'
-      });
-      setTimeout(() => setLiveToast(null), 3000);
-    } else if (targetRole === 'empresa') {
-      const userOwnedCompanies = companies.filter(c => c.ownerId === currentUser?.uid || c.id === userProfile?.companyId);
-      const hasCompany = userProfile?.hasCompanyProfile || userOwnedCompanies.length > 0 || !!userProfile?.companyId;
-      
-      if (!hasCompany) {
-        // Se ainda não consta no estado local, checa diretamente no Firestore antes de abrir o modal
-        if (currentUser?.uid) {
-          findCompanyByOwnerId(currentUser.uid, userProfile?.companyId).then((existingComp) => {
-            if (existingComp) {
-              setRoleMode('empresa');
-              setUserRole('empresa');
-              if (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios') {
-                setActiveTab('dashboard');
-              }
-              setLiveToast({
-                message: 'Modo Empresa Ativado',
-                sub: `Acessando ${existingComp.name}`,
-                amount: 'Empresa'
-              });
-              setTimeout(() => setLiveToast(null), 3000);
-            } else {
-              setCompanyAuthModal('register_company');
-            }
-          }).catch(() => {
-            setCompanyAuthModal('register_company');
-          });
-          return;
-        }
-        setCompanyAuthModal('register_company');
-        return;
-      }
-      setRoleMode('empresa');
-      setUserRole('empresa');
-      if (activeTab === 'minhas_afiliacoes' || activeTab === 'afiliados' || activeTab === 'relatorios') {
-        setActiveTab('dashboard');
-      }
-      setLiveToast({
-        message: 'Modo Empresa Ativado',
-        sub: 'Gestão de soluções e planos corporativos',
-        amount: 'Empresa'
-      });
-      setTimeout(() => setLiveToast(null), 3000);
-    }
+    setAreaSwitchBusy(true);
+    try {
+      await activateArea(targetRole);
+      setLedgerSidebarAvailableCents(0);
+      setRoleMode(targetRole);
+      setUserRole(targetRole);
+      setActiveTab('dashboard');
+      setIsMobileMenuOpen(false);
+    } catch (error: any) {
+      setLiveToast({ message: 'Não foi possível trocar de área', sub: error.message, amount: '' });
+    } finally { setAreaSwitchBusy(false); }
   };
 
   const handleCompleteAffiliateProfile = async (data: {
@@ -666,6 +594,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       return;
     }
 
+    setLedgerSidebarAvailableCents(0);
     let cancelled = false;
     currentUser.getIdToken()
       .then((token) => fetch(`/api/balance/releases?role=${encodeURIComponent(roleMode)}`, {
@@ -830,12 +759,11 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
     if (roleMode === 'afiliado') {
       return transactions.filter(s => {
-        const affId = s.affiliateId || s.sellerId;
+        const affId = s.affiliateId;
         const affCode = s.affiliateCode || s.affiliate_code;
         const isMyId = affId === effectiveUserId;
         const isMyCode = Boolean(affCode && userAffiliationCodes.includes(affCode));
-        const isMyUtm = Boolean(userAffiliationCodes.length > 0 && userAffiliationCodes.some(code => s.utmSource && s.utmSource.includes(code)));
-        return isMyId || isMyCode || isMyUtm;
+        return isMyId || (!affId && isMyCode);
       });
     }
 
@@ -1401,6 +1329,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
   return (
     <div className="leadspay-platform min-h-[100dvh] h-[100dvh] bg-[#050811] text-white flex flex-row overflow-x-hidden relative selection:bg-[#D9F22A] selection:text-[#060A15]" data-theme={isDarkMode ? 'dark' : 'light'}>
+      {activationArea && <AccountAreaDialog key={activationArea} area={activationArea} onClose={() => setActivationArea(null)} onActivated={(area) => {
+        setActivationArea(null); setLedgerSidebarAvailableCents(0); setRoleMode(area); setUserRole(area); setActiveTab('meu_perfil');
+      }} />}
+      {inviteDialog && <AccountAreaDialog area={null} admin onClose={() => setInviteDialog(false)} onActivated={() => {}} />}
       {/* Background Ambience */}
       <div className="fixed top-0 right-1/4 w-[600px] h-[600px] bg-[#D9F22A]/[0.03] rounded-full blur-[180px] pointer-events-none -z-10" />
 
@@ -1883,6 +1815,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
                     <div className="h-px bg-white/10 my-1.5" />
 
+                    {isSuperAdmin && <button onClick={() => { setInviteDialog(true); setIsUserMenuOpen(false); }} className="w-full px-3 py-2 text-left text-xs font-bold text-lime-300">Convidar afiliado para o piloto</button>}
                     {/* Menu Links */}
                     <div className="space-y-0.5">
                       <button
@@ -1928,15 +1861,16 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                         </button>
                       )}
 
-                      {false && !isMobileScreen && (
+                      {!isSuperAdmin && (
                         <button
+                          disabled={areaSwitchBusy}
                           onClick={() => {
                             setIsUserMenuOpen(false);
-                            handleSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
+                            void handleSwitchRole(roleMode === 'afiliado' ? 'empresa' : 'afiliado');
                           }}
                           className="w-full text-left px-3 py-2 text-xs font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer flex items-center justify-between"
                         >
-                          <span>{roleMode === 'afiliado' ? 'Mudar para painel da empresa' : 'Mudar para painel de afiliado'}</span>
+                          <span>{roleMode === 'afiliado' ? 'Ir para área da empresa' : 'Ir para área de afiliado'}</span>
                           <ArrowRightLeft className="w-3.5 h-3.5 text-[#D9F22A]" />
                         </button>
                       )}
@@ -1988,6 +1922,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
             <>
               {activeTab === 'dashboard' && (
                 <DashboardView
+              key={roleMode}
                   roleMode={roleMode}
                   userProfile={userProfile}
                   transactions={userVisibleTransactions}
@@ -2003,7 +1938,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
                   setActiveTab={setActiveTab}
                   onOpenWithdraw={() => setIsWithdrawModalOpen(true)}
                   onSelectProductDetail={(prod) => setSelectedDetailProduct(prod)}
-                  onSwitchRole={!isMobileScreen ? handleSwitchRole : undefined}
+                  onSwitchRole={handleSwitchRole}
                   onLogout={logout}
                   selectedPeriod={selectedPeriod}
                   setSelectedPeriod={setSelectedPeriod}
@@ -2031,6 +1966,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {activeTab === 'meu_perfil' && (
             <MeuPerfilView
+              key={roleMode}
               userProfile={userProfile}
               onSaveProfile={handleSaveProfile}
               onSubmitForVerification={handleSubmitForVerification}
@@ -2202,6 +2138,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {activeTab === 'vendas' && (
             <VendasView
+              key={roleMode}
               roleMode={roleMode}
               transactions={userVisibleTransactions}
             />
@@ -2209,6 +2146,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
 
           {(activeTab === 'financeiro' || activeTab === 'carteira') && (
             <FinanceiroView
+              key={roleMode}
               roleMode={roleMode}
               userProfile={userProfile}
               company={activeCompany}
@@ -2260,6 +2198,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'saques' && (
             <SaquesView
+              key={roleMode}
               userProfile={userProfile}
               roleMode={roleMode}
               withdrawals={withdrawals.filter((item) => item.role === roleMode)}
@@ -2268,6 +2207,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
           )}
           {activeTab === 'assinaturas' && (
             <AssinaturasView
+              key={roleMode}
               roleMode={roleMode}
               plans={roleMode === 'afiliado' ? plans : (roleMode === 'admin' && isSuperAdmin ? plans : myCompanyPlans)}
               sales={userVisibleTransactions}
@@ -2478,6 +2418,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ onBackToHome }) 
       />
 
       <WithdrawModal
+              key={roleMode}
         isOpen={isWithdrawModalOpen}
         onClose={() => setIsWithdrawModalOpen(false)}
         userProfile={userProfile}

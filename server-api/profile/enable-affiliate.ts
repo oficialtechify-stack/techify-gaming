@@ -1,3 +1,4 @@
+import { hasAccountArea } from '../../lib/accountAreas.js';
 import { getServerAdminFirestore, verifyFirebaseIdentity } from '../../lib/firebaseAdminServer.js';
 
 type Req = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
@@ -34,6 +35,7 @@ export default async function handler(req: Req, res: Res) {
     const profileSnap = await profileRef.get();
     if (!profileSnap.exists) return res.status(404).json({ error: 'Perfil não encontrado.' });
     const profile = profileSnap.data()!;
+    if (!hasAccountArea(profile, 'afiliado')) return res.status(403).json({ error: 'Ative a área de afiliado com seu convite antes de completar o perfil.' });
     if (profile.banned === true || profile.status === 'banned') return res.status(403).json({ error: 'Esta conta está bloqueada.' });
 
     const duplicates = await db.collection('user_profiles').where('cleanCpf', '==', cpf).limit(20).get();

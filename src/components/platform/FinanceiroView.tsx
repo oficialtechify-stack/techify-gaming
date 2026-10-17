@@ -17,8 +17,8 @@ export const FinanceiroView:React.FC<FinanceiroViewProps>=({roleMode='afiliado',
   const role=roleMode==='empresa'?'empresa':'afiliado';
   const availableCents=role==='empresa'?userProfile.empresaAvailableBalanceCents:userProfile.afiliadoAvailableBalanceCents;
   const pendingCents=role==='empresa'?userProfile.empresaPendingBalanceCents:userProfile.afiliadoPendingBalanceCents;
-  const available=Number.isFinite(Number(availableCents))?Number(availableCents)/100:Number(userProfile.availableBalance||0);
-  const pending=Number.isFinite(Number(pendingCents))?Number(pendingCents)/100:Number(userProfile.pendingBalance||0);
+  const available=Number.isFinite(Number(availableCents))?Number(availableCents)/100:0;
+  const pending=Number.isFinite(Number(pendingCents))?Number(pendingCents)/100:0;
   const approved=transactions.filter(t=>['aprovado','approved','liberado','received','confirmed'].includes(String(t.status||'').toLowerCase()));
   const gross=approved.reduce((s,t)=>s+Number(t.amount||0),0);
   const commissions=approved.reduce((s,t)=>s+Number(t.commissionEarned||0),0);
@@ -36,7 +36,7 @@ export const FinanceiroView:React.FC<FinanceiroViewProps>=({roleMode='afiliado',
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><div className="text-xs font-bold uppercase tracking-widest text-[#D9F22A]">Financeiro real</div><h1 className="text-2xl sm:text-3xl font-black text-white font-['Syne']">Carteira & Faturamento</h1><p className="text-xs text-white/50 mt-1">Saldos atualizados por webhooks da Stripe e liberados automaticamente após o prazo.</p></div>{onOpenWithdraw&&roleMode!=='admin'&&<button onClick={onOpenWithdraw} className="px-4 py-2.5 rounded-xl bg-[#D9F22A] text-[#060A15] font-black text-xs flex gap-2 items-center"><ArrowUpRight className="w-4 h-4"/>Solicitar saque</button>}</div>
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div className="p-5 rounded-2xl bg-[#07120f] border border-emerald-500/30"><Wallet className="w-4 h-4 text-emerald-400"/><div className="text-[11px] uppercase font-bold text-white/45 mt-3">Disponível</div><div className="text-3xl font-black text-emerald-400">R$ {money(available)}</div></div>
-      <div className="p-5 rounded-2xl bg-[#080d1a] border border-white/10"><Clock className="w-4 h-4 text-amber-400"/><div className="text-[11px] uppercase font-bold text-white/45 mt-3">Pendente</div><div className="text-3xl font-black text-white">R$ {money(pending)}</div><div className="text-[10px] text-white/35 mt-2">8 dias com plano pago; 15 dias sem plano pago.</div></div>
+      <div className="p-5 rounded-2xl bg-[#080d1a] border border-white/10"><Clock className="w-4 h-4 text-amber-400"/><div className="text-[11px] uppercase font-bold text-white/45 mt-3">Pendente</div><div className="text-3xl font-black text-white">R$ {money(pending)}</div><div className="text-[10px] text-white/35 mt-2">Consulte o prazo de liberação na sua área de recebimentos.</div></div>
       <div className="p-5 rounded-2xl bg-[#080d1a] border border-white/10"><CheckCircle2 className="w-4 h-4 text-[#D9F22A]"/><div className="text-[11px] uppercase font-bold text-white/45 mt-3">Já sacado</div><div className="text-3xl font-black text-[#D9F22A]">R$ {money(completed)}</div></div>
     </div>
     {role==='empresa'&&<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1,3 +1,4 @@
+import { AccountAreaDialog } from './AccountAreaDialog';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import type { TeamMember } from '../../types/platform';
@@ -17,6 +18,7 @@ const emptyForm = (): MemberForm => ({ name: '', email: '', role: 'Vendedor B2B'
 
 export const EquipeView: React.FC = () => {
   const { currentUser } = useAuth();
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,6 +89,8 @@ export const EquipeView: React.FC = () => {
   };
   const active = members.filter(m => m.status === 'Ativo').length;
   return <div className="space-y-6 text-white">
+    {inviteOpen && <AccountAreaDialog area={null} companyInvite onClose={() => setInviteOpen(false)} onActivated={() => {}} />}
+    <section className="rounded-xl border border-white/15 p-4"><h2 className="font-bold">Parceiros afiliados</h2><p className="my-2 text-sm text-white/60">Convide parceiros para o programa. Eles completam o perfil de afiliado e solicitam acesso às ofertas; não recebem permissões de colaborador.</p><button onClick={() => setInviteOpen(true)} className="rounded-xl bg-lime-300 px-4 py-2 font-bold text-black">Convidar afiliado</button></section>
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div>
         <div className="text-[11px] font-bold uppercase tracking-widest text-[#D9F22A] mb-2">Gestão de pessoas da empresa</div>

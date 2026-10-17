@@ -1,3 +1,4 @@
+import { resolveProfileRole, profileHasRole } from '../../lib/profileEligibility';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
@@ -87,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               (typeof data.partnerLevel === 'string' && data.partnerLevel.toLowerCase().includes('empresa'))
             );
 
-            const resolvedRoleMode: UserRoleMode = isAdminAccount ? 'admin' : (isCompanyAccount ? 'empresa' : 'afiliado');
+            const resolvedRoleMode: UserRoleMode = isAdminAccount ? 'admin' : resolveProfileRole(data as any);
 
             const safeProfile: UserSellerProfile = {
               ...INITIAL_USER_PROFILE,
@@ -103,9 +104,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               targetGoal: typeof data.targetGoal === 'number' && !isNaN(data.targetGoal) ? data.targetGoal : (isCompanyAccount ? 500000 : 100000),
               currentSalesProgress: typeof data.currentSalesProgress === 'number' && !isNaN(data.currentSalesProgress) ? data.currentSalesProgress : 0,
               partnerLevel: data.partnerLevel || (isAdminAccount ? 'Super Administrador' : (isCompanyAccount ? 'Empresa Parceira' : 'Afiliado Starter')),
-              accountType: resolvedRoleMode,
-              hasAffiliateProfile: !isAdminAccount && !isCompanyAccount,
-              hasCompanyProfile: !isAdminAccount && isCompanyAccount,
+              accountType: isAdminAccount ? 'admin' : data.accountType || resolvedRoleMode,
+              hasAffiliateProfile: !isAdminAccount && profileHasRole(data as any, 'afiliado'),
+              hasCompanyProfile: !isAdminAccount && profileHasRole(data as any, 'empresa'),
               activeRoleMode: resolvedRoleMode,
               role: data.role || (isAdminAccount ? 'Administrador do Sistema' : (isCompanyAccount ? 'Fundador / Startup' : 'Afiliado de Alta Performance')),
               plan: data.plan,
@@ -222,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await loginUser(email, password, preferredRole);
       setCurrentUser(res.user);
       setUserProfile(res.profile);
-      const effectiveRole = preferredRole || res.profile.activeRoleMode || res.profile.accountType || 'afiliado';
+      const effectiveRole = resolveProfileRole(res.profile as any, preferredRole === 'admin' ? undefined : preferredRole);
       setUserRole(effectiveRole);
       return res;
     } finally {
